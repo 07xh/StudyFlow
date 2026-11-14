@@ -14,15 +14,9 @@ from studyflow.platforms.zhidao import legacy_runtime
 
 
 @pytest.fixture
-def installed_reader(tmp_path, monkeypatch):
+def session_cache(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
-    installation = tmp_path / "appdata" / "ZHSDesktop"
-    installation.mkdir(parents=True)
-    (installation / "zhidao_only.py").write_text("# fake reader\n", encoding="utf-8")
-    python = installation / ".venv" / "Scripts" / "python.exe"
-    python.parent.mkdir(parents=True)
-    python.write_text("fake", encoding="utf-8")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "appdata"))
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
     cache = home / ".zhs"
@@ -32,16 +26,11 @@ def installed_reader(tmp_path, monkeypatch):
     (cache / "cookies.json").write_bytes(cookies)
     (cache / "zhidao-cache-salt.bin").write_bytes(salt)
     fingerprint = hmac.new(salt, cookies, hashlib.sha256).hexdigest()
-    return installation, python, cache, fingerprint
+    return cache, fingerprint
 
 
-def test_flat_legacy_install_location(installed_reader):
-    install, _, _, _ = installed_reader
-    assert legacy_runtime.legacy_script() == install / "zhidao_only.py"
-
-
-def test_real_cache_adapter_preserves_type_stale_and_identity(installed_reader, monkeypatch):
-    install, python, cache, fingerprint = installed_reader
+def test_real_cache_adapter_preserves_type_stale_and_identity(session_cache, monkeypatch):
+    cache, fingerprint = session_cache
     rows = [
         {"courseType": "ai", "courseId": "11", "classId": "21", "name": "电工基础", "stale": False},
         {"courseType": "ai", "courseId": "11", "classId": "22", "name": "另一教学班", "stale": True},
@@ -65,8 +54,8 @@ def test_real_cache_adapter_preserves_type_stale_and_identity(installed_reader, 
     assert all("route1" not in row.course_id for row in result)
 
 
-def test_rotated_cookie_fails_closed(installed_reader, monkeypatch):
-    install, _, cache, fingerprint = installed_reader
+def test_rotated_cookie_fails_closed(session_cache, monkeypatch):
+    cache, fingerprint = session_cache
     (cache / "zhidao-courses.json").write_text(
         json.dumps({"source": "zhidao", "schemaVersion": 4,
                     "sessionFingerprint": fingerprint, "incomplete": False,
@@ -80,8 +69,8 @@ def test_rotated_cookie_fails_closed(installed_reader, monkeypatch):
 
 
 
-def test_same_session_progress_cache_is_exposed_as_server_verified(installed_reader, monkeypatch):
-    _, _, cache, fingerprint = installed_reader
+def test_same_session_progress_cache_is_exposed_as_server_verified(session_cache, monkeypatch):
+    cache, fingerprint = session_cache
     rows = [
         {"courseType": "ai", "courseId": "11", "classId": "21", "name": "智慧课程"},
         {"courseType": "shared", "courseId": "13", "recruitAndCourseId": "route1", "name": "共享课程"},
@@ -108,8 +97,8 @@ def test_same_session_progress_cache_is_exposed_as_server_verified(installed_rea
     assert all(x.verified_at == "2026-11-14T10:00:00+00:00" for x in result)
 
 
-def test_progress_cache_from_another_session_is_not_exposed(installed_reader, monkeypatch):
-    _, _, cache, fingerprint = installed_reader
+def test_progress_cache_from_another_session_is_not_exposed(session_cache, monkeypatch):
+    cache, fingerprint = session_cache
     rows = [{"courseType": "ai", "courseId": "11", "classId": "21", "name": "智慧课程"}]
     (cache / "zhidao-courses.json").write_text(json.dumps({
         "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
@@ -128,8 +117,8 @@ def test_progress_cache_from_another_session_is_not_exposed(installed_reader, mo
     assert result[0].progress_evidence is None
 
 
-def test_verify_course_rejects_invalid_or_unmatched_keys_before_process(installed_reader, monkeypatch):
-    _, _, cache, fingerprint = installed_reader
+def test_verify_course_rejects_invalid_or_unmatched_keys_before_process(session_cache, monkeypatch):
+    cache, fingerprint = session_cache
     monkeypatch.setattr(legacy_runtime.subprocess, "run",
                         lambda *a, **kw: pytest.fail("invalid key must not launch a process"))
     with pytest.raises(ValueError, match="INVALID_COURSE"):
@@ -142,8 +131,8 @@ def test_verify_course_rejects_invalid_or_unmatched_keys_before_process(installe
         legacy_runtime.verify_course("a" * 64)
 
 
-def test_refresh_progress_uses_readonly_mode_and_accepts_partial_snapshot(installed_reader, monkeypatch):
-    _, _, cache, fingerprint = installed_reader
+def test_refresh_progress_uses_readonly_mode_and_accepts_partial_snapshot(session_cache, monkeypatch):
+    cache, fingerprint = session_cache
     rows = [{"courseType": "ai", "courseId": "11", "classId": "21", "name": "智慧课程"}]
     (cache / "zhidao-courses.json").write_text(json.dumps({
         "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
@@ -166,8 +155,8 @@ def test_refresh_progress_uses_readonly_mode_and_accepts_partial_snapshot(instal
 
 
 
-def test_resolve_course_returns_only_current_session_official_route(installed_reader):
-    _, _, directory, fingerprint = installed_reader
+def test_resolve_course_returns_only_current_session_official_route(session_cache):
+    directory, fingerprint = session_cache
     rows = [
         {"courseType": "ai", "courseId": "11", "classId": "21", "name": "智慧课程"},
         {"courseType": "shared", "courseId": "13", "classId": "0",
@@ -186,7 +175,7 @@ def test_resolve_course_returns_only_current_session_official_route(installed_re
     assert shared["recruit_and_course_id"] == "route_13"
 
 
-def test_player_settings_roundtrip_and_reject_invalid_values(installed_reader):
+def test_player_settings_roundtrip_and_reject_invalid_values(session_cache):
     defaults = legacy_runtime.get_player_settings()
     assert defaults["speed"] == "1.5" and defaults["mode"] == "official"
     saved = legacy_runtime.save_player_settings({
@@ -200,8 +189,8 @@ def test_player_settings_roundtrip_and_reject_invalid_values(installed_reader):
                                              "autoStart": True, "autoNext": True})
 
 
-def test_signout_and_cache_clear_use_separate_exact_allowlists(installed_reader):
-    _, _, directory, _ = installed_reader
+def test_signout_and_cache_clear_use_separate_exact_allowlists(session_cache):
+    directory, _ = session_cache
     (directory / "qrcode.png").write_bytes(b"qr")
     (directory / "zhidao-courses.json").write_text("{}", encoding="utf-8")
     (directory / "zhidao-progress.json").write_text("{}", encoding="utf-8")
@@ -235,8 +224,8 @@ def test_legal_document_reader_is_allowlisted():
 
 
 
-def test_course_detail_restores_ai_knowledge_points_and_shared_videos(installed_reader):
-    _, _, directory, fingerprint = installed_reader
+def test_course_detail_restores_ai_knowledge_points_and_shared_videos(session_cache):
+    directory, fingerprint = session_cache
     ai = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "智慧课程"}
     shared = {"courseType": "shared", "courseId": "13",
               "recruitAndCourseId": "route_13", "name": "共享课程"}
