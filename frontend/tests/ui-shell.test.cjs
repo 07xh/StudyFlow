@@ -111,3 +111,22 @@ test("platform task status and verified progress are placed before login control
   assert.match(playback,/presentation\.percent !== null/);
   assert.doesNotMatch(playback,/Math\.random\(\)|setInterval\([^,]+,\s*[1-9]\)/);
 });
+
+
+test("StudyFlow shared controls keep their own accessible interaction contracts",()=>{
+  const toggle=read("src/ui/Switch.tsx");
+  const empty=read("src/ui/EmptyState.tsx");
+  const theme=read("src/ui/ThemeModeSelector.tsx");
+  assert.match(toggle,/type="checkbox"/);
+  assert.match(toggle,/role="switch"/);
+  assert.match(toggle,/currentTarget\.checked/);
+  assert.match(empty,/aria-live="polite"/);
+  assert.match(empty,/aria-atomic="true"/);
+  assert.match(empty,/sf-empty-action/);
+  assert.match(theme,/role="group"/);
+  assert.match(theme,/aria-pressed=\{mode==="light"\}/);
+  assert.match(theme,/onChange\("dark"\)/);
+  assert.match(theme,/onChange\("system"\)/);
+  for(const source of [toggle,empty,theme])
+    assert.doesNotMatch(source,/LightC-UI|Evan Lau/);
+});
