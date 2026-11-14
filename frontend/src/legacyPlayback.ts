@@ -139,3 +139,22 @@ export function legacyError(err: unknown): string {
     default: return "原版任务操作失败，请检查安装与登录状态。";
   }
 }
+
+/** UI-safe explanation of the actual local process exit, not server progress. */
+export function legacyExitMessage(status: LegacyTaskStatus): string {
+  if (status.state !== "exited") return "";
+  if (status.platform !== "zhidao") {
+    return status.exit_code === 0 ? "原版任务已结束；请核验平台记录。" :
+      `原版任务已退出（代码 ${status.exit_code ?? "未知"}），请检查该平台登录与配置。`;
+  }
+  switch (status.exit_code) {
+    case 0: return "ZHS 进程已正常退出；不代表服务器确认学习完成。";
+    case 2: return "ZHS 启动参数无效，请重新同步并选择课程。";
+    case 4: return "ZHS 登录会话或课程缓存不可用，请重新验证知到登录并同步课程。";
+    case 5: return "未找到可用的 ZHS 0.1.5 运行时，请重新安装完整学序安装包。";
+    case 6: return "所选课程不属于当前登录会话、已失效，或缺少有效课程路由，请重新同步课程。";
+    case 9: return "原版 ZHS 要求交互输入，当前无终端模式无法继续；需在应用内处理该交互。";
+    case 1: return "ZHS 已启动但原版执行失败，请检查登录、课程状态及运行环境。";
+    default: return `ZHS 意外退出（代码 ${status.exit_code ?? "未知"}），尚未确认执行成功。`;
+  }
+}
