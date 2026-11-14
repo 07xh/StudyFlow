@@ -1,30 +1,27 @@
 # 源码来源与迁移记录
 
 ## 知到
-- 上游仓库：`07xh/zhidao-assistant`
-- 审查时上游 `main` 树 SHA：`157c48aa2c37da8d15137c94be3ef67afc2f6cb9`
-- `payload/zhidao_courses.py` → `src/studyflow/platforms/zhidao/courses.py`：仅调整 `zhidao_diagnostics` 为包内相对导入。
-- `payload/zhidao_diagnostics.py` → `src/studyflow/platforms/zhidao/diagnostics.py`：原样迁入。
-- 上游包含 GPL-3.0 LICENSE；正式发布前应完成整套依赖与许可证合规审查。
+- 上游仓库：`07xh/zhidao-assistant`。
+- 原始任务启动器、监控/播放器资源和只读 CLI 文件快照位于 `legacy/zhidao/`。
+- 来源版本：`53c92446d40b2cd1732c9aa1884d9f3b3a3fe55a`；文件字节与来源 blob SHA 由 `docs/ORIGINAL_SOURCE_MANIFEST.json` 和 `tests/test_original_playback.py` 持续核验。
+- `src/studyflow/platforms/zhidao/` 中的课程、诊断、二维码和缓存适配器保留独立模块边界；正式发布仍需检查全部依赖许可证。
 
 ## 雨课堂
-- 上游仓库：`07xh/yuketang-heartbeat`
-- 审查时上游 `main` 树 SHA：`a81cf336d7f2d635d7500b5d6698e251e88c5a73`
-- 已确认 `main.py`、`exe_entry.py` 和 requirements；尚未迁入运行时模块。
-- `exe_entry.py` 自述旧 EXE 字节码未完全反编译；不能视为全部原始功能已恢复。
+- 上游仓库：`07xh/yuketang-heartbeat`。
+- 来源版本：`a81cf336d7f2d635d7500b5d6698e251e88c5a73`。
+- 原始 `main.py`、恢复版 `exe_entry.py` 和 `requirements.txt` 已快照至 `legacy/yuketang/`，文件 SHA 由 `docs/ORIGINAL_SOURCE_MANIFEST.json` 锁定。
+- 原始 `main.py` 由隔离的 StudyFlow 子进程执行，不直接导入 GUI/IPC 主进程。只读课程元数据适配器与原版任务执行器分离。
+- `exe_entry.py` 属于恢复版入口；原 EXE 字节码未完全恢复，不宣称全部历史菜单和功能均已找回。
+- 上游仓库对第三方材料权利和再分发许可的说明仍需遵守；未经确认的代码不应继续公开复制或打包。
 
-## UI
-- LightC-UI 2.18.3 原始 ZIP 需要重新核对实际组件和依赖后迁入，当前仓库未包含其源码。
+## UI 与第三方许可
+- 用户提供的 `LightC-UI-源码-2.18.3.zip` 已重新读取，SHA-256：`f853a16e890ab8f082e62c33dd360b1cf396a41f8c904f7f85919fd7d4836624`。
+- 根目录许可证为 **LightC Source Available License v1.0**，允许个人教育/研究和非商业修改，但限制未经书面许可分发修改版、编译包及将其作为独立产品或替代产品发布。
+- StudyFlow 公开仓库和安装程序不复制该项目的源码、组件、资源或衍生实现。侧栏、主题、开关和空状态由 StudyFlow 自有 React/TypeScript/CSS 独立实现。
+- 详细审查见 `docs/LIGHTC_UI_REVIEW.md` 和 `docs/LICENSE_PROVENANCE.md`。
 
 ## 验收规则
 - 不使用模拟课程数据宣称真实平台可用。
-- 原仓库继续保留；正式 EXE 仅从 StudyFlow 构建。
+- 原始快照与上游来源 SHA 必须持续一致；有意修改须单独记录并审查。
 - 登录凭据、Cookie、HAR 与本地缓存不得提交。
-
-## 2026-11-14 知到 UI 第二阶段迁移
-
-- 审查基线更新为 `07xh/zhidao-assistant@53c92446d40b2cd1732c9aa1884d9f3b3a3fe55a`。
-- 学序使用独立 React/TypeScript 组件表达动态课程卡片、登录入口、主题、响应式布局与三种服务器证据状态；**未直接复制 LightC 限制素材、原 XAML 或 PowerShell GUI**。
-- 原知到实际读课由已连接的 Tauri Python sidecar 转发，沿用 HMAC 会话检查；本轮新增课程类型、stale 和去重身份字段。
-- 原二维码刷新/自动清理机制仍在上游 WPF 应用；学序调用原版窗口，不声称已独立迁移其认证实现。
-- 具体实现和剩余门禁参见 `docs/ZHIDAO_UI_MIGRATION.md`。
+- CI、离线测试和 Windows 打包不能替代真实账号与真实课程端到端验收。
