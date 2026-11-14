@@ -41,3 +41,11 @@
 - CI 执行 Python pytest 与前端 TypeScript/Vite build。
 - Windows 打包仍由手动触发的 Windows workflow 负责。
 - CI 成功不表示已通过真实登录/课程或 Windows 安装验收。
+
+## LightC-UI 2.18.3 选择性组件适配
+
+从用户提供的 `LightC-UI-源码-2.18.3.zip` 中选取独立控件的交互实现进行适配。
+本次只采用三态主题选择、原生复选框开关逻辑、通用空数据态和侧栏折叠/记忆设计，
+落地在 `ThemeModeSelector`、`Switch`、`EmptyState` 和 `AppShell`。
+移除了原应用的清理模块、i18n、Tailwind、专属 Context 等依赖，保留 StudyFlow 的
+Tauri IPC、平台登录及真实课程读取逻辑。不复制原应用的完整界面或无关业务。

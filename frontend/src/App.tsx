@@ -9,6 +9,9 @@ import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo,platformRegistry} from "./ui/registry";
 import {useAppearance} from "./ui/useAppearance";
+import {ThemeModeSelector} from "./ui/ThemeModeSelector";
+import {Switch} from "./ui/Switch";
+import {EmptyState} from "./ui/EmptyState";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const credentialFields=[
@@ -21,7 +24,15 @@ const credentialFields=[
 
 export default function App(){
   const [page,setPage]=useState<Page>("home");
-  const {dark,toggleTheme}=useAppearance();
+  const {dark,mode,setMode,toggleTheme}=useAppearance();
+  const [compactCards,setCompactCards]=useState(()=>{
+    try{return window.localStorage.getItem("studyflow.cards.compact")==="true";}
+    catch{return false;}
+  });
+  useEffect(()=>{
+    try{window.localStorage.setItem("studyflow.cards.compact",String(compactCards));}
+    catch{/* Setting remains usable in this session. */}
+  },[compactCards]);
   const [platforms,setPlatforms]=useState<Record<Platform,PlatformState>>(initialPlatforms);
   const [busy,setBusy]=useState("");
   const [notice,setNotice]=useState("");
@@ -148,16 +159,16 @@ export default function App(){
     {(compact?courses:filtered).length>0
       ?<div className="course-grid">{(compact?courses.slice(0,4):filtered).map(course=>
         <CourseCard course={course} key={course.platform+":"+course.course_id}/>)}</div>
-      :<div className="empty"><BookOpen size={35}/>
-        <strong>{courses.length>0?"未找到匹配课程":"暂无真实课程数据"}</strong>
-        <span>{courses.length>0?"可以更换筛选条件。":"完成平台登录并同步后，这里显示实际课程。"}</span>
-        {courses.length===0&&<button className="secondary" type="button"
-          onClick={()=>setPage("platforms")}>前往平台管理</button>}
-      </div>}
+      :<EmptyState icon={BookOpen}
+        title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
+        description={courses.length>0?"可以更换筛选条件。":"完成平台登录并同步后，这里显示实际课程。"}
+        action={courses.length===0?<button className="secondary" type="button"
+          onClick={()=>setPage("platforms")}>前往平台管理</button>:undefined}/>
+    }
   </section>;
 
   return <AppShell page={page} onNavigate={setPage} dark={dark} onThemeToggle={toggleTheme}
-    desktop={desktop} notice={notice}>
+    desktop={desktop} notice={notice} compact={compactCards}>
     {page==="home"&&<>
       <div className="hero">
         <div>
@@ -220,8 +231,12 @@ export default function App(){
         <div className="sf-settings-line">
           <div><strong>界面主题</strong>
             <p>主题设置会在下次打开学序时保留。</p></div>
-          <button className="secondary" type="button" onClick={toggleTheme}>
-            切换为{dark?"浅色":"深色"}主题</button>
+          <ThemeModeSelector mode={mode} onChange={setMode}/>
+        </div>
+        <div className="sf-settings-line">
+          <div><strong>紧凑卡片</strong><p>在小屏幕显示更多课程，不改变学习数据。</p></div>
+          <Switch checked={compactCards} aria-label="紧凑卡片"
+            onChange={next=>setCompactCards(next)}/>
         </div>
       </section>
       <section className="settings-card">

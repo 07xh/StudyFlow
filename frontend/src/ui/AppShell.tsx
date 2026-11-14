@@ -1,5 +1,5 @@
-import type {ReactNode} from "react";
-import {BookOpen,ChevronRight,GraduationCap,LayoutDashboard,Moon,Settings,ShieldCheck,Sun} from "lucide-react";
+import {useEffect,useState,type ReactNode} from "react";
+import {BookOpen,ChevronRight,GraduationCap,LayoutDashboard,Moon,PanelLeftClose,PanelLeftOpen,Settings,ShieldCheck,Sun} from "lucide-react";
 import type {LucideIcon} from "lucide-react";
 import "./foundation.css";
 
@@ -16,16 +16,31 @@ const titles:Record<Page,string>={
 
 interface Props {
   page:Page;onNavigate:(next:Page)=>void;dark:boolean;onThemeToggle:()=>void;
-  desktop:boolean;notice:string;children:ReactNode;
+  desktop:boolean;notice:string;compact:boolean;children:ReactNode;
 }
-export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,children}:Props){
-  return <div className={dark?"app dark sf-shell":"app sf-shell"}>
+export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,compact,children}:Props){
+  const [collapsed,setCollapsed]=useState(()=>{
+    try{return window.localStorage.getItem("studyflow.nav.collapsed")==="true";}
+    catch{return false;}
+  });
+  useEffect(()=>{
+    try{window.localStorage.setItem("studyflow.nav.collapsed",String(collapsed));}
+    catch{/* Sidebar still works without persisted preference. */}
+  },[collapsed]);
+  return <div className={["app","sf-shell",dark?"dark":"",collapsed?"sf-collapsed":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
     <aside className="sidebar" aria-label="主导航">
       <div className="brand">
         <div className="brand-icon"><GraduationCap size={23}/></div>
         <div><strong>学序</strong><small>StudyFlow</small></div>
       </div>
-      <div className="section-label">工作空间</div>
+      <div className="sf-nav-head">
+        <span className="section-label">工作空间</span>
+        <button className="sf-nav-toggle" title={collapsed?"展开侧边栏":"折叠侧边栏"}
+          type="button" aria-label={collapsed?"展开侧边栏":"折叠侧边栏"}
+          aria-expanded={!collapsed} onClick={()=>setCollapsed(current=>!current)}>
+          {collapsed?<PanelLeftOpen size={19}/>:<PanelLeftClose size={19}/>}
+        </button>
+      </div>
       <nav aria-label="学习工作空间">
         {navigation.map(item=><button key={item.id} type="button"
           title={item.label} aria-current={page===item.id?"page":undefined}
