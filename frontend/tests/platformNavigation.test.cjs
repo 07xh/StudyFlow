@@ -87,6 +87,7 @@ test("LightC AnchorNav pattern stays compact, floating, and keeps settings in th
  assert.doesNotMatch(shell,/systemNavigation|sf-floating-nav__brand/);
  assert.match(css,/width:32px/);
  assert.match(css,/left:12px/);
- assert.match(css,/width:min\(196px/);
+ assert.match(css,/width:max-content/);
+ assert.match(css,/min-width:132px/);
  assert.match(css,/padding-left:clamp\(18px,2\.4vw,34px\)/);
 });
