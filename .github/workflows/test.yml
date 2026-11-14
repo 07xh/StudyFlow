@@ -27,4 +27,11 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e '.[desktop,dev]'
+      - run: python -m PyInstaller --noconfirm --onefile --console --name studyflow-bridge --paths src --collect-all keyring --distpath packaging/sidecar --workpath build/pyinstaller --specpath build/specs packaging/bridge_entry.py
+      - run: npm install --no-audit --no-fund
+      - run: npm run tauri -- icon packaging/icon.svg
       - run: cargo check --manifest-path src-tauri/Cargo.toml
