@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,7 +53,7 @@ def test_real_cache_adapter_preserves_type_stale_and_identity(installed_reader, 
                     "courses": rows}), encoding="utf-8"
     )
     def fake_run(args, **kwargs):
-        assert args == [str(python), str(install / "zhidao_only.py"), "courses"]
+        assert args == [sys.executable, "-m", "studyflow.platforms.zhidao.upstream.zhidao_only", "courses"]
         return SimpleNamespace(returncode=0, stdout="")
     monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
     result = legacy_runtime.read_courses()
