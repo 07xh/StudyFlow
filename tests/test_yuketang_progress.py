@@ -64,6 +64,24 @@ def test_session_isolation_and_no_path_traversal(monkeypatch, tmp_path):
         read_session_progress("../" + session)
 
 
+def test_richtext_stats_do_not_leak_into_video_failure_count():
+    p = parse_original_log(
+        "开始批量浏览图文内容...\n"
+        "准备浏览 2 个图文\n"
+        "正在处理第 1/2 个图文\n"
+        "图文批量浏览完成！\n"
+        "总图文数: 2\n"
+        "成功浏览: 1\n"
+        "失败:     1\n"
+        "图文浏览结果: 共2篇, 成功1篇, 失败1篇\n"
+        "开始批量观看视频...\n"
+        "准备观看 1 个视频\n"
+    )
+    assert p["rich_total"] == 2
+    assert p["rich_success"] == 1 and p["rich_failed"] == 1
+    assert p["failed"] == 0
+
+
 def test_server_rate_is_only_logged_original_response():
     p = parse_original_log("开始并发观看视频\n发送心跳成功 - 位置: 60.0s/60.0s (100.0%), 事件: playing")
     assert p["simulation_percent"] == 100
