@@ -13,6 +13,15 @@ from typing import Any
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
 from studyflow.platforms.zhidao import qr_runtime
 from studyflow.platforms.zhidao.cookie_import import import_cookie
+from studyflow.platforms.zhidao.legacy_runtime import (
+    refresh_progress as refresh_zhidao_progress, verify_course as verify_zhidao_course,
+    resolve_course as resolve_zhidao_course, get_player_settings as get_zhidao_player_settings,
+    save_player_settings as save_zhidao_player_settings, diagnose_server as diagnose_zhidao_server,
+    clear_session as clear_zhidao_session, clear_course_cache as clear_zhidao_course_cache,
+    read_document as read_zhidao_document,
+    read_course_detail as read_zhidao_course_detail,
+    consent_status as get_consent_status, accept_consent as accept_studyflow_consent,
+)
 
 # Best-effort cleanup when the persistent JSONL process reaches normal EOF.
 atexit.register(qr_runtime.cancel)
@@ -23,6 +32,15 @@ from studyflow.platforms.yuketang.legacy_config import read_settings as get_orig
 
 MAX_LINE = 600000
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
+
+
+def _course_payload(course):
+    return {
+        "platform": course.platform.value, "course_id": course.course_id, "title": course.title,
+        "progress_percent": course.progress_percent, "course_type": course.course_type,
+        "stale": course.stale, "progress_evidence": course.progress_evidence,
+        "verified_at": course.verified_at,
+    }
 
 
 def dispatch(request: dict[str, Any]) -> dict[str, Any]:
@@ -70,12 +88,95 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             courses = ADAPTERS[platform].list_courses()
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
-        return {"id": request_id, "ok": True, "data": [
-            {"platform": c.platform.value, "course_id": c.course_id, "title": c.title,
-             "progress_percent": c.progress_percent, "course_type": c.course_type,
-             "stale": c.stale, "progress_evidence": None, "verified_at": None}
-            for c in courses
-        ]}
+        return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
+    if operation in ("zhidao.progress.sync", "zhidao.progress.verify"):
+        try:
+            if operation == "zhidao.progress.sync":
+                snapshot = refresh_zhidao_progress()
+            else:
+                course_key = request.get("course_key")
+                if not isinstance(course_key, str) or len(course_key) != 64:
+                    return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+                snapshot = verify_zhidao_course(course_key)
+            return {"id": request_id, "ok": True, "data": {
+                "courses": [_course_payload(c) for c in snapshot["courses"]],
+                "incomplete": snapshot["incomplete"],
+                "fetched_at": snapshot["fetched_at"],
+            }}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except RuntimeError as exc:
+            error = "COURSE_NOT_FOUND" if str(exc) == "COURSE_NOT_FOUND" else "ZHIDAO_PROGRESS_FAILED"
+            return {"id": request_id, "ok": False, "error": error}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHIDAO_PROGRESS_FAILED"}
+    if operation == "zhidao.course.detail":
+        try:
+            data = read_zhidao_course_detail(request.get("course_key"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except RuntimeError as exc:
+            error = "COURSE_NOT_FOUND" if str(exc) == "COURSE_NOT_FOUND" else "PLATFORM_NOT_READY"
+            return {"id": request_id, "ok": False, "error": error}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+    if operation == "studyflow.consent.status":
+        try:
+            return {"id": request_id, "ok": True, "data": get_consent_status()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CONSENT_STORAGE_FAILED"}
+    if operation == "studyflow.consent.accept":
+        try:
+            return {"id": request_id, "ok": True, "data": accept_studyflow_consent()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CONSENT_STORAGE_FAILED"}
+    if operation == "zhidao.player.target":
+        try:
+            target = resolve_zhidao_course(request.get("course_key"))
+            return {"id": request_id, "ok": True, "data": target}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except RuntimeError as exc:
+            error = "COURSE_NOT_FOUND" if str(exc) == "COURSE_NOT_FOUND" else "COURSE_ROUTE_UNAVAILABLE"
+            return {"id": request_id, "ok": False, "error": error}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "COURSE_ROUTE_UNAVAILABLE"}
+    if operation == "zhidao.player.settings.get":
+        try:
+            return {"id": request_id, "ok": True, "data": get_zhidao_player_settings()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLAYER_SETTINGS_UNAVAILABLE"}
+    if operation == "zhidao.player.settings.save":
+        try:
+            return {"id": request_id, "ok": True, "data": save_zhidao_player_settings(request.get("settings"))}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_PLAYER_SETTINGS"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLAYER_SETTINGS_UNAVAILABLE"}
+    if operation == "zhidao.diagnose":
+        try:
+            return {"id": request_id, "ok": True, "data": diagnose_zhidao_server()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHIDAO_DIAGNOSE_FAILED"}
+    if operation == "zhidao.session.clear":
+        try:
+            qr_runtime.cancel()
+            return {"id": request_id, "ok": True, "data": clear_zhidao_session()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHIDAO_DATA_CLEAR_FAILED"}
+    if operation == "zhidao.cache.clear":
+        try:
+            return {"id": request_id, "ok": True, "data": clear_zhidao_course_cache()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHIDAO_DATA_CLEAR_FAILED"}
+    if operation == "zhidao.document.read":
+        try:
+            return {"id": request_id, "ok": True, "data": read_zhidao_document(request.get("document_id"))}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_DOCUMENT"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "DOCUMENT_UNAVAILABLE"}
     if operation == "videos.list":
         if request.get("platform") != "yuketang":
             return {"id": request_id, "ok": False, "error": "UNKNOWN_PLATFORM"}

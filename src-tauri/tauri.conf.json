@@ -35,7 +35,10 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../packaging/sidecar/studyflow-bridge.exe": "bin/studyflow-bridge.exe"
+      "../packaging/sidecar/studyflow-bridge.exe": "bin/studyflow-bridge.exe",
+      "../legacy/zhidao/Official-Player.ps1": "legacy/zhidao/Official-Player.ps1",
+      "../legacy/zhidao/Official-MediaController.js": "legacy/zhidao/Official-MediaController.js",
+      "../legacy/zhidao/Install-WebView2.ps1": "legacy/zhidao/Install-WebView2.ps1"
     },
     "windows": {
       "nsis": {

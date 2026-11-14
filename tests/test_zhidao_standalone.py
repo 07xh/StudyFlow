@@ -11,15 +11,29 @@ from studyflow.platforms.zhidao import legacy_runtime, qr_runtime
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_packaged_entry_rejects_write_modes_without_loading_zhs(monkeypatch):
+def test_packaged_entry_exposes_only_readonly_progress_and_single_course_verify(monkeypatch):
+    from types import ModuleType
+    from studyflow.platforms.zhidao import upstream, verify_entry
+
+    # Stub the vendored ZHS import boundary: this test validates dispatch only,
+    # and CI intentionally does not install the user's external ZHS runtime.
+    reader = ModuleType("zhidao_only")
+    reader.main = lambda mode: 0 if mode == "progress" else 2
+    monkeypatch.setattr(upstream, "zhidao_only", reader, raising=False)
+    monkeypatch.setitem(sys.modules, "studyflow.platforms.zhidao.upstream.zhidao_only", reader)
+    monkeypatch.setattr(verify_entry, "main", lambda args: 0 if args == ["a" * 64] else 2)
+
     spec = importlib.util.spec_from_file_location("studyflow_entry_test", ROOT / "packaging" / "bridge_entry.py")
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
+
     monkeypatch.setattr(sys, "argv", ["studyflow-bridge.exe", "--zhidao-readonly", "progress"])
-    assert module.main() == 2
+    assert module.main() == 0
     monkeypatch.setattr(sys, "argv", ["studyflow-bridge.exe", "--zhidao-readonly", "verify-one"])
     assert module.main() == 2
+    monkeypatch.setattr(sys, "argv", ["studyflow-bridge.exe", "--zhidao-verify-one", "a" * 64])
+    assert module.main() == 0
 
 
 def test_readonly_operations_use_this_app_python_not_legacy_venv(monkeypatch):

@@ -1,4 +1,5 @@
 mod legacy_tasks;
+mod zhidao_player;
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
@@ -76,7 +77,20 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     let operation = request.get("operation").and_then(|v| v.as_str()).unwrap_or("");
     match operation {
         "ping" | "platform.status" | "yuketang.clear"
-        | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel" => Ok(()),
+        | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
+        | "zhidao.progress.sync" | "zhidao.player.settings.get"
+        | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
+        | "studyflow.consent.status" | "studyflow.consent.accept" => Ok(()),
+        "zhidao.progress.verify" | "zhidao.player.target"
+            if request.get("course_key").and_then(|x| x.as_str())
+                .is_some_and(|key| key.len() == 64
+                    && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
+        "zhidao.player.settings.save" if request.get("settings").map_or(false, |x| x.is_object()) => Ok(()),
+        "zhidao.course.detail" if request.get("course_key").and_then(|x| x.as_str())
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
+        "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
+            .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
         "yuketang.progress" if request.get("run_id").and_then(|x| x.as_str())
@@ -148,6 +162,46 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
 }
 
 #[tauri::command]
+fn zhidao_open_official_site() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        Command::new("cmd.exe")
+            .args(["/C", "start", "", "https://www.zhihuishu.com/"])
+            .creation_flags(0x08000000)
+            .spawn()
+            .map_err(|_| "OFFICIAL_SITE_OPEN_FAILED")?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
+#[tauri::command]
+fn studyflow_exit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
+fn zhidao_open_data_folder() -> Result<(), String> {
+    let home = std::env::var_os("USERPROFILE").ok_or("USERPROFILE_UNAVAILABLE")?;
+    let folder = PathBuf::from(home).join(".zhs");
+    std::fs::create_dir_all(&folder).map_err(|_| "ZHS_DATA_FOLDER_UNAVAILABLE")?;
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe").arg(folder).spawn()
+            .map_err(|_| "ZHS_DATA_FOLDER_OPEN_FAILED")?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
+#[tauri::command]
 fn launch_zhidao_legacy() -> Result<(), String> {
     let dir = std::env::var_os("LOCALAPPDATA").ok_or("Windows app directory unavailable")?;
     let script = PathBuf::from(dir).join("ZHSDesktop").join("Zhidao-GUI.ps1");
@@ -169,15 +223,53 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(Mutex::new(None::<QrBridgeWorker>)))
         .manage(legacy_tasks::LegacyTasks::default())
+        .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit,
+            zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
+            zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
+            zhidao_player::zhidao_player_clear_web_profile,
             legacy_tasks::legacy_start, legacy_tasks::legacy_status, legacy_tasks::legacy_stop
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<legacy_tasks::LegacyTasks>().shutdown();
+                window.state::<zhidao_player::ZhidaoPlayerManager>().shutdown();
             }
         })
         .run(tauri::generate_context!())
         .expect("Failed to launch StudyFlow");
+}
+
+
+
+#[cfg(test)]
+mod ipc_validation_tests {
+    use super::validate;
+    use serde_json::json;
+
+    #[test]
+    fn allows_zhidao_readonly_progress_operations() {
+        assert!(validate(&json!({"id":"a","version":1,"operation":"zhidao.progress.sync"})).is_ok());
+        assert!(validate(&json!({"id":"b","version":1,"operation":"zhidao.progress.verify","course_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})).is_ok());
+        assert!(validate(&json!({"id":"c","version":1,"operation":"zhidao.player.target","course_key":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"})).is_ok());
+        assert!(validate(&json!({"id":"d","version":1,"operation":"zhidao.player.settings.get"})).is_ok());
+        assert!(validate(&json!({"id":"e","version":1,"operation":"zhidao.diagnose"})).is_ok());
+        assert!(validate(&json!({"id":"f","version":1,"operation":"zhidao.session.clear"})).is_ok());
+        assert!(validate(&json!({"id":"g","version":1,"operation":"zhidao.cache.clear"})).is_ok());
+        assert!(validate(&json!({"id":"h","version":1,"operation":"zhidao.document.read","document_id":"privacy"})).is_ok());
+        assert!(validate(&json!({"id":"i","version":1,"operation":"zhidao.player.settings.save","settings":{}})).is_ok());
+        assert!(validate(&json!({"id":"j","version":1,"operation":"zhidao.course.detail","course_key":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"})).is_ok());
+        assert!(validate(&json!({"id":"k","version":1,"operation":"studyflow.consent.status"})).is_ok());
+        assert!(validate(&json!({"id":"l","version":1,"operation":"studyflow.consent.accept"})).is_ok());
+        assert!(validate(&json!({"id":"m","version":1,"operation":"zhidao.diagnose"})).is_ok());
+    }
+
+    #[test]
+    fn rejects_malformed_zhidao_course_keys_at_tauri_boundary() {
+        for key in ["../invalid", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] {
+            assert!(validate(&json!({"id":"c","version":1,"operation":"zhidao.progress.verify","course_key":key})).is_err());
+        }
+    }
 }

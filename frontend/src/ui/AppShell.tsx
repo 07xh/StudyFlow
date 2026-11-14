@@ -1,8 +1,15 @@
-import {useEffect,useState,type ReactNode} from "react";
 import {
-  Activity,BookOpen,ChevronDown,ChevronRight,GraduationCap,History,
-  LayoutDashboard,Layers3,ListChecks,Moon,PanelLeftClose,PanelLeftOpen,
-  RefreshCw,Settings,Sun
+  useEffect,
+  useRef,
+  useState,
+  type FocusEvent as ReactFocusEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode
+} from "react";
+import {
+  Activity,BookOpen,ChevronDown,GraduationCap,History,
+  LayoutDashboard,Layers3,ListChecks,Moon,Navigation,Pin,
+  RefreshCw,Settings,Sun,X
 } from "lucide-react";
 import type {LucideIcon} from "lucide-react";
 import {NoticeBanner} from "./NoticeBanner";
@@ -32,6 +39,15 @@ const titles:Record<Page,string>={
   records:"学习记录",logs:"日志中心",settings:"设置"
 };
 
+function readNavPinned():boolean{
+  try{return window.localStorage.getItem("studyflow.nav.pinned")==="true";}
+  catch{return false;}
+}
+function readPlatformExpanded():boolean{
+  try{return window.localStorage.getItem("studyflow.nav.platform-expanded")!=="false";}
+  catch{return true;}
+}
+
 interface Props {
   page:Page;onNavigate:(next:Page)=>void;dark:boolean;onThemeToggle:()=>void;
   onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
@@ -40,42 +56,102 @@ interface Props {
 export function AppShell({
   page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children
 }:Props){
-  const [collapsed,setCollapsed]=useState(()=>{
-    try{return window.localStorage.getItem("studyflow.nav.collapsed")==="true";}
-    catch{return false;}
-  });
-  const [platformExpanded,setPlatformExpanded]=useState(()=>{
-    try{return window.localStorage.getItem("studyflow.nav.platform-expanded")!=="false";}
-    catch{return true;}
-  });
+  const [navPinned,setNavPinned]=useState(readNavPinned);
+  const [navOpen,setNavOpen]=useState(readNavPinned);
+  const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
+  const navRootRef=useRef<HTMLDivElement|null>(null);
+  const closeTimerRef=useRef<number|null>(null);
+
+  function cancelCloseTimer(){
+    if(closeTimerRef.current!==null){
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current=null;
+    }
+  }
+  function closeNavigation(){
+    cancelCloseTimer();
+    setNavPinned(false);
+    setNavOpen(false);
+  }
+  function toggleNavigationPin(){
+    cancelCloseTimer();
+    const next=!navPinned;
+    setNavPinned(next);
+    setNavOpen(next);
+  }
+  function handlePointerEnter(event:ReactPointerEvent<HTMLElement>){
+    if(event.pointerType==="touch")return;
+    cancelCloseTimer();
+    setNavOpen(true);
+  }
+  function handlePointerLeave(event:ReactPointerEvent<HTMLElement>){
+    if(event.pointerType==="touch"||navPinned)return;
+    cancelCloseTimer();
+    closeTimerRef.current=window.setTimeout(()=>{closeTimerRef.current=null;setNavOpen(false);},180);
+  }
+  function handleNavBlur(event:ReactFocusEvent<HTMLDivElement>){
+    const nextTarget=event.relatedTarget;
+    if(nextTarget instanceof Node&&navRootRef.current?.contains(nextTarget))return;
+    if(!navPinned)setNavOpen(false);
+  }
+
   useEffect(()=>{
-    try{window.localStorage.setItem("studyflow.nav.collapsed",String(collapsed));}
-    catch{/* Navigation stays usable in this session. */}
-  },[collapsed]);
+    try{window.localStorage.setItem("studyflow.nav.pinned",String(navPinned));}
+    catch{/* Navigation remains available for the current session. */}
+  },[navPinned]);
   useEffect(()=>{
     try{window.localStorage.setItem("studyflow.nav.platform-expanded",String(platformExpanded));}
-    catch{/* Navigation stays usable in this session. */}
+    catch{/* The current navigation state remains available for this session. */}
   },[platformExpanded]);
+  useEffect(()=>{
+    if(!navOpen)return;
+    const handleOutsidePointerDown=(event:PointerEvent)=>{
+      const target=event.target;
+      if(target instanceof Node&&!navRootRef.current?.contains(target)){
+        setNavPinned(false);
+        setNavOpen(false);
+      }
+    };
+    const handleKeyDown=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){
+        setNavPinned(false);
+        setNavOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown",handleOutsidePointerDown);
+    document.addEventListener("keydown",handleKeyDown);
+    return ()=>{
+      document.removeEventListener("pointerdown",handleOutsidePointerDown);
+      document.removeEventListener("keydown",handleKeyDown);
+    };
+  },[navOpen]);
+  useEffect(()=>()=>cancelCloseTimer(),[]);
+
   const platformActive=page==="platforms"||page==="platform-zhidao"||page==="platform-yuketang";
   const renderItem=(item:{id:Page;label:string;icon:LucideIcon},nested=false)=>
     <button key={item.id} type="button" title={item.label} aria-label={item.label}
+      tabIndex={navOpen?0:-1}
       aria-current={page===item.id?"page":undefined}
-      className={[ "nav",page===item.id?"active":"",nested?"sf-nav-child":""].filter(Boolean).join(" ")}
+      className={["nav",page===item.id?"active":"",nested?"sf-nav-child":""].filter(Boolean).join(" ")}
       onClick={()=>onNavigate(item.id)}>
-      <item.icon size={nested?16:19}/><span className="nav-label">{item.label}</span>
-      {page===item.id&&<ChevronRight size={14} className="right"/>}
+      <item.icon size={nested?16:18}/>
+      <span className="nav-label">{item.label}</span>
+      {page===item.id&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
     </button>;
-  const renderItems=(items:typeof workspaceNavigation,label:string)=><nav aria-label={label}>
+  const renderItems=(items:typeof workspaceNavigation,label:string)=><nav className="sf-floating-nav__nav" aria-label={label}>
     {items.map(item=>item.id==="platforms"
       ?<div className="sf-platform-nav" key={item.id}>
         <div className="sf-platform-nav-parent">
           <button type="button" title="学习平台" aria-label="学习平台"
+            tabIndex={navOpen?0:-1}
             className={["nav",platformActive?"active":""].filter(Boolean).join(" ")}
             aria-current={page==="platforms"?"page":undefined}
             onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");}}>
-            <Layers3 size={19}/><span className="nav-label">学习平台</span>
+            <Layers3 size={18}/><span className="nav-label">学习平台</span>
+            {page==="platforms"&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
           </button>
           <button type="button" className="sf-nav-expand"
+            tabIndex={navOpen?0:-1}
             aria-label={platformExpanded?"收起学习平台":"展开学习平台"}
             aria-expanded={platformExpanded} title={platformExpanded?"收起":"展开"}
             onClick={()=>setPlatformExpanded(current=>!current)}>
@@ -89,32 +165,52 @@ export function AppShell({
       :renderItem(item))}
   </nav>;
 
-  return <div className={["app","sf-shell",dark?"dark":"",collapsed?"sf-collapsed":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
-    <aside className="sidebar" aria-label="主导航">
-      <div className="brand">
-        <div className="brand-icon"><GraduationCap size={23}/></div>
-        <div><strong>学序</strong><small>StudyFlow</small></div>
-      </div>
-      <div className="sf-nav-head">
-        <span className="section-label">工作空间</span>
-        <button className="sf-nav-toggle" type="button"
-          title={collapsed?"展开侧边栏":"折叠侧边栏"}
-          aria-label={collapsed?"展开侧边栏":"折叠侧边栏"}
-          aria-expanded={!collapsed} onClick={()=>setCollapsed(current=>!current)}>
-          {collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}
-        </button>
-      </div>
-      <div className="sf-nav-group">{renderItems(workspaceNavigation,"学习工作空间")}</div>
-      <div className="sf-nav-group sf-nav-system">
-        <span className="section-label">系统</span>
-        {renderItems(systemNavigation,"系统设置")}
-      </div>
-      <div className="sidebar-bottom">
-        <div className="sf-side-status"><span className="sf-side-dot"/>
-          {desktop?"Windows 桌面":"浏览器预览"}
+  return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
+    <div className="sf-floating-nav" ref={navRootRef}
+      onFocusCapture={()=>{cancelCloseTimer();setNavOpen(true);}}
+      onBlurCapture={handleNavBlur}>
+      <button type="button"
+        className={["sf-floating-nav__trigger",navOpen?"is-open":""].filter(Boolean).join(" ")}
+        aria-label={navPinned?"取消固定并收起导航":navOpen?"固定导航":"打开导航"}
+        aria-expanded={navOpen} aria-pressed={navPinned} aria-controls="sf-floating-navigation"
+        title={navPinned?"取消固定导航":navOpen?"固定导航":"打开导航"}
+        onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}
+        onClick={toggleNavigationPin}>
+        <Navigation size={18}/>
+      </button>
+      <aside id="sf-floating-navigation"
+        className={["sf-floating-nav__panel",navOpen?"is-open":""].filter(Boolean).join(" ")}
+        aria-label="主导航" aria-hidden={!navOpen}
+        onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
+        <div className="sf-floating-nav__header">
+          <div className="sf-floating-nav__brand">
+            <span className="sf-floating-nav__brand-icon"><GraduationCap size={18}/></span>
+            <span className="sf-floating-nav__brand-copy"><strong>学序</strong><small>StudyFlow</small></span>
+          </div>
+          <div className="sf-floating-nav__header-actions">
+            <button type="button" className={["sf-floating-nav__action",navPinned?"is-pinned":""].join(" ")}
+              title={navPinned?"取消固定导航":"固定导航"}
+              aria-label={navPinned?"取消固定导航":"固定导航"} aria-pressed={navPinned}
+              tabIndex={navOpen?0:-1} onClick={toggleNavigationPin}>
+              <Pin size={14}/>
+            </button>
+            <button type="button" className="sf-floating-nav__action"
+              title="关闭导航" aria-label="关闭导航" tabIndex={navOpen?0:-1}
+              onClick={closeNavigation}>
+              <X size={15}/>
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+        <div className="sf-floating-nav__section">
+          <span className="sf-floating-nav__section-label">工作空间</span>
+          {renderItems(workspaceNavigation,"学习工作空间")}
+        </div>
+        <div className="sf-floating-nav__section sf-floating-nav__system">
+          <span className="sf-floating-nav__section-label">系统</span>
+          {renderItems(systemNavigation,"系统设置")}
+        </div>
+      </aside>
+    </div>
     <main className="main" id="main-content">
       <header className="sf-header">
         <div className="sf-page-heading"><h1>{titles[page]}</h1></div>

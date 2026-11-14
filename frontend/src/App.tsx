@@ -6,13 +6,20 @@ import {
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
+import {YuketangTaskArea} from "./components/YuketangTaskArea";
+import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
+import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
+import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
+import {ZhidaoCourseDetailPanel} from "./components/ZhidaoCourseDetailPanel";
+import {StudyFlowConsentGate} from "./components/StudyFlowConsentGate";
+import {ZhidaoActivityPanel} from "./components/ZhidaoActivityPanel";
+import {ZhidaoPlayerMonitor} from "./components/ZhidaoPlayerMonitor";
 import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
 import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
-  fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,
-  openLegacyZhidao,request
+  fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,request
 } from "./bridge";
-import type {Config,Video} from "./bridge";
+import type {Config,Video,ZhidaoPlayerSettings} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {presentCourse,platformNames} from "./presentation";
@@ -65,8 +72,40 @@ export default function App(){
   const [query,setQuery]=useState("");
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
+  const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
+  const [platformLoginExpanded,setPlatformLoginExpanded]=useState(true);
   const initialized=useRef(false);
   const desktop=isDesktop();
+  const [consentAccepted,setConsentAccepted]=useState(!desktop);
+  useEffect(()=>{
+    if(!desktop){setConsentAccepted(true);return;}
+    let live=true;
+    void request<{accepted:boolean}>({operation:"studyflow.consent.status"})
+      .then(result=>{if(live)setConsentAccepted(result.accepted);})
+      .catch(()=>{if(live)setConsentAccepted(false);});
+    return ()=>{live=false;};
+  },[desktop]);
+
+  useEffect(()=>{
+    if(!desktop)return;
+    let live=true;
+    void request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"})
+      .then(settings=>{if(live&&settings.mode)setZhidaoPlaybackMode(settings.mode);})
+      .catch(()=>{});
+    return ()=>{live=false;};
+  },[desktop]);
+
+  async function changeZhidaoPlaybackMode(mode:"official"|"zhs-original"){
+    const previous=zhidaoPlaybackMode;
+    setZhidaoPlaybackMode(mode);
+    try{
+      const current=await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"});
+      await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.save",settings:{...current,mode}});
+    }catch(error){
+      setZhidaoPlaybackMode(previous);
+      setNotice(friendlyBridgeError(error));
+    }
+  }
 
   const recordEvent=useCallback((platform:string,action:string,result:EventResult,detail:string)=>{
     const item:ActivityEntry={
@@ -120,10 +159,10 @@ export default function App(){
   },[desktop,recordEvent]);
 
   useEffect(()=>{
-    if(initialized.current)return;
+    if(!consentAccepted||initialized.current)return;
     initialized.current=true;
     void refresh();
-  },[refresh]);
+  },[refresh,consentAccepted]);
 
   async function sync(platform:Platform){
     const name=platformNames[platform]??platform;
@@ -169,31 +208,19 @@ export default function App(){
     }finally{setBusy("");}
   }
 
-  async function openZhidao(){
-    setBusy("zhidao-login");setNotice("");
-    try{
-      await openLegacyZhidao();
-      setNotice("已打开原版知到登录窗口；完成登录后检测连接。");
-      recordEvent("知到","打开原版登录","info","已调用原版登录窗口");
-    }catch(error){
-      const message=error instanceof Error&&error.message==="LEGACY_NOT_AVAILABLE"
-        ?"未找到原版知到登录窗口，请检查原版运行时。":friendlyBridgeError(error);
-      setNotice(message);recordEvent("知到","打开原版登录","warning",message);
-    }finally{setBusy("");}
-  }
-
   function enterCourses(platform:Platform){
     setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
   }
 
   function goPlatform(platform:Platform){
     setSelectedCourse(null);
+    setPlatformLoginExpanded(true);
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
   function renderPlatformLogin(platform:Platform){
     if(platform==="zhidao")return <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
-      onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}
+      onOpenNative={()=>setQrOpen(true)}
       onImported={()=>{recordEvent("知到","导入 Cookie","success","服务器已确认会话");void refresh();}}/>;
     if(platform==="yuketang")return <YuketangLoginPanel config={config}
       desktop={desktop} busy={Boolean(busy)}
@@ -227,16 +254,47 @@ export default function App(){
     if(!definition)return null;
     return <>
       
+      {platform==="zhidao"&&<section className="sf-zd-mode-selector">
+        <div><strong>知到播放模式</strong><small>选择本次要运行的原版播放方式</small></div>
+        <div className="sf-zd-mode-options">
+          <button type="button" aria-pressed={zhidaoPlaybackMode==="official"}
+            className={zhidaoPlaybackMode==="official"?"active":""}
+            onClick={()=>void changeZhidaoPlaybackMode("official")}>官方 WebView2</button>
+          <button type="button" aria-pressed={zhidaoPlaybackMode==="zhs-original"}
+            className={zhidaoPlaybackMode==="zhs-original"?"active":""}
+            onClick={()=>void changeZhidaoPlaybackMode("zhs-original")}>ZHS 0.1.5 原版任务</button>
+        </div>
+      </section>}
       <section className="sf-platform-task-section">
-        <LegacyPlaybackPanel platform={platform} courses={platforms[platform].courses}
-          desktop={desktop} connected={platforms[platform].status==="connected"}
-          onEvent={(action,result,detail)=>recordEvent(platformNames[platform],action,result,detail)}/>
+        {platform==="zhidao"
+          ?<div hidden={zhidaoPlaybackMode!=="official"}>
+            <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
+              onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+              onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+          </div>
+          :<YuketangTaskArea courses={platforms.yuketang.courses}
+            desktop={desktop} connected={platforms.yuketang.status==="connected"}
+            onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>}
       </section>
+      {platform==="zhidao"&&<>
+        <section className="sf-platform-task-section" hidden={zhidaoPlaybackMode!=="zhs-original"}>
+          <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
+            desktop={desktop} connected={platforms.zhidao.status==="connected"}
+            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+        </section>
+        <ZhidaoProgressPanel courses={platforms.zhidao.courses}
+          desktop={desktop} connected={platforms.zhidao.status==="connected"}
+          onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+          onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+        <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")}/>
+        <ZhidaoAccountTools desktop={desktop} dark={dark}
+          onDataChanged={()=>{setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:[]}}));void refresh();}}/>
+      </>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
-          busy={Boolean(busy)} expanded={true}
+          busy={Boolean(busy)} expanded={platformLoginExpanded}
           onSync={()=>void sync(platform)}
-          onToggleLogin={()=>setPage("platforms")}
+          onToggleLogin={()=>setPlatformLoginExpanded(value=>!value)}
           onEnterCourses={()=>enterCourses(platform)}>
           {renderPlatformLogin(platform)}
         </PlatformCard>
@@ -349,8 +407,10 @@ export default function App(){
       :<EmptyState icon={BookOpen} title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
         description={courses.length>0?"可以更换搜索词或平台筛选。":"在平台卡片中完成登录并同步后，真实课程会显示在这里。"}
         action={courses.length===0?<button className="secondary" type="button" onClick={()=>setPage("platforms")}>前往平台登录</button>:undefined}/>}
-    {selectedCourse&&<div className="course-v2-detail" role="region" aria-label="课程详情">
-      <div><span className="eyebrow">{platformNames[selectedCourse.platform]} / 课程详情</span>
+    {selectedCourse?.platform==="zhidao"&&<ZhidaoCourseDetailPanel course={selectedCourse}
+      desktop={desktop} onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}/>}
+    {selectedCourse?.platform==="yuketang"&&<div className="course-v2-detail" role="region" aria-label="课程详情">
+      <div><span className="eyebrow">雨课堂 / 课程详情</span>
         <h3>{selectedCourse.title}</h3>
         <p>{presentCourse(selectedCourse).detail}；学习进度只有平台服务端确认后才会展示。</p>
       </div>
@@ -382,8 +442,10 @@ export default function App(){
         <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
       :<EmptyState icon={History} title="暂无已核验学习记录"
         description="当前课程接口没有返回可验证的学习进度，不会用本地播放计数代替平台记录。"/>}
-    {selectedCourse&&<div className="course-v2-detail">
-      <div><span className="eyebrow">{platformNames[selectedCourse.platform]} / 学习记录</span>
+    {selectedCourse?.platform==="zhidao"&&<ZhidaoCourseDetailPanel course={selectedCourse}
+      desktop={desktop} onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}/>}
+    {selectedCourse?.platform==="yuketang"&&<div className="course-v2-detail">
+      <div><span className="eyebrow">雨课堂 / 学习记录</span>
         <h3>{selectedCourse.title}</h3><p>{presentCourse(selectedCourse).detail}</p></div>
       <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>关闭</button>
     </div>}
@@ -433,6 +495,10 @@ export default function App(){
         </section>
       </>}
     </AppShell>
+    <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
+    {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
+      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+      onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setNotice("知到登录已通过服务端核验；正在检测连接。");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");void refresh();}}/>}

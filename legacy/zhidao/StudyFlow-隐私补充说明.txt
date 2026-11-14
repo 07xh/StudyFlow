@@ -1,0 +1,39 @@
+学序（StudyFlow）统一 Windows 客户端 · 隐私与本地数据补充说明
+版本：StudyFlow 统一客户端集成版
+本文件补充原知到学习助手 V5.2.9 隐私说明。原版说明和原始脚本保持不变；如与本文件涉及的 StudyFlow 新目录不同，以本文件中的新客户端目录为准。
+
+1. 数据流与网络访问
+- 学序不会把知到 Cookie、课程缓存、学习进度或本机播放观测上传到开发者自建服务器。
+- 知到和雨课堂的业务请求由本机程序直接发往对应平台服务；官方 WebView2 页面也会直接连接网页自身的官方服务与资源。
+- 云端更新功能可能读取 GitHub 发布版本信息并下载用户选择安装的更新包；不会把本机 Cookie 或课程缓存作为更新请求内容。
+- WebView2 的登录会话属于独立网页配置文件，不与 ZHS Python Cookie 共享。
+
+2. 主要本地数据位置
+- %USERPROFILE%\.zhs\cookies.json：ZHS 登录 Cookie，按上游格式明文保存，属于敏感凭证。
+- %USERPROFILE%\.zhs\zhidao-courses.json：当前会话的课程身份与课程缓存。
+- %USERPROFILE%\.zhs\zhidao-progress.json：当前会话的服务器进度核验缓存。
+- %USERPROFILE%\.zhs\config.toml、logs\：ZHS 配置和日志；日志可能包含敏感诊断信息。
+- %LOCALAPPDATA%\ZHSDesktop\official-player-settings.json：官方播放器倍速、自动播放、自动下一节、窗口选项和默认模式；不保存 Cookie。
+- %LOCALAPPDATA%\StudyFlow\privacy-accepted-v1.flag：首次使用声明确认时间标记。
+- %LOCALAPPDATA%\StudyFlow\zhidao-player\LocalAppData\ZHSDesktop\Official-Player.ps1、Official-MediaController.js：学序随安装包部署的原版官方播放器资源副本。
+- %LOCALAPPDATA%\StudyFlow\zhidao-player\LocalAppData\ZHSDesktop\webview2\：官方 WebView2 SDK 文件。
+- %LOCALAPPDATA%\StudyFlow\zhidao-player\LocalAppData\ZHSDesktop\official-webview-profile\：学序内嵌官方 WebView2 的网页 Cookie、登录状态与缓存。
+- 同目录下 monitor-playback-*.json：临时本机 HTML5 视频位置与状态观测文件；播放器关闭后由程序清理。
+- %LOCALAPPDATA%\StudyFlow\legacy-logs\：学序托管的原版任务运行日志，按任务运行 ID 分目录保存。
+
+3. 两种知到播放方式
+- 官方 WebView2：在知到官方网页中登录和播放。学序只对网页识别到的主 HTML5 视频应用用户设置的倍速、自动播放和自动下一节；本机播放位置只用于状态显示，不代表服务器已确认进度。正常关闭播放器后，学序可使用当前 ZHS Cookie 会话发起一次单课只读核验，不提交学习进度。
+- ZHS 0.1.5 原版任务：直接运行随学序打包的原版 ZHS 依赖与原版任务入口。该模式保留上游原有行为，可能按上游实现向知到发送进度/心跳数据；它不是官方 WebView2 模式，也不属于只读核验。使用前应确认自己理解原版行为。
+- 定时进度核验和课程详情读取属于只读查询；它们不会替代原版 ZHS 任务，也不会把本机视频播放位置伪装成服务器进度。
+
+4. 数据清理按钮的范围
+- 退出登录：只删除 %USERPROFILE%\.zhs\cookies.json 和临时二维码文件；不删除课程缓存、进度缓存、配置和日志，也不保证服务端其他会话立即撤销。
+- 清理课程缓存：只删除 zhidao-courses.json 与 zhidao-progress.json；保留 Cookie、配置和日志。
+- 清除网页登录数据：只清除学序内嵌 WebView2 的 official-webview-profile；不删除 ZHS Python Cookie。
+- 打开数据目录：打开当前 Windows 用户的 .zhs 目录。
+- 清理操作不会删除未列入对应清单的文件或目录。正在运行的官方播放器未关闭时，学序拒绝清除其 WebView2 配置文件。
+
+5. 卸载与安全
+- 卸载学序不会自动删除 %USERPROFILE%\.zhs、ZHS 日志或学序的独立 WebView2 配置文件，以免误删其他 ZHS 工具共用的数据。需要清理时，请先使用学序设置页中的对应功能。
+- ZHS Cookie 仍按上游格式明文保存在本机；请保护 Windows 用户账户，不要把 Cookie、二维码、课程缓存、日志或诊断文件发给他人。
+- 不要把本机播放位置、原版任务进程状态或日志中的模拟片段误认为平台服务器已确认的学习进度。只有带有核验时间的服务器记录才会显示为已核验。
