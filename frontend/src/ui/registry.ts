@@ -16,7 +16,7 @@ export interface PlatformDefinition {
 export const platformRegistry:readonly PlatformDefinition[] = [
   {id:"zhidao",name:"知到",mark:"知",summary:"智慧树课程与学习记录",color:"blue",
    capabilities:{legacyLogin:true,videoList:false,sessionConfiguration:false}},
-  {id:"yuketang",name:"雨课堂",mark:"雨",summary:"课程、章节与视频信息",color:"rose",
+  {id:"yuketang",name:"雨课堂",mark:"雨",summary:"课程、章节与视频信息",color:"cyan",
    capabilities:{legacyLogin:false,videoList:true,sessionConfiguration:true}},
 ];
 
