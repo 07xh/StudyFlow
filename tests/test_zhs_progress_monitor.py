@@ -27,14 +27,16 @@ def test_numeric_observer_keeps_local_segment_and_resource_position_separate(tmp
     output = io.StringIO()
     tee = vendor["StdoutObserver"](output, sink)
 
-    tee.write("处理资源 2/5\n")
+    tee.write("处理资源 2/5")
+    tee.write("\n")
     tee.write("\rplaying [####------] 48.5%")
     data = json.loads(sink.path.read_text(encoding="utf-8"))
     assert data["videoSegmentPercent"] == 48.5
     assert data["resourceIndex"] == 2
     assert data["resourceTotal"] == 5
     assert "playing" in output.getvalue()
-    tee.write("\r处理资源 3/5\n")
+    tee.write("\r处理资源 3/5")
+    tee.write("\n")
     next_data = json.loads(sink.path.read_text(encoding="utf-8"))
     assert next_data["videoSegmentPercent"] is None
     assert next_data["resourceIndex"] == 3
