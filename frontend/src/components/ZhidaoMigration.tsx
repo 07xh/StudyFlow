@@ -29,8 +29,8 @@ export function MigratedCourseCard({course,onInspect}:{course:Course;onInspect:(
   </article>;
 }
 
-export function ZhidaoLoginPanel({desktop,busy,onOpenLegacy,onOpenNative,onImported}:{
-  desktop:boolean;busy:boolean;onOpenLegacy:()=>void;onOpenNative:()=>void;onImported:()=>void
+export function ZhidaoLoginPanel({desktop,busy,onOpenNative,onImported}:{
+  desktop:boolean;busy:boolean;onOpenNative:()=>void;onImported:()=>void
 }){
   const [cookieMode,setCookieMode]=useState(false);
   const [cookie,setCookie]=useState("");
@@ -61,9 +61,6 @@ export function ZhidaoLoginPanel({desktop,busy,onOpenLegacy,onOpenNative,onImpor
       <div className="sf-login-actions">
         <button className="primary" type="button" disabled={locked} onClick={onOpenNative}>
           <ScanLine size={16}/>学序内扫码登录
-        </button>
-        <button className="secondary" type="button" disabled={locked} onClick={onOpenLegacy}>
-          打开原版登录窗口
         </button>
         <button className="secondary" type="button" disabled={locked}
           aria-expanded={cookieMode} onClick={()=>setCookieMode(current=>!current)}>
