@@ -55,5 +55,10 @@ export type ZhidaoQrStage =
 export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null};
 
 export function zhidaoQrCommand(action:"start"|"status"|"cancel"):Promise<ZhidaoQrState>{
-  return request<ZhidaoQrState>({operation:"zhidao.qr."+action});
+  const operation = ({
+    start:"zhidao.qr.start",
+    status:"zhidao.qr.status",
+    cancel:"zhidao.qr.cancel"
+  } as const)[action];
+  return request<ZhidaoQrState>({operation});
 }
