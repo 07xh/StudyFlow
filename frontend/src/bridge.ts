@@ -9,7 +9,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
-  | {id: string; version: 1; operation: "yuketang.clear"};
+  | {id: string; version: 1; operation: "yuketang.clear"}
+  | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
 export type BridgeResponse<T> =
   | {id: string | null; ok: true; data: T}
@@ -52,7 +53,8 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
   }
   if (!result.ok) {
     const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
-                             "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED"]);
+                             "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED",
+                             "ZHIDAO_QR_UNAVAILABLE"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -141,6 +143,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "UNSUPPORTED_VERSION": return "桌面端与数据服务协议版本不一致。";
     case "UNKNOWN_PLATFORM": return "不支持该学习平台。";
     case "INVALID_REQUEST": return "本机请求格式有误。";
+    case "ZHIDAO_QR_UNAVAILABLE": return "知到扫码服务尚不可用，检查原版安装与网络。";
     default: return "本机服务调用失败，请检查运行环境。";
   }
 }
@@ -149,4 +152,15 @@ export async function openLegacyZhidao(): Promise<void> {
   if (!isDesktop()) throw new Error("BRIDGE_NOT_READY");
   try { await invoke("launch_zhidao_legacy"); }
   catch { throw new Error("LEGACY_NOT_AVAILABLE"); }
+}
+
+/** Ephemeral QR image, never saved to localStorage or a log. */
+export type ZhidaoQrStage = "idle" | "busy" | "requesting" | "ready" | "scanned" |
+  "confirming" | "verified" | "unavailable" | "rejected" | "expired" |
+  "cancelled" | "failed" | "environment-error";
+export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null};
+export function zhidaoQrCommand(action:"start"|"status"|"cancel"):Promise<ZhidaoQrState>{
+  const operation = ({start:"zhidao.qr.start",status:"zhidao.qr.status",
+    cancel:"zhidao.qr.cancel"} as const)[action];
+  return request<ZhidaoQrState>({operation});
 }
