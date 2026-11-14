@@ -51,3 +51,17 @@ test("Zhidao QR dialog stays themed and platform-owned",()=>{
   assert.match(qr,/data-theme=\{dark\?"dark":"light"\}/);
   assert.match(app,/if\(platform==="zhidao"\)return <ZhidaoLoginPanel/);
 });
+
+test("platform task status and verified progress are placed before login controls",()=>{
+  const app=read("src/App.tsx");
+  const playback=read("src/components/LegacyPlaybackPanel.tsx");
+  const start=app.indexOf("const renderPlatformDetail=");
+  const end=app.indexOf("async function configureFromPanel",start);
+  const detail=app.slice(start,end);
+  assert.ok(start>=0&&end>start);
+  assert.ok(detail.indexOf("sf-platform-task-section")<detail.indexOf("sf-platform-detail"));
+  assert.match(playback,/sf-live-progress-summary/);
+  assert.match(playback,/presentCourse\(course\)/);
+  assert.match(playback,/presentation\.percent !== null/);
+  assert.doesNotMatch(playback,/Math\.random\(\)|setInterval\([^,]+,\s*[1-9]\)/);
+});

@@ -225,6 +225,12 @@ export default function App(){
     const definition=platformInfo(platform);
     if(!definition)return null;
     return <>
+      
+      <section className="sf-platform-task-section">
+        <LegacyPlaybackPanel platform={platform} courses={platforms[platform].courses}
+          desktop={desktop} connected={platforms[platform].status==="connected"}
+          onEvent={(action,result,detail)=>recordEvent(platformNames[platform],action,result,detail)}/>
+      </section>
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
           busy={Boolean(busy)} expanded={true}
@@ -234,11 +240,7 @@ export default function App(){
           {renderPlatformLogin(platform)}
         </PlatformCard>
       </section>
-      <section className="sf-platform-task-section">
-        <LegacyPlaybackPanel platform={platform} courses={platforms[platform].courses}
-          desktop={desktop} connected={platforms[platform].status==="connected"}
-          onEvent={(action,result,detail)=>recordEvent(platformNames[platform],action,result,detail)}/>
-      </section>
+
     </>;
   };
 

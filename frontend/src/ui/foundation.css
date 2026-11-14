@@ -859,3 +859,53 @@
 .sf-shell .sf-platform-detail .sf-platform-login{grid-template-columns:minmax(0,1fr)}
 .sf-shell .sf-login-panel-main{padding:14px 16px}
 .sf-shell .sf-platform-card .sf-platform-identity-copy p:empty{display:none}
+
+/* Platform page: live process status + evidence-only learning progress placed first. */
+.sf-shell .sf-platform-task-section{margin-bottom:12px}
+.sf-shell .sf-live-progress-summary{
+  display:grid;grid-template-columns:minmax(155px,.7fr) minmax(0,1.7fr);gap:10px;
+  padding:12px 0;margin:4px 0 14px;border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+.sf-shell .sf-live-state{
+  display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;
+  padding:11px 12px;border:1px solid var(--line);border-radius:11px;
+  background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-live-state>span,.sf-shell .sf-live-course-heading>span{
+  font-size:11px;color:var(--muted);
+}
+.sf-shell .sf-live-state>strong{font-size:13px;font-weight:700;color:var(--text)}
+.sf-shell .sf-live-state>small,.sf-shell .sf-live-course-heading>small{
+  font-size:10px;color:var(--muted);
+}
+.sf-shell .sf-live-course-progress{
+  min-width:0;padding:10px 12px;border:1px solid var(--line);
+  border-radius:11px;background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-live-course-heading{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+}
+.sf-shell .sf-unverified-note{
+  margin-top:11px;font-size:12px;color:var(--muted);
+}
+.sf-shell .sf-verified-list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.sf-shell .sf-verified-row{
+  display:grid;grid-template-columns:minmax(70px,1fr) minmax(65px,1.4fr) 44px;
+  align-items:center;gap:10px;font-size:11px;
+}
+.sf-shell .sf-verified-row>span{
+  color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.sf-shell .sf-verified-row strong{
+  text-align:right;color:var(--accent-text);font-size:11px;font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-verified-track{
+  height:6px;background:var(--line);overflow:hidden;border-radius:99px;
+}
+.sf-shell .sf-verified-track>span{
+  display:block;height:100%;border-radius:99px;background:var(--accent);
+}
+@media(max-width:760px){
+  .sf-shell .sf-live-progress-summary{grid-template-columns:1fr}
+}
