@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError} from "../bridge";
@@ -24,22 +24,26 @@ export function LegacyPlaybackPanel({
   detailMode?:boolean;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
+  const latestStatusRequest = useRef(0);
   const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState(courseId??"");
   const options = yuketangOptions ?? {...originalYktDefaults};
   const playableCourses = courses.filter(c => c.platform === "zhidao" && (c.course_type === "ai" || c.course_type === "shared") && !c.stale);
-  const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
-    .filter(item => item.presentation.percent !== null);
+  const verified = courses.filter(course => course.platform === platform)
+    .map(course => ({course, presentation: presentCourse(course)}))
+    .filter(item => item.presentation.status === "verified" && item.presentation.percent !== null);
   const liveZhs = platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
   const selectedCourse=courses.find(course=>course.course_id===selection)??null;
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
+    const requestId = ++latestStatusRequest.current;
     try {
       const next = await getLegacyStatus(platform);
+      if (requestId !== latestStatusRequest.current) return;
       if (platform==="zhidao" && next.state==="running" && next.course_id) {
         setSelection(previous => previous || next.course_id || "");
       }
@@ -48,10 +52,17 @@ export function LegacyPlaybackPanel({
         setMessage("");
       }
       if (platform === "yuketang" && next.run_id) {
-        try { setYktProgress(await getYuketangLiveProgress(next.run_id)); }
-        catch { setYktProgress(null); }
+        try {
+          const progress = await getYuketangLiveProgress(next.run_id);
+          if (requestId === latestStatusRequest.current) setYktProgress(progress);
+        } catch {
+          if (requestId === latestStatusRequest.current) setYktProgress(null);
+        }
       } else setYktProgress(null);
-    } catch { setStatus(null);setYktProgress(null); }
+    } catch {
+      if (requestId !== latestStatusRequest.current) return;
+      setStatus(null);setYktProgress(null);
+    }
   }, [desktop, platform]);
 
   useEffect(() => {
@@ -62,18 +73,19 @@ export function LegacyPlaybackPanel({
     void updateStatus();
     if (!desktop) return;
     const timer = window.setInterval(() => { void updateStatus(); }, 2000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearInterval(timer); latestStatusRequest.current++; };
   }, [desktop, updateStatus]);
 
 
 
   async function start() {
+    const requestId = ++latestStatusRequest.current;
     setBusy(true); setMessage("");setYktProgress(null);
     try {
       if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined);
-      setStatus(next);
+      if (requestId === latestStatusRequest.current) setStatus(next);
       setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
       onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
     } catch (error) {
@@ -84,9 +96,11 @@ export function LegacyPlaybackPanel({
   }
 
   async function stop() {
+    const requestId = ++latestStatusRequest.current;
     setBusy(true);setMessage("");
     try {
-      setStatus(await stopLegacy(platform));
+      const next = await stopLegacy(platform);
+      if (requestId === latestStatusRequest.current) setStatus(next);
       setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
       onEvent?.("停止原版任务","success","已停止学序托管的原版进程");
     } catch(error) {setMessage(legacyError(error));onEvent?.("停止原版任务","warning",legacyError(error));}
@@ -148,6 +162,7 @@ export function LegacyPlaybackPanel({
                 <span style={{width:(presentation.percent??0)+"%"}}/>
               </div>
               <strong>{presentation.percent?.toFixed(1)}%</strong>
+              {course.verified_at && <small title={course.verified_at}>核验时间：{course.verified_at}</small>}
             </div>)}</div>
           :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
       </div>}
