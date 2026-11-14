@@ -455,7 +455,7 @@
 .sf-shell .sf-ykt-live-title{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
 .sf-shell .sf-ykt-live-title strong{color:var(--text);font-size:12px}
 .sf-shell .sf-ykt-live-title small,.sf-shell .sf-ykt-live-note{color:var(--muted);font-size:10px;line-height:1.5}
-.sf-shell .sf-ykt-live-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.sf-shell .sf-ykt-live-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:9px}
 .sf-shell .sf-ykt-live-item{display:flex;flex-direction:column;gap:7px;min-width:0;padding:11px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.025)}
 .sf-shell .sf-ykt-live-item>span,.sf-shell .sf-ykt-live-item>small{font-size:10px;color:var(--muted)}
 .sf-shell .sf-ykt-live-item>strong{font-size:18px;color:var(--text);font-variant-numeric:tabular-nums}
