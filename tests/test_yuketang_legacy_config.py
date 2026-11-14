@@ -150,6 +150,13 @@ def test_every_original_yuketang_runtime_setting_is_exposed_in_studyflow():
 
     ui = (root / "frontend" / "src" / "components" / "YuketangTaskArea.tsx").read_text(encoding="utf-8")
     types = (root / "frontend" / "src" / "legacyPlayback.ts").read_text(encoding="utf-8")
-    for field in config.FIELDS:
+    for field, env_key in config.FIELDS.items():
         assert field in ui
         assert field in types
+
+    # The native task supervisor must expose the same typed fields and pass
+    # every non-credential setting to the unchanged original child process.
+    rust = (root / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
+    for field, env_key in config.FIELDS.items():
+        assert field in rust
+        assert f'command.env("{env_key}"' in rust
