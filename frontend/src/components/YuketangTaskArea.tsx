@@ -89,7 +89,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
               onChange={event=>update(id,event.currentTarget.checked)}/>{label}
           </label>)}
         </div>
-        <details className="sf-ykt-advanced-options">
+        <details className="sf-ykt-advanced-options" open={detailMode}>
           <summary>图文与诊断参数</summary>
           <div className="legacy-option-grid">
             <label>
