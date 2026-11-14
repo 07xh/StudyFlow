@@ -85,6 +85,9 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 .is_some_and(|key| key.len() == 64
                     && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.player.settings.save" if request.get("settings").map_or(false, |x| x.is_object()) => Ok(()),
+        "zhidao.course.detail" if request.get("course_key").and_then(|x| x.as_str())
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),

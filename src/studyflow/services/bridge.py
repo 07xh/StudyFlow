@@ -19,6 +19,7 @@ from studyflow.platforms.zhidao.legacy_runtime import (
     save_player_settings as save_zhidao_player_settings, diagnose_server as diagnose_zhidao_server,
     clear_session as clear_zhidao_session, clear_course_cache as clear_zhidao_course_cache,
     read_document as read_zhidao_document,
+    read_course_detail as read_zhidao_course_detail,
 )
 
 # Best-effort cleanup when the persistent JSONL process reaches normal EOF.
@@ -108,6 +109,17 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": error}
         except Exception:
             return {"id": request_id, "ok": False, "error": "ZHIDAO_PROGRESS_FAILED"}
+    if operation == "zhidao.course.detail":
+        try:
+            data = read_zhidao_course_detail(request.get("course_key"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except RuntimeError as exc:
+            error = "COURSE_NOT_FOUND" if str(exc) == "COURSE_NOT_FOUND" else "PLATFORM_NOT_READY"
+            return {"id": request_id, "ok": False, "error": error}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
     if operation == "zhidao.player.target":
         try:
             target = resolve_zhidao_course(request.get("course_key"))
