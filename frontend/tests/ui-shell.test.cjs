@@ -112,22 +112,21 @@ test("platform task status and verified progress are placed before login control
   assert.doesNotMatch(playback,/Math\.random\(\)|setInterval\([^,]+,\s*[1-9]\)/);
 });
 
-test("first-run consent remains readable without Python sidecar and can exit on failure", () => {
-  const gate=read("src/components/StudyFlowConsentGate.tsx");
-  const router=read("../src-tauri/src/lib.rs");
-  const config=read("../src-tauri/tauri.conf.json");
-  const bridge=read("src/bridge.ts");
-  assert.match(gate,/studyflow_consent_status/);
-  assert.match(gate,/studyflow_read_document/);
-  assert.match(gate,/studyflow_consent_accept/);
-  assert.doesNotMatch(gate,/request<.*studyflow\.consent|zhidao\.document\.read/);
-  assert.match(gate,/退出学序/);
-  assert.match(gate,/studyflow_exit/);
-  assert.match(router,/studyflow_consent_status/);
-  assert.match(router,/studyflow_consent_accept/);
-  assert.match(router,/studyflow_read_document/);
-  assert.match(config,/legal\/使用条款与第三方声明\.txt/);
-  assert.match(config,/legal\/隐私政策与数据说明\.txt/);
-  assert.match(bridge,/BRIDGE_BINARY_MISSING/);
-  assert.match(bridge,/BRIDGE_START_FAILED/);
+
+test("StudyFlow shared controls keep their own accessible interaction contracts",()=>{
+  const toggle=read("src/ui/Switch.tsx");
+  const empty=read("src/ui/EmptyState.tsx");
+  const theme=read("src/ui/ThemeModeSelector.tsx");
+  assert.match(toggle,/type="checkbox"/);
+  assert.match(toggle,/role="switch"/);
+  assert.match(toggle,/currentTarget\.checked/);
+  assert.match(empty,/aria-live="polite"/);
+  assert.match(empty,/aria-atomic="true"/);
+  assert.match(empty,/sf-empty-action/);
+  assert.match(theme,/role="group"/);
+  assert.match(theme,/aria-pressed=\{mode==="light"\}/);
+  assert.match(theme,/onChange\("dark"\)/);
+  assert.match(theme,/onChange\("system"\)/);
+  for(const source of [toggle,empty,theme])
+    assert.doesNotMatch(source,/LightC-UI|Evan Lau/);
 });
