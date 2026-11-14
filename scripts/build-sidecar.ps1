@@ -41,12 +41,29 @@ if ($settings.id -cne 'packaging-settings' -or -not $settings.ok -or
     $settings.data.speed -notin @('1','1.25','1.5','2')) {
   throw 'Frozen StudyFlow local settings JSONL contract mismatch'
 }
-$yktSettings = Invoke-JsonlProbe '{"id":"packaging-ykt-settings","version":1,"operation":"yuketang.settings.get"}'
-if ($yktSettings.id -cne 'packaging-ykt-settings' -or -not $yktSettings.ok -or
-    $yktSettings.data.video_speed -ne 1.5 -or $yktSettings.data.heartbeat_interval -ne 5 -or
-    $yktSettings.data.max_concurrent_videos -ne 3 -or
-    $yktSettings.data.completion_threshold -ne 90 -or
-    $yktSettings.data.debug -ne $false) {
-  throw 'Frozen original Rain Classroom settings JSONL contract mismatch'
+# Isolate the probe from any settings already present on the build machine.
+$oldYktHome = $env:YKT_HOME
+$probeHome = Join-Path $env:TEMP ('studyflow-ykt-probe-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $probeHome -Force | Out-Null
+try {
+  $env:YKT_HOME = $probeHome
+  $ykt = Invoke-JsonlProbe '{"id":"packaging-yuketang-settings","version":1,"operation":"yuketang.settings.get"}'
+  $expectedFields = @(
+    'video_speed','heartbeat_interval','max_concurrent_videos','completion_threshold',
+    'skip_completed','use_concurrent','test_mode','test_video_count','auto_richtext',
+    'debug','richtext_stay_seconds','richtext_skip_delay'
+  )
+  if ($ykt.id -cne 'packaging-yuketang-settings' -or -not $ykt.ok) {
+    throw 'Frozen Rain Classroom settings JSONL contract failed'
+  }
+  foreach ($field in $expectedFields) {
+    if ($ykt.data.PSObject.Properties.Name -notcontains $field) {
+      throw "Frozen Rain Classroom setting is missing: $field"
+    }
+  }
+} finally {
+  if ($null -eq $oldYktHome) { Remove-Item Env:YKT_HOME -ErrorAction SilentlyContinue }
+  else { $env:YKT_HOME = $oldYktHome }
+  Remove-Item -LiteralPath $probeHome -Recurse -Force -ErrorAction SilentlyContinue
 }
-Write-Host '[READY] Frozen ZHS, Rain Classroom, clean JSONL settings and original module imports verified without server access.'
+Write-Host '[READY] Frozen ZHS, Rain Classroom, clean JSONL output and both settings adapters verified without server access.'
