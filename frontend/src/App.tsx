@@ -279,7 +279,7 @@ export default function App(){
       </section>
         </CollapsibleSection>
       {platform==="zhidao"&&<>
-        {zhidaoPlaybackMode==="zhs-original"&&<CollapsibleSection id="platform:zhidao:original" title="ZHS 原版任务" defaultExpanded={false}>
+        {zhidaoPlaybackMode==="zhs-original"&&<CollapsibleSection id="platform:zhidao:original" title="ZHS 原版任务">
 <section className="sf-platform-task-section" hidden={zhidaoPlaybackMode!=="zhs-original"}>
           <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
             desktop={desktop} connected={platforms.zhidao.status==="connected"}
@@ -419,8 +419,10 @@ export default function App(){
           <CollapsibleSection id={scope+"chapters"} title="章节与任务进度">
 <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
-          <CollapsibleSection id={scope+"logs"} title="课程运行记录" defaultExpanded={false}>
-<ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")} expandedByDefault/>
+          <CollapsibleSection id={scope+"runtime"} title="当前任务与运行进度">
+<ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
+            courseId={course.course_id} detailMode onCoursesUpdated={updateCourses}
+            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
         </CollapsibleSection>
           <CollapsibleSection id={scope+"server"} title="平台进度核验">
 <ZhidaoProgressPanel courses={platforms.zhidao.courses}
@@ -435,10 +437,8 @@ export default function App(){
             courseId={course.course_id} detailMode
             onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
         </CollapsibleSection>
-          <CollapsibleSection id={scope+"runtime"} title="当前任务与运行进度">
-<ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
-            courseId={course.course_id} detailMode onCoursesUpdated={updateCourses}
-            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+          <CollapsibleSection id={scope+"logs"} title="课程运行记录" defaultExpanded={false}>
+<ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")} expandedByDefault/>
         </CollapsibleSection>
         </>
         :<>
@@ -447,13 +447,13 @@ export default function App(){
             <p>当前接口尚未返回这门课程可核验的章节进度明细。</p>
           </section>
         </CollapsibleSection>
-          <CollapsibleSection id={scope+"logs"} title="课程运行记录" defaultExpanded={false}>
-<ZhidaoActivityPanel events={activity.filter(item=>item.platform==="雨课堂")} expandedByDefault/>
-        </CollapsibleSection>
           <CollapsibleSection id={scope+"runtime"} title="当前任务与运行进度">
 <YuketangTaskArea courses={[course]} desktop={desktop}
             connected={platforms.yuketang.status==="connected"} detailMode
             onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>
+        </CollapsibleSection>
+          <CollapsibleSection id={scope+"logs"} title="课程运行记录" defaultExpanded={false}>
+<ZhidaoActivityPanel events={activity.filter(item=>item.platform==="雨课堂")} expandedByDefault/>
         </CollapsibleSection>
         </>}
     </section>;
@@ -544,8 +544,8 @@ export default function App(){
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
       compact={compactCards}
       headerTitle={activeSelectedCourse?"课程详情":undefined}
-       currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
-       currentCourseTitle={activeSelectedCourse?.title} courseProgress={activeCourseProgress}>
+      currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
+      currentCourseTitle={activeSelectedCourse?.title} courseProgress={activeCourseProgress}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
