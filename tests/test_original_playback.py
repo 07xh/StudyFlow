@@ -29,7 +29,7 @@ ORIGINAL_BLOBS = {
 
 def _blob_sha(path):
     content = (ROOT / path).read_bytes()
-    return hashlib.sha1(b"blob " + str(len(content)).encode("ascii") + b"\\0" + content).hexdigest()
+    return hashlib.sha1(b"blob " + str(len(content)).encode("ascii") + b"\0" + content).hexdigest()
 
 
 @pytest.mark.parametrize("filename,expected", list(ORIGINAL_BLOBS.items()))
