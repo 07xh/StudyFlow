@@ -181,8 +181,9 @@ export default function App(){
     setBusy("clear");setNotice("");
     try{
       await request<{cleared:boolean}>({operation:"yuketang.clear"});
-      invalidatePlatform("yuketang");
+      invalidatePlatform("yuketang",true);
       setConfig(emptyConfiguration);setClearDialogOpen(false);
+      await refresh();
       setNotice("已清除学序保存的雨课堂凭据；原版客户端不受影响。");
       recordEvent("雨课堂","退出并清除凭据","success","已清除学序凭据");
     }catch(error){
@@ -314,8 +315,10 @@ export default function App(){
     }finally{setBusy("");}
   }
 
-  function invalidatePlatform(platform:Platform){
-    setPlatforms(previous=>({...previous,[platform]:{...previous[platform],courses:[]}}));
+  function invalidatePlatform(platform:Platform, resetStatus = false){
+    setPlatforms(previous=>({...previous,[platform]:resetStatus
+      ?initialPlatforms[platform]
+      :{...previous[platform],courses:[]}}));
     setSelectedCourse(previous=>previous?.platform===platform?null:previous);
     if(platform==="yuketang")setVideos([]);
   }
