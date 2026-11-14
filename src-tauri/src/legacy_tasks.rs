@@ -53,6 +53,7 @@ struct LegacyJob {
     child: Option<Child>,
     state: String,
     exit_code: Option<i32>,
+    run_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -60,6 +61,7 @@ pub struct LegacyStatus {
     platform: String,
     state: String,
     exit_code: Option<i32>,
+    run_id: Option<String>,
 }
 
 fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, String> {
@@ -74,6 +76,7 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         platform: platform.into(),
         state: task.state.clone(),
         exit_code: task.exit_code,
+        run_id: task.run_id.clone(),
     })
 }
 
@@ -136,10 +139,17 @@ pub fn legacy_start(
     }
     let binary = crate::bridge_binary(&app).map_err(|_| "LEGACY_NOT_INSTALLED")?;
     let mut command = Command::new(binary);
+    let run_id = if platform == "yuketang" {
+        let micros = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "LEGACY_LAUNCH_FAILED")?.as_micros();
+        Some(format!("{}-{micros}", std::process::id()))
+    } else { None };
     if platform == "zhidao" {
         command.arg("--legacy-zhidao").arg(course_id.as_deref().unwrap_or(""));
     } else {
         command.arg("--legacy-yuketang");
+        if let Some(ref id) = run_id { command.env("STUDYFLOW_YKT_RUN_ID", id); }
         if let Some(settings) = &options {
             settings.apply(&mut command);
         }
@@ -152,10 +162,11 @@ pub fn legacy_start(
     }
     let child = command.spawn().map_err(|_| "LEGACY_LAUNCH_FAILED")?;
     guard.insert(platform.clone(), LegacyJob {
-        child: Some(child), state: "running".into(), exit_code: None
+        child: Some(child), state: "running".into(), exit_code: None,
+        run_id: run_id.clone(),
     });
     Ok(LegacyStatus {
-        platform, state: "running".into(), exit_code: None
+        platform, state: "running".into(), exit_code: None, run_id
     })
 }
 
@@ -167,7 +178,7 @@ pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     match guard.get_mut(&platform) {
         Some(task) => status_of(&platform, task),
-        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None}),
+        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None}),
     }
 }
 
