@@ -250,7 +250,7 @@ export default function App(){
       </div>
     </section>}
   </AppShell>
-    {qrOpen&&<ZhidaoQrDialog onClose={()=>setQrOpen(false)}
+    {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setNotice("知到登录已通过服务器核验。");void refresh();}}/>}
     <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}
       title="清除雨课堂登录会话？"

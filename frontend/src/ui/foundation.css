@@ -515,3 +515,44 @@
     animation-duration:.01ms!important;transition-duration:.01ms!important;
   }
 }
+
+
+/* QR login is rendered outside the shell; provide its theme explicitly. */
+.qr-backdrop[data-theme="dark"]{
+  background:rgba(7,12,14,.76);
+  backdrop-filter:blur(9px);
+}
+.qr-backdrop[data-theme="light"]{background:rgba(18,35,26,.38)}
+.qr-backdrop .qr-dialog{
+  --qr-bg:#252d33;--qr-fg:#edf3f2;--qr-muted:#a7b2b6;--qr-line:rgba(255,255,255,.11);
+  width:min(430px,100%);max-height:min(92vh,720px);overflow:auto;
+  padding:19px;border:1px solid var(--qr-line);border-radius:17px;
+  color:var(--qr-fg);background:linear-gradient(150deg,#303941,#222a30);
+  box-shadow:0 26px 78px rgba(0,0,0,.42);
+}
+.qr-backdrop[data-theme="light"] .qr-dialog{
+  --qr-bg:#fff;--qr-fg:#1e2b26;--qr-muted:#6e7d75;--qr-line:rgba(28,58,43,.13);
+  color:var(--qr-fg);background:linear-gradient(150deg,#fff,#f4f8f5);
+}
+.qr-backdrop .qr-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.qr-backdrop .qr-header h3{margin:0;color:var(--qr-fg);font-size:15px}
+.qr-backdrop .qr-icon-button{
+  width:34px;height:34px;display:grid;place-items:center;flex:none;
+  border:1px solid var(--qr-line);border-radius:9px;color:var(--qr-muted);
+  background:transparent;cursor:pointer;
+}
+.qr-backdrop .qr-icon-button:hover{color:var(--accent-text);background:var(--soft-accent)}
+.qr-backdrop .qr-image-area{
+  min-height:255px;margin:15px 0 8px;padding:15px;
+  border:1px solid var(--qr-line);border-radius:14px;background:rgba(0,0,0,.12);
+}
+.qr-backdrop[data-theme="light"] .qr-image-area{background:#f0f5f1}
+.qr-backdrop .qr-placeholder{min-height:220px;color:var(--qr-muted);font-size:12px}
+.qr-backdrop .qr-stage{margin:10px 0;color:var(--qr-fg);font-size:12px}
+.qr-backdrop .qr-error{color:#ff8585;font-size:11px}
+.qr-backdrop .qr-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
+.qr-backdrop .qr-privacy{
+  margin:13px 0 0;padding-top:10px;border-top:1px solid var(--qr-line);
+  color:var(--qr-muted);font-size:10px;line-height:1.5;
+}
+@media(max-width:500px){.qr-backdrop .qr-dialog{padding:15px}.qr-backdrop .qr-image-area{min-height:225px}}

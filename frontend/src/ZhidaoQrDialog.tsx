@@ -12,9 +12,9 @@ const labels:Record<ZhidaoQrStage,string>={
   "environment-error":"知到扫码组件不可用，请检查本地安装"
 };
 const terminal=new Set<ZhidaoQrStage>(["verified","unavailable","rejected","expired","cancelled","failed","environment-error"]);
-type Props={onClose:()=>void;onVerified:()=>void};
+type Props={dark:boolean;onClose:()=>void;onVerified:()=>void};
 
-export default function ZhidaoQrDialog({onClose,onVerified}:Props){
+export default function ZhidaoQrDialog({dark,onClose,onVerified}:Props){
   const [state,setState]=useState<ZhidaoQrState>({stage:"idle",image_png_base64:null});
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
@@ -89,7 +89,7 @@ export default function ZhidaoQrDialog({onClose,onVerified}:Props){
   };
   const image=state.image_png_base64;
   const showImage=(state.stage==="ready"||state.stage==="requesting")&&Boolean(image);
-  return <div className="qr-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)void cancel();}}>
+  return <div className="qr-backdrop" data-theme={dark?"dark":"light"} role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)void cancel();}}>
     <section className="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-title">
       <div className="qr-header"><h3 id="qr-title">知到扫码登录</h3>
         <button className="qr-icon-button" aria-label="关闭扫码窗口" onClick={()=>void cancel()}><X size={19}/></button>

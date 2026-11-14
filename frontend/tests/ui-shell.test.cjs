@@ -43,3 +43,14 @@ test("platform login, original task controls and real IPC actions remain wired",
   assert.match(playback, /stopLegacy/);
   assert.match(playback, /getLegacyStatus/);
 });
+
+
+test("QR login dialog follows the selected app theme outside the shell", () => {
+  const app = read("src/App.tsx");
+  const qr = read("src/ZhidaoQrDialog.tsx");
+  const css = read("src/ui/foundation.css");
+  assert.match(app, /ZhidaoQrDialog dark=\{dark\}/);
+  assert.match(qr, /data-theme=\{dark\?"dark":"light"\}/);
+  assert.match(css, /qr-backdrop\[data-theme="dark"\]/);
+  assert.match(css, /qr-backdrop\[data-theme="light"\]/);
+});
