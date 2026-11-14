@@ -170,8 +170,19 @@ class _RefreshingZhsSink:
         refresh_due = previous is not None and now - self.last_publish >= 5.0
         if refresh_due:
             self.sink.last_snapshot = None
-        self.sink.receive(chunk)
-        if (refresh_due and self.sink.last_snapshot is not None) or self.sink.last_snapshot != previous:
+        try:
+            self.sink.receive(chunk)
+        except Exception:
+            # The observer is optional. Never corrupt its deduplication state
+            # when an observation or an atomic snapshot write fails.
+            self.sink.last_snapshot = previous
+            raise
+        current = self.sink.last_snapshot
+        if current is None:
+            # No valid numeric output: unrelated CLI chatter must not reset
+            # refresh cadence or revive a last-known percentage.
+            self.sink.last_snapshot = previous
+        elif refresh_due or current != previous:
             self.last_publish = now
 
 
