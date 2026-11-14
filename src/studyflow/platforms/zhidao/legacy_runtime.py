@@ -1,80 +1,89 @@
-"""Adapter for the unchanged, installed Zhidao Windows Python runtime.
+"""Read-only bridge to the unchanged, installed Zhidao Windows runtime.
 
-Reads only verified session-bound cache after upstream's real course sync.
-The original application, WPF GUI and scripts are not altered or deleted.
+The upstream PowerShell/WPF app, QR flow, Python modules and cache format remain
+untouched. This adapter never treats a local cookie file as server login proof.
 """
 from __future__ import annotations
+
+import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
 import subprocess
-import sys
 
 from studyflow.core.models import Course, Platform
 
-def legacy_script() -> Path:
-    root = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ZHSDesktop"
-    return root / "payload" / "zhidao_only.py"
 
-def _python_executable() -> Path:
-    root = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ZHSDesktop"
-    return root / ".venv" / "Scripts" / "python.exe"
+def installation_root() -> Path:
+    return Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "ZHSDesktop"
+
+
+def legacy_script() -> Path:
+    # Installer places payload content directly in ZHSDesktop, not /payload.
+    return installation_root() / "zhidao_only.py"
+
+
+def python_executable() -> Path:
+    return installation_root() / ".venv" / "Scripts" / "python.exe"
+
+
+def _run_readonly(command: str, timeout: int) -> subprocess.CompletedProcess[str]:
+    script, python = legacy_script(), python_executable()
+    if not script.is_file() or not python.is_file():
+        raise RuntimeError("Zhidao legacy installation is missing")
+    try:
+        return subprocess.run(
+            [str(python), str(script), command],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout, cwd=Path.home(), check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("Zhidao runtime could not be queried") from exc
+
 
 def probe_login() -> bool:
-    script, python = legacy_script(), _python_executable()
-    if not script.is_file() or not python.is_file():
-        return False
     try:
-        result = subprocess.run([str(python), str(script), "doctor-server"],
-                                capture_output=True, text=True, timeout=55,
-                                cwd=str(Path.home()), check=False)
+        result = _run_readonly("doctor-server", 65)
         return result.returncode in (0, 7) and "[SESSION_OK]" in result.stdout
-    except (OSError, subprocess.TimeoutExpired):
+    except RuntimeError:
         return False
 
+
 def read_courses() -> list[Course]:
-    script, python = legacy_script(), _python_executable()
-    if not script.is_file() or not python.is_file():
-        raise RuntimeError("Zhidao legacy runtime is not installed")
-    result = subprocess.run([str(python), str(script), "courses"],
-                            capture_output=True, text=True, timeout=120,
-                            cwd=str(Path.home()), check=False)
+    result = _run_readonly("courses", 150)
     if result.returncode != 0:
-        raise RuntimeError("Zhidao course sync failed")
-    # The upstream runtime writes a fingerprint-scoped cache; do not use
-    # cache records without independently verifying their envelope.
-    cache = Path.home() / ".zhs" / "zhidao-courses.json"
+        raise RuntimeError("Zhidao server course sync failed")
+
+    directory = Path.home() / ".zhs"
     try:
-        data = json.loads(cache.read_text(encoding="utf-8"))
+        cache = json.loads((directory / "zhidao-courses.json").read_text(encoding="utf-8"))
+        cookies = (directory / "cookies.json").read_bytes()
+        salt = (directory / "zhidao-cache-salt.bin").read_bytes()
     except (OSError, ValueError) as exc:
-        raise RuntimeError("Zhidao course cache unavailable") from exc
-    if not isinstance(data, dict) or data.get("source") != "zhidao" or data.get("schemaVersion") != 4:
-        raise RuntimeError("Untrusted Zhidao cache envelope")
-    # Session fingerprint validation is performed by the unchanged upstream
-    # code during sync. A rotated cookie between sync and read is still a
-    # race: compare fingerprint with the upstream HMAC helper before display.
-    import hashlib, hmac
-    try:
-        cookies = (Path.home()/".zhs"/"cookies.json").read_bytes()
-        salt = (Path.home()/".zhs"/"zhidao-cache-salt.bin").read_bytes()
-        fp = hmac.new(salt, cookies, hashlib.sha256).hexdigest()
-    except OSError as exc:
-        raise RuntimeError("Session fingerprint unavailable") from exc
-    if not hmac.compare_digest(str(data.get("sessionFingerprint", "")), fp):
+        raise RuntimeError("Verified Zhidao course cache is unavailable") from exc
+
+    if not isinstance(cache, dict) or cache.get("source") != "zhidao" or cache.get("schemaVersion") != 4:
+        raise RuntimeError("Unexpected Zhidao cache version")
+    if len(salt) != 32 or not cookies:
+        raise RuntimeError("Zhidao session proof unavailable")
+    fingerprint = hmac.new(salt, cookies, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(str(cache.get("sessionFingerprint") or ""), fingerprint):
         raise RuntimeError("Zhidao session changed")
-    if data.get("incomplete"):
-        raise RuntimeError("Zhidao course sync incomplete")
-    rows = data.get("courses")
+    if cache.get("incomplete") or cache.get("failedSources") or cache.get("unconfirmedEmptySources"):
+        raise RuntimeError("Zhidao returned incomplete course data")
+
+    rows = cache.get("courses")
     if not isinstance(rows, list):
-        raise RuntimeError("Invalid Zhidao course data")
-    result_courses = []
+        raise RuntimeError("Unexpected Zhidao course format")
+    courses: list[Course] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        course_id = row.get("courseId")
-        name = row.get("name") or row.get("courseName")
-        if course_id is None or not isinstance(name, str) or not name.strip():
+        title = row.get("name") or row.get("courseName")
+        identifier = row.get("courseId")
+        if identifier is None or not isinstance(title, str) or not title.strip():
             continue
-        result_courses.append(Course(platform=Platform.ZHIDAO, course_id=str(course_id),
-                                     title=name.strip(), progress_percent=None))
-    return result_courses
+        courses.append(Course(platform=Platform.ZHIDAO, course_id=str(identifier),
+                              title=title.strip(), progress_percent=None))
+    return courses
