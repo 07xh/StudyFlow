@@ -1,34 +1,39 @@
-# 学序 UI 与平台迁移审查（2026-11-14）
+# 学序集成审查（2026-11-14）
 
-## 实际上游代码
-
-### 雨课堂
-- `07xh/yuketang-heartbeat/main.py`：Python 单体程序，包含 requests、dotenv、日志输出重定向、视频相关业务和线程池。
-- `exe_entry.py`：恢复版命令行入口；原 EXE 字节码未完整恢复。
-- `requirements.txt`：requests、python-dotenv。
-- 直接 `import main` 可能触发日志文件创建与标准输出替换，**不能**直接作为 GUI 插件导入。
-- 迁移顺序：只读课程数据模型 → 登录状态读取 → 课程展示 → 正常播放入口。需避免通过非官方进度伪报实现学习记录。
+## 原项目代码与运行时
 
 ### 知到
-- `07xh/zhidao-assistant/payload/Zhidao-GUI.ps1`：PowerShell/WPF GUI，约 63 KB；依赖 Windows PresentationFramework、WindowsBase 等。
-- `payload/Zhidao-UI.xaml`：WPF/XAML UI，约 21 KB，原版浅色主题。
-- `payload/zhidao_only.py`：Python 数据读取适配器，尚需逐项审查。
-- 当前 `StudyFlow` 已迁移课程身份处理与诊断两个纯 Python 模块，尚未迁移 Windows 运行时。
+- 上游：`07xh/zhidao-assistant`。
+- 原始任务启动器、监控脚本、播放器资源及只读 CLI 文件保存在 `legacy/zhidao/`；来源版本与 Git blob SHA 由 `docs/ORIGINAL_SOURCE_MANIFEST.json` 锁定。
+- StudyFlow 的 Python sidecar 打包 ZHS 0.1.5 运行依赖；二维码、登录状态、课程读取和进度核验通过平台适配器与版本化 IPC 接入。
+- 原版任务由隔离子进程启动。进程状态、本地播放器观察值和服务器只读进度必须分开显示。
 
-### LightC-UI
-- 先前对话中的 `LightC-UI-源码-2.18.3.zip` 当前未能读取其原始内容；不得声称已复用真实 UI 组件。
-- 需要重新取得 ZIP，核对框架、许可证、组件 API、资源和 Windows 打包依赖。
+### 雨课堂
+- 上游：`07xh/yuketang-heartbeat`。
+- 原始 `main.py`、恢复版 `exe_entry.py` 与依赖快照位于 `legacy/yuketang/`，并由来源清单锁定 SHA。
+- `main.py` 不在 GUI/IPC 服务中直接导入；原版任务在隔离子进程中执行，避免其日志和标准输出副作用污染主进程。
+- 课程/章节/视频元数据由独立只读适配器读取。任务日志中的本地模拟位置、服务端响应和批量统计是不同证据，不能合并成平台完成率。
+- 旧 EXE 字节码并未完整恢复，不能把恢复版菜单入口等同于全部历史功能已恢复。
 
-## 架构决策
-1. `src/studyflow/ui/` 是唯一主界面，平台模块不自行创建顶层窗口。
-2. `src/studyflow/platforms/{zhidao,yuketang}/` 仅放各自的登录、只读课程、正常播放与诊断适配。
-3. GUI 通过显式调用适配器方法运行；不得通过导入启动网络请求、写日志或修改 `sys.stdout`。
-4. Cookie、缓存和本地文件放用户数据目录，不放源码仓库或 EXE 解压目录。
-5. 所有进度必须有真实平台数据来源，不能把本地估算显示成平台确认完成。
-6. 源码与第三方许可核验后才启用正式打包与发布。
+## LightC-UI 2.18.3 许可与实现边界
+- 已重新读取用户提供的 `LightC-UI-源码-2.18.3.zip`；许可证为 **LightC Source Available License v1.0**。
+- 许可允许个人教育/研究和非商业修改，但限制未经书面许可分发修改版及编译安装包。
+- StudyFlow 公开仓库和 Windows 安装包不直接包含其源码、组件、资源或衍生实现。视觉层次与交互目标由 StudyFlow 自有 React/TypeScript/CSS 独立实现。
+- 许可证审查记录见 `docs/LIGHTC_UI_REVIEW.md` 与 `docs/LICENSE_PROVENANCE.md`。
 
-## 阻塞项
-- LightC-UI ZIP 原始源码不可用。
-- 雨课堂单体脚本的 import side effects 需要隔离。
-- 知到 WPF/PowerShell 到统一 UI 的接口需要定义和回归。
-- Windows 实机集成与 CI 尚未验收。
+## 当前架构
+1. `frontend/src/ui/` 是统一界面层；平台专属登录、参数和任务位于各自二级页面。
+2. `src/studyflow/platforms/{zhidao,yuketang}/` 提供平台适配、凭据和只读数据访问。
+3. Tauri Rust 管理桌面窗口、IPC 边界和原版任务子进程；Python sidecar 负责平台适配。
+4. 原始源码快照受哈希测试保护；登录凭据、Cookie、HAR 和真实课程个人数据不得进入仓库。
+5. 真实平台进度只接受服务器证据；本地进程运行或模拟播放位置不等于服务器确认。
+
+## 尚需 Windows 真机验收
+1. 干净 Windows 环境首次安装、启动、升级、卸载与旧数据保留。
+2. 知到真实扫码登录、课程同步、课程详情和单课/全量服务器进度核验。
+3. 知到原版任务启动/停止、ZHS 运行时完整性，以及与旧版安装目录并存。
+4. 雨课堂真实会话保存、连接检测、课程/章节/视频读取和原版任务参数持久化。
+5. 雨课堂原版任务启动/停止及任务日志读取；不将本地模拟位置当成服务端进度。
+6. 125%/150%/200% DPI、小窗口、深浅主题与触摸/键盘导航的真机观感。
+
+Windows 构建成功和离线测试通过不等于上述真实平台端到端验收通过。
