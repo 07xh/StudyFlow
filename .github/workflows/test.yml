@@ -47,6 +47,8 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+      - name: Run Tauri Rust unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build fully bundled Zhidao + StudyFlow Windows installer
         shell: pwsh
         run: ./scripts/build-windows.ps1
