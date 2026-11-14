@@ -175,9 +175,18 @@ def refresh_progress() -> dict:
 def verify_course(course_key: str) -> dict:
     if not isinstance(course_key, str) or COURSE_KEY.fullmatch(course_key) is None:
         raise ValueError("INVALID_COURSE")
-    rows, _ = _session_course_cache()
+    rows, fingerprint = _session_course_cache()
     if sum(progress_key(row) == course_key for row in rows) != 1:
         raise RuntimeError("COURSE_NOT_FOUND")
+    # The old cache is historical evidence, not proof that THIS verification
+    # actually consulted the platform. Save the selected course's marker first.
+    previous_rows = _progress_cache(fingerprint).get("courses", [])
+    previous_markers = [
+        row.get("lastVerifiedAt") for row in previous_rows
+        if isinstance(row, dict) and row.get("courseType") in ("ai", "shared")
+        and progress_key(row) == course_key and isinstance(row.get("lastVerifiedAt"), str)
+    ]
+    previous_marker = previous_markers[0] if len(previous_markers) == 1 else ""
     if getattr(sys, "frozen", False):
         arguments = [sys.executable, "--zhidao-verify-one", course_key]
     else:
@@ -191,7 +200,15 @@ def verify_course(course_key: str) -> dict:
         raise RuntimeError("Zhidao single-course verification failed") from exc
     if result.returncode != 0:
         raise RuntimeError("Zhidao single-course verification failed")
-    return _progress_snapshot()
+    snapshot = _progress_snapshot()
+    target = [course for course in snapshot["courses"] if course.course_id == course_key]
+    if (len(target) != 1 or target[0].progress_evidence != "server_verified"
+            or not target[0].verified_at
+            or target[0].verified_at <= previous_marker):
+        # A zero exit code with an unchanged/stale cache is NOT a new server
+        # verification. Never promote old data to a fresh success.
+        raise RuntimeError("Zhidao single-course verification returned no fresh evidence")
+    return snapshot
 
 
 
