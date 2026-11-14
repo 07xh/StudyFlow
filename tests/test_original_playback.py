@@ -1,0 +1,123 @@
+"""Offline regression for original, unmodified legacy executors (no network)."""
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from studyflow.platforms.zhidao.courses import progress_key
+from studyflow.services import legacy_playback as legacy
+
+ROOT = Path(__file__).resolve().parents[1]
+
+# Git SHA-1 of each original file. Tests catch accidental edits to the vendors.
+ORIGINAL_BLOBS = {
+    "legacy/yuketang/main.py": "1e64ab67376c43060e1dcdf4dfa9949b6bb27b8c",
+    "legacy/yuketang/exe_entry.py": "7a3399f3cd30d8b046225fa25940b5b835938cf8",
+    "legacy/yuketang/requirements.txt": "ac5f657f4c989d82ea5d1d82eebed91bccb0f8ce",
+    "legacy/zhidao/Zhidao-Task.cmd": "8c4d45265a48e47479ce8129887ebe08976e0e36",
+    "legacy/zhidao/HeartbeatMonitor.ps1": "1a466a76eb0c2339add85cd3953a6a3711731f8b",
+    "legacy/zhidao/HeartbeatView.ps1": "7d89dafb4f60373b97b635560416495c0f4146c7",
+    "legacy/zhidao/ZHS-ConsoleMonitor.py": "fbff5bce350245ddf4dfde42ea8a18db944ff307",
+    "legacy/zhidao/Official-Player.ps1": "5c71d9551886450b0480cba9434072b71ad10fc6",
+    "legacy/zhidao/Official-MediaController.js": "fed27706722d6339028863ab4a839796eaedb527",
+}
+
+
+def _blob_sha(path):
+    content = (ROOT / path).read_bytes()
+    return hashlib.sha1(b"blob " + str(len(content)).encode("ascii") + b"\\0" + content).hexdigest()
+
+
+@pytest.mark.parametrize("filename,expected", list(ORIGINAL_BLOBS.items()))
+def test_source_is_byte_for_byte_original(filename, expected):
+    assert _blob_sha(filename) == expected
+
+
+def test_original_ykt_launcher_config_and_no_import_side_effects(monkeypatch, tmp_path):
+    cfg = SimpleNamespace(
+        session_id="offline-session", csrf_token="offline-csrf",
+        classroom_id="234", university_id="567", sign="test-sign",
+    )
+    original = tmp_path / "main.py"
+    original.write_text("# never executed in this test", encoding="utf-8")
+    monkeypatch.setattr(legacy, "load_yuketang", lambda: cfg)
+    monkeypatch.setattr(legacy, "_legacy_source", lambda: original)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    called = []
+
+    def inspect(path, *, run_name):
+        called.append((path, run_name))
+        assert legacy.os.environ["SESSION_ID"] == "offline-session"
+        assert legacy.os.environ["CSRF_TOKEN"] == "offline-csrf"
+        assert legacy.os.environ["CLASSROOM_ID"] == "234"
+
+    monkeypatch.setattr(legacy.runpy, "run_path", inspect)
+    assert legacy.run_yuketang_original() == 0
+    assert called == [(str(original), "__main__")]
+    assert (tmp_path / "StudyFlow" / "legacy-logs").is_dir()
+
+
+def test_original_ykt_requires_existing_user_session(monkeypatch):
+    monkeypatch.setattr(legacy, "load_yuketang", lambda: None)
+    monkeypatch.setattr(legacy.runpy, "run_path", lambda *_a, **_kw: pytest.fail("Must not run"))
+    assert legacy.run_yuketang_original() == 4
+
+
+def test_original_zhs_resolves_only_current_session_course(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    data = home / ".zhs"
+    data.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    cookies = b"fake-demo-cookies"
+    salt = b"x" * 32
+    (data / "cookies.json").write_bytes(cookies)
+    (data / "zhidao-cache-salt.bin").write_bytes(salt)
+    course = {"courseType": "ai", "courseId": "20", "classId": "30", "name": "offline"}
+    key = progress_key(course)
+    cache = {
+        "source": "zhidao", "schemaVersion": 4,
+        "sessionFingerprint": hmac.new(salt, cookies, hashlib.sha256).hexdigest(),
+        "courses": [course],
+    }
+    (data / "zhidao-courses.json").write_text(json.dumps(cache), encoding="utf-8")
+    assert legacy._course_ids_for_current_session(key) == ("20", "30")
+    with pytest.raises(RuntimeError):
+        legacy._course_ids_for_current_session("0" * 64)
+    (data / "cookies.json").write_bytes(b"rotated")
+    with pytest.raises(RuntimeError, match="SESSION_CHANGED"):
+        legacy._course_ids_for_current_session(key)
+
+
+def test_zhs_invokes_exact_original_task_without_rewriting_sender(monkeypatch, tmp_path):
+    cmd = tmp_path / "Zhidao-Task.cmd"
+    cmd.write_text("rem fake file, never run", encoding="utf-8")
+    monkeypatch.setattr(legacy, "installation_root", lambda: tmp_path)
+    monkeypatch.setattr(legacy, "_course_ids_for_current_session", lambda key: ("20", "30"))
+    calls = []
+
+    def no_process(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(legacy.subprocess, "run", no_process)
+    assert legacy.run_zhidao_original("a" * 64) == 0
+    assert calls == [[str(cmd), "play-ai", "20", "30"]]
+
+
+def test_legacy_cli_rejects_unknown_commands():
+    assert legacy.main(["--legacy-unknown"]) == 2
+
+
+def test_tauri_task_manager_keeps_original_qr_and_supported_platforms():
+    root = ROOT / "src-tauri" / "src"
+    lib = (root / "lib.rs").read_text(encoding="utf-8")
+    tasks = (root / "legacy_tasks.rs").read_text(encoding="utf-8")
+    assert "QrBridgeWorker" in lib and "legacy_tasks::legacy_start" in lib
+    assert "legacy_tasks::legacy_stop" in lib
+    assert "legacy_tasks::LegacyTasks::default()" in lib
+    assert "taskkill" in tasks and '"--legacy-yuketang"' in tasks
+    assert '"--legacy-zhidao"' in tasks
