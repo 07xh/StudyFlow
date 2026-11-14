@@ -278,24 +278,25 @@ export default function App(){
       <CollapsibleSection id={"platform:"+platform+":tasks"} title="当前任务与进度">
 <section className="sf-platform-task-section">
         {platform==="zhidao"
-          ?<div hidden={zhidaoPlaybackMode!=="official"}>
+          ?<>
+            <div hidden={zhidaoPlaybackMode!=="official"}>
             <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
               onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-          </div>
+            </div>
+            <div hidden={zhidaoPlaybackMode!=="zhs-original"}>
+              <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
+                desktop={desktop} connected={platforms.zhidao.status==="connected"}
+                onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+            </div>
+          </>
           :<YuketangTaskArea courses={platforms.yuketang.courses}
             desktop={desktop} connected={platforms.yuketang.status==="connected"}
             onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>}
       </section>
         </CollapsibleSection>
       {platform==="zhidao"&&<>
-        {zhidaoPlaybackMode==="zhs-original"&&<CollapsibleSection id="platform:zhidao:original" title="ZHS 原版任务">
-<section className="sf-platform-task-section" hidden={zhidaoPlaybackMode!=="zhs-original"}>
-          <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
-            desktop={desktop} connected={platforms.zhidao.status==="connected"}
-            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-        </section>
-        </CollapsibleSection>}
+
         <CollapsibleSection id={"platform:zhidao:progress"} title="进度核验">
 <ZhidaoProgressPanel courses={platforms.zhidao.courses}
           desktop={desktop} connected={platforms.zhidao.status==="connected"}
