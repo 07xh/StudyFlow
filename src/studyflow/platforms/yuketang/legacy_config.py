@@ -182,7 +182,7 @@ def save_settings(settings: Any) -> dict[str, Any]:
 
 def prepare_environment(settings_home: Path | None = None) -> Path:
     """Load persistent original settings without changing the active run log path."""
-    root = settings_home or default_config_home()
+    root = settings_home or config_home()
     root.mkdir(parents=True, exist_ok=True)
     for key, value in _raw_config(root).items():
         if isinstance(key, str) and isinstance(value, str):
