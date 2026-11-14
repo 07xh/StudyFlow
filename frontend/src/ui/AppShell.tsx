@@ -1,36 +1,94 @@
-import {Fragment,useEffect,useState,type ReactNode} from "react";
-import {BookOpen,ChevronRight,GraduationCap,LayoutDashboard,Moon,PanelLeftClose,PanelLeftOpen,Settings,ShieldCheck,Sun} from "lucide-react";
+import {useEffect,useState,type ReactNode} from "react";
+import {
+  Activity,BookOpen,ChevronDown,ChevronRight,GraduationCap,History,
+  LayoutDashboard,Layers3,ListChecks,Moon,PanelLeftClose,PanelLeftOpen,
+  RefreshCw,Settings,Sun
+} from "lucide-react";
 import type {LucideIcon} from "lucide-react";
 import {NoticeBanner} from "./NoticeBanner";
 import {PageSurface} from "./PageSurface";
 import "./foundation.css";
 
-export type Page="home"|"courses"|"platforms"|"platform-zhidao"|"platform-yuketang"|"settings";
-const navigation:{id:Page;label:string;icon:LucideIcon}[]=[
-  {id:"home",label:"学习总览",icon:LayoutDashboard},
+export type Page="home"|"courses"|"tasks"|"platforms"|"platform-zhidao"|
+  "platform-yuketang"|"records"|"logs"|"settings";
+const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
+  {id:"home",label:"首页",icon:LayoutDashboard},
   {id:"courses",label:"课程中心",icon:BookOpen},
-  {id:"platforms",label:"学习平台",icon:ShieldCheck},
-  {id:"settings",label:"偏好设置",icon:Settings}
+  {id:"tasks",label:"学习任务",icon:ListChecks},
+  {id:"platforms",label:"学习平台",icon:Layers3},
+  {id:"records",label:"学习记录",icon:History},
+  {id:"logs",label:"日志中心",icon:Activity}
+];
+const platformNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
+  {id:"platform-zhidao",label:"知到",icon:BookOpen},
+  {id:"platform-yuketang",label:"雨课堂",icon:BookOpen}
+];
+const systemNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
+  {id:"settings",label:"设置",icon:Settings}
 ];
 const titles:Record<Page,string>={
-  home:"学习总览",courses:"课程中心",platforms:"学习平台",
-  "platform-zhidao":"知到","platform-yuketang":"雨课堂",settings:"偏好设置"
+  home:"学习总览",courses:"课程中心",tasks:"学习任务",platforms:"学习平台",
+  "platform-zhidao":"知到","platform-yuketang":"雨课堂",
+  records:"学习记录",logs:"日志中心",settings:"设置"
 };
 
 interface Props {
   page:Page;onNavigate:(next:Page)=>void;dark:boolean;onThemeToggle:()=>void;
-  desktop:boolean;notice:string;onDismissNotice:()=>void;compact:boolean;children:ReactNode;
+  onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
+  compact:boolean;children:ReactNode;
 }
-export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,onDismissNotice,compact,children}:Props){
-  const [platformsOpen,setPlatformsOpen]=useState(true);
+export function AppShell({
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children
+}:Props){
   const [collapsed,setCollapsed]=useState(()=>{
     try{return window.localStorage.getItem("studyflow.nav.collapsed")==="true";}
     catch{return false;}
   });
+  const [platformExpanded,setPlatformExpanded]=useState(()=>{
+    try{return window.localStorage.getItem("studyflow.nav.platform-expanded")!=="false";}
+    catch{return true;}
+  });
   useEffect(()=>{
     try{window.localStorage.setItem("studyflow.nav.collapsed",String(collapsed));}
-    catch{/* Sidebar still works without persisted preference. */}
+    catch{/* Navigation stays usable in this session. */}
   },[collapsed]);
+  useEffect(()=>{
+    try{window.localStorage.setItem("studyflow.nav.platform-expanded",String(platformExpanded));}
+    catch{/* Navigation stays usable in this session. */}
+  },[platformExpanded]);
+  const platformActive=page==="platforms"||page==="platform-zhidao"||page==="platform-yuketang";
+  const renderItem=(item:{id:Page;label:string;icon:LucideIcon},nested=false)=>
+    <button key={item.id} type="button" title={item.label} aria-label={item.label}
+      aria-current={page===item.id?"page":undefined}
+      className={[ "nav",page===item.id?"active":"",nested?"sf-nav-child":""].filter(Boolean).join(" ")}
+      onClick={()=>onNavigate(item.id)}>
+      <item.icon size={nested?16:19}/><span className="nav-label">{item.label}</span>
+      {page===item.id&&<ChevronRight size={14} className="right"/>}
+    </button>;
+  const renderItems=(items:typeof workspaceNavigation,label:string)=><nav aria-label={label}>
+    {items.map(item=>item.id==="platforms"
+      ?<div className="sf-platform-nav" key={item.id}>
+        <div className="sf-platform-nav-parent">
+          <button type="button" title="学习平台" aria-label="学习平台"
+            className={["nav",platformActive?"active":""].filter(Boolean).join(" ")}
+            aria-current={page==="platforms"?"page":undefined}
+            onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");}}>
+            <Layers3 size={19}/><span className="nav-label">学习平台</span>
+          </button>
+          <button type="button" className="sf-nav-expand"
+            aria-label={platformExpanded?"收起学习平台":"展开学习平台"}
+            aria-expanded={platformExpanded} title={platformExpanded?"收起":"展开"}
+            onClick={()=>setPlatformExpanded(current=>!current)}>
+            <ChevronDown size={15} className={platformExpanded?"":"sf-chevron-closed"}/>
+          </button>
+        </div>
+        {platformExpanded&&<div className="sf-subnav" role="group" aria-label="平台二级页面">
+          {platformNavigation.map(child=>renderItem(child,true))}
+        </div>}
+      </div>
+      :renderItem(item))}
+  </nav>;
+
   return <div className={["app","sf-shell",dark?"dark":"",collapsed?"sf-collapsed":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
     <aside className="sidebar" aria-label="主导航">
       <div className="brand">
@@ -39,57 +97,38 @@ export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,onDi
       </div>
       <div className="sf-nav-head">
         <span className="section-label">工作空间</span>
-        <button className="sf-nav-toggle" title={collapsed?"展开侧边栏":"折叠侧边栏"}
-          type="button" aria-label={collapsed?"展开侧边栏":"折叠侧边栏"}
+        <button className="sf-nav-toggle" type="button"
+          title={collapsed?"展开侧边栏":"折叠侧边栏"}
+          aria-label={collapsed?"展开侧边栏":"折叠侧边栏"}
           aria-expanded={!collapsed} onClick={()=>setCollapsed(current=>!current)}>
-          {collapsed?<PanelLeftOpen size={19}/>:<PanelLeftClose size={19}/>}
+          {collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}
         </button>
       </div>
-      <nav aria-label="学习工作空间">
-        {navigation.map(item=><Fragment key={item.id}>
-          <button type="button" title={item.label}
-            aria-current={page===item.id?"page":undefined}
-            aria-expanded={item.id==="platforms"?platformsOpen:undefined}
-            className={page===item.id||(item.id==="platforms"&&page.startsWith("platform-"))?"nav active":"nav"}
-            onClick={()=>{
-              if(item.id==="platforms")setPlatformsOpen(current=>!current);
-              onNavigate(item.id);
-            }}>
-            <item.icon size={19}/><span className="nav-label">{item.label}</span>
-            {item.id==="platforms"
-              ?<ChevronRight size={15} className={platformsOpen?"right sf-nav-expanded":"right"}/>
-              :page===item.id?<ChevronRight size={15} className="right"/>:null}
-          </button>
-          {item.id==="platforms"&&platformsOpen&&
-            <div className="sf-platform-subnav" role="group" aria-label="学习平台">
-              {([
-                {id:"platform-zhidao" as const,name:"知到",mark:"知"},
-                {id:"platform-yuketang" as const,name:"雨课堂",mark:"雨"}
-              ]).map(platform=><button key={platform.id} type="button"
-                title={platform.name} aria-current={page===platform.id?"page":undefined}
-                className={page===platform.id?"sf-subnav-item active":"sf-subnav-item"}
-                onClick={()=>onNavigate(platform.id)}>
-                <span className="sf-subnav-mark">{platform.mark}</span>
-                <span className="sf-subnav-label">{platform.name}</span>
-              </button>)}
-            </div>}
-        </Fragment>)}
-      </nav>
+      <div className="sf-nav-group">{renderItems(workspaceNavigation,"学习工作空间")}</div>
+      <div className="sf-nav-group sf-nav-system">
+        <span className="section-label">系统</span>
+        {renderItems(systemNavigation,"系统设置")}
+      </div>
       <div className="sidebar-bottom">
-        <div className="privacy"><ShieldCheck size={18}/> 本地优先 · 平台凭据隔离</div>
-        <small>StudyFlow · Windows 桌面端</small>
+        <div className="sf-side-status"><span className="sf-side-dot"/>
+          {desktop?"Windows 桌面":"浏览器预览"}
+        </div>
       </div>
     </aside>
     <main className="main" id="main-content">
       <header className="sf-header">
-        <div><span className="eyebrow">STUDYFLOW / WORKSPACE</span>
-          <h1>{titles[page]}</h1>
-          <p className="subtitle">多学习平台统一工作空间 · 只展示真实同步数据</p>
-        </div>
+        <div className="sf-page-heading"><h1>{titles[page]}</h1></div>
         <div className="sf-header-actions">
-          <span className={desktop?"sf-mode desktop":"sf-mode"}>{desktop?"桌面客户端":"浏览器预览"}</span>
-          <button className="theme-button" type="button" aria-label={dark?"切换浅色主题":"切换深色主题"}
-            onClick={onThemeToggle}>{dark?<Sun size={19}/>:<Moon size={19}/>}</button>
+          <span className="sf-mode"><span className="sf-status-dot"/>
+            {desktop?"Windows 桌面":"浏览器预览"}
+          </span>
+          <button className="theme-button" type="button" title="刷新连接"
+            aria-label="刷新连接" disabled={!desktop} onClick={onRefresh}>
+            <RefreshCw size={17}/>
+          </button>
+          <button className="theme-button" type="button"
+            aria-label={dark?"切换浅色主题":"切换深色主题"}
+            onClick={onThemeToggle}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
         </div>
       </header>
       <NoticeBanner message={notice} onDismiss={onDismissNotice}/>

@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useState} from "react";
 import {Play, Square, RefreshCw, SlidersHorizontal, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
-import {request, friendlyBridgeError} from "../bridge";
+import {request,friendlyBridgeError} from "../bridge";
 import {
   getLegacyStatus, legacyError, originalYktDefaults, startLegacy, stopLegacy,
   validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions
@@ -13,9 +13,10 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected
+  platform, courses, desktop, connected, onEvent
 }: {
-  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean
+  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
+  onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,51 +38,49 @@ export function LegacyPlaybackPanel({
     return () => window.clearInterval(timer);
   }, [desktop, updateStatus]);
 
-  useEffect(() => {
-    if (!desktop || platform !== "yuketang") return;
-    let alive = true;
+  useEffect(()=>{
+    if(!desktop||platform!=="yuketang")return;
+    let live=true;
     void request<OriginalYktOptions>({operation:"yuketang.settings.get"})
-      .then(saved => {
-        if (alive && validateOriginalOptions(saved)) setOptions(saved);
-      })
-      .catch(error => {
-        if (alive) setMessage(friendlyBridgeError(error));
-      });
-    return () => {alive = false};
-  }, [desktop, platform]);
+      .then(settings=>{if(live&&validateOriginalOptions(settings))setOptions(settings);})
+      .catch(error=>{if(live)setMessage(friendlyBridgeError(error));});
+    return ()=>{live=false;};
+  },[desktop,platform]);
 
-  function updateOption<K extends keyof OriginalYktOptions>(key: K, value: OriginalYktOptions[K]) {
-    setOptions(current => ({...current, [key]: value}));
+  function updateOption<K extends keyof OriginalYktOptions>(key:K,value:OriginalYktOptions[K]){
+    setOptions(previous=>({...previous,[key]:value}));
   }
 
-  async function saveOriginalSettings() {
-    if (platform !== "yuketang" || !validateOriginalOptions(options)) return;
-    setBusy(true); setMessage("");
-    try {
-      const saved = await request<OriginalYktOptions>({operation:"yuketang.settings.save", settings:options});
-      if (!validateOriginalOptions(saved)) throw new Error("INVALID_IPC_RESPONSE");
+  async function saveOriginalSettings(){
+    if(platform!=="yuketang"||!validateOriginalOptions(options))return;
+    setBusy(true);setMessage("");
+    try{
+      const saved=await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
+      if(!validateOriginalOptions(saved))throw new Error("INVALID_IPC_RESPONSE");
       setOptions(saved);
       setMessage("已通过原版 exe_entry.py 保存雨课堂配置。");
-    } catch (error) {
-      setMessage(friendlyBridgeError(error));
-    } finally {setBusy(false);}
+      onEvent?.("保存原版参数","success","参数已保存至学序本机配置");
+    }catch(error){
+      const message=friendlyBridgeError(error);
+      setMessage(message);onEvent?.("保存原版参数","warning",message);
+    }finally{setBusy(false);}
   }
 
   async function start() {
     setBusy(true); setMessage("");
     try {
-      if (platform === "yuketang") {
-        // exe_entry.py remains the single source of truth for saved settings.
-        await request<OriginalYktOptions>({operation:"yuketang.settings.save", settings:options});
+      if(platform==="yuketang"){
+        await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       }
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined);
       setStatus(next);
       setMessage("已启动原版任务进程。进程运行不代表服务器已经接受心跳或确认学习进度。");
+      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
     } catch (error) {
-      const message = error instanceof Error && error.message.includes("YUKETANG")
-        ? friendlyBridgeError(error) : legacyError(error);
-      setMessage(message);
+      const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")
+        ?friendlyBridgeError(error):legacyError(error);
+      setMessage(msg);onEvent?.("启动原版任务","warning",msg);
     }
     finally {setBusy(false);}
   }
@@ -91,14 +90,14 @@ export function LegacyPlaybackPanel({
     try {
       setStatus(await stopLegacy(platform));
       setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
-    } catch(error) {setMessage(legacyError(error));}
+      onEvent?.("停止原版任务","success","已停止学序托管的原版进程");
+    } catch(error) {setMessage(legacyError(error));onEvent?.("停止原版任务","warning",legacyError(error));}
     finally {setBusy(false);}
   }
 
   return <section className="legacy-playback-panel">
     <div className="section-head">
       <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到" : "雨课堂"}原版心跳任务</h3>
-        <p>启动的是原有心跳实现，不会替换其生成、发送或进度计算代码。</p>
       </div>
       <span className={status?.state === "running" ? "legacy-run-state active" : "legacy-run-state"}>
         {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
@@ -111,10 +110,9 @@ export function LegacyPlaybackPanel({
             <option value="">选择已同步的智慧课程</option>
             {aiCourses.map(c=><option value={c.course_id} key={c.course_id}>{c.title}</option>)}
           </select>
-          <p>仅调用原版 ZHS 支持的智慧课程模式；共享课仍通过原版官方播放器处理。</p>
         </div>
       : <div className="legacy-options">
-          <h4><SlidersHorizontal size={16}/> 原版参数（直接透传）</h4>
+          <h4><SlidersHorizontal size={16}/> 参数</h4>
           <div className="legacy-option-grid">
             {([
               ["video_speed","视频倍速",0.1,4,0.1],
@@ -142,9 +140,7 @@ export function LegacyPlaybackPanel({
           <div className="actions">
             <button className="secondary" type="button"
               disabled={!desktop||busy||!validateOriginalOptions(options)}
-              onClick={()=>void saveOriginalSettings()}>
-              保存到原版配置
-            </button>
+              onClick={()=>void saveOriginalSettings()}>保存原版参数</button>
           </div>
         </div>}
     <div className="actions legacy-actions">
@@ -162,7 +158,6 @@ export function LegacyPlaybackPanel({
       原版进程退出码：{status.exit_code ?? "未知"}。退出码不等于服务器心跳或学习完成确认。
     </p>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
-    <p className="legacy-disclaimer">学序只管理由本界面启动的进程。原版日志与服务器学习记录分开，
-      本地运行百分比不能代替平台实际确认的学习结果。</p>
+    <p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>
   </section>;
 }

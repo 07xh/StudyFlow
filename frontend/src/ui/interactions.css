@@ -1,44 +1,83 @@
-/* Selective LightC-UI-style interactions adapted to StudyFlow's visual tokens.
-   No global resets, no Tailwind dependency, no platform business logic. */
-.sf-dialog-overlay{position:fixed;inset:0;z-index:10050;display:flex;justify-content:center;align-items:center;
-  padding:18px;background:rgba(10,12,25,.56);backdrop-filter:blur(5px);
-  --modal-bg:#ffffff;--modal-fg:#25263b;--modal-muted:#656980;--modal-line:#e5e6ef;
-  --modal-soft:#f6f7fb;animation:sf-dim-in .17s ease both}
-.sf-dialog-overlay[data-theme="dark"]{--modal-bg:#202234;--modal-fg:#f2f1ff;
-  --modal-muted:#adb0c7;--modal-line:#37394d;--modal-soft:#292b40}
-.sf-dialog{width:min(460px,100%);max-height:min(680px,calc(100dvh - 36px));overflow:auto;
-  color:var(--modal-fg);background:var(--modal-bg);border:1px solid var(--modal-line);
-  border-radius:18px;box-shadow:0 26px 74px rgba(0,0,0,.34);animation:sf-dialog-rise .22s cubic-bezier(.18,.8,.24,1) both}
-.sf-dialog-heading,.sf-dialog-actions{padding:18px 22px;display:flex;align-items:center;gap:12px}
+/* Compact glass dialogs and non-blocking status toast. */
+.sf-dialog-overlay{
+  position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;
+  padding:18px;background:rgba(7,12,14,.68);backdrop-filter:blur(8px);
+  --modal-bg:#252d33;--modal-fg:#edf3f2;--modal-muted:#a7b2b6;
+  --modal-line:rgba(255,255,255,.1);--modal-soft:#20272d;
+  animation:sf-dim-in .16s ease both;
+}
+.sf-dialog-overlay[data-theme="light"]{
+  --modal-bg:#fff;--modal-fg:#1e2b26;--modal-muted:#6e7d75;
+  --modal-line:rgba(28,58,43,.13);--modal-soft:#f3f7f4;
+}
+.sf-dialog{
+  width:min(440px,100%);max-height:min(680px,calc(100dvh - 36px));overflow:auto;
+  color:var(--modal-fg);background:linear-gradient(150deg,var(--modal-bg),var(--modal-soft));
+  border:1px solid var(--modal-line);border-radius:17px;
+  box-shadow:0 26px 74px rgba(0,0,0,.38);
+  animation:sf-dialog-rise .2s cubic-bezier(.18,.8,.24,1) both;
+}
+.sf-dialog-heading,.sf-dialog-actions{display:flex;align-items:center;gap:11px;padding:16px 19px}
 .sf-dialog-heading{border-bottom:1px solid var(--modal-line)}
-.sf-dialog-heading h2{font-size:17px;line-height:1.4;margin:0;flex:1}
-.sf-dialog-symbol{background:#3bae8f20;color:#24ae84;width:39px;height:39px;border-radius:12px;display:grid;place-items:center}
-.sf-dialog-symbol.danger{background:#f59e0b20;color:#eaa032}
-.sf-dialog-close{background:transparent;border:0;color:var(--modal-muted);padding:8px;cursor:pointer;border-radius:9px}
+.sf-dialog-heading h2{flex:1;margin:0;color:var(--modal-fg);font-size:15px;line-height:1.4}
+.sf-dialog-symbol{
+  width:36px;height:36px;display:grid;place-items:center;flex:none;
+  border-radius:11px;color:#50e5a4;background:rgba(19,217,146,.13);
+}
+.sf-dialog-symbol.danger{color:#e7b66d;background:rgba(231,182,109,.13)}
+.sf-dialog-close{
+  display:grid;place-items:center;padding:7px;border:0;border-radius:8px;
+  color:var(--modal-muted);background:transparent;cursor:pointer;
+}
 .sf-dialog-close:hover{background:var(--modal-soft)}
-.sf-dialog-body{padding:20px 22px;font-size:14px;color:var(--modal-muted);line-height:1.7}
+.sf-dialog-body{padding:18px 19px;color:var(--modal-muted);font-size:12px;line-height:1.65}
 .sf-dialog-body p{margin:0}
-.sf-dialog-body .sf-dialog-warning{margin-top:12px;background:#f59e0b12;
-  border:1px solid #eab54a44;border-radius:10px;padding:12px;color:var(--modal-fg)}
-.sf-dialog-actions{justify-content:flex-end;border-top:1px solid var(--modal-line);
-  background:var(--modal-soft);flex-wrap:wrap}
-.sf-dialog-actions button{font:inherit;font-size:13px;font-weight:600;padding:10px 15px;border-radius:10px;cursor:pointer}
+.sf-dialog-body .sf-dialog-warning{
+  margin-top:11px;padding:10px 11px;border:1px solid rgba(231,182,109,.24);
+  border-radius:10px;color:var(--modal-fg);background:rgba(231,182,109,.08);
+}
+.sf-dialog-actions{
+  justify-content:flex-end;flex-wrap:wrap;
+  border-top:1px solid var(--modal-line);background:var(--modal-soft);
+}
+.sf-dialog-actions button{
+  padding:9px 13px;border:1px solid var(--modal-line);border-radius:9px;
+  color:var(--modal-fg);background:var(--modal-bg);font-size:11px;font-weight:650;cursor:pointer;
+}
+.sf-dialog-actions .sf-dialog-confirm{
+  border-color:rgba(19,217,146,.4);color:#08291b;background:#43e6a2;
+}
+.sf-dialog-actions .sf-dialog-confirm.danger{border-color:#d96a61;color:#fff;background:#c95757}
 .sf-dialog-actions button:disabled,.sf-dialog-close:disabled{opacity:.5;cursor:not-allowed}
-.sf-dialog-cancel{border:1px solid var(--modal-line);background:var(--modal-bg);color:var(--modal-fg)}
-.sf-dialog-confirm{border:1px solid transparent;background:#8060e5;color:#fff}
-.sf-dialog-confirm.danger{background:#d64d6b}
-.sf-dialog-actions button:focus-visible,.sf-dialog-close:focus-visible{outline:2px solid #9677f5;outline-offset:2px}
-.sf-notice-banner{margin:0 0 20px;display:flex;gap:11px;align-items:flex-start;
-  padding:13px 15px;background:var(--panel);color:var(--text);border:1px solid var(--line);
-  border-left:3px solid var(--accent,#9778f2);border-radius:12px;
-  box-shadow:0 8px 28px #00000009;font-size:13px;overflow-wrap:anywhere}
-.sf-notice-banner>svg{flex:none;color:var(--accent-text,#997bf1)}
-.sf-notice-banner>span{flex:1;line-height:1.55}
-.sf-notice-banner button{flex:none;display:grid;place-items:center;color:var(--muted);border:0;border-radius:8px;
-  background:transparent;padding:3px;cursor:pointer}
+.sf-dialog-actions button:focus-visible,.sf-dialog-close:focus-visible{
+  outline:2px solid #37df9a;outline-offset:2px;
+}
+.sf-notice-banner{
+  position:fixed;top:22px;right:24px;z-index:900;
+  display:flex;align-items:center;gap:10px;
+  width:min(420px,calc(100vw - 32px));max-width:420px;
+  padding:10px 12px;border:1px solid var(--line);
+  border-left:2px solid var(--accent);border-radius:12px;
+  color:var(--text);background:rgba(37,45,52,.96);
+  box-shadow:0 15px 38px rgba(0,0,0,.3);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  font-size:11px;line-height:1.5;overflow-wrap:anywhere;
+  animation:sf-toast-in .18s ease both;
+}
+.sf-shell:not(.dark) .sf-notice-banner{color:var(--text);background:rgba(255,255,255,.97);box-shadow:0 14px 34px rgba(25,55,39,.13)}
+.sf-notice-banner>svg{flex:none;color:var(--accent)}
+.sf-notice-banner>span{flex:1}
+.sf-notice-banner button{
+  flex:none;display:grid;place-items:center;padding:4px;border:0;border-radius:7px;
+  color:var(--muted);background:transparent;cursor:pointer;
+}
 .sf-notice-banner button:hover{color:var(--text);background:var(--soft-accent)}
-.sf-page-surface{animation:sf-content-enter .2s ease-out both}
+.sf-page-surface{animation:sf-content-enter .18s ease-out both}
 @keyframes sf-dim-in{from{opacity:0}to{opacity:1}}
-@keyframes sf-dialog-rise{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes sf-content-enter{from{opacity:.25;transform:translateY(6px)}to{opacity:1;transform:none}}
-@media(prefers-reduced-motion:reduce){.sf-page-surface,.sf-dialog,.sf-dialog-overlay{animation:none!important}}
+@keyframes sf-dialog-rise{from{opacity:0;transform:translateY(9px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes sf-content-enter{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes sf-toast-in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+@media(max-width:600px){.sf-notice-banner{top:12px;right:12px;width:calc(100vw - 24px)}}
+@media(prefers-reduced-motion:reduce){
+  .sf-page-surface,.sf-dialog,.sf-dialog-overlay,.sf-notice-banner{animation:none!important}
+}

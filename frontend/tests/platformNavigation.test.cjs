@@ -1,37 +1,34 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
+const test=require("node:test");
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const source=p=>fs.readFileSync(path.join(__dirname,"..","src",p),"utf8");
 
-const source = name => fs.readFileSync(path.join(__dirname, "..", "src", name), "utf8");
-
-test("platforms have dedicated second-level sidebar pages", () => {
-  const shell = source("ui/AppShell.tsx");
-  assert.match(shell, /"platform-zhidao"/);
-  assert.match(shell, /"platform-yuketang"/);
-  assert.match(shell, /sf-platform-subnav/);
-  assert.match(shell, /onNavigate\(platform.id\)/);
+test("new graphite shell keeps dedicated sidebar pages",()=>{
+ const shell=source("ui/AppShell.tsx");
+ assert.match(shell,/platformNavigation/);
+ assert.match(shell,/"platform-zhidao"/);
+ assert.match(shell,/"platform-yuketang"/);
+ assert.match(shell,/sf-subnav/);
+ assert.match(shell,/setPlatformExpanded/);
 });
 
-test("all login and original parameters live inside their platform page", () => {
-  const app = source("App.tsx");
-  const start = app.indexOf('{page==="platforms"&&renderPlatforms()}');
-  const z = app.indexOf('{page==="platform-zhidao"');
-  const y = app.indexOf('{page==="platform-yuketang"');
-  const settings = app.indexOf('{page==="settings"');
-  assert.ok(start >= 0 && start < z && z < y && y < settings);
-  const zSegment = app.slice(z,y);
-  const ySegment = app.slice(y,settings);
-  assert.match(zSegment, /ZhidaoLoginPanel/);
-  assert.match(zSegment, /LegacyPlaybackPanel platform="zhidao"/);
-  assert.match(ySegment, /credential-form/);
-  assert.match(ySegment, /LegacyPlaybackPanel platform="yuketang"/);
-  assert.equal((app.match(/<ZhidaoLoginPanel/g)||[]).length,1);
+test("new dashboard keeps platform-owned login and task panels",()=>{
+ const app=source("App.tsx");
+ assert.match(app,/page==="platform-zhidao"&&renderPlatformDetail\("zhidao"\)/);
+ assert.match(app,/page==="platform-yuketang"&&renderPlatformDetail\("yuketang"\)/);
+ assert.match(app,/renderPlatformLogin\(platform\)/);
+ assert.match(app,/YuketangLoginPanel/);
+ assert.match(app,/ZhidaoLoginPanel/);
+ assert.match(app,/LegacyPlaybackPanel platform=\{platform\}/);
+ assert.match(app,/onImported=/);
 });
 
-test("original YKT settings use the backend source of truth, not localStorage", () => {
-  const panel = source("components/LegacyPlaybackPanel.tsx");
-  assert.match(panel, /yuketang.settings.get/);
-  assert.match(panel, /yuketang.settings.save/);
-  assert.doesNotMatch(panel, /localStorage/);
+test("original settings and cookie import use the Python bridge instead of localStorage",()=>{
+ const panel=source("components/LegacyPlaybackPanel.tsx");
+ const login=source("components/ZhidaoMigration.tsx");
+ assert.match(panel,/yuketang.settings.get/);
+ assert.match(panel,/yuketang.settings.save/);
+ assert.doesNotMatch(panel,/localStorage/);
+ assert.match(login,/zhidao.cookie.import/);
 });
