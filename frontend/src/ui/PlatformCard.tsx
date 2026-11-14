@@ -1,12 +1,12 @@
-import {PlayCircle,RefreshCw} from "lucide-react";
+import {ChevronRight,RefreshCw} from "lucide-react";
 import type {PlatformState} from "../types";
 import type {PlatformDefinition} from "./registry";
 
 interface Props {
   definition:PlatformDefinition;state:PlatformState;desktop:boolean;busy:boolean;
-  onSync:()=>void;onLogin:()=>void;onVideos:()=>void;
+  onSync:()=>void;onOpen:()=>void;
 }
-export function PlatformCard({definition,state,desktop,busy,onSync,onLogin,onVideos}:Props){
+export function PlatformCard({definition,state,desktop,busy,onSync,onOpen}:Props){
   const connected=state.status==="connected";
   return <article className="platform-card sf-platform-card">
     <div className="platform-top">
@@ -22,12 +22,9 @@ export function PlatformCard({definition,state,desktop,busy,onSync,onLogin,onVid
       <button className="secondary" type="button" disabled={!desktop||busy} onClick={onSync}>
         <RefreshCw size={16}/>同步课程
       </button>
-      {definition.capabilities.legacyLogin&&
-        <button className="secondary" type="button" disabled={!desktop||busy} onClick={onLogin}>扫码登录</button>}
-      {definition.capabilities.videoList&&
-        <button className="secondary" type="button" disabled={!desktop||busy} onClick={onVideos}>
-          <PlayCircle size={16}/>章节与视频
-        </button>}
+      <button className="secondary" type="button" onClick={onOpen}>
+        进入{definition.name}<ChevronRight size={16}/>
+      </button>
     </div>
   </article>;
 }

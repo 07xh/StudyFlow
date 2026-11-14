@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from "react";
-import {Play, Square, RefreshCw, SlidersHorizontal, Activity} from "lucide-react";
+import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
 import {
   getLegacyStatus, legacyError, originalYktDefaults, startLegacy, stopLegacy,
@@ -11,25 +11,17 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
   exited: "原版进程已退出", stopped: "已终止"
 };
 
-function storedOptions(): OriginalYktOptions {
-  try {
-    const json = JSON.parse(window.localStorage.getItem("studyflow.ykt.original-options") || "null");
-    if (json && typeof json === "object" && validateOriginalOptions(json as OriginalYktOptions))
-      return json as OriginalYktOptions;
-  } catch { /* No credentials or raw task results stored here. */ }
-  return {...originalYktDefaults};
-}
-
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected
+  platform, courses, desktop, connected, yuketangOptions
 }: {
-  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean
+  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
+  yuketangOptions?: OriginalYktOptions
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState("");
-  const [options, setOptions] = useState<OriginalYktOptions>(storedOptions);
+  const options = yuketangOptions ?? {...originalYktDefaults};
   const aiCourses = courses.filter(c => c.platform === "zhidao" && c.course_type === "ai");
 
   const updateStatus = useCallback(async () => {
@@ -44,18 +36,6 @@ export function LegacyPlaybackPanel({
     const timer = window.setInterval(() => { void updateStatus(); }, 2000);
     return () => window.clearInterval(timer);
   }, [desktop, updateStatus]);
-
-  function updateOption<K extends keyof OriginalYktOptions>(key: K, value: OriginalYktOptions[K]) {
-    setOptions(current => {
-      const next = {...current, [key]: value};
-      // UI preferences only; session credentials remain in Windows Credential Manager.
-      if (validateOriginalOptions(next)) {
-        try {window.localStorage.setItem("studyflow.ykt.original-options", JSON.stringify(next));}
-        catch {/* Persistence is optional. */}
-      }
-      return next;
-    });
-  }
 
   async function start() {
     setBusy(true); setMessage("");
@@ -95,33 +75,7 @@ export function LegacyPlaybackPanel({
           </select>
           <p>仅调用原版 ZHS 支持的智慧课程模式；共享课仍通过原版官方播放器处理。</p>
         </div>
-      : <div className="legacy-options">
-          <h4><SlidersHorizontal size={16}/> 原版参数（直接透传）</h4>
-          <div className="legacy-option-grid">
-            {([
-              ["video_speed","视频倍速",0.1,4,0.1],
-              ["heartbeat_interval","心跳间隔（秒）",1,120,1],
-              ["max_concurrent_videos","并发数量",1,32,1],
-              ["completion_threshold","本地阈值（%）",0,100,1],
-              ["test_video_count","测试视频数量",1,10000,1],
-            ] as const).map(([id,label,min,max,step])=><label key={id}>
-              <span>{label}</span>
-              <input type="number" min={min} max={max} step={step} value={options[id]}
-                onChange={event=>updateOption(id,Number(event.target.value))}/>
-            </label>)}
-          </div>
-          <div className="legacy-flags">
-            {([
-              ["skip_completed","跳过已完成"],
-              ["use_concurrent","原版并发模式"],
-              ["test_mode","仅运行测试视频数量"],
-              ["auto_richtext","保留原版图文处理"],
-            ] as const).map(([id,label])=><label key={id}>
-              <input type="checkbox" checked={options[id]}
-                onChange={event=>updateOption(id,event.target.checked)}/>{label}
-            </label>)}
-          </div>
-        </div>}
+      : null}
     <div className="actions legacy-actions">
       <button className="primary" type="button" disabled={!desktop||!connected||busy||
         status?.state==="running"||

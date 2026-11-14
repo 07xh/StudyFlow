@@ -3,6 +3,7 @@ import {BookOpen,ChevronRight,GraduationCap,RefreshCw,Search} from "lucide-react
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
+import {LegacyPlaybackSettings,useOriginalYktOptions} from "./components/LegacyPlaybackSettings";
 import {fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,openLegacyZhidao,request} from "./bridge";
 import type {Config,Video} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
@@ -46,6 +47,7 @@ export default function App(){
   const [qrOpen,setQrOpen]=useState(false);
   const [videos,setVideos]=useState<Video[]>([]);
   const [config,setConfig]=useState<Config>(emptyConfiguration);
+  const [yuketangOptions,setYuketangOptions]=useOriginalYktOptions();
   const [query,setQuery]=useState("");
   const [coursePlatform,setCoursePlatform]=useState("all");
   const initialized=useRef(false);
@@ -144,7 +146,7 @@ export default function App(){
       {platformRegistry.map(definition=><PlatformCard key={definition.id}
         definition={definition} state={platforms[definition.id]} desktop={desktop}
         busy={Boolean(busy)} onSync={()=>void sync(definition.id)}
-        onLogin={()=>void openZhidao()} onVideos={()=>void showVideos()}/>)}
+        onOpen={()=>setPage(definition.id)}/>)}
     </div>
   </section>;
 
@@ -184,6 +186,97 @@ export default function App(){
     </div>}
   </section>;
 
+  const renderTasks=()=> <section>
+    <div className="section-head"><div><h3>各平台学习任务</h3>
+      <p>选择平台进入其独立页面操作原版任务；不同平台的启动与参数互不混用。</p>
+    </div></div>
+    <div className="platform-grid">
+      {platformRegistry.map(definition=><article className="platform-card sf-task-route" key={definition.id}>
+        <div className="platform-top"><span className={"platform-logo sf-provider-"+definition.color}>{definition.mark}</span>
+          <span className="status">{platforms[definition.id].status==="connected"?"已连接":"未连接"}</span>
+        </div>
+        <h3>{definition.name}学习任务</h3>
+        <p>原版任务控制、运行状态以及平台专属设置统一在{definition.name}二级页面。</p>
+        <button className="secondary" type="button" onClick={()=>setPage(definition.id)}>
+          进入{definition.name}<ChevronRight size={16}/>
+        </button>
+      </article>)}
+    </div>
+  </section>;
+
+  const renderPlatformDetail=(platform:Platform)=>{
+    const definition=platformInfo(platform);
+    if(!definition)return null;
+    const state=platforms[platform];
+    return <>
+      <section className="sf-provider-detail">
+        <div className="sf-provider-detail-heading">
+          <span className={"platform-logo sf-provider-"+definition.color}>{definition.mark}</span>
+          <div><h3>{definition.name}</h3><p>{definition.summary} · {state.message}</p></div>
+          <span className={state.status==="connected"?"status sf-connected":"status"}>
+            {state.status==="connected"?"已连接":"未连接"}
+          </span>
+        </div>
+        <div className="actions">
+          <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+            onClick={()=>void refresh()}><RefreshCw size={16}/>检测连接</button>
+          <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+            onClick={()=>void sync(platform)}><RefreshCw size={16}/>同步课程</button>
+        </div>
+      </section>
+      {platform==="zhidao"&&<ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
+        onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>}
+      {platform==="yuketang"&&<section className="settings-card">
+        <h3>雨课堂登录会话</h3>
+        <p>仅配置本人的有效登录会话；保存在 Windows 凭据管理器，不修改原版程序。</p>
+        <form className="credential-form" onSubmit={event=>void configure(event)}>
+          {credentialFields.map(field=><label key={field.id}>
+            <span>{field.label}</span>
+            <input type={field.type} required={field.required} autoComplete="off"
+              value={config[field.id]}
+              onChange={event=>setConfig(previous=>({...previous,[field.id]:event.target.value}))}/>
+          </label>)}
+          <div className="actions">
+            <button className="primary" type="submit" disabled={!desktop||Boolean(busy)}>保存并验证</button>
+            <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+              onClick={()=>setClearDialogOpen(true)}>仅清除学序凭据</button>
+          </div>
+        </form>
+      </section>}
+      <section className="sf-platform-courses">
+        <div className="section-head"><div><h3>{definition.name}课程</h3>
+          <p>仅显示该平台真实同步的课程，不与其他平台混排。</p>
+        </div></div>
+        {state.courses.length>0
+          ?<div className="course-grid">{state.courses.map(course=>
+            <CourseCard key={course.platform+":"+course.course_id} course={course}
+              onInspect={setSelectedCourse}/>)}</div>
+          :<EmptyState icon={BookOpen} title="暂无真实课程"
+            description="完成该平台的登录后，点击上方同步课程读取。"/>}
+        {selectedCourse?.platform===platform&&<div className="course-v2-detail" role="region" aria-label="课程详情">
+          <div><span className="eyebrow">{definition.name} / 课程详情</span>
+            <h3>{selectedCourse.title}</h3>
+            <p>{presentCourse(selectedCourse).detail}；课程进度以服务器实际核验为准。</p></div>
+          <button type="button" className="secondary" onClick={()=>setSelectedCourse(null)}>关闭</button>
+        </div>}
+      </section>
+      {platform==="yuketang"&&<section className="settings-card">
+        <div className="section-head"><div><h3>雨课堂章节与视频</h3>
+          <p>来自雨课堂适配器的读取结果。</p></div>
+          <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+            onClick={()=>void showVideos()}>读取章节与视频</button>
+        </div>
+        {videos.length>0&&<div className="video-list">{videos.map((video,index)=>
+          <div key={video.id+":"+index}><small>{video.chapter}</small>
+            <strong>{video.name}</strong><span>视频 ID：{video.id}</span></div>)}</div>}
+      </section>}
+      <LegacyPlaybackPanel platform={platform} courses={state.courses} desktop={desktop}
+        connected={state.status==="connected"} yuketangOptions={platform==="yuketang"?yuketangOptions:undefined}/>
+      {platform==="yuketang"&&<LegacyPlaybackSettings options={yuketangOptions}
+        onChange={setYuketangOptions}/>}
+    </>;
+  };
+
   return <><AppShell page={page} onNavigate={setPage} dark={dark} onThemeToggle={toggleTheme}
     desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")} compact={compactCards}>
     {page==="home"&&<>
@@ -210,42 +303,9 @@ export default function App(){
       {renderCourses(true)}
     </>}
     {page==="courses"&&renderCourses(false)}
-    {page==="platforms"&&<>
-      {renderPlatforms()}
-      <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
-        desktop={desktop} connected={platforms.zhidao.status==="connected"}/>
-      <LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
-        desktop={desktop} connected={platforms.yuketang.status==="connected"}/>
-      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>
-      {platformRegistry.some(item=>item.capabilities.sessionConfiguration&&item.id==="yuketang")&&
-        <section className="settings-card">
-          <h3>雨课堂登录会话</h3>
-          <p>仅配置本人的有效登录会话。会话保存在 Windows 凭据管理器，不修改原版程序。</p>
-          <form className="credential-form" onSubmit={event=>void configure(event)}>
-            {credentialFields.map(field=><label key={field.id}>
-              <span>{field.label}</span>
-              <input type={field.type} required={field.required} autoComplete="off"
-                value={config[field.id]}
-                onChange={event=>setConfig(previous=>({...previous,[field.id]:event.target.value}))}/>
-            </label>)}
-            <div className="actions">
-              <button className="primary" type="submit" disabled={!desktop||Boolean(busy)}>保存并验证</button>
-              <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
-                onClick={()=>setClearDialogOpen(true)}>仅清除学序凭据</button>
-            </div>
-          </form>
-        </section>}
-      {videos.length>0&&<section className="settings-card">
-        <h3>雨课堂章节视频</h3>
-        <p>来自本地平台适配器的真实读取结果。</p>
-        <div className="video-list">{videos.map((video,index)=>
-          <div key={video.id+":"+index}>
-            <small>{video.chapter}</small><strong>{video.name}</strong>
-            <span>视频 ID：{video.id}</span>
-          </div>)}
-        </div>
-      </section>}
-    </>}
+    {page==="platforms"&&renderPlatforms()}
+    {page==="tasks"&&renderTasks()}
+    {(page==="zhidao"||page==="yuketang")&&renderPlatformDetail(page)}
     {page==="settings"&&<>
       <section className="settings-card">
         <h3>外观</h3>
