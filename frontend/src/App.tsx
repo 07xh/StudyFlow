@@ -252,8 +252,8 @@ export default function App(){
     if(!definition)return null;
     return <div className="sf-platform-workspace">
       
-      <CollapsibleSection id={"platform:zhidao:mode"} title="播放模式" defaultExpanded={false}>
-{platform==="zhidao"&&<section className="sf-zd-mode-selector">
+      {platform==="zhidao"&&<CollapsibleSection id="platform:zhidao:mode" title="播放模式" defaultExpanded={false}>
+        <section className="sf-zd-mode-selector">
         <div><strong>知到播放模式</strong><small>选择本次要运行的原版播放方式</small></div>
         <div className="sf-zd-mode-options">
           <button type="button" aria-pressed={zhidaoPlaybackMode==="official"}
@@ -263,8 +263,8 @@ export default function App(){
             className={zhidaoPlaybackMode==="zhs-original"?"active":""}
             onClick={()=>void changeZhidaoPlaybackMode("zhs-original")}>ZHS 0.1.5 原版任务</button>
         </div>
-      </section>}
-        </CollapsibleSection>
+      </section>
+        </CollapsibleSection>}
       <CollapsibleSection id={"platform:"+platform+":tasks"} title="当前任务与进度">
 <section className="sf-platform-task-section">
         {platform==="zhidao"
@@ -279,13 +279,13 @@ export default function App(){
       </section>
         </CollapsibleSection>
       {platform==="zhidao"&&<>
-        <CollapsibleSection id={"platform:zhidao:original"} title="ZHS 原版任务" defaultExpanded={false}>
+        {zhidaoPlaybackMode==="zhs-original"&&<CollapsibleSection id="platform:zhidao:original" title="ZHS 原版任务" defaultExpanded={false}>
 <section className="sf-platform-task-section" hidden={zhidaoPlaybackMode!=="zhs-original"}>
           <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
             desktop={desktop} connected={platforms.zhidao.status==="connected"}
             onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
         </section>
-        </CollapsibleSection>
+        </CollapsibleSection>}
         <CollapsibleSection id={"platform:zhidao:progress"} title="进度核验">
 <ZhidaoProgressPanel courses={platforms.zhidao.courses}
           desktop={desktop} connected={platforms.zhidao.status==="connected"}
@@ -444,7 +444,6 @@ export default function App(){
         :<>
           <CollapsibleSection id={scope+"chapters"} title="章节进度">
 <section className="sf-course-chapter-note">
-            <div className="section-head"><h3>章节进度</h3></div>
             <p>当前接口尚未返回这门课程可核验的章节进度明细。</p>
           </section>
         </CollapsibleSection>
