@@ -20,6 +20,7 @@ from studyflow.platforms.zhidao.legacy_runtime import (
     clear_session as clear_zhidao_session, clear_course_cache as clear_zhidao_course_cache,
     read_document as read_zhidao_document,
     read_course_detail as read_zhidao_course_detail,
+    consent_status as get_consent_status, accept_consent as accept_studyflow_consent,
 )
 
 # Best-effort cleanup when the persistent JSONL process reaches normal EOF.
@@ -120,6 +121,16 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": error}
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+    if operation == "studyflow.consent.status":
+        try:
+            return {"id": request_id, "ok": True, "data": get_consent_status()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CONSENT_STORAGE_FAILED"}
+    if operation == "studyflow.consent.accept":
+        try:
+            return {"id": request_id, "ok": True, "data": accept_studyflow_consent()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CONSENT_STORAGE_FAILED"}
     if operation == "zhidao.player.target":
         try:
             target = resolve_zhidao_course(request.get("course_key"))
