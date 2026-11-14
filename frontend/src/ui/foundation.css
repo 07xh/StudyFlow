@@ -1582,9 +1582,6 @@
 
 /* LightC AnchorNav geometry adapted for StudyFlow: a 32px floating trigger,
    a compact overlay menu, and no reserved sidebar column. */
-.sf-shell .main{
-  padding-left:clamp(18px,2.4vw,34px);
-}
 .sf-shell .sf-floating-nav{left:12px}
 .sf-shell .sf-floating-nav__trigger{
   left:12px;
@@ -1647,7 +1644,6 @@
   background:var(--soft-accent);
 }
 @media(max-width:720px){
-  .sf-shell .main{padding-left:13px}
   .sf-shell .sf-floating-nav{left:8px}
   .sf-shell .sf-floating-nav__trigger{left:8px}
   .sf-shell .sf-floating-nav__panel{
