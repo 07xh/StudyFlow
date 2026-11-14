@@ -10,8 +10,8 @@ npm install --prefix frontend --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Frontend npm install failed' }
 npm --prefix frontend run build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
-python -m PyInstaller --noconfirm --clean --onefile --console --name studyflow-bridge --paths src --collect-all keyring --distpath packaging/sidecar --workpath build/pyinstaller --specpath build/specs packaging/bridge_entry.py
-if ($LASTEXITCODE -ne 0) { throw 'Python sidecar build failed' }
+& (Join-Path $PSScriptRoot 'build-sidecar.ps1')
+# build-sidecar.ps1 throws on failed frozen ZHS import or IPC smoke test.
 npm run tauri -- icon packaging/icon.svg
 if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed' }
 npm run tauri -- build
