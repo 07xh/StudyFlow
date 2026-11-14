@@ -64,7 +64,6 @@ export default function App(){
   const [config,setConfig]=useState<Config>(emptyConfiguration);
   const [query,setQuery]=useState("");
   const [coursePlatform,setCoursePlatform]=useState("all");
-  const [expandedLogin,setExpandedLogin]=useState<Record<Platform,boolean>>({zhidao:false,yuketang:false});
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const initialized=useRef(false);
   const desktop=isDesktop();
@@ -187,33 +186,61 @@ export default function App(){
     setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
   }
 
+  function goPlatform(platform:Platform){
+    setSelectedCourse(null);
+    setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
+  }
+
+  function renderPlatformLogin(platform:Platform){
+    if(platform==="zhidao")return <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
+      onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>;
+    if(platform==="yuketang")return <YuketangLoginPanel config={config}
+      desktop={desktop} busy={Boolean(busy)}
+      connected={platforms.yuketang.status==="connected"} videos={videos}
+      onChange={(field,value)=>setConfig(previous=>({...previous,[field]:value}))}
+      onSubmit={()=>void configureFromPanel()} onClear={()=>setClearDialogOpen(true)}
+      onShowVideos={()=>void showVideos()}/>;
+    return null;
+  }
+
   const renderPlatforms=()=> <section className="sf-platform-section">
     <div className="section-head">
-      <div><h3>学习平台</h3><p>登录、连接与课程入口分别属于对应平台。</p></div>
-      <button className="text-button" type="button" onClick={()=>setPage("platforms")}>
-        平台管理<ChevronRight size={16}/>
-      </button>
+      <h3>学习平台</h3>
+      <button className="secondary sf-refresh" type="button" disabled={!desktop||Boolean(busy)}
+        onClick={()=>void refresh()}><RefreshCw size={15}/>检测连接</button>
     </div>
     <div className="platform-grid sf-platform-grid">
       {platformRegistry.map(definition=><PlatformCard key={definition.id}
         definition={definition} state={platforms[definition.id]} desktop={desktop}
-        busy={Boolean(busy)} expanded={expandedLogin[definition.id]}
+        busy={Boolean(busy)} expanded={false}
         onSync={()=>void sync(definition.id)}
-        onToggleLogin={()=>setExpandedLogin(previous=>({...previous,[definition.id]:!previous[definition.id]}))}
+        onToggleLogin={()=>goPlatform(definition.id)}
         onEnterCourses={()=>enterCourses(definition.id)}>
-        {definition.id==="zhidao"
-          ?<ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
-              onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>
-          :definition.id==="yuketang"
-            ?<YuketangLoginPanel config={config} desktop={desktop} busy={Boolean(busy)}
-                connected={platforms.yuketang.status==="connected"} videos={videos}
-                onChange={(field,value)=>setConfig(previous=>({...previous,[field]:value}))}
-                onSubmit={()=>void configureFromPanel()} onClear={()=>setClearDialogOpen(true)}
-                onShowVideos={()=>void showVideos()}/>
-            :<p className="sf-platform-not-ready">该平台的登录组件尚未接入。</p>}
+        {null}
       </PlatformCard>)}
     </div>
   </section>;
+
+  const renderPlatformDetail=(platform:Platform)=>{
+    const definition=platformInfo(platform);
+    if(!definition)return null;
+    return <>
+      <section className="sf-platform-section sf-platform-detail">
+        <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
+          busy={Boolean(busy)} expanded={true}
+          onSync={()=>void sync(platform)}
+          onToggleLogin={()=>setPage("platforms")}
+          onEnterCourses={()=>enterCourses(platform)}>
+          {renderPlatformLogin(platform)}
+        </PlatformCard>
+      </section>
+      <section className="sf-platform-task-section">
+        <LegacyPlaybackPanel platform={platform} courses={platforms[platform].courses}
+          desktop={desktop} connected={platforms[platform].status==="connected"}
+          onEvent={(action,result,detail)=>recordEvent(platformNames[platform],action,result,detail)}/>
+      </section>
+    </>;
+  };
 
   async function configureFromPanel(){
     setBusy("configure");setNotice("");
@@ -255,7 +282,7 @@ export default function App(){
 
   const renderRecentCourses=()=> <section className="sf-recent-section">
     <div className="section-head">
-      <div><h3>课程概览</h3><p>只展示已同步课程；未获得平台进度时不绘制进度条。</p></div>
+      <h3>课程概览</h3>
       <button className="text-button" type="button" onClick={()=>{setCoursePlatform("all");setPage("courses");}}>
         查看全部<ChevronRight size={16}/>
       </button>
@@ -296,7 +323,7 @@ export default function App(){
 
   const renderCourses=()=> <section>
     <div className="section-head">
-      <div><h3>课程列表</h3><p>课程信息来自已连接平台的真实读取结果。</p></div>
+      <h3>课程列表</h3>
       {coursePlatform!=="all"&&<button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
         onClick={()=>void sync(coursePlatform as Platform)}>
         <RefreshCw size={15}/>同步当前平台
@@ -328,22 +355,25 @@ export default function App(){
     </div>}
   </section>;
 
-  const renderTasks=()=> <section>
-    <div className="section-head"><div><h3>原版学习任务</h3>
-      <p>分别管理知到与雨课堂的原有任务进程；登录仍在各自平台卡片内。</p></div></div>
-    <div className="sf-task-grid">
-      <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
-        desktop={desktop} connected={platforms.zhidao.status==="connected"}
-        onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-      <LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
-        desktop={desktop} connected={platforms.yuketang.status==="connected"}
-        onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>
+  const renderTasks=()=> <section className="sf-section">
+    <div className="section-head"><h3>学习任务</h3></div>
+    <div className="sf-task-grid sf-task-shortcuts">
+      {platformRegistry.map(definition=><article className="sf-task-shortcut" key={definition.id}>
+        <div className="sf-task-shortcut-head">
+          <span className={"platform-logo sf-provider-"+definition.color}>{definition.mark}</span>
+          <div><strong>{definition.name}</strong>
+            <small>{platforms[definition.id].status==="connected"?"已连接":"未连接"}</small>
+          </div>
+        </div>
+        <button type="button" className="secondary" onClick={()=>goPlatform(definition.id)}>
+          <Activity size={15}/>查看任务与参数<ChevronRight size={15}/>
+        </button>
+      </article>)}
     </div>
   </section>;
 
   const renderRecords=()=> <section>
-    <div className="section-head"><div><h3>已核验学习记录</h3>
-      <p>只有包含服务端核验标记和时间戳的记录才会出现在这里。</p></div></div>
+    <div className="section-head"><h3>已核验学习记录</h3></div>
     {verifiedCourses.length>0
       ?<div className="course-grid">{verifiedCourses.map(course=>
         <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
@@ -357,8 +387,7 @@ export default function App(){
   </section>;
 
   const renderLogs=()=> <section>
-    <div className="section-head"><div><h3>本机操作记录</h3>
-      <p>最多保留最近 100 条操作元数据，不记录密码、Cookie、二维码或原始响应。</p></div>
+    <div className="section-head"><h3>本机操作记录</h3>
       <button className="secondary" type="button" disabled={activity.length===0}
         onClick={()=>{setActivity([]);try{window.localStorage.removeItem(ACTIVITY_KEY);}catch{};}}>
         清空记录
@@ -383,26 +412,23 @@ export default function App(){
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
       {page==="platforms"&&renderPlatforms()}
+      {page==="platform-zhidao"&&renderPlatformDetail("zhidao")}
+      {page==="platform-yuketang"&&renderPlatformDetail("yuketang")}
       {page==="records"&&renderRecords()}
       {page==="logs"&&renderLogs()}
       {page==="settings"&&<>
         <section className="settings-card">
-          <h3>外观</h3><p>偏好仅保存在本机，不接触平台凭据及学习数据。</p>
+          <h3>外观</h3>
           <div className="sf-settings-line">
-            <div><strong>界面主题</strong><p>可切换深色、浅色或跟随系统。</p></div>
+            <div><strong>界面主题</strong></div>
             <ThemeModeSelector mode={mode} onChange={setMode}/>
           </div>
           <div className="sf-settings-line">
-            <div><strong>紧凑卡片</strong><p>在较小窗口中显示更多课程。</p></div>
+            <div><strong>紧凑卡片</strong></div>
             <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
           </div>
         </section>
-        <section className="settings-card">
-          <h3>平台扩展</h3>
-          <p>当前接入 {platformRegistry.length} 个平台。新平台必须先完成真实后端适配，再注册登录与课程界面。</p>
-        </section>
       </>}
-      <footer className="studyflow-footer">学序 StudyFlow · 本地优先 · 平台凭据相互隔离</footer>
     </AppShell>
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setNotice("知到登录已通过服务端核验；正在检测连接。");
