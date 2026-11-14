@@ -85,7 +85,10 @@ test("LightC AnchorNav pattern stays compact, floating, and keeps settings in th
  assert.match(shell,/sf-settings-button/);
  assert.match(shell,/onPointerEnter=\{handlePointerEnter\} onPointerLeave=\{handlePointerLeave\}/);
  assert.doesNotMatch(shell,/systemNavigation|sf-floating-nav__brand/);
- assert.match(css,/width:32px/);
+ assert.match(css,/\.sf-floating-nav__trigger\{[\\s\\S]*?width:32px;[\\s\\S]*?height:32px;/);
+ assert.match(css,/\.sf-shell \.main\{[\\s\\S]*?padding:20px clamp\\(18px,2\\.4vw,34px\\) 26px 58px;/);
+ assert.match(css,/padding:15px 13px 20px 52px/);
+ assert.match(shell,/function handleTriggerClick\\(\\)\\{\\s*setNavOpen\\(current=>!current\\);\\s*\\}/);
  assert.match(css,/left:12px/);
  assert.match(css,/width:max-content/);
  assert.match(css,/min-width:132px/);
