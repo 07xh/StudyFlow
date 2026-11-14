@@ -6,6 +6,7 @@ import {
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
+import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
 import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
@@ -232,6 +233,10 @@ export default function App(){
           desktop={desktop} connected={platforms[platform].status==="connected"}
           onEvent={(action,result,detail)=>recordEvent(platformNames[platform],action,result,detail)}/>
       </section>
+      {platform==="zhidao"&&<ZhidaoProgressPanel courses={platforms.zhidao.courses}
+        desktop={desktop} connected={platforms.zhidao.status==="connected"}
+        onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+        onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
           busy={Boolean(busy)} expanded={true}

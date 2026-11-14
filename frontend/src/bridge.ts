@@ -15,7 +15,11 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.settings.save"; settings: OriginalYktOptions}
   | {id: string; version: 1; operation: "zhidao.cookie.import"; content: string; mode: "file" | "text"}
   | {id: string; version: 1; operation: "yuketang.progress"; run_id: string}
+  | {id: string; version: 1; operation: "zhidao.progress.sync"}
+  | {id: string; version: 1; operation: "zhidao.progress.verify"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
+
+export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
 
 export type BridgeResponse<T> =
   | {id: string | null; ok: true; data: T}
@@ -60,7 +64,8 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
     const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED",
                              "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
-                             "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS"]);
+                             "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
+                             "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -153,6 +158,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_REQUEST": return "本机请求格式有误。";
     case "ZHIDAO_QR_UNAVAILABLE": return "知到扫码服务尚不可用，检查原版安装与网络。";
     case "INVALID_COOKIE_IMPORT": return "Cookie 内容为空、格式不正确或超过原版支持的大小。";
+    case "ZHIDAO_PROGRESS_FAILED": return "知到服务器进度读取失败；旧记录保持不变。";
+    case "COURSE_NOT_FOUND": return "当前登录会话中找不到这门课程，请先重新同步课程。";
     case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
     default: return "本机服务调用失败，请检查运行环境。";
   }

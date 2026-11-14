@@ -939,3 +939,42 @@
 @media(max-width:760px){
   .sf-shell .sf-live-progress-summary,.sf-shell .sf-live-progress-summary.sf-has-zhs{grid-template-columns:1fr}
 }
+
+
+/* Read-only Zhidao progress verification controls. */
+.sf-shell .sf-zhidao-progress-panel{padding:17px 18px}
+.sf-shell .sf-zd-progress-grid{
+  display:grid;grid-template-columns:minmax(220px,1.1fr) minmax(220px,1fr);
+  gap:12px;align-items:stretch;
+}
+.sf-shell .sf-zd-progress-grid>label{
+  min-width:0;display:grid;align-content:start;gap:7px;
+  color:var(--muted);font-size:12px;font-weight:600;
+}
+.sf-shell .sf-zd-progress-grid select{
+  width:100%;min-width:0;padding:10px 11px;border:1px solid var(--line);
+  border-radius:10px;color:var(--text);background:var(--panel-raised);
+}
+.sf-shell .sf-zd-progress-value{
+  min-width:0;display:grid;align-content:center;gap:5px;
+  padding:12px 14px;border:1px solid var(--line);border-radius:12px;
+  background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-zd-progress-value span,.sf-shell .sf-zd-progress-value small{
+  color:var(--muted);font-size:11px;
+}
+.sf-shell .sf-zd-progress-value strong{
+  color:var(--text);font-size:23px;font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-zd-progress-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+.sf-shell .sf-zd-progress-auto{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-top:13px;padding-top:12px;border-top:1px solid var(--line);
+}
+.sf-shell .sf-zd-progress-auto strong{display:block;color:var(--text);font-size:12px}
+.sf-shell .sf-zd-progress-auto small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
+.sf-shell .sf-zd-progress-note{margin:10px 0 0;color:var(--muted);font-size:11px;line-height:1.55}
+.sf-shell .sf-zd-progress-message{margin:10px 0 0;color:var(--text);font-size:12px}
+@media(max-width:680px){
+  .sf-shell .sf-zd-progress-grid{grid-template-columns:minmax(0,1fr)}
+}

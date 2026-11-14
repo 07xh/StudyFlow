@@ -17,7 +17,12 @@ export function presentCourse(course: Course): CoursePresentation {
   // A numeric progress value alone is not evidence of platform verification.
   if (course.progress_evidence === "server_verified" && typeof value === "number" &&
       Number.isFinite(value) && value >= 0 && value <= 100 && Boolean(course.verified_at)) {
-    return {status: "verified", label: "服务器已核验", detail: "平台返回的上次核验记录", percent: value};
+    const detail = course.course_type === "ai"
+      ? "满进度知识点占比，不代表课程总进度或掌握度"
+      : course.course_type === "shared"
+        ? "已完成视频占比，不代表观看时长"
+        : "平台返回的上次核验记录";
+    return {status: "verified", label: "服务器已核验", detail, percent: value};
   }
   return {status: "unverified", label: "未核验", detail: "暂无可确认的服务器学习进度", percent: null};
 }

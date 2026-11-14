@@ -13,6 +13,7 @@ from typing import Any
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
 from studyflow.platforms.zhidao import qr_runtime
 from studyflow.platforms.zhidao.cookie_import import import_cookie
+from studyflow.platforms.zhidao.legacy_runtime import refresh_progress as refresh_zhidao_progress, verify_course as verify_zhidao_course
 
 # Best-effort cleanup when the persistent JSONL process reaches normal EOF.
 atexit.register(qr_runtime.cancel)
@@ -23,6 +24,15 @@ from studyflow.platforms.yuketang.legacy_config import read_settings as get_orig
 
 MAX_LINE = 600000
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
+
+
+def _course_payload(course):
+    return {
+        "platform": course.platform.value, "course_id": course.course_id, "title": course.title,
+        "progress_percent": course.progress_percent, "course_type": course.course_type,
+        "stale": course.stale, "progress_evidence": course.progress_evidence,
+        "verified_at": course.verified_at,
+    }
 
 
 def dispatch(request: dict[str, Any]) -> dict[str, Any]:
@@ -70,12 +80,28 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             courses = ADAPTERS[platform].list_courses()
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
-        return {"id": request_id, "ok": True, "data": [
-            {"platform": c.platform.value, "course_id": c.course_id, "title": c.title,
-             "progress_percent": c.progress_percent, "course_type": c.course_type,
-             "stale": c.stale, "progress_evidence": None, "verified_at": None}
-            for c in courses
-        ]}
+        return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
+    if operation in ("zhidao.progress.sync", "zhidao.progress.verify"):
+        try:
+            if operation == "zhidao.progress.sync":
+                snapshot = refresh_zhidao_progress()
+            else:
+                course_key = request.get("course_key")
+                if not isinstance(course_key, str) or len(course_key) != 64:
+                    return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+                snapshot = verify_zhidao_course(course_key)
+            return {"id": request_id, "ok": True, "data": {
+                "courses": [_course_payload(c) for c in snapshot["courses"]],
+                "incomplete": snapshot["incomplete"],
+                "fetched_at": snapshot["fetched_at"],
+            }}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except RuntimeError as exc:
+            error = "COURSE_NOT_FOUND" if str(exc) == "COURSE_NOT_FOUND" else "ZHIDAO_PROGRESS_FAILED"
+            return {"id": request_id, "ok": False, "error": error}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHIDAO_PROGRESS_FAILED"}
     if operation == "videos.list":
         if request.get("platform") != "yuketang":
             return {"id": request_id, "ok": False, "error": "UNKNOWN_PLATFORM"}
