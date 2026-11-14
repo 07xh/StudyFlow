@@ -132,14 +132,13 @@ def test_original_exe_entry_is_frozen_in_desktop_package():
 
 
 def test_every_original_yuketang_runtime_setting_is_exposed_in_studyflow():
-    import re
-
     root = Path(__file__).resolve().parents[1]
     original_main = (root / "legacy" / "yuketang" / "main.py").read_text(encoding="utf-8")
-    runtime_keys = set(re.findall(
-        r"os\\.getenv\\(\\s*['\\\"]([A-Z][A-Z0-9_]*)['\\\"]",
-        original_main,
-    ))
+    runtime_keys = {
+        line.split("os.getenv(", 1)[1].split(")", 1)[0].strip().strip("'\\\"")
+        for line in original_main.splitlines()
+        if "os.getenv(" in line
+    }
     credential_keys = {
         "CLASSROOM_ID", "SIGN", "UNIVERSITY_ID", "CSRF_TOKEN", "SESSION_ID",
     }
