@@ -20,7 +20,7 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
     setPhase("checking");setMessage("");
     try{
       const status=await request<{accepted:boolean}>({operation:"studyflow.consent.status"});
-      if(status.accepted){setPhase("accepted");return;}
+      if(status.accepted){setPhase("accepted");onAccepted?.();return;}
       const [terms,privacy]=await Promise.all([
         request<ZhidaoDocument>({operation:"zhidao.document.read",document_id:"terms"}),
         request<ZhidaoDocument>({operation:"zhidao.document.read",document_id:"privacy"})
