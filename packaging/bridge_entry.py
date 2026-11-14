@@ -8,6 +8,31 @@ from __future__ import annotations
 import sys
 
 
+def _prepare_jsonl_stdout():
+    """Preserve the protocol pipe and redirect incidental process output to stderr.
+
+    This is done before importing platform adapters so import-time diagnostics
+    from third-party packages cannot corrupt the first JSONL response.
+    """
+    import os
+
+    stdout = sys.stdout
+    stderr = sys.stderr
+    if stdout is None or stderr is None:
+        raise RuntimeError("JSONL stdout/stderr is unavailable")
+    protocol_fd = os.dup(stdout.fileno())
+    protocol_output = os.fdopen(
+        protocol_fd, "w", encoding="utf-8", buffering=1
+    )
+    try:
+        os.dup2(stderr.fileno(), stdout.fileno())
+    except Exception:
+        protocol_output.close()
+        raise
+    sys.stdout = stderr
+    return protocol_output
+
+
 def main() -> int:
     if len(sys.argv) > 1:
         mode = sys.argv[1]
@@ -48,8 +73,15 @@ def main() -> int:
             return legacy_main(sys.argv[1:])
         return 2
 
-    from studyflow.services.bridge import main as bridge_main
-    return bridge_main()
+    protocol_output = _prepare_jsonl_stdout()
+    try:
+        from studyflow.services.bridge import main as bridge_main
+        return bridge_main(protocol_output)
+    finally:
+        try:
+            protocol_output.flush()
+        finally:
+            protocol_output.close()
 
 
 if __name__ == "__main__":
