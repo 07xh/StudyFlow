@@ -12,3 +12,22 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -e .[dev]
       - run: python -m pytest -q
+
+  frontend:
+    name: React typecheck, production build and IPC/UI tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check TypeScript and build production frontend
+        run: npm run build
+      - name: Verify course evidence and fail-closed IPC behavior
+        run: npm test
