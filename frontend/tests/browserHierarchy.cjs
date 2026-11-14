@@ -14,6 +14,7 @@ const server=http.createServer((req,res)=>{
  try{
   for(const width of [1280,960,720]){
    const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1.25,colorScheme:'light'});
+   await context.addInitScript(()=>localStorage.setItem('studyflow.appearance.v2','light'));
    const page=await context.newPage();page.on('pageerror',error=>failures.push(error.message));
    await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
    const header=await page.locator('.sf-workspace-header').boundingBox(),rail=await page.locator('aside.sf-floating-nav').boundingBox();
