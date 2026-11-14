@@ -38,10 +38,16 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(app,/page==="platform-yuketang"/);
   assert.match(app,/renderPlatformDetail\("zhidao"\)/);
   assert.match(app,/renderPlatformDetail\("yuketang"\)/);
-  assert.match(app,/<LegacyPlaybackPanel platform=\{platform\}/);
+  assert.match(app,/<ZhidaoOfficialPlayerPanel/);
+  assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
+  assert.match(app,/<LegacyPlaybackPanel platform="yuketang"/);
   assert.match(playback,/startLegacy/);
   assert.match(playback,/stopLegacy/);
   assert.match(playback,/getLegacyStatus/);
+  const official=read("src/components/ZhidaoOfficialPlayerPanel.tsx");
+  assert.match(official,/zhidao_player_start/);
+  assert.match(official,/zhidao.progress.verify/);
+  assert.match(official,/autoNext/);
 });
 
 test("Rain Classroom original progress has three distinct UI fields and a scoped IPC", () => {

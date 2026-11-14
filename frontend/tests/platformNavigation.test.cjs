@@ -20,8 +20,12 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/renderPlatformLogin\(platform\)/);
  assert.match(app,/YuketangLoginPanel/);
  assert.match(app,/ZhidaoLoginPanel/);
- assert.match(app,/LegacyPlaybackPanel platform=\{platform\}/);
+ assert.match(app,/ZhidaoOfficialPlayerPanel/);
+ assert.match(app,/LegacyPlaybackPanel platform="zhidao"/);
+ assert.match(app,/LegacyPlaybackPanel platform="yuketang"/);
  assert.match(app,/onImported=/);
+ assert.match(app,/ZhidaoAccountTools/);
+ assert.match(app,/ZhidaoProgressPanel/);
 });
 
 test("original settings and cookie import use the Python bridge instead of localStorage",()=>{

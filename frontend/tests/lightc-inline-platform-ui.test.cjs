@@ -21,10 +21,13 @@ test("platform sidebar has separate pages and platform-owned login components",(
 test("playback configuration belongs to the individual platform page",()=>{
   const app=read("App.tsx"),legacy=read("components/LegacyPlaybackPanel.tsx");
   assert.match(app,/const renderPlatformDetail=\(platform:Platform\)=>/);
-  assert.match(app,/<LegacyPlaybackPanel platform=\{platform\}/);
+  assert.match(app,/<ZhidaoOfficialPlayerPanel/);
+  assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
+  assert.match(app,/<LegacyPlaybackPanel platform="yuketang"/);
   assert.match(app,/查看任务与参数/);
   assert.match(legacy,/validateOriginalOptions/);
   assert.match(legacy,/max_concurrent_videos/);
+  assert.match(read("components/ZhidaoOfficialPlayerPanel.tsx"),/zhidao_player_start/);
   assert.doesNotMatch(app,/page==="tasks"&&[\s\S]*<LegacyPlaybackPanel platform="zhidao"/);
 });
 
