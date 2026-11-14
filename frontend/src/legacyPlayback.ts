@@ -3,11 +3,19 @@ import type {Platform} from "./types";
 import {isDesktop, request} from "./bridge";
 
 export type LegacyTaskState = "idle" | "running" | "exited" | "stopped";
+export type ZhsLocalProgress = {
+  video_segment_percent: number | null;
+  resource_index: number | null;
+  resource_total: number | null;
+};
+
 export type LegacyTaskStatus = {
   platform: Platform;
   state: LegacyTaskState;
   exit_code: number | null;
   run_id?: string | null;
+  course_id: string | null;
+  zhs_progress: ZhsLocalProgress | null;
 };
 
 export type YuketangLiveProgress = {

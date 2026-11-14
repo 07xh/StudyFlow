@@ -882,11 +882,26 @@
   padding:12px 0;margin:4px 0 14px;border-top:1px solid var(--line);
   border-bottom:1px solid var(--line);
 }
+.sf-shell .sf-live-progress-summary.sf-has-zhs{
+  grid-template-columns:minmax(215px,1fr) minmax(0,1.5fr);
+}
 .sf-shell .sf-live-state{
   display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;
   padding:11px 12px;border:1px solid var(--line);border-radius:11px;
   background:rgba(255,255,255,.025);
 }
+.sf-shell .sf-zhs-local{
+  display:flex;flex-direction:column;gap:9px;min-width:0;width:100%;
+  padding-top:11px;margin-top:8px;border-top:1px solid var(--line);
+}
+.sf-shell .sf-zhs-local-heading{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;
+  width:100%;font-size:11px;color:var(--muted);
+}
+.sf-shell .sf-zhs-local-heading strong{color:var(--text);font-size:13px;font-variant-numeric:tabular-nums}
+.sf-shell .sf-zhs-local small{font-size:10px;color:var(--muted);line-height:1.55}
+.sf-shell .sf-zhs-local .sf-verified-track{width:100%}
+
 .sf-shell .sf-live-state>span,.sf-shell .sf-live-course-heading>span{
   font-size:11px;color:var(--muted);
 }
@@ -922,5 +937,5 @@
   display:block;height:100%;border-radius:99px;background:var(--accent);
 }
 @media(max-width:760px){
-  .sf-shell .sf-live-progress-summary{grid-template-columns:1fr}
+  .sf-shell .sf-live-progress-summary,.sf-shell .sf-live-progress-summary.sf-has-zhs{grid-template-columns:1fr}
 }

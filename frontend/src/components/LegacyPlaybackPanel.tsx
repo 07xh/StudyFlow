@@ -28,11 +28,16 @@ export function LegacyPlaybackPanel({
   const aiCourses = courses.filter(c => c.platform === "zhidao" && c.course_type === "ai");
   const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
     .filter(item => item.presentation.percent !== null);
+  const liveZhs = platform === "zhidao" && status?.state === "running" &&
+    status.course_id === selection ? status.zhs_progress : null;
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
     try {
       const next = await getLegacyStatus(platform);
+      if (platform==="zhidao" && next.state==="running" && next.course_id) {
+        setSelection(previous => previous || next.course_id || "");
+      }
       setStatus(next);
       if (platform === "yuketang" && next.run_id) {
         try { setYktProgress(await getYuketangLiveProgress(next.run_id)); }
@@ -110,11 +115,30 @@ export function LegacyPlaybackPanel({
         {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
     </div>
-    <div className="sf-live-progress-summary" aria-label="运行状态与已核验学习进度">
+    <div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
         <strong>{status ? labels[status.state] : desktop ? "检测中" : "未连接桌面端"}</strong>
         <small>约每 2 秒更新</small>
+        {platform==="zhidao"&&<div className="sf-zhs-local" aria-label="ZHS 原版本地模拟片段">
+          <div className="sf-zhs-local-heading">
+            <span>本地模拟片段</span>
+            <strong>{liveZhs?.video_segment_percent != null
+              ? liveZhs.video_segment_percent.toFixed(1)+"%"
+              : "—"}</strong>
+          </div>
+          {liveZhs?.video_segment_percent != null
+            ? <div className="sf-verified-track" role="progressbar" aria-label="当前本地模拟片段进度"
+                aria-valuemin={0} aria-valuemax={100} aria-valuenow={liveZhs.video_segment_percent}>
+                <span style={{width:liveZhs.video_segment_percent+"%"}}/>
+              </div>
+            : <small>{status?.state==="running"
+                ? status.course_id===selection ? "等待原版输出" : "请选择正在运行的课程"
+                : "任务未运行"}</small>}
+          {liveZhs?.resource_index!=null&&liveZhs.resource_total!=null&&
+            <small>当前知识点资源 {liveZhs.resource_index}/{liveZhs.resource_total}</small>}
+          <small>仅原版本地输出，非服务器确认进度</small>
+        </div>}
       </div>
       <div className="sf-live-course-progress">
         <div className="sf-live-course-heading">
