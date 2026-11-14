@@ -26,6 +26,10 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/onImported=/);
  assert.match(app,/ZhidaoAccountTools/);
  assert.match(app,/ZhidaoProgressPanel/);
+ const monitor=source("components/ZhidaoPlayerMonitor.tsx");
+ assert.match(app,/consentAccepted&&<ZhidaoPlayerMonitor/);
+ assert.match(monitor,/zhidao\.progress\.verify/);
+ assert.match(monitor,/1000/);
 });
 
 test("original settings and cookie import use the Python bridge instead of localStorage",()=>{

@@ -46,7 +46,9 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(playback,/getLegacyStatus/);
   const official=read("src/components/ZhidaoOfficialPlayerPanel.tsx");
   assert.match(official,/zhidao_player_start/);
-  assert.match(official,/zhidao.progress.verify/);
+  const monitor=read("src/components/ZhidaoPlayerMonitor.tsx");
+  assert.match(monitor,/zhidao.progress.verify/);
+  assert.match(monitor,/status.runId/);
   assert.match(official,/autoNext/);
 });
 
