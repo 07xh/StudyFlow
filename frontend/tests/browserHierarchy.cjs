@@ -13,7 +13,7 @@ const server=http.createServer((req,res)=>{
  const browser=await chromium.launch({headless:true});const failures=[];
  try{
   for(const width of [1280,960,720]){
-   const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1.25,colorScheme:'light'});
+   const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1.25,colorScheme:'light',reducedMotion:'reduce'});
    await context.addInitScript(()=>localStorage.setItem('studyflow.appearance.v2','light'));
    const page=await context.newPage();page.on('pageerror',error=>failures.push(error.message));
    await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
@@ -22,7 +22,8 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByRole('progressbar').count(),0,'Empty account cannot have percentage progress');
    await page.getByRole('button',{name:'雨课堂',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-login').count(),0,'Account form starts collapsed until requested');
-   await page.screenshot({path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
+   await page.mouse.move(0,0);
+   await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
    await page.getByRole('button',{name:'登录平台',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-login').getByLabel('Session ID',{exact:true}).count(),1);
    assert.equal(await page.locator('.sf-platform-login').getByLabel('课堂 ID',{exact:true}).count(),0);
@@ -30,13 +31,15 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByLabel('课堂 ID',{exact:true}).count(),1);
    assert.equal(await page.locator('.sf-ykt-worker').count(),0,'No invented worker states before launch');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Page cannot overflow horizontally');
-   await page.screenshot({path:path.join(output,'yuketang-'+width+'.png'),fullPage:true});
+   await page.mouse.move(0,0);
+   await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-'+width+'.png'),fullPage:true});
    await page.getByRole('button',{name:'学习任务',exact:true}).click();
    assert.equal(await page.locator('.sf-task-shortcuts,.sf-runtime-task').count(),0);
    await page.getByRole('button',{name:'设置',exact:true}).click();
    await page.getByRole('button',{name:'切换深色主题',exact:true}).click();
    assert.equal(await page.locator('.sf-shell.dark').count(),1);
-   await page.screenshot({path:path.join(output,'settings-dark-'+width+'.png'),fullPage:true});
+   await page.mouse.move(0,0);
+   await page.screenshot({animations:'disabled',path:path.join(output,'settings-dark-'+width+'.png'),fullPage:true});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
    await context.close();
   }

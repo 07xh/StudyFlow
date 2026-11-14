@@ -28,3 +28,9 @@ User approval: the preceding comprehensive UI audit and placement table were acc
 - A browser smoke script and CI step check 1280/960/720px empty-account layouts at 125% scale and retain screenshots. No local desktop/browser screenshot or real account acceptance has been claimed.
 - Original legacy platform and Python business sources remain unchanged. Native changes are limited to process identity and atomic stop validation.
 - One read-only reviewer inspected production modules and raised the run-identity issue, then became unavailable. Remaining settings/async paths were reviewed inline. Windows/package verification remains pending until the actual workflow result.
+
+## Browser verification
+
+Real Chromium CI checks passed at 1280/960/720 CSS pixels and device scale 1.25. Reviewed empty-account screenshots at minimum width and both themes. Follow-up visual repairs remove duplicated page headings, use the header for actual course selection, collapse account forms by default while honoring saved choices, normalize content inputs, and keep notifications in document flow. Initial browser failure was a deterministic-test setup error (app defaults to dark); it was corrected without changing the product theme default. Stable captures use reduced motion and an unfocused pointer.
+
+An earlier revision completed Windows Rust/package/install smoke successfully. Current release eligibility remains tied to all checks on the final head, not to that earlier result.

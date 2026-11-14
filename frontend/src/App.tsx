@@ -282,7 +282,7 @@ export default function App(){
     if(!definition)return null;
     return <div className="sf-platform-workspace">
       <div className="sf-platform-toolbar actions">
-        <button className="primary" onClick={()=>enterCourses(platform)}>打开课程列表</button>
+        <button className={platforms[platform].status==="connected"?"primary":"secondary"} onClick={()=>enterCourses(platform)}>打开课程列表</button>
         <button className="secondary" disabled={!desktop||!!busy||platforms[platform].status!=="connected"} onClick={()=>void sync(platform)}>同步课程列表</button>
       </div>
       <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop} busy={Boolean(busy)} variant="account"

@@ -218,8 +218,8 @@ export function LegacyPlaybackPanel({
           {yktProgress.rich_current != null && <small>处理到第 {yktProgress.rich_current} 篇图文</small>}
         </div>}
       </div>
-      </details>
       <small className="sf-ykt-live-note">并发模式下，各槽位状态来自原版 Worker 日志。心跳无法对应到单个视频，百分比保持空白；诊断区的最近值也不代表课程总进度。</small>
+      </details>
     </div>}
     {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
       <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>
@@ -239,6 +239,6 @@ export function LegacyPlaybackPanel({
     </p>}
     {status?.run_id&&ownsStatus&&<RunParameters parameters={events.find(event=>event.runner===(platform==="zhidao"?"zhs":"yuketang")&&event.runId===status.run_id&&event.parameters)?.parameters}/>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
-    <p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>
+    {status?.run_id&&<p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>}
   </section>;
 }
