@@ -20,7 +20,7 @@ BATCH_TOTAL = re.compile(r"(?:准备观看|找到)\s*(\d+)\s*个视频")
 BATCH_TEST = re.compile(r"测试模式：只处理前\s*(\d+)\s*个视频")
 BATCH_CURRENT = re.compile(r"正在处理第\s*(\d+)/(\d+)\s*个视频")
 BATCH_DONE = re.compile(r"\[主线程\].*?\((\d+)/(\d+)\)")
-BATCH_SUMMARY = re.compile(r"^(总视频数|成功观看|跳过（已完成）|失败|手动停止):\s*(\d+)\s*$")
+BATCH_SUMMARY = re.compile(r"(总视频数|成功观看|跳过（已完成）|失败|手动停止):\s*(\d+)\s*$")
 # The original serializer reports one worker's progress without its video ID.
 # In concurrent mode, NEVER attribute these values to a particular video.
 
@@ -63,14 +63,17 @@ def parse_original_log(text: str) -> dict:
         elif "开始批量观看视频" in line:
             result["concurrent"] = False
 
-        if "开始模拟观看视频" in line:
-            # A new video starts: do not carry the previous video's rate forward.
-            result["simulation_percent"] = None
-            result["simulation_position"] = None
-            result["simulation_duration"] = None
+        if ("正在处理第" in line and "个视频" in line) or re.search(r"\[Worker-\d+\]\s*开始处理视频", line):
+            # New video begins; never carry its predecessor's server result.
             result["server_percent"] = None
             result["server_position"] = None
             result["server_source"] = None
+        if "开始模拟观看视频" in line:
+            # Preserve the original read-only initial server response of this
+            # video, recorded just before simulate_video_watching() begins.
+            result["simulation_percent"] = None
+            result["simulation_position"] = None
+            result["simulation_duration"] = None
 
         match = SIMULATION.search(line)
         if match:
