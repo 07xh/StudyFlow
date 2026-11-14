@@ -18,8 +18,10 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/page==="platform-zhidao"&&renderPlatformDetail\("zhidao"\)/);
  assert.match(app,/page==="platform-yuketang"&&renderPlatformDetail\("yuketang"\)/);
  assert.match(app,/renderPlatformLogin\(platform\)/);
- assert.match(app,/platformLoginExpanded/);\n assert.match(app,/Record<Platform,boolean>/);\n assert.match(app,/expanded=\\{platformLoginExpanded\\[platform\\]\\}/);
- assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(value=>!value\)\}/);
+ assert.match(app,/platformLoginExpanded/);
+ assert.match(app,/Record<Platform,boolean>/);
+ assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
+ assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.{3}previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
  assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
  assert.match(app,/YuketangLoginPanel/);
  assert.match(app,/ZhidaoLoginPanel/);
@@ -66,8 +68,9 @@ test("first-run consent uses native bundled resources and blocks the desktop unt
  assert.match(gate,/studyflow_consent_status/);
  assert.match(gate,/studyflow_consent_accept/);
  assert.match(gate,/studyflow_read_document/);
- assert.match(gate,/点击“同意并继续使用”即表示你已阅读并同意/);\n assert.doesNotMatch(gate,/type="checkbox"/);
- assert.match(gate,/退出学序/);
+ assert.match(gate,/点击“同意并继续使用”即表示你已阅读并同意/);
+ assert.doesNotMatch(gate,/type="checkbox"/);
+ assert.match(gate,/不同意并退出/);
  assert.match(gate,/studyflow_exit/);
  assert.doesNotMatch(gate,/studyflow\.consent\.status|studyflow\.consent\.accept|zhidao\.document\.read/);
  assert.match(app,/StudyFlowConsentGate desktop=\{desktop\}/);
