@@ -76,7 +76,11 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     let operation = request.get("operation").and_then(|v| v.as_str()).unwrap_or("");
     match operation {
         "ping" | "platform.status" | "yuketang.clear"
-        | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel" => Ok(()),
+        | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
+        | "zhidao.progress.sync" => Ok(()),
+        "zhidao.progress.verify" if request.get("course_key").and_then(|x| x.as_str())
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
         "yuketang.progress" if request.get("run_id").and_then(|x| x.as_str())
@@ -180,4 +184,26 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("Failed to launch StudyFlow");
+}
+
+
+
+#[cfg(test)]
+mod ipc_validation_tests {
+    use super::validate;
+    use serde_json::json;
+
+    #[test]
+    fn allows_zhidao_readonly_progress_operations() {
+        assert!(validate(&json!({"id":"a","version":1,"operation":"zhidao.progress.sync"})).is_ok());
+        assert!(validate(&json!({"id":"b","version":1,"operation":"zhidao.progress.verify","course_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})).is_ok());
+    }
+
+    #[test]
+    fn rejects_malformed_zhidao_course_keys_at_tauri_boundary() {
+        for key in ["../invalid", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] {
+            assert!(validate(&json!({"id":"c","version":1,"operation":"zhidao.progress.verify","course_key":key})).is_err());
+        }
+    }
 }
