@@ -14,11 +14,11 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected, onEvent, onCoursesUpdated, yuketangOptions, settingsReady=true, courseId, detailMode=false
+  platform, courses, desktop, connected, onEvent, onCourseVerified, yuketangOptions, settingsReady=true, courseId, detailMode=false
 }: {
   platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
   onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
-  onCoursesUpdated?: (courses:Course[])=>void;
+  onCourseVerified?: (course:Course)=>void;
   yuketangOptions?: OriginalYktOptions;
   settingsReady?: boolean;
   courseId?:string;
@@ -27,9 +27,9 @@ export function LegacyPlaybackPanel({
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const [verificationState, setVerificationState] = useState<"idle"|"checking"|"verified"|"unknown">("idle");
   const verifiedRunRef = useRef<string | null>(null);
-  const onCoursesUpdatedRef = useRef(onCoursesUpdated);
+  const onCourseVerifiedRef = useRef(onCourseVerified);
   const onEventRef = useRef(onEvent);
-  useEffect(()=>{onCoursesUpdatedRef.current=onCoursesUpdated;},[onCoursesUpdated]);
+  useEffect(()=>{onCourseVerifiedRef.current=onCourseVerified;},[onCourseVerified]);
   useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
   const latestStatusRequest = useRef(0);
   const taskActionInFlight = useRef(false);
@@ -119,7 +119,7 @@ export function LegacyPlaybackPanel({
       const target = snapshot.courses.find(course =>
         course.platform === "zhidao" && course.course_id === status.course_id);
       if (target?.progress_evidence === "server_verified" && !target.stale && target.verified_at) {
-        onCoursesUpdatedRef.current?.(snapshot.courses);
+        onCourseVerifiedRef.current?.(target);
         setVerificationState("verified");
         onEventRef.current?.("自动只读核验","success","已获取当前课程服务器记录；进度是否增加以核验值为准");
       } else {
