@@ -9,7 +9,8 @@ export type BridgeRequest =
   | {id:string;version:1;operation:"courses.list";platform:Platform}
   | {id:string;version:1;operation:"videos.list";platform:"yuketang"}
   | {id:string;version:1;operation:"yuketang.configure";configuration:Config}
-  | {id:string;version:1;operation:"yuketang.clear"};
+  | {id:string;version:1;operation:"yuketang.clear"}
+  | {id:string;version:1;operation:"zhidao.qr.start"|"zhidao.qr.status"|"zhidao.qr.cancel"};
 
 export type BridgeResponse<T> =
   | {id:string|null;ok:true;data:T}
@@ -27,9 +28,7 @@ const errorLabels:Record<string,string> = {
   UNSUPPORTED_VERSION:"通信协议版本不匹配"
 };
 
-type WithoutEnvelope<T> = T extends unknown ? Omit<T,"id"|"version"> : never;
-
-export async function request<T>(message:WithoutEnvelope<BridgeRequest>):Promise<T> {
+export async function request<T>(message:Omit<BridgeRequest,"id"|"version">):Promise<T> {
   if(!isDesktop())throw new Error("当前为浏览器预览，需启动 Windows 桌面版才能连接真实课程");
   const payload={...message,id:crypto.randomUUID(),version:1} as BridgeRequest;
   const result=await invoke<BridgeResponse<T>>("bridge_request",{request:payload});
@@ -46,4 +45,20 @@ export async function fetchStatuses():Promise<PlatformState[]>{
 export async function openLegacyZhidao():Promise<void> {
   if(!isDesktop())throw new Error("请在 Windows 桌面版中使用");
   await invoke("launch_zhidao_legacy");
+}
+
+/** Ephemeral QR image, never persist or log this base64 string. */
+export type ZhidaoQrStage =
+  | "idle" | "busy" | "requesting" | "ready" | "scanned" | "confirming"
+  | "verified" | "unavailable" | "rejected" | "expired" | "cancelled"
+  | "failed" | "environment-error";
+export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null};
+
+export function zhidaoQrCommand(action:"start"|"status"|"cancel"):Promise<ZhidaoQrState>{
+  const operation = ({
+    start:"zhidao.qr.start",
+    status:"zhidao.qr.status",
+    cancel:"zhidao.qr.cancel"
+  } as const)[action];
+  return request<ZhidaoQrState>({operation});
 }
