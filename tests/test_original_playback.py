@@ -28,8 +28,20 @@ ORIGINAL_BLOBS = {
 
 
 def _blob_sha(path):
-    content = (ROOT / path).read_bytes()
-    return hashlib.sha1(b"blob " + str(len(content)).encode("ascii") + b"\0" + content).hexdigest()
+    # Windows checkout may translate LF to CRLF, but the Git *blob* is
+    # unchanged. Compare canonical stored bytes rather than checkout bytes.
+    import subprocess
+    assert (ROOT / path).is_file()
+    result = subprocess.run(
+        ["git", "rev-parse", f"HEAD:{path}"],
+        cwd=ROOT, check=True, capture_output=True, text=True, timeout=10,
+    )
+    # Detect uncommitted source edits without falsely rejecting CRLF checkout.
+    subprocess.run(
+        ["git", "diff", "--exit-code", "--quiet", "HEAD", "--", path],
+        cwd=ROOT, check=True, capture_output=True, timeout=10,
+    )
+    return result.stdout.strip()
 
 
 @pytest.mark.parametrize("filename,expected", list(ORIGINAL_BLOBS.items()))
