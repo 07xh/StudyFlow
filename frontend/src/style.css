@@ -20,3 +20,19 @@
 .video-list small,.video-list span{color:var(--muted);font-size:11px}
 .video-list strong{font-size:14px;flex:1}
 @media(max-width:700px){.credential-form{grid-template-columns:1fr}}
+
+/* Platform-independent modal shell; Zhidao supplies only QR-specific content. */
+.qr-backdrop{position:fixed;inset:0;z-index:1000;background:#060711a8;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(6px)}
+.qr-dialog{width:min(100%,440px);max-height:min(94vh,740px);overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 24px 80px #0005;margin:0}
+.qr-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.qr-header h3{font-size:19px;margin:0}
+.qr-header p,.qr-privacy{font-size:12px;color:var(--muted);line-height:1.7}
+.qr-icon-button{display:grid;place-items:center;flex-shrink:0;width:34px;height:34px;background:transparent;color:var(--text);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.qr-image-area{display:grid;place-items:center;min-height:272px;padding:18px;margin:18px 0 8px;background:var(--bg);border:1px solid var(--line);border-radius:16px}
+.qr-image{width:min(100%,236px);height:auto;aspect-ratio:1;object-fit:contain;background:#fff;padding:9px;border-radius:10px;image-rendering:auto}
+.qr-placeholder{min-height:210px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;text-align:center;color:var(--muted);font-size:13px}
+.qr-stage{font-size:14px;text-align:center;font-weight:600;min-height:24px}
+.qr-error{color:#df7575;font-size:12px;overflow-wrap:anywhere}
+.qr-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.qr-privacy{border-top:1px solid var(--line);padding-top:12px;margin-bottom:0}
+@media(max-width:500px){.qr-dialog{padding:17px}.qr-image-area{min-height:230px}}
