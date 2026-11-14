@@ -1,6 +1,6 @@
 import {useEffect,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {BookOpen,ShieldCheck} from "lucide-react";
+import {BookOpen,ShieldCheck,X} from "lucide-react";
 import {friendlyBridgeError,type ZhidaoDocument} from "../bridge";
 
 type Props={desktop:boolean;dark:boolean;onAccepted?:()=>void};
@@ -52,6 +52,10 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
         <span><ShieldCheck size={20}/></span>
         <div><h2 id="sf-consent-title">学序首次使用声明</h2>
           <p>继续使用前，请阅读第三方声明与隐私数据说明。</p></div>
+        <button className="sf-consent-exit" type="button"
+          onClick={()=>void invoke("studyflow_exit")} aria-label="退出学序" title="退出学序">
+          <X size={16}/><span>退出学序</span>
+        </button>
       </header>
       {phase==="checking"&&<div className="sf-consent-loading">正在读取本机声明文件…</div>}
       {phase==="error"&&<div className="sf-consent-error" role="alert">
@@ -74,8 +78,6 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
         </p>
         {message&&<p className="sf-consent-message" role="alert">{message}</p>}
         <footer className="sf-consent-actions">
-          <button className="secondary" type="button" disabled={busy}
-            onClick={()=>void invoke("studyflow_exit")}>不同意并退出</button>
           <button className="primary" type="button" disabled={!docs.terms||!docs.privacy||busy}
             onClick={()=>void accept()}>{busy?"正在保存…":"同意并继续使用"}</button>
         </footer>
