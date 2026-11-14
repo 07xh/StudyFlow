@@ -45,9 +45,10 @@ interface Props {
   page:Page;onNavigate:(next:Page)=>void;dark:boolean;onThemeToggle:()=>void;
   onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
   compact:boolean;children:ReactNode;
+  headerTitle?:string;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle
 }:Props){
   const [navOpen,setNavOpen]=useState(false);
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
@@ -168,7 +169,7 @@ export function AppShell({
     </div>
     <main className="main" id="main-content">
       <header className="sf-header">
-        <div className="sf-page-heading"><h1>{titles[page]}</h1></div>
+        <div className="sf-page-heading"><h1>{headerTitle??titles[page]}</h1></div>
         <div className="sf-header-actions">
           <span className="sf-mode"><span className="sf-status-dot"/>
             {desktop?"Windows 桌面":"浏览器预览"}
