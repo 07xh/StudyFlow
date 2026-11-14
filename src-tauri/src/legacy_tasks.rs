@@ -1,8 +1,12 @@
 //! Process-only integration of the original ZHS and Rain Classroom executors.
 //! Their heartbeat generators, senders, defaults and upstream source are unchanged.
 use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
@@ -53,6 +57,15 @@ struct LegacyJob {
     child: Option<Child>,
     state: String,
     exit_code: Option<i32>,
+    course_id: Option<String>, // opaque course key, never a raw login credential
+    monitor_token: Option<String>, // per-run nonce, kept out of frontend
+}
+
+#[derive(Serialize)]
+pub struct ZhsProgress {
+    video_segment_percent: Option<f64>,
+    resource_index: Option<u64>,
+    resource_total: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -60,6 +73,60 @@ pub struct LegacyStatus {
     platform: String,
     state: String,
     exit_code: Option<i32>,
+    course_id: Option<String>,
+    zhs_progress: Option<ZhsProgress>,
+}
+
+fn zhs_snapshot_path(token: &str) -> Option<PathBuf> {
+    if token.len() != 32 || !token.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) {
+        return None;
+    }
+    let local = std::env::var_os("LOCALAPPDATA")?;
+    Some(PathBuf::from(local).join("StudyFlow").join(format!("monitor-zhs-{token}.json")))
+}
+
+fn remove_zhs_snapshot(token: Option<&str>) {
+    if let Some(path) = token.and_then(zhs_snapshot_path) {
+        let _ = fs::remove_file(path);
+    }
+}
+
+/// Parse only bounded, fresh, per-process numeric telemetry from the unchanged observer.
+/// Never mistake local simulated progress for confirmed platform learning progress.
+fn read_zhs_snapshot(token: &str) -> Option<ZhsProgress> {
+    let path = zhs_snapshot_path(token)?;
+    let metadata = fs::metadata(&path).ok()?;
+    if !metadata.is_file() || metadata.len() < 2 || metadata.len() > 2048 {
+        return None;
+    }
+    let bytes = fs::read(&path).ok()?;
+    let data: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    if data.get("v")?.as_u64()? != 1 || data.get("token")?.as_str()? != token {
+        return None;
+    }
+    let observed = data.get("at")?.as_f64()?;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs_f64();
+    if !observed.is_finite() || observed > now + 10.0 || now - observed > 18.0 {
+        return None;
+    }
+    let raw_percent = data.get("videoSegmentPercent")?;
+    let percent = if raw_percent.is_null() { None } else {
+        let value = raw_percent.as_f64()?;
+        if !value.is_finite() || !(0.0..=100.0).contains(&value) { return None; }
+        Some(value)
+    };
+    let raw_index = data.get("resourceIndex")?;
+    let raw_total = data.get("resourceTotal")?;
+    let (index, total) = if raw_index.is_null() && raw_total.is_null() {
+        (None, None)
+    } else {
+        let i = raw_index.as_u64()?;
+        let t = raw_total.as_u64()?;
+        if i < 1 || t < i || t > 100000 { return None; }
+        (Some(i), Some(t))
+    };
+    if percent.is_none() && index.is_none() { return None; }
+    Some(ZhsProgress { video_segment_percent: percent, resource_index: index, resource_total: total })
 }
 
 fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, String> {
@@ -68,12 +135,17 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
             task.exit_code = code.code();
             task.state = "exited".into();
             task.child = None;
+            remove_zhs_snapshot(task.monitor_token.as_deref());
         }
     }
     Ok(LegacyStatus {
         platform: platform.into(),
         state: task.state.clone(),
         exit_code: task.exit_code,
+        course_id: task.course_id.clone(),
+        zhs_progress: if platform == "zhidao" && task.state == "running" {
+            task.monitor_token.as_deref().and_then(read_zhs_snapshot)
+        } else { None },
     })
 }
 
@@ -99,6 +171,7 @@ impl LegacyTasks {
                     terminate_tree(&mut child);
                     task.state = "stopped".into();
                 }
+                remove_zhs_snapshot(task.monitor_token.as_deref());
             }
         }
     }
@@ -135,9 +208,14 @@ pub fn legacy_start(
         }
     }
     let binary = crate::bridge_binary(&app).map_err(|_| "LEGACY_NOT_INSTALLED")?;
+    let monitor_token = if platform == "zhidao" {
+        Some(Uuid::new_v4().simple().to_string())
+    } else { None };
     let mut command = Command::new(binary);
     if platform == "zhidao" {
-        command.arg("--legacy-zhidao").arg(course_id.as_deref().unwrap_or(""));
+        command.arg("--legacy-zhidao")
+            .arg(course_id.as_deref().unwrap_or(""))
+            .arg(monitor_token.as_deref().unwrap_or(""));
     } else {
         command.arg("--legacy-yuketang");
         if let Some(settings) = &options {
@@ -152,10 +230,14 @@ pub fn legacy_start(
     }
     let child = command.spawn().map_err(|_| "LEGACY_LAUNCH_FAILED")?;
     guard.insert(platform.clone(), LegacyJob {
-        child: Some(child), state: "running".into(), exit_code: None
+        child: Some(child), state: "running".into(), exit_code: None,
+        course_id: if platform == "zhidao" { course_id.clone() } else { None },
+        monitor_token,
     });
     Ok(LegacyStatus {
-        platform, state: "running".into(), exit_code: None
+        platform, state: "running".into(), exit_code: None,
+        course_id: if platform == "zhidao" { course_id } else { None },
+        zhs_progress: None,
     })
 }
 
@@ -167,7 +249,7 @@ pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     match guard.get_mut(&platform) {
         Some(task) => status_of(&platform, task),
-        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None}),
+        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, course_id: None, zhs_progress: None}),
     }
 }
 
@@ -183,10 +265,11 @@ pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String) -> Result<Le
                 terminate_tree(&mut child);
                 job.state = "stopped".into();
             }
+            remove_zhs_snapshot(job.monitor_token.as_deref());
         }
         return status_of(&platform, job);
     }
-    Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None})
+    Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, course_id: None, zhs_progress: None})
 }
 
 #[cfg(test)]
@@ -198,5 +281,11 @@ mod tests {
         assert!(!valid_course_key(&"A".repeat(64)));
         assert!(!valid_course_key("123"));
         assert!(!valid_course_key(&"g".repeat(64)));
+    }
+
+    #[test]
+    fn telemetry_file_name_never_accepts_path_tokens() {
+        assert!(zhs_snapshot_path("../../../outside").is_none());
+        assert!(zhs_snapshot_path(&"A".repeat(32)).is_none());
     }
 }
