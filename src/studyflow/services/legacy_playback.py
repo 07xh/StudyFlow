@@ -28,7 +28,7 @@ def _legacy_source() -> Path:
     # PyInstaller copies the original under the bundle's internal directory.
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS) / "legacy" / "yuketang" / "main.py"
-    return Path(__file__).resolve().parents[4] / "legacy" / "yuketang" / "main.py"
+    return Path(__file__).resolve().parents[3] / "legacy" / "yuketang" / "main.py"
 
 
 def run_yuketang_original() -> int:
