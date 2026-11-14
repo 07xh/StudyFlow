@@ -36,10 +36,6 @@ const titles:Record<Page,string>={
   records:"学习记录",logs:"日志中心",settings:"设置"
 };
 
-function readNavPinned():boolean{
-  try{return window.localStorage.getItem("studyflow.nav.pinned")==="true";}
-  catch{return false;}
-}
 function readPlatformExpanded():boolean{
   try{return window.localStorage.getItem("studyflow.nav.platform-expanded")!=="false";}
   catch{return true;}
@@ -53,8 +49,8 @@ interface Props {
 export function AppShell({
   page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children
 }:Props){
-  const [navPinned,setNavPinned]=useState(readNavPinned);
-  const [navOpen,setNavOpen]=useState(readNavPinned);
+  const [navOpen,setNavOpen]=useState(false);
+  const touchTriggerRef=useRef(false);
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
   const navRootRef=useRef<HTMLDivElement|null>(null);
   const closeTimerRef=useRef<number|null>(null);
@@ -67,14 +63,18 @@ export function AppShell({
   }
   function closeNavigation(){
     cancelCloseTimer();
-    setNavPinned(false);
     setNavOpen(false);
   }
-  function toggleNavigationPin(){
-    cancelCloseTimer();
-    const next=!navPinned;
-    setNavPinned(next);
-    setNavOpen(next);
+  function handleTriggerPointerDown(event:ReactPointerEvent<HTMLButtonElement>){
+    touchTriggerRef.current=event.pointerType==="touch";
+  }
+  function handleTriggerClick(){
+    if(touchTriggerRef.current){
+      setNavOpen(current=>!current);
+      touchTriggerRef.current=false;
+      return;
+    }
+    setNavOpen(true);
   }
   function handlePointerEnter(event:ReactPointerEvent<HTMLElement>){
     if(event.pointerType==="touch")return;
@@ -82,20 +82,16 @@ export function AppShell({
     setNavOpen(true);
   }
   function handlePointerLeave(event:ReactPointerEvent<HTMLElement>){
-    if(event.pointerType==="touch"||navPinned)return;
+    if(event.pointerType==="touch")return;
     cancelCloseTimer();
     closeTimerRef.current=window.setTimeout(()=>{closeTimerRef.current=null;setNavOpen(false);},180);
   }
   function handleNavBlur(event:ReactFocusEvent<HTMLDivElement>){
     const nextTarget=event.relatedTarget;
     if(nextTarget instanceof Node&&navRootRef.current?.contains(nextTarget))return;
-    if(!navPinned)setNavOpen(false);
+    setNavOpen(false);
   }
 
-  useEffect(()=>{
-    try{window.localStorage.setItem("studyflow.nav.pinned",String(navPinned));}
-    catch{/* Navigation remains available for the current session. */}
-  },[navPinned]);
   useEffect(()=>{
     try{window.localStorage.setItem("studyflow.nav.platform-expanded",String(platformExpanded));}
     catch{/* The current navigation state remains available for this session. */}
@@ -105,13 +101,11 @@ export function AppShell({
     const handleOutsidePointerDown=(event:PointerEvent)=>{
       const target=event.target;
       if(target instanceof Node&&!navRootRef.current?.contains(target)){
-        setNavPinned(false);
         setNavOpen(false);
       }
     };
     const handleKeyDown=(event:KeyboardEvent)=>{
       if(event.key==="Escape"){
-        setNavPinned(false);
         setNavOpen(false);
       }
     };
@@ -165,20 +159,19 @@ export function AppShell({
   return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
     <div className="sf-floating-nav" ref={navRootRef}
       onFocusCapture={()=>{cancelCloseTimer();setNavOpen(true);}}
-      onBlurCapture={handleNavBlur}>
+      onBlurCapture={handleNavBlur}
+      onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
       <button type="button"
         className={["sf-floating-nav__trigger",navOpen?"is-open":""].filter(Boolean).join(" ")}
-        aria-label={navPinned?"取消固定并收起导航":navOpen?"固定导航":"打开导航"}
-        aria-expanded={navOpen} aria-pressed={navPinned} aria-controls="sf-floating-navigation"
-        title={navPinned?"取消固定导航":navOpen?"固定导航":"打开导航"}
-        onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}
-        onClick={toggleNavigationPin}>
+        aria-label={navOpen?"关闭导航":"打开导航"}
+        aria-expanded={navOpen} aria-pressed={navOpen} aria-controls="sf-floating-navigation"
+        title={navOpen?"关闭导航":"打开导航"}
+        onPointerDown={handleTriggerPointerDown} onClick={handleTriggerClick}>
         <PanelLeft size={18}/>
       </button>
       <aside id="sf-floating-navigation"
         className={["sf-floating-nav__panel",navOpen?"is-open":""].filter(Boolean).join(" ")}
-        aria-label="主导航" aria-hidden={!navOpen}
-        onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
+        aria-label="主导航" aria-hidden={!navOpen}>
         {renderItems(workspaceNavigation)}
       </aside>
     </div>
