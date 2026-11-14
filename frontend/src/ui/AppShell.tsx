@@ -50,7 +50,6 @@ export function AppShell({
   page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children
 }:Props){
   const [navOpen,setNavOpen]=useState(false);
-  const touchTriggerRef=useRef(false);
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
   const navRootRef=useRef<HTMLDivElement|null>(null);
   const closeTimerRef=useRef<number|null>(null);
@@ -65,16 +64,8 @@ export function AppShell({
     cancelCloseTimer();
     setNavOpen(false);
   }
-  function handleTriggerPointerDown(event:ReactPointerEvent<HTMLButtonElement>){
-    touchTriggerRef.current=event.pointerType==="touch";
-  }
   function handleTriggerClick(){
-    if(touchTriggerRef.current){
-      setNavOpen(current=>!current);
-      touchTriggerRef.current=false;
-      return;
-    }
-    setNavOpen(true);
+    setNavOpen(current=>!current);
   }
   function handlePointerEnter(event:ReactPointerEvent<HTMLElement>){
     if(event.pointerType==="touch")return;
@@ -166,7 +157,7 @@ export function AppShell({
         aria-label={navOpen?"关闭导航":"打开导航"}
         aria-expanded={navOpen} aria-pressed={navOpen} aria-controls="sf-floating-navigation"
         title={navOpen?"关闭导航":"打开导航"}
-        onPointerDown={handleTriggerPointerDown} onClick={handleTriggerClick}>
+        onClick={handleTriggerClick}>
         <PanelLeft size={18}/>
       </button>
       <aside id="sf-floating-navigation"

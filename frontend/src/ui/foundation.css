@@ -439,7 +439,7 @@
 }
 @media(max-width:720px){
   .app.sf-shell{gap:8px;padding:8px}
-    .sf-shell .main{min-height:calc(100vh - 16px);padding:15px 13px;border-radius:17px}
+    .sf-shell .main{min-height:calc(100vh - 16px);padding:15px 13px 20px 52px;border-radius:17px}
   .sf-shell .sf-header{align-items:flex-start;flex-wrap:wrap;margin-bottom:15px;padding-bottom:12px}
   .sf-shell .sf-header h1{font-size:20px}
   .sf-shell .sf-header-actions{margin-left:auto}
@@ -868,13 +868,13 @@
   position:fixed;
   left:12px;
   top:50%;
-  width:36px;
-  height:36px;
+  width:32px;
+  height:32px;
   display:grid;
   place-items:center;
   padding:0;
   border:1px solid var(--line);
-  border-radius:12px;
+  border-radius:10px;
   color:var(--muted);
   background:var(--panel);
   box-shadow:0 12px 30px rgba(0,0,0,.18);
@@ -898,9 +898,9 @@
 }
 .sf-shell .sf-floating-nav__panel{
   position:fixed;
-  left:54px;
+  left:50px;
   top:50%;
-  width:min(236px,calc(100vw - 62px));
+  width:min(236px,calc(100vw - 58px));
   max-height:calc(100vh - 24px);
   overflow-x:hidden;
   overflow-y:auto;
