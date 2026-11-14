@@ -12,6 +12,7 @@ import json
 import os
 import re
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 import sys
@@ -446,3 +447,43 @@ def read_course_detail(course_key: str) -> dict:
         "percent": round(done * 100.0 / total, 1) if total else None,
         "items": items,
     }
+
+
+
+def _consent_flag_path() -> Path:
+    base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    return base / "StudyFlow" / "privacy-accepted-v1.flag"
+
+
+def consent_status() -> dict:
+    path = _consent_flag_path()
+    try:
+        if path.is_symlink() or path.stat().st_size > 256:
+            return {"accepted": False}
+        value = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {"accepted": False}
+    except (OSError, UnicodeError):
+        return {"accepted": False}
+    return {"accepted": value.startswith("StudyFlow privacy notice v1 accepted at ")}
+
+
+def accept_consent() -> dict:
+    path = _consent_flag_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise RuntimeError("CONSENT_STORAGE_FAILED")
+    value = "StudyFlow privacy notice v1 accepted at " + datetime.now(timezone.utc).isoformat()
+    fd, temporary = tempfile.mkstemp(prefix=".consent-", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(value)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+    return {"accepted": True}
