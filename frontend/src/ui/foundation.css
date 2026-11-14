@@ -548,9 +548,9 @@
 @media(max-width:500px){
   .sf-shell .sidebar{width:64px;flex-basis:64px}
   .sf-shell .sf-sidebar-panel{padding:12px 6px 10px}
-  .sf-shell:not(.sf-collapsed) .sf-sidebar-panel{width:min(216px,calc(100vw - 82px))}
+  .sf-shell:not(.sf-collapsed) .sf-sidebar-panel{width:min(226px,calc(100vw - 82px))}
   .sf-shell.sf-collapsed .sf-sidebar-panel:hover,
-  .sf-shell.sf-collapsed .sf-sidebar-panel:focus-within{width:min(216px,calc(100vw - 82px))}
+  .sf-shell.sf-collapsed .sf-sidebar-panel:focus-within{width:min(226px,calc(100vw - 82px))}
   .sf-shell .brand{gap:8px;padding:0 4px;margin-bottom:20px}
   .sf-shell .brand-icon{width:35px;height:35px}
   .sf-shell .brand strong{font-size:16px}
@@ -686,11 +686,11 @@
   .sf-shell .sf-sidebar-panel{max-height:calc(100vh - 16px)}
 }
 @media(max-width:500px){
-  .sf-shell .sf-sidebar{width:64px;flex-basis:64px}
+  .sf-shell .sidebar{width:64px;flex-basis:64px}
   .sf-shell .sf-sidebar-panel{padding:12px 6px 10px}
-  .sf-shell:not(.sf-collapsed) .sf-sidebar-panel{width:min(216px,calc(100vw - 82px))}
+  .sf-shell:not(.sf-collapsed) .sf-sidebar-panel{width:min(226px,calc(100vw - 82px))}
   .sf-shell.sf-collapsed .sf-sidebar-panel:hover,
-  .sf-shell.sf-collapsed .sf-sidebar-panel:focus-within{width:min(216px,calc(100vw - 82px))}
+  .sf-shell.sf-collapsed .sf-sidebar-panel:focus-within{width:min(226px,calc(100vw - 82px))}
 }
 
 

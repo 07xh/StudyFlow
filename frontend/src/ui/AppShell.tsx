@@ -101,9 +101,9 @@ export function AppShell({
       <div className="sf-nav-head">
         <span className="section-label">工作空间</span>
         <button className="sf-nav-toggle" type="button"
-          title={collapsed?"展开侧边栏":"折叠侧边栏"}
-          aria-label={collapsed?"展开侧边栏":"折叠侧边栏"}
-          aria-expanded={!collapsed} onClick={()=>setCollapsed(current=>!current)}>
+          title={collapsed?"固定展开侧边栏":"取消固定，恢复悬浮收起"}
+          aria-label={collapsed?"固定展开侧边栏":"取消固定侧边栏"}
+          aria-pressed={!collapsed} onClick={()=>setCollapsed(current=>!current)}>
           {collapsed?<PanelLeftOpen size={18}/>:<PanelLeftClose size={18}/>}
         </button>
       </div>
