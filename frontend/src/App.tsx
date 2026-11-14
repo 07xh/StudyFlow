@@ -45,8 +45,8 @@ const PLATFORM_LOGIN_EXPANDED_KEY="studyflow.platform-login.expanded.v1";
 function readPlatformLoginExpanded():Record<Platform,boolean>{
   try{
     const saved=JSON.parse(window.localStorage.getItem(PLATFORM_LOGIN_EXPANDED_KEY)||"{}");
-    return {zhidao:saved.zhidao!==false,yuketang:saved.yuketang!==false};
-  }catch{return {zhidao:true,yuketang:true};}
+    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true};
+  }catch{return {zhidao:false,yuketang:false};}
 }
 
 function readActivity():ActivityEntry[]{
@@ -146,7 +146,7 @@ export default function App(){
 
 
   const refresh=useCallback(async()=>{
-    if(!desktop){setNotice("浏览器仅提供界面预览；请使用 Windows 桌面版连接真实平台。");return;}
+    if(!desktop)return;
     setBusy("status");setNotice("");
     try{
       const statuses=await fetchStatuses();
@@ -312,7 +312,7 @@ export default function App(){
           <YuketangContentPanel config={config} videos={videos} desktop={desktop} busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"&&!scopeDirty} onChange={updateConfiguration} onShowVideos={()=>void showVideos()}/>
         </CollapsibleSection>
         <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务与默认参数">
-          <p className="sf-task-context">启动和停止作用于雨课堂已保存的课堂范围，不限定为当前浏览的单门课程。{scopeDirty&&" 新编辑的课堂范围尚未保存。"}</p>
+          <p className={scopeDirty?"sf-task-context":"sf-muted"}>启动和停止作用于雨课堂已保存的课堂范围，不限定为当前浏览的单门课程。{scopeDirty&&" 新编辑的课堂范围尚未保存。"}</p>
           <YuketangTaskArea courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"} events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
         </CollapsibleSection>
@@ -517,7 +517,9 @@ export default function App(){
       currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
       currentCourseTitle={workspaceCourse?.title} courseProgress={activeCourseProgress}
       metricLabel={activeMetric?.label} courseEvidence={activeMetric?.evidenceLabel} courseVerifiedAt={activeMetric?.verifiedAt}
-      currentPlatformStatus={headerPlatform?platforms[headerPlatform].status:undefined}>
+      currentPlatformStatus={headerPlatform?platforms[headerPlatform].status:undefined}
+      courseOptions={headerPlatform?platforms[headerPlatform].courses.map(course=>({id:course.course_id,title:course.title})):[]}
+      onCourseSelect={id=>{const course=courses.find(course=>course.platform===headerPlatform&&course.course_id===id);if(course)inspectCourse(course);}}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}

@@ -43,10 +43,11 @@ interface Props {
   currentPlatform?:string;
   currentCourseTitle?:string;
   courseProgress?:number|null;
+  courseOptions?:{id:string;title:string}[];onCourseSelect?:(id:string)=>void;
   metricLabel?:string;courseEvidence?:string;courseVerifiedAt?:string|null;currentPlatformStatus?:ConnectionStatus;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -104,7 +105,7 @@ export function AppShell({
           <div className="sf-workspace-progress-head"><div className="sf-workspace-progress-course"><small>{metricLabel??"平台记录进度"}</small><strong title={currentCourseTitle}>{currentCourseTitle}</strong></div><strong className="sf-workspace-progress-value">{courseProgress==null?"—":courseProgress.toFixed(1)+"%"}</strong></div>
           {courseProgress!=null&&<div className="sf-workspace-progress-track" role="progressbar" aria-label={metricLabel??"平台记录进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={courseProgress}><span style={{width:courseProgress+"%"}}/></div>}
           <div className="sf-header-evidence"><span>{courseEvidence??"待核验"}</span><time>{courseVerifiedAt&&Number.isFinite(Date.parse(courseVerifiedAt))?new Date(courseVerifiedAt).toLocaleString():"暂无核验时间"}</time></div>
-        </>:<div className="sf-workspace-page-context"><strong>{titles[page]}</strong>{page==="courses"&&<small>选择课程后查看已核验进度</small>}</div>}
+        </>:<div className="sf-workspace-page-context">{page.startsWith("platform-")?<label className="sf-header-course-picker">选择课程<select value="" disabled={!courseOptions.length} onChange={event=>onCourseSelect?.(event.target.value)}><option value="">{courseOptions.length?"选择一门课程查看进度":"请先同步课程"}</option>{courseOptions.map(course=><option key={course.id} value={course.id}>{course.title}</option>)}</select></label>:<><strong>{titles[page]}</strong>{page==="courses"&&<small>选择课程后查看已核验进度</small>}</>}</div>}
       </div>
       <div className="sf-header-actions">
         <span className="sf-mode">
@@ -127,7 +128,7 @@ export function AppShell({
       {renderItems(workspaceNavigation)}
     </aside>
     <main className="main" id="main-content">
-      <div className="sf-page-heading"><h1>{headerTitle??titles[page]}</h1></div>
+      <div className="sf-page-heading sf-sr-only"><h1>{headerTitle??titles[page]}</h1></div>
       <NoticeBanner message={notice} onDismiss={onDismissNotice}/>
       <PageSurface page={page}>{children}</PageSurface>
     </main>

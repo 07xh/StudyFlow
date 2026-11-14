@@ -29,7 +29,7 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
     <div className="sf-login-panel-main">
       <div className="sf-login-panel-heading">
         <span className="sf-login-symbol"><KeyRound size={19}/></span>
-        <div><h4>雨课堂会话配置</h4>
+        <div><h4>会话凭据</h4>
           <p>凭据保存到 Windows 凭据管理器</p>
         </div>
         <span className={connected?"sf-login-state connected":"sf-login-state"}>

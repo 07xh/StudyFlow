@@ -43,7 +43,7 @@ export function PlatformCard({
           <BookOpen size={16}/>进入课程<ChevronRight size={15}/>
         </button>
         </>}
-        <button className={!connected?"primary":"secondary"} type="button" disabled={busy}
+        <button className={!connected&&!expanded?"primary":"secondary"} type="button" disabled={busy}
           aria-expanded={expanded} onClick={onToggleLogin}>
           <Settings2 size={15}/>{expanded?"收起账号设置":connected?"管理账号":"登录平台"}
         </button>

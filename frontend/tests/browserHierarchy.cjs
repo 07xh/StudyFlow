@@ -21,6 +21,11 @@ const server=http.createServer((req,res)=>{
    assert.ok(rail.y>=header.y+header.height-1,'Navigation must begin below full-width header');
    assert.equal(await page.getByRole('progressbar').count(),0,'Empty account cannot have percentage progress');
    await page.getByRole('button',{name:'雨课堂',exact:true}).click();
+   assert.equal(await page.locator('.sf-platform-login').count(),0,'Account form starts collapsed until requested');
+   await page.screenshot({path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
+   await page.getByRole('button',{name:'登录平台',exact:true}).click();
+   assert.equal(await page.locator('.sf-platform-login').getByLabel('Session ID',{exact:true}).count(),1);
+   assert.equal(await page.locator('.sf-platform-login').getByLabel('课堂 ID',{exact:true}).count(),0);
    assert.equal(await page.locator('.sf-platform-login').getByText('读取章节视频',{exact:true}).count(),0);
    assert.equal(await page.getByLabel('课堂 ID',{exact:true}).count(),1);
    assert.equal(await page.locator('.sf-ykt-worker').count(),0,'No invented worker states before launch');
