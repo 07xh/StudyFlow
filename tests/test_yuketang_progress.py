@@ -86,3 +86,39 @@ def test_server_rate_is_only_logged_original_response():
     p = parse_original_log("开始并发观看视频\n发送心跳成功 - 位置: 60.0s/60.0s (100.0%), 事件: playing")
     assert p["simulation_percent"] == 100
     assert p["server_percent"] is None
+
+
+def test_concurrent_worker_slots_follow_real_lifecycle_without_faking_percent():
+    # Worker number is video queue position, not a permanent thread number.
+    p = parse_original_log(
+        "开始并发观看视频... (最大并发数: 3)\n"
+        "[Worker-1] 开始处理视频: A (ID: 11)\n"
+        "[Worker-2] 开始处理视频: B (ID: 22)\n"
+        "[Worker-3] 开始处理视频: C (ID: 33)\n"
+        "[Worker-1] 🎬 开始观看视频: A\n"
+        "发送心跳成功 - 位置: 40.0s/100.0s (40.0%), 事件: playing\n"
+        "[Worker-1] ✅ 视频观看完成: A\n"
+        "[Worker-4] 开始处理视频: D (ID: 44)\n"
+        "[Worker-4] 🎬 开始观看视频: D\n"
+        "[Worker-2] ❌ 视频观看失败: B\n"
+    )
+    slots = p["worker_slots"]
+    assert len(slots) == 3
+    assert [slot["slot"] for slot in slots] == [1, 2, 3]
+    assert slots[0] == {"slot": 1, "video_index": 4, "state": "watching"}
+    assert slots[1] == {"slot": 2, "video_index": 2, "state": "failed"}
+    assert slots[2] == {"slot": 3, "video_index": 3, "state": "preparing"}
+    assert p["simulation_percent"] == 40.0
+    assert all("percent" not in slot for slot in slots)
+    assert "ID: 44" not in str(slots)
+
+
+def test_worker_slots_unknown_if_batch_ends_without_worker_result():
+    p = parse_original_log(
+        "开始并发观看视频... (并发数: 2)\n"
+        "[Worker-1] 开始处理视频: A\n"
+        "并发观看完成！\n"
+    )
+    assert len(p["worker_slots"]) == 2
+    assert p["worker_slots"][0]["state"] == "unknown"
+    assert p["worker_slots"][1]["state"] == "waiting"
