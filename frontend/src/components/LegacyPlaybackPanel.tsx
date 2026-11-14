@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
-import {request,friendlyBridgeError} from "../bridge";
+import {request,friendlyBridgeError,type ZhidaoProgressSnapshot} from "../bridge";
 import {presentCourse} from "../presentation";
 import {
   getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, originalYktDefaults, startLegacy, stopLegacy,
@@ -14,16 +14,23 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected, onEvent, yuketangOptions, settingsReady=true, courseId, detailMode=false
+  platform, courses, desktop, connected, onEvent, onCoursesUpdated, yuketangOptions, settingsReady=true, courseId, detailMode=false
 }: {
   platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
   onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
+  onCoursesUpdated?: (courses:Course[])=>void;
   yuketangOptions?: OriginalYktOptions;
   settingsReady?: boolean;
   courseId?:string;
   detailMode?:boolean;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
+  const [verificationState, setVerificationState] = useState<"idle"|"checking"|"verified"|"unknown">("idle");
+  const verifiedRunRef = useRef<string | null>(null);
+  const onCoursesUpdatedRef = useRef(onCoursesUpdated);
+  const onEventRef = useRef(onEvent);
+  useEffect(()=>{onCoursesUpdatedRef.current=onCoursesUpdated;},[onCoursesUpdated]);
+  useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
   const latestStatusRequest = useRef(0);
   const taskActionInFlight = useRef(false);
   const currentPlatform = useRef(platform);
@@ -84,6 +91,52 @@ export function LegacyPlaybackPanel({
     const timer = window.setInterval(() => { void updateStatus(); }, 2000);
     return () => { window.clearInterval(timer); latestStatusRequest.current++; };
   }, [desktop, updateStatus]);
+
+  // One read-only server reconciliation per observed ZHS termination.
+  // The execution's exit code and CLI percentages never count as proof.
+  useEffect(() => {
+    if (!desktop || platform !== "zhidao") {
+      verifiedRunRef.current = null;
+      setVerificationState("idle");
+      return;
+    }
+    if (status?.state === "running") {
+      verifiedRunRef.current = null;
+      setVerificationState("idle");
+      return;
+    }
+    if (!connected || !status?.course_id ||
+        (status.state !== "exited" && status.state !== "stopped")) return;
+    const marker = status.course_id + ":" + status.state;
+    if (verifiedRunRef.current === marker) return;
+    verifiedRunRef.current = marker;
+    let active = true;
+    setVerificationState("checking");
+    void request<ZhidaoProgressSnapshot>({
+      operation:"zhidao.progress.verify",course_key:status.course_id
+    }).then(snapshot => {
+      if (!active || currentPlatform.current !== "zhidao") return;
+      const target = snapshot.courses.find(course =>
+        course.platform === "zhidao" && course.course_id === status.course_id);
+      if (target?.progress_evidence === "server_verified" && !target.stale && target.verified_at) {
+        onCoursesUpdatedRef.current?.(snapshot.courses);
+        setVerificationState("verified");
+        onEventRef.current?.("自动只读核验","success","已获取当前课程服务器记录；进度是否增加以核验值为准");
+      } else {
+        setVerificationState("unknown");
+        onEventRef.current?.("自动只读核验","warning","未获得当前课程可确认的服务器记录");
+      }
+    }).catch(() => {
+      if (!active || currentPlatform.current !== "zhidao") return;
+      setVerificationState("unknown");
+      onEventRef.current?.("自动只读核验","warning","任务已结束，但服务器核验未成功；可手动重试");
+    });
+    return () => {
+      active = false;
+      // A request cancelled by unmount/status change must be retryable.
+      if (verifiedRunRef.current === marker) verifiedRunRef.current = null;
+    };
+  }, [desktop, platform, connected, status?.state, status?.course_id]);
 
 
 
@@ -264,6 +317,12 @@ export function LegacyPlaybackPanel({
       {platform==="zhidao"&&status.exit_code===0&&!status.zhs_progress&&
         <small>未采集到播放进度；请检查课程是否有可播放内容并使用服务端只读核验。</small>}
     </p>}
+    {platform==="zhidao"&&verificationState!=="idle"&&
+      <p className="legacy-state-note" role="status">
+        {verificationState==="checking"?"正在只读核验当前课程的服务器记录…":
+          verificationState==="verified"?"已读取当前课程的服务器学习记录；请以核验值判断是否完成。":
+          "未确认当前课程的最新服务器记录；请在进度核验区手动重试。"}
+      </p>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
     <p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>
   </section>;
