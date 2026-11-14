@@ -90,7 +90,7 @@ def test_run_environment_loads_persistent_settings_without_replacing_run_log_dir
     run_home = tmp_path / "run-123"
     settings_home.mkdir()
     (settings_home / ".env").write_text(
-        "VIDEO_SPEED=1.8\\nDEBUG=true\\nRICHTEXT_STAY_SECONDS=11\\n",
+        "VIDEO_SPEED=1.8\nDEBUG=true\nRICHTEXT_STAY_SECONDS=11\n",
         encoding="utf-8",
     )
     monkeypatch.setenv("YKT_HOME", str(run_home))
