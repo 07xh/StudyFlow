@@ -46,7 +46,8 @@ test("original settings and cookie import use the Python bridge instead of local
  assert.match(panel,/yuketang.settings.get/);
  assert.match(panel,/yuketang.settings.save/);
  assert.match(panel,/LegacyPlaybackPanel platform="yuketang"/);
- assert.doesNotMatch(panel,/localStorage/);
+ const stored=Array.from(panel.matchAll(/localStorage\.setItem\(([^;]+)\);/g),m=>m[1]);
+ assert.deepEqual(stored,['"studyflow.yuketang.settings-open",String(settingsOpen)']);
  assert.doesNotMatch(legacy,/localStorage/);
  assert.match(login,/zhidao.cookie.import/);
 });
@@ -92,7 +93,7 @@ test("LightC-style left rail is compact, permanent, and keeps settings in the he
  assert.doesNotMatch(css,/sf-floating-nav__trigger|sf-floating-nav__panel/);
 });
 
-test("course details render as one expanded workspace with distinct progress sources",()=>{
+test("course details use one foldable workspace and show total progress only in the header",()=>{
  const app=source("App.tsx");
  const lesson=source("components/ZhidaoCourseDetailPanel.tsx");
  const server=source("components/ZhidaoProgressPanel.tsx");
@@ -102,10 +103,12 @@ test("course details render as one expanded workspace with distinct progress sou
  const yuketang=source("components/YuketangTaskArea.tsx");
  const css=source("ui/foundation.css");
  assert.match(app,/renderCourseWorkspace/);
- assert.match(app,/sf-course-total-progress/);
- assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);
+ assert.doesNotMatch(app,/sf-course-total-progress/);
+ assert.match(app,/<CollapsibleSection id={scope\+"runtime"}/);
+ assert.match(app,/headerTitle=\{activeSelectedCourse\?"课程详情":undefined\}/);
+ assert.match(app,/courseProgress=\{activeCourseProgress\}/);
  assert.match(app,/activeSelectedCourse/);
- assert.match(app,/expandedByDefault/);
+ assert.match(app,/<ZhidaoActivityPanel embedded events=/);
  assert.match(app,/courseId=\{course\.course_id\}.*detailMode/s);
  assert.match(lesson,/zhidao\.course\.detail/);
  assert.match(lesson,/章节进度/);
@@ -121,7 +124,8 @@ test("course details render as one expanded workspace with distinct progress sou
  assert.match(simulation,/sf-detail-live/);
  assert.match(css,/sf-ykt-live\.sf-detail-live \.sf-ykt-live-grid/);
  assert.match(css,/\.sf-course-workspace>section\{margin:0\}/);
- assert.match(css,/sf-course-total-progress/);
+ assert.match(css,/\.sf-workspace-header/);
+ assert.match(css,/\.sf-fold-body\[hidden\]/);
  assert.match(css,/sf-zd-detail-list-expanded/);
 });
 

@@ -2,7 +2,6 @@ import {useCallback, useEffect, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError} from "../bridge";
-import {presentCourse} from "../presentation";
 import {
   getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, originalYktDefaults, startLegacy, stopLegacy,
   validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type YuketangLiveProgress
@@ -30,11 +29,26 @@ export function LegacyPlaybackPanel({
   const [selection, setSelection] = useState(courseId??"");
   const options = yuketangOptions ?? {...originalYktDefaults};
   const playableCourses = courses.filter(c => c.platform === "zhidao" && (c.course_type === "ai" || c.course_type === "shared") && !c.stale);
-  const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
-    .filter(item => item.presentation.percent !== null);
   const liveZhs = platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
   const selectedCourse=courses.find(course=>course.course_id===selection)??null;
+  const workerCount=platform==="yuketang"
+    ?(yktProgress?.concurrent===false?1:
+      yktProgress?.worker_slots?.length||(options.use_concurrent?options.max_concurrent_videos:1))
+    :0;
+  const workerSlots=Array.from({length:Math.max(0,Math.min(32,workerCount))},(_,index)=>{
+    const observed=yktProgress?.worker_slots?.[index];
+    const slot=observed??{slot:index+1,video_index:null,
+      state:yktProgress?.available?"unknown" as const:"waiting" as const};
+    const unfinished=["waiting","preparing","watching"].includes(slot.state);
+    if(unfinished&&status?.state==="exited")return {...slot,state:"unknown" as const};
+    if(unfinished&&status?.state==="stopped")return {...slot,state:"stopped" as const};
+    return slot;
+  });
+  const workerStateLabels:Record<string,string>={
+    waiting:"等待分配",preparing:"准备中",watching:"执行中",completed:"已完成",
+    skipped:"已跳过",failed:"失败",stopped:"已停止",unknown:"状态待核实"
+  };
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
@@ -95,13 +109,13 @@ export function LegacyPlaybackPanel({
 
   return <section className="legacy-playback-panel">
     <div className="section-head">
-      <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到" : "雨课堂"}原版心跳任务</h3>
+      <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到原版任务" : "运行任务"}</h3>
       </div>
       <span className={status?.state === "running" ? "legacy-run-state active" : "legacy-run-state"}>
         {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
     </div>
-    <div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
+    {platform==="zhidao"&&<div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
         <strong>{status ? labels[status.state] : desktop ? "检测中" : "未连接桌面端"}</strong>
@@ -128,30 +142,24 @@ export function LegacyPlaybackPanel({
           <small>仅原版本地输出，非服务器确认进度</small>
         </div>}
       </div>
-      {!detailMode&&<div className="sf-live-course-progress">
-        <div className="sf-live-course-heading">
-          <span>{platform==="yuketang"?"课程整体进度":"平台学习进度"}</span>
-          <small>{verified.length>0?`已核验 ${verified.length} 门`:"暂无服务端核验数据"}</small>
-        </div>
-        {verified.length>0
-          ?<div className="sf-verified-list">{verified.slice(0,4).map(({course,presentation})=>
-            <div className="sf-verified-row" key={course.platform+":"+course.course_id}>
-              <span title={course.title}>{course.title}</span>
-              <div className="sf-verified-track" role="progressbar"
-                aria-label={course.title+"平台已核验学习进度"}
-                aria-valuemin={0} aria-valuemax={100}
-                aria-valuenow={presentation.percent??0}>
-                <span style={{width:(presentation.percent??0)+"%"}}/>
-              </div>
-              <strong>{presentation.percent?.toFixed(1)}%</strong>
-            </div>)}</div>
-          :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
-      </div>}
-    </div>
+    </div>}
     {platform === "yuketang" && <div className={"sf-ykt-live"+(detailMode?" sf-detail-live":"")} aria-label="雨课堂原版实时进度">
-      <div className="sf-ykt-live-title"><strong>雨课堂原版进度</strong>
+      <div className="sf-ykt-live-title"><strong>并发任务进度</strong>
         <small>{yktProgress?.available ? "本次任务日志 · 每 2 秒读取" : "本次任务尚无进度记录"}</small></div>
-      <div className="sf-ykt-live-grid">
+      <div className="sf-ykt-worker-grid" aria-label="并发任务独立状态">
+        {workerSlots.map(slot=><article className="sf-ykt-worker" key={slot.slot}>
+          <div className="sf-ykt-worker-heading">
+            <strong>{yktProgress?.concurrent===false?"视频任务":"并发槽位 "+slot.slot}</strong>
+            <span>{workerStateLabels[slot.state]??"状态待核实"}</span>
+          </div>
+          <small>{slot.video_index==null?(slot.state==="waiting"?"尚未分配视频":"视频归属待核实"):"视频任务 #"+slot.video_index}</small>
+          <div className="sf-ykt-worker-track" aria-hidden="true"><span/></div>
+          <small>单任务进度：—（原版日志未标注心跳归属）</small>
+        </article>)}
+      </div>
+      <details className="sf-ykt-diagnostics">
+        <summary>运行诊断 · 最近一次响应</summary>
+        <div className="sf-ykt-live-grid">
         <div className="sf-ykt-live-item">
           <span>最近一条模拟位置</span>
           <strong>{yktProgress?.simulation_percent != null ? yktProgress.simulation_percent.toFixed(1)+"%" : "—"}</strong>
@@ -191,7 +199,8 @@ export function LegacyPlaybackPanel({
           {yktProgress.rich_current != null && <small>处理到第 {yktProgress.rich_current} 篇图文</small>}
         </div>}
       </div>
-      <small className="sf-ykt-live-note">模拟位置不是已核验学习进度；并发模式下，原版日志未标识每条心跳所属视频，仅显示最新记录。</small>
+      </details>
+      <small className="sf-ykt-live-note">并发模式下，各槽位状态来自原版 Worker 日志。心跳无法对应到单个视频，百分比保持空白；诊断区的最近值也不代表课程总进度。</small>
     </div>}
     {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
       <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>

@@ -90,17 +90,17 @@ test("Zhidao QR dialog stays themed and platform-owned",()=>{
   assert.match(app,/if\(platform==="zhidao"\)return <ZhidaoLoginPanel/);
 });
 
-test("platform task status and verified progress are placed before login controls",()=>{
+test("platform login is available first and worker status stays distinct from course totals",()=>{
   const app=read("src/App.tsx");
   const playback=read("src/components/LegacyPlaybackPanel.tsx");
   const start=app.indexOf("const renderPlatformDetail=");
   const end=app.indexOf("async function configureFromPanel",start);
   const detail=app.slice(start,end);
   assert.ok(start>=0&&end>start);
-  assert.ok(detail.indexOf("sf-platform-task-section")<detail.indexOf("sf-platform-detail"));
+  assert.ok(detail.indexOf("sf-platform-detail")<detail.indexOf("sf-platform-task-section"));
   assert.match(playback,/sf-live-progress-summary/);
-  assert.match(playback,/presentCourse\(course\)/);
-  assert.match(playback,/presentation\.percent !== null/);
+  assert.match(playback,/workerSlots\.map/);
+  assert.doesNotMatch(playback,/sf-live-course-progress/);
   assert.doesNotMatch(playback,/Math\.random\(\)|setInterval\([^,]+,\s*[1-9]\)/);
 });
 
