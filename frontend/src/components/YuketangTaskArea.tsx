@@ -58,7 +58,10 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   }
 
   return <>
-    <section className="legacy-playback-panel sf-yuketang-settings-panel">
+    <LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
+      connected={connected} yuketangOptions={options} settingsReady={loaded}
+      detailMode={detailMode} onEvent={onEvent}/>
+    {!detailMode&&<section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head">
         <div><h3><SlidersHorizontal size={17}/>雨课堂原版参数</h3></div>
         <span className="legacy-run-state">{loaded?"已读取本机配置":"等待读取配置"}</span>
@@ -126,9 +129,6 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
       <p className="legacy-disclaimer">设置单独保存在雨课堂平台配置中；启动任务时由学序透传给原版执行器，不修改原版心跳逻辑。</p>
-    </section>
-    <LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
-      connected={connected} yuketangOptions={options} settingsReady={loaded}
-      detailMode={detailMode} onEvent={onEvent}/>
+    </section>}
   </>;
 }
