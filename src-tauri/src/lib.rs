@@ -41,6 +41,10 @@ impl QrBridgeWorker {
 
 impl Drop for QrBridgeWorker {
     fn drop(&mut self) {
+        // Ask Python to stop the QR child and clear only its ephemeral PNG.
+        if self.child.try_wait().ok().flatten().is_none() {
+            let _ = self.request(b"{\"id\":\"shutdown\",\"version\":1,\"operation\":\"zhidao.qr.cancel\"}\n");
+        }
         let _ = self.child.kill();
         let _ = self.child.wait();
     }

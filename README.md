@@ -5,26 +5,26 @@
 ## 已有实现
 
 - 自主编写的深色 / 浅色桌面 UI、课程卡片、平台状态、课程同步和章节视频列表。
-- 知到：调用原有 Windows ZHSDesktop 的服务端登录检查与课程同步，读取同会话绑定的缓存。
+- 知到：通过学序内置 ZHS 0.1.5 扫码与只读服务端诊断、课程同步，读取同会话 HMAC 绑定的缓存；原版 WPF 入口仅为可选备用。
 - 雨课堂：读取课堂信息、章节和视频元数据。会话存储在 Windows Credential Manager。
 - Tauri 2 Rust IPC 调用 PyInstaller 打包的 Python sidecar。
 - Windows NSIS 安装包构建脚本，详见 [构建指南](docs/BUILD_WINDOWS.md)。
 
 ## 使用条件
 
-- 知到原版程序需已安装且通过自身扫码登录；**学序不会修改或删除原版程序**。
+- **无需预先安装原版知到助手**：学序安装包自带 ZHS Python 依赖；原版软件若存在仍独立保留，不会被修改或删除。
 - 雨课堂需要本人有效的现有登录会话及课堂 ID；未登录或未连接时明确显示失败。
 - 真实平台登录、课程读取和 Windows 安装包尚未经过用户环境的端到端验收，不能据此宣称全部已可用。
 
 ## 构建
 
-在 Windows 上安装 Python 3.11、Node.js 22、Rust stable、VS C++ Build Tools、WebView2 后：
+在 Windows 上安装 Python 3.13、Node.js 22、Rust stable、VS C++ Build Tools、WebView2 后：
 
 \`\`\`powershell
 powershell -NoProfile -File .\scripts\build-windows.ps1
 \`\`\`
 
-或者在 GitHub Actions 手动运行 **Build Windows EXE (manual)**，成功后下载 NSIS 构建产物。为了节省 Actions 时间，默认不会每次提交自动打包。
+或者通过 GitHub Actions 的 **Build Windows EXE** 工作流下载 NSIS 构建产物；与打包相关的主分支提交也会触发构建。构建完成必须再经用户 Windows 真机登录验收。
 
 ## 上游保留
 
@@ -44,6 +44,8 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 
 Windows 构建使用 `zhs==0.1.5` 固定依赖和 `scripts/build-sidecar.ps1` 进行 PyInstaller 独立编译，内置仅读取的课程 CLI 及登录工作进程。安装学序时不再要求已有 `%LOCALAPPDATA%\\ZHSDesktop\\.venv`。扫码状态/临时 PNG 独立写入 `%LOCALAPPDATA%\\StudyFlow\\zhidao`；知到账号与服务端核验缓存仍沿用本人 `%USERPROFILE%\\.zhs`，不会清除旧版登录。用户真实账号登录、课程读取仍须在 Windows 上核验，CI 无法替代。
 
-## 原版模拟心跳保留与接入
+## 原版模拟心跳代码恢复与进程接入
 
-学序通过独立任务控制直接运行未修改的 ZHS 0.1.5 及雨课堂原始 `main.py`：知到智慧课程可从已同步列表选择，雨课堂沿用原来的并发、倍速、心跳间隔和本地阈值设置。原文件逐字节保留在 `legacy/` 并由测试守护，不重写原心跳数据生成和发送。托管进程状态与服务端确认状态严格区分。见 [原版心跳恢复说明](docs/ORIGINAL_HEARTBEAT_RESTORE.md)。真实 Windows 运行/远端验收以及第三方源代码许可证核对仍是发布门槛。
+学序保留用户原始知到 ZHS 0.1.5 与雨课堂 `main.py` 的心跳生成和发送算法，不以只读查询替代它们。原始文件快照位于 `legacy/`，每个 Git blob SHA 与对应原仓库一致；前端由 Tauri 负责原版任务启动、状态和停止。学序优先调用内置 ZHS 0.1.5 CLI，雨课堂执行原封不动的 `main.py`。进程运行、退出不等于平台确认学习进度。见 [完整迁移记录](docs/ORIGINAL_HEARTBEAT_RESTORE.md)。
+
+Windows 真实账号验收及雨课堂原源码许可核查仍是正式发布门槛。
