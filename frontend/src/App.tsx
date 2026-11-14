@@ -6,6 +6,7 @@ import {
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
+import {YuketangTaskArea} from "./components/YuketangTaskArea";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
@@ -283,7 +284,7 @@ export default function App(){
               onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
           </div>
-          :<LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
+          :<YuketangTaskArea courses={platforms.yuketang.courses}
             desktop={desktop} connected={platforms.yuketang.status==="connected"}
             onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>}
       </section>
