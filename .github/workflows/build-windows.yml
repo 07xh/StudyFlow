@@ -1,23 +1,19 @@
 name: Build Windows EXE
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "packaging/**"
-      - "scripts/**"
-      - "src/**"
-      - "src-tauri/**"
-      - "pyproject.toml"
-      - ".github/workflows/build-windows.yml"
   push:
     branches: [main]
     paths:
-      - "packaging/**"
-      - "scripts/**"
-      - "src/**"
-      - "src-tauri/**"
-      - "pyproject.toml"
-      - ".github/workflows/build-windows.yml"
+      - 'frontend/**'
+      - 'src-tauri/**'
+      - 'src/**'
+      - 'packaging/**'
+      - 'scripts/build-windows.ps1'
+      - '.github/workflows/build-windows.yml'
+
+concurrency:
+  group: studyflow-windows-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   windows-package:
