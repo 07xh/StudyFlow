@@ -492,8 +492,8 @@ export default function App(){
       onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setQrOpen(false);
-        setNotice("知到登录已通过服务端核验；正在检测连接。");
-        recordEvent("知到","扫码登录","success","知到服务端验证通过");void refresh();}}/>}
+        recordEvent("知到","扫码登录","success","知到服务端验证通过");
+        void refresh().then(()=>setNotice(previous=>previous||"知到登录已通过服务端核验。"));}}/>}
     <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}
       title="清除学序保存的雨课堂凭据？"
       description="此操作将清除学序在 Windows 凭据管理器中保存的雨课堂登录会话。"
