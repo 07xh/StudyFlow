@@ -92,3 +92,12 @@ def test_probe_login_requires_explicit_server_session_proof(monkeypatch):
     result = SimpleNamespace(returncode=0, stdout="[SERVER_OK] 课程接口可读，但没有登录证明")
     monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda *_: result)
     assert legacy_runtime.probe_login() is False
+
+
+def test_probe_login_rejects_session_marker_embedded_in_other_output(monkeypatch):
+    result = SimpleNamespace(
+        returncode=0,
+        stdout="diagnostic: [SESSION_OK] marker copied from an example",
+    )
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda *_: result)
+    assert legacy_runtime.probe_login() is False
