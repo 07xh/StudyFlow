@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force $markerDirectory | Out-Null
 $app = $null
 $oldPath = $env:PATH
 $oldYktHome = $env:YKT_HOME
-$probeYktHome = Join-Path $root 'yuketang-settings'
+$probeYktHome = Join-Path ([IO.Path]::GetTempPath()) ('StudyFlowYktSmoke-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $probeYktHome | Out-Null
 try {
     # Prove the bundled sidecar works without a machine-wide Python installation.
@@ -57,6 +57,10 @@ try {
         }
         if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Install/upgrade changed user data' }
     }
+    # Restore the normal process environment before launching the desktop app.
+    $env:PATH = $oldPath
+    if ($null -eq $oldYktHome) { Remove-Item Env:YKT_HOME -ErrorAction SilentlyContinue }
+    else { $env:YKT_HOME = $oldYktHome }
     $executable = Join-Path $root 'studyflow.exe'
     $app = Start-Process -FilePath $executable -PassThru
     Start-Sleep -Seconds 5
@@ -77,5 +81,6 @@ try {
     else { $env:YKT_HOME = $oldYktHome }
     if ($null -ne $app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $probeYktHome -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
