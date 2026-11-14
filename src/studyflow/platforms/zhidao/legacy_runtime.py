@@ -371,6 +371,11 @@ def read_document(document_id: str) -> dict:
         if path.is_symlink() or path.stat().st_size > 512 * 1024:
             raise RuntimeError("DOCUMENT_UNAVAILABLE")
         content = path.read_text(encoding="utf-8-sig")
+        if document_id == "privacy":
+            supplement = _legacy_resource_root() / "StudyFlow-隐私补充说明.txt"
+            if supplement.is_symlink() or supplement.stat().st_size > 128 * 1024:
+                raise RuntimeError("DOCUMENT_UNAVAILABLE")
+            content += "\n\n" + supplement.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeError) as exc:
         raise RuntimeError("DOCUMENT_UNAVAILABLE") from exc
     return {"id": document_id, "title": names[document_id], "content": content}
