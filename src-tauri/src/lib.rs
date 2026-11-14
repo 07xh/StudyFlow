@@ -234,6 +234,26 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     }
 }
 
+fn parse_jsonl_reply(stdout: &[u8], expected_id: &str) -> Result<serde_json::Value, String> {
+    if stdout.is_empty() || stdout.len() > 1_048_576 {
+        return Err("Python service returned an invalid response".into());
+    }
+    let mut lines = stdout.split(|byte| *byte == b'\\n')
+        .filter(|line| !line.iter().all(|byte| byte.is_ascii_whitespace()));
+    let line = lines.next().ok_or_else(|| "Python service protocol error".to_string())?;
+    if lines.next().is_some() {
+        return Err("Python service protocol error".into());
+    }
+    let value: serde_json::Value = serde_json::from_slice(line)
+        .map_err(|_| "Python service protocol error".to_string())?;
+    if value.get("id").and_then(|item| item.as_str()) != Some(expected_id)
+        || value.get("ok").and_then(|item| item.as_bool()).is_none()
+    {
+        return Err("Python service protocol error".into());
+    }
+    Ok(value)
+}
+
 #[tauri::command]
 async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     -> Result<serde_json::Value, String> {
@@ -244,6 +264,8 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         return Err("Request is too large".into());
     }
     message.push(b'\n');
+    let expected_id = request.get("id").and_then(|value| value.as_str())
+        .ok_or("Invalid request id")?.to_string();
     let is_qr = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr."));
     if is_qr {
@@ -273,15 +295,10 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
             input.write_all(&message).map_err(|_| "Could not send request")?;
         }
         let output = child.wait_with_output().map_err(|_| "Python service failed")?;
-        if !output.status.success() || output.stdout.len() > 1_048_576 {
+        if !output.status.success() {
             return Err("Python service returned an invalid response".into());
         }
-        let value: serde_json::Value = serde_json::from_slice(&output.stdout)
-            .map_err(|_| "Python service protocol error")?;
-        if value.get("ok").and_then(|x| x.as_bool()).is_none() {
-            return Err("Python service protocol error".into());
-        }
-        Ok(value)
+        parse_jsonl_reply(&output.stdout, &expected_id)
     }).await.map_err(|_| "Python service worker crashed".to_string())?
 }
 
@@ -370,8 +387,30 @@ pub fn run() {
 
 #[cfg(test)]
 mod ipc_validation_tests {
-    use super::validate;
+    use super::{parse_jsonl_reply, validate};
     use serde_json::json;
+
+    #[test]
+    fn accepts_one_correlated_jsonl_reply() {
+        let reply = parse_jsonl_reply(
+            b"{\\"id\\":\\"req-1\\",\\"ok\\":true,\\"data\\":{}}\\n",
+            "req-1",
+        ).unwrap();
+        assert_eq!(reply["id"], "req-1");
+        assert_eq!(reply["ok"], true);
+    }
+
+    #[test]
+    fn rejects_stdout_noise_and_mismatched_jsonl_ids() {
+        assert!(parse_jsonl_reply(
+            b"debug output\\n{\\"id\\":\\"req-1\\",\\"ok\\":true}\\n",
+            "req-1",
+        ).is_err());
+        assert!(parse_jsonl_reply(
+            b"{\\"id\\":\\"other\\",\\"ok\\":true}\\n",
+            "req-1",
+        ).is_err());
+    }
 
     #[test]
     fn allows_zhidao_readonly_progress_operations() {
