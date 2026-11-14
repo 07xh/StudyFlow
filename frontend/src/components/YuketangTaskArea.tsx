@@ -111,7 +111,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent}:Props){
               调试输出（仅本机日志）
             </label>
           </div>
-          <p className="sf-ykt-advanced-note">沿用原版 DEBUG、RICHTEXT_STAY_SECONDS、RICHTEXT_SKIP_DELAY 配置；调试日志可能包含课程和视频标识，不会上传。</p>
+          <p className="sf-ykt-advanced-note">沿用原版 DEBUG、RICHTEXT_STAY_SECONDS、RICHTEXT_SKIP_DELAY 配置；调试日志可能包含课程和视频标识，分享前请检查日志内容。</p>
         </details>
         {!validateOriginalOptions(options)&&<p className="sf-validation-error" role="alert">
           参数不在原版支持范围内，修正后才允许启动任务。
