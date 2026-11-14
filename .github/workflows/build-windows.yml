@@ -10,6 +10,7 @@ on:
       - 'packaging/**'
       - 'scripts/build-windows.ps1'
       - 'scripts/build-sidecar.ps1'
+      - 'scripts/test-windows-install.ps1'
       - '.github/workflows/build-windows.yml'
 
 concurrency:
@@ -36,6 +37,9 @@ jobs:
       - name: Build full Windows package
         shell: pwsh
         run: ./scripts/build-windows.ps1
+      - name: Install NSIS package in a clean Windows directory
+        shell: pwsh
+        run: ./scripts/test-windows-install.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: StudyFlow-Windows-NSIS
