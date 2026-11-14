@@ -45,7 +45,9 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": [
             {"platform": c.platform.value, "course_id": c.course_id, "title": c.title,
-             "progress_percent": c.progress_percent} for c in courses
+             "progress_percent": c.progress_percent, "course_type": c.course_type,
+             "stale": c.stale, "progress_evidence": None, "verified_at": None}
+            for c in courses
         ]}
     if operation == "videos.list":
         if request.get("platform") != "yuketang":

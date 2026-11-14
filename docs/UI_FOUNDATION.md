@@ -49,3 +49,6 @@
 落地在 `ThemeModeSelector`、`Switch`、`EmptyState` 和 `AppShell`。
 移除了原应用的清理模块、i18n、Tailwind、专属 Context 等依赖，保留 StudyFlow 的
 Tauri IPC、平台登录及真实课程读取逻辑。不复制原应用的完整界面或无关业务。
+
+## 并行知到迁移兼容
+保留最新主分支的 `ZhidaoLoginPanel`、服务端核验契约 `presentCourse`、`fetchCoursesFromDesktop` 输入校验以及 `Course` 的 `progress_evidence/stale/verified_at`，避免把未核验进度展示成真实进度。

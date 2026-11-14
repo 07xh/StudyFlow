@@ -1,10 +1,12 @@
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from "react";
 import {BookOpen,ChevronRight,GraduationCap,RefreshCw,Search} from "lucide-react";
 import {initialPlatforms} from "./platforms";
-import {fetchStatuses,isDesktop,openLegacyZhidao,request} from "./bridge";
+import {fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,openLegacyZhidao,request} from "./bridge";
 import type {Config,Video} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
+import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
+import {presentCourse,platformNames} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo,platformRegistry} from "./ui/registry";
@@ -35,6 +37,7 @@ export default function App(){
   },[compactCards]);
   const [platforms,setPlatforms]=useState<Record<Platform,PlatformState>>(initialPlatforms);
   const [busy,setBusy]=useState("");
+  const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   const [notice,setNotice]=useState("");
   const [videos,setVideos]=useState<Video[]>([]);
   const [config,setConfig]=useState<Config>(emptyConfiguration);
@@ -55,15 +58,16 @@ export default function App(){
     setBusy("status");setNotice("");
     try{
       const statuses=await fetchStatuses();
+      setSelectedCourse(null);
       setPlatforms(previous=>{
         const next={...previous};
         for(const status of statuses){
           if(!platformInfo(status.platform))continue;
-          next[status.platform]={...status,courses:previous[status.platform]?.courses??[]};
+          next[status.platform]={...status,courses:[]};
         }
         return next;
       });
-    }catch(error){setNotice(error instanceof Error?error.message:"无法检测本地学习服务");}
+    }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy("");}
   },[desktop]);
 
@@ -77,10 +81,11 @@ export default function App(){
     if(!platformInfo(platform))return;
     setBusy(platform);setNotice("");
     try{
-      const list=await request<Course[]>({operation:"courses.list",platform});
+      const list=await fetchCoursesFromDesktop(platform);
       setPlatforms(previous=>({...previous,[platform]:{...previous[platform],courses:list}}));
+      setSelectedCourse(null);
       setNotice((platformInfo(platform)?.name??platform)+"已同步 "+list.length+" 门真实课程");
-    }catch(error){setNotice(error instanceof Error?error.message:"同步失败");}
+    }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy("");}
   }
 
@@ -91,7 +96,7 @@ export default function App(){
       setConfig(previous=>({...previous,session_id:"",csrf_token:"",sign:""}));
       setNotice("会话已保存到 Windows 凭据管理器。请检测连接并读取真实课程。");
       await refresh();
-    }catch(error){setNotice(error instanceof Error?error.message:"保存失败");}
+    }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy("");}
   }
 
@@ -101,7 +106,7 @@ export default function App(){
       await request<{cleared:boolean}>({operation:"yuketang.clear"});
       setPlatforms(previous=>({...previous,yuketang:initialPlatforms.yuketang}));
       setVideos([]);setNotice("已清除学序保存的雨课堂凭据；原程序不受影响。");
-    }catch(error){setNotice(error instanceof Error?error.message:"清除失败");}
+    }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy("");}
   }
 
@@ -111,7 +116,7 @@ export default function App(){
       const result=await request<Video[]>({operation:"videos.list",platform:"yuketang"});
       setVideos(result);
       if(result.length===0)setNotice("未读取到章节视频，请检查当前课堂配置。");
-    }catch(error){setNotice(error instanceof Error?error.message:"章节读取失败");}
+    }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy("");}
   }
 
@@ -120,7 +125,7 @@ export default function App(){
     try{
       await openLegacyZhidao();
       setNotice("已调用原版知到登录窗口；完成扫码后点击检测连接。");
-    }catch(error){setNotice(error instanceof Error?error.message:"原版知到客户端未安装");}
+    }catch(error){setNotice(error instanceof Error&&error.message==="LEGACY_NOT_AVAILABLE"?"未找到原版知到登录窗口，请检查原版安装。":friendlyBridgeError(error));}
     finally{setBusy("");}
   }
 
@@ -158,13 +163,20 @@ export default function App(){
     </div>}
     {(compact?courses:filtered).length>0
       ?<div className="course-grid">{(compact?courses.slice(0,4):filtered).map(course=>
-        <CourseCard course={course} key={course.platform+":"+course.course_id}/>)}</div>
+        <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
       :<EmptyState icon={BookOpen}
         title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
         description={courses.length>0?"可以更换筛选条件。":"完成平台登录并同步后，这里显示实际课程。"}
         action={courses.length===0?<button className="secondary" type="button"
           onClick={()=>setPage("platforms")}>前往平台管理</button>:undefined}/>
     }
+    {page==="courses"&&selectedCourse&&<div className="course-v2-detail" role="region" aria-label="课程详情">
+      <div><span className="eyebrow">{platformNames[selectedCourse.platform]} / 课程详情</span>
+        <h3>{selectedCourse.title}</h3>
+        <p>{presentCourse(selectedCourse).detail}；课程视频进度只有真实平台核验后才能展示。</p>
+      </div>
+      <button type="button" className="secondary" onClick={()=>setSelectedCourse(null)}>关闭</button>
+    </div>}
   </section>;
 
   return <AppShell page={page} onNavigate={setPage} dark={dark} onThemeToggle={toggleTheme}
@@ -195,6 +207,7 @@ export default function App(){
     {page==="courses"&&renderCourses(false)}
     {page==="platforms"&&<>
       {renderPlatforms()}
+      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()}/>
       {platformRegistry.some(item=>item.capabilities.sessionConfiguration&&item.id==="yuketang")&&
         <section className="settings-card">
           <h3>雨课堂登录会话</h3>
@@ -245,5 +258,6 @@ export default function App(){
         <div className="sf-section-note">UI 注册不等于已经支持登录、课程或视频播放。后续学习通等平台复用相同卡片与导航。</div>
       </section>
     </>}
+    <footer className="studyflow-footer">知到新版课程 UI 已保留 · 平台凭据相互隔离 · 进度以服务器核验为准</footer>
   </AppShell>;
 }
