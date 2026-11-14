@@ -15,9 +15,11 @@
 - `payload/zhidao_only.py`：Python 数据读取适配器，尚需逐项审查。
 - 当前 `StudyFlow` 已迁移课程身份处理与诊断两个纯 Python 模块，尚未迁移 Windows 运行时。
 
-### LightC-UI
-- 先前对话中的 `LightC-UI-源码-2.18.3.zip` 当前未能读取其原始内容；不得声称已复用真实 UI 组件。
-- 需要重新取得 ZIP，核对框架、许可证、组件 API、资源和 Windows 打包依赖。
+### LightC-UI 2.18.3
+- 已从用户资料库重新取得 `LightC-UI-源码-2.18.3.zip` 并检查：316 个 ZIP 条目，解压文件总计 6,921,240 字节；归档 SHA-256：`bb6d3c4d48ea0d8787a29234689c32ec4a1c91d85fd03df7372e3bb3519ef3ae`。
+- 源码基于 React 19、TypeScript、Vite、Tailwind CSS 4、Framer Motion 与 Tauri 2；已检查 `SidebarNav.tsx`、主应用布局和主题样式。
+- `LICENSE` 为 LightC Source Available License v1.0。它允许查看、学习和非商业研究/修改，但限制将修改版作为独立或改名产品发布，也限制分发相应二进制、安装包或将实质性源码打包进其他产品；StudyFlow 的公开仓库和独立安装包不能仅凭“非商业”就视为获准复制。
+- 因此不把 LightC 组件、资源或源码片段迁入 StudyFlow。当前浮动导航、主题和平台页面由 StudyFlow 自有 React/TypeScript 与 CSS 独立实现；只将用户要求的交互目标作为设计参考。需要直接复用源码时，先取得权利人书面许可。
 
 ## 架构决策
 1. `src/studyflow/ui/` 是唯一主界面，平台模块不自行创建顶层窗口。
@@ -28,7 +30,7 @@
 6. 源码与第三方许可核验后才启用正式打包与发布。
 
 ## 阻塞项
-- LightC-UI ZIP 原始源码不可用。
+- LightC-UI 源码已取得并完成许可证审查；受限源码不可直接并入 StudyFlow，独立 UI 仍需 Windows 真机验收。
 - 雨课堂单体脚本的 import side effects 需要隔离。
 - 知到 WPF/PowerShell 到统一 UI 的接口需要定义和回归。
 - Windows 实机集成与 CI 尚未验收。
