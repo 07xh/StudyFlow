@@ -160,3 +160,31 @@ def test_every_original_yuketang_runtime_setting_is_exposed_in_studyflow():
     for field, env_key in config.FIELDS.items():
         assert field in rust
         assert f'command.env("{env_key}"' in rust
+
+
+
+def test_windows_package_checks_both_platforms_inside_frozen_runtime():
+    root = Path(__file__).resolve().parents[1]
+    entry = (root / "packaging" / "bridge_entry.py").read_text(encoding="utf-8")
+    sidecar = (root / "scripts" / "build-sidecar.ps1").read_text(encoding="utf-8")
+    installer_test = (root / "scripts" / "test-windows-install.ps1").read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "build-windows.yml").read_text(encoding="utf-8")
+
+    assert "--packaged-runtime-self-test" in entry
+    assert "sys.frozen" in entry and "sys._MEIPASS" in entry
+    assert "legacy/yuketang/main.py" in entry
+    assert "legacy/yuketang/exe_entry.py" in entry
+    assert "legacy/zhidao/ZHS-ConsoleMonitor.py" in entry
+    assert "legacy/zhidao/Zhidao-Task.cmd" in entry
+    assert "--packaged-runtime-self-test" in sidecar
+    assert "yuketang.settings.get" in sidecar
+    assert "zhidao.player.settings.get" in sidecar
+
+    # The final NSIS installer, not only the build-tree sidecar, is installed
+    # into a fresh directory and exercised with Python removed from PATH.
+    assert "studyflow-clean-install" in installer_test
+    assert "System32" in installer_test
+    assert "--packaged-runtime-self-test" in installer_test
+    assert "yuketang.settings.get" in installer_test
+    assert "Start-Process -FilePath $app.FullName" in installer_test
+    assert "test-windows-install.ps1" in workflow
