@@ -225,6 +225,13 @@ mod ipc_validation_tests {
     fn allows_zhidao_readonly_progress_operations() {
         assert!(validate(&json!({"id":"a","version":1,"operation":"zhidao.progress.sync"})).is_ok());
         assert!(validate(&json!({"id":"b","version":1,"operation":"zhidao.progress.verify","course_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})).is_ok());
+        assert!(validate(&json!({"id":"c","version":1,"operation":"zhidao.player.target","course_key":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"})).is_ok());
+        assert!(validate(&json!({"id":"d","version":1,"operation":"zhidao.player.settings.get"})).is_ok());
+        assert!(validate(&json!({"id":"e","version":1,"operation":"zhidao.diagnose"})).is_ok());
+        assert!(validate(&json!({"id":"f","version":1,"operation":"zhidao.session.clear"})).is_ok());
+        assert!(validate(&json!({"id":"g","version":1,"operation":"zhidao.cache.clear"})).is_ok());
+        assert!(validate(&json!({"id":"h","version":1,"operation":"zhidao.document.read","document_id":"privacy"})).is_ok());
+        assert!(validate(&json!({"id":"i","version":1,"operation":"zhidao.player.settings.save","settings":{}})).is_ok());
     }
 
     #[test]

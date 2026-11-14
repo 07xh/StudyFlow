@@ -17,9 +17,17 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.progress"; run_id: string}
   | {id: string; version: 1; operation: "zhidao.progress.sync"}
   | {id: string; version: 1; operation: "zhidao.progress.verify"; course_key: string}
+  | {id: string; version: 1; operation: "zhidao.player.target"; course_key: string}
+  | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
+  | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
+  | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
+export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
+export type ZhidaoPlayerTarget = {course_key:string;course_type:"ai"|"shared";course_id:string;class_id:string;recruit_and_course_id:string;title:string};
+export type ZhidaoDiagnostic = {code:number;state:string;lines:string[]};
+export type ZhidaoDocument = {id:string;title:string;content:string};
 
 export type BridgeResponse<T> =
   | {id: string | null; ok: true; data: T}
@@ -65,7 +73,9 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED",
                              "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
-                             "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND"]);
+                             "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
+                             "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHIDAO_DIAGNOSE_FAILED",
+                             "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -160,6 +170,13 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_COOKIE_IMPORT": return "Cookie 内容为空、格式不正确或超过原版支持的大小。";
     case "ZHIDAO_PROGRESS_FAILED": return "知到服务器进度读取失败；旧记录保持不变。";
     case "COURSE_NOT_FOUND": return "当前登录会话中找不到这门课程，请先重新同步课程。";
+    case "COURSE_ROUTE_UNAVAILABLE": return "当前课程缺少原版播放器需要的安全路由信息，请重新同步课程。";
+    case "PLAYER_SETTINGS_UNAVAILABLE": return "知到播放器设置读取或保存失败，旧设置保持不变。";
+    case "INVALID_PLAYER_SETTINGS": return "知到播放器参数无效，未保存。";
+    case "ZHIDAO_DIAGNOSE_FAILED": return "知到连接诊断未能完成。";
+    case "ZHIDAO_DATA_CLEAR_FAILED": return "知到本地数据清理失败；未删除未列入清单的数据。";
+    case "INVALID_DOCUMENT": return "请求的说明文档不存在。";
+    case "DOCUMENT_UNAVAILABLE": return "说明文档暂不可读取。";
     case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
     default: return "本机服务调用失败，请检查运行环境。";
   }

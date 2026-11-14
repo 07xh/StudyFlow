@@ -295,8 +295,11 @@ pub async fn zhidao_player_start(
         let mut command = Command::new("powershell.exe");
         command.args(["-NoProfile", "-STA", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"])
             .arg(script)
-            .args(["-CourseType", course_type, "-CourseId", course_id, "-ClassId", class_id,
-                "-Speed", &speed, "-MonitorToken", &token]);
+            .arg("-CourseType").arg(course_type)
+            .arg("-CourseId").arg(course_id)
+            .arg("-ClassId").arg(class_id)
+            .arg("-Speed").arg(&speed)
+            .arg("-MonitorToken").arg(&token);
         if course_type == "shared" {
             command.args(["-RecruitAndCourseId", route]);
         }
