@@ -39,6 +39,6 @@ test("Rain Classroom credential inputs are only rendered in its own platform pan
   const app = read("App.tsx");
   assert.match(ykt, /Session ID/);
   assert.match(ykt, /Windows 凭据管理器/);
-  assert.match(app, /definition\.id==="zhidao"[\s\S]*:\\s*<YuketangLoginPanel/);
+  assert.match(app, /definition\.id==="zhidao"[\s\S]*:\s*<YuketangLoginPanel/);
   assert.doesNotMatch(app, /雨课堂登录会话[\s\S]*credential-form/);
 });
