@@ -15,6 +15,7 @@ import re
 import runpy
 import subprocess
 import sys
+import time
 
 from studyflow.platforms.zhidao.courses import progress_key
 from studyflow.platforms.zhidao.legacy_runtime import installation_root
@@ -150,6 +151,30 @@ def _zhs_monitor_source() -> Path:
     return Path(__file__).resolve().parents[3] / "legacy" / "zhidao" / "ZHS-ConsoleMonitor.py"
 
 
+class _RefreshingZhsSink:
+    """Refresh unchanged numeric output at most every five seconds.
+
+    The vendored observer intentionally suppresses duplicate frames. Without
+    periodic refresh, a running CLI reporting the same percentage would look
+    stale after the Rust supervisor's 18-second freshness window. This wrapper
+    never generates or sends heartbeats; it only refreshes local observations.
+    """
+
+    def __init__(self, sink):
+        self.sink = sink
+        self.last_publish = time.monotonic()
+
+    def receive(self, chunk: str) -> None:
+        previous = self.sink.last_snapshot
+        now = time.monotonic()
+        refresh_due = previous is not None and now - self.last_publish >= 5.0
+        if refresh_due:
+            self.sink.last_snapshot = None
+        self.sink.receive(chunk)
+        if (refresh_due and self.sink.last_snapshot is not None) or self.sink.last_snapshot != previous:
+            self.last_publish = now
+
+
 def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None) -> int | None:
     """Run upstream ZHS 0.1.5 CLI unchanged; None means no bundled runtime."""
     from importlib.metadata import PackageNotFoundError, version
@@ -160,6 +185,7 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
     except (ImportError, PackageNotFoundError, ValueError):
         return None
     original_stdout = sys.stdout
+    original_stderr = sys.stderr
     sink = None
     try:
         if monitor_token:
@@ -168,11 +194,17 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                 if original.is_file():
                     observer = runpy.run_path(str(original), run_name="studyflow_vendor_zhs_monitor")
                     root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
-                    sink = observer["NumericTelemetry"](monitor_token, directory=root / "StudyFlow")
+                    sink = _RefreshingZhsSink(
+                        observer["NumericTelemetry"](monitor_token, directory=root / "StudyFlow")
+                    )
+                    # Rich-based CLIs may emit progress to stderr, not stdout.
+                    # Each observer forwards output unchanged and stores numbers only.
                     sys.stdout = observer["StdoutObserver"](original_stdout, sink)
+                    sys.stderr = observer["StdoutObserver"](original_stderr, sink)
             except (OSError, ValueError, KeyError):
                 sink = None
                 sys.stdout = original_stdout
+                sys.stderr = original_stderr
         # Do not change upstream progress, heartbeat or login behavior.
         result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
@@ -191,6 +223,7 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
         # The Rust supervisor reads the final numeric observation before
         # deleting it. Removing this in the worker loses the last frame.
         sys.stdout = original_stdout
+        sys.stderr = original_stderr
 
 
 def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = None) -> int | None:
