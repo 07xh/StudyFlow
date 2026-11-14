@@ -20,8 +20,8 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/renderPlatformLogin\(platform\)/);
  assert.match(app,/platformLoginExpanded/);
  assert.match(app,/Record<Platform,boolean>/);
- assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
- assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.{3}previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
+ assert.match(app,/aria-expanded=\{platformLoginExpanded\[platform\]\}/);
+ assert.match(app,/onClick=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.\.\.previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
  assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
  assert.match(app,/YuketangLoginPanel/);
  assert.match(app,/ZhidaoLoginPanel/);
@@ -78,24 +78,18 @@ test("first-run consent uses native bundled resources and blocks the desktop unt
 });
 
 
-test("LightC AnchorNav pattern stays compact, floating, and keeps settings in the header",()=>{
- const shell=source("ui/AppShell.tsx");
- const css=source("ui/foundation.css");
- assert.match(shell,/PanelLeft/);
+test("navigation is permanently visible, compact, and platform-owned",()=>{
+ const shell=source("ui/AppShell.tsx"),css=source("ui/foundation.css");
+ assert.match(shell,/className="sf-sidebar-brand"/);
+ assert.match(shell,/aria-label="常驻侧栏"/);
+ assert.match(shell,/platformLabel/);
  assert.match(shell,/sf-settings-button/);
- assert.match(shell,/onPointerEnter=\{handlePointerEnter\} onPointerLeave=\{handlePointerLeave\}/);
- assert.doesNotMatch(shell,/systemNavigation|sf-floating-nav__brand/);
- assert.match(css,/\.sf-floating-nav__trigger\{\s*position:fixed;\s*left:12px;\s*top:50%;\s*width:32px;\s*height:32px;/);
- assert.ok(css.includes("padding:20px clamp(18px,2.4vw,34px) 26px 58px;"));
- assert.ok(css.includes("padding:15px 13px 20px 52px"));
- assert.match(shell,/function handleTriggerClick\(\)\{\s*setNavOpen\(current=>!current\);\s*\}/);
- assert.match(css,/left:12px/);
- assert.match(css,/width:max-content/);
- assert.match(css,/min-width:132px/);
- assert.doesNotMatch(css,/\.sf-shell \.main\s*\{\s*padding-left:clamp/);
- assert.ok(css.includes("padding:20px clamp(18px,2.4vw,34px) 26px 58px;"));
+ assert.doesNotMatch(shell,/aria-hidden=\{!navOpen\}|onPointerEnter/);
+ assert.match(css,/grid-template-columns:176px minmax\(0,1fr\)/);
+ assert.match(css,/position:sticky/);
+ assert.match(css,/\.sf-shell \.sf-sidebar-brand/);
+ assert.doesNotMatch(css,/\.sf-shell \.sf-floating-nav__trigger\{/);
 });
-
 
 test("course details render as one expanded workspace with distinct progress sources",()=>{
  const app=source("App.tsx");
@@ -107,7 +101,8 @@ test("course details render as one expanded workspace with distinct progress sou
  const yuketang=source("components/YuketangTaskArea.tsx");
  const css=source("ui/foundation.css");
  assert.match(app,/renderCourseWorkspace/);
- assert.match(app,/sf-course-total-progress/);
+ assert.doesNotMatch(app,/<section className="sf-course-total-progress"/);
+ assert.match(source("ui/AppShell.tsx"),/sf-header-course/);
  assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);
  assert.match(app,/activeSelectedCourse/);
  assert.match(app,/expandedByDefault/);
