@@ -22,6 +22,10 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
   const [incomplete,setIncomplete]=useState(false);
   const [fetchedAt,setFetchedAt]=useState<string|null>(null);
   const busyRef=useRef(false);
+  const onCoursesUpdatedRef=useRef(onCoursesUpdated);
+  const onEventRef=useRef(onEvent);
+  useEffect(()=>{onCoursesUpdatedRef.current=onCoursesUpdated;},[onCoursesUpdated]);
+  useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
   const current=courses.find(course=>course.course_id===selected)??null;
   const view=current?presentCourse(current):null;
 
@@ -38,7 +42,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       const snapshot=kind==="sync"
         ?await request<ZhidaoProgressSnapshot>({operation:"zhidao.progress.sync"})
         :await request<ZhidaoProgressSnapshot>({operation:"zhidao.progress.verify",course_key:selected});
-      onCoursesUpdated(snapshot.courses);
+      onCoursesUpdatedRef.current(snapshot.courses);
       setIncomplete(snapshot.incomplete);
       setFetchedAt(snapshot.fetched_at);
       if(!quiet){
@@ -46,7 +50,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
           ?"进度读取已返回，但部分课程未能完成核验；未确认的数据不会显示为已核验。"
           :kind==="sync"?"已完成全部课程的服务器只读进度读取。":"已完成所选课程的服务器只读核验。";
         setMessage(text);
-        onEvent?.(kind==="sync"?"同步学习进度":"核验单课进度",snapshot.incomplete?"warning":"success",text);
+        onEventRef.current?.(kind==="sync"?"同步学习进度":"核验单课进度",snapshot.incomplete?"warning":"success",text);
       }
     }catch(error){
       const text=friendlyBridgeError(error);
@@ -54,7 +58,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
     }finally{
       busyRef.current=false;setBusy(null);
     }
-  },[desktop,connected,selected,onCoursesUpdated,onEvent]);
+  },[desktop,connected,selected]);
 
   useEffect(()=>{
     if(!monitor||!connected||!selected)return;
