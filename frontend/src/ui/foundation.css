@@ -1858,3 +1858,11 @@
   .sf-shell .sf-course-total-meta{display:grid}
   .sf-shell .sf-zd-detail-summary-compact{grid-template-columns:minmax(0,1fr)}
 }
+
+.sf-shell .sf-ykt-live.sf-detail-live .sf-ykt-live-grid{
+  grid-template-columns:minmax(0,1fr);
+}
+.sf-shell .sf-ykt-live.sf-detail-live .sf-ykt-live-item{
+  min-width:0;
+  width:100%;
+}
