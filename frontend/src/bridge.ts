@@ -39,7 +39,7 @@ export async function request<T>(message:WithoutEnvelope<BridgeRequest>):Promise
 
 export async function fetchStatuses():Promise<PlatformState[]>{
   const list=await request<Array<{platform:Platform;connected:boolean;message:string}>>({operation:"platform.status"});
-  return list.map(p=>({platform:p.platform,status:p.connected?"connected":"not_connected",
+  return list.map((p):PlatformState=>({platform:p.platform,status:p.connected?"connected":"not_connected",
     message:p.message,courses:[] as Course[]}));
 }
 
