@@ -8,6 +8,7 @@ import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
 import {UpdatePanel} from "./components/UpdatePanel";
+import {LicensePanel} from "./components/LicensePanel";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
@@ -605,6 +606,7 @@ export default function App(){
           </div>
         </section>
       </>}
+      <LicensePanel desktop={desktop&&consentAccepted} visible={page==="settings"}/>
       <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice}/>
     </AppShell>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
