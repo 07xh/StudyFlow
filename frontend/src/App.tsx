@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from "react";
+import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {
   Activity,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
   History,ListChecks,RefreshCw,Search
@@ -88,7 +88,6 @@ export default function App(){
     (course.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())||
       course.course_id.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
   ),[courses,coursePlatform,query]);
-  const connectedCount=Object.values(platforms).filter(item=>item.status==="connected").length;
   const verifiedCourses=useMemo(()=>courses.filter(course=>
     course.progress_evidence==="server_verified"&&typeof course.verified_at==="string"&&
     course.verified_at.length>0&&course.progress_percent!==null
@@ -296,10 +295,10 @@ export default function App(){
   const renderCourses=()=> <section>
     <div className="section-head">
       <div><h3>课程列表</h3><p>课程信息来自已连接平台的真实读取结果。</p></div>
-      <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
-        onClick={()=>void sync(coursePlatform==="all"?"zhidao":coursePlatform as Platform)}>
-        <RefreshCw size={15}/>同步课程
-      </button>
+      {coursePlatform!=="all"&&<button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+        onClick={()=>void sync(coursePlatform as Platform)}>
+        <RefreshCw size={15}/>同步当前平台
+      </button>}
     </div>
     <div className="sf-search-toolbar">
       <label className="sf-search"><Search size={16}/><input type="search"
