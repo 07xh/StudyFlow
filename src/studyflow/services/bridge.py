@@ -8,6 +8,7 @@ from __future__ import annotations
 import atexit
 import json
 import sys
+from contextlib import redirect_stdout
 from typing import Any
 
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
@@ -223,7 +224,10 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     return {"id": request_id, "ok": False, "error": "UNKNOWN_OPERATION"}
 
 
-def main() -> int:
+def main(protocol_output=None) -> int:
+    # stdout is a machine-readable JSONL channel. Business modules may still
+    # print diagnostics, but those must never be mixed into the protocol.
+    output = protocol_output if protocol_output is not None else sys.stdout
     for raw in sys.stdin.buffer:
         try:
             if len(raw) > MAX_LINE:
@@ -231,11 +235,12 @@ def main() -> int:
             req = json.loads(raw)
             if not isinstance(req, dict):
                 raise ValueError("invalid")
-            result = dispatch(req)
+            with redirect_stdout(sys.stderr):
+                result = dispatch(req)
         except (ValueError, UnicodeDecodeError, TypeError):
             result = {"id": None, "ok": False, "error": "INVALID_REQUEST"}
-        sys.stdout.write(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n")
-        sys.stdout.flush()
+        output.write(json.dumps(result, ensure_ascii=False, separators=(",", ":")) + "\n")
+        output.flush()
     return 0
 
 
