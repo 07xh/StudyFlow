@@ -70,9 +70,10 @@ struct LegacyJob {
     run_id: Option<String>,
     course_id: Option<String>, // opaque course key, never a raw login credential
     monitor_token: Option<String>, // per-run nonce, kept out of frontend
+    last_zhs_progress: Option<ZhsProgress>, // last real numeric observation, never server-confirmed
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct ZhsProgress {
     video_segment_percent: Option<f64>,
     resource_index: Option<u64>,
@@ -142,13 +143,23 @@ fn read_zhs_snapshot(token: &str) -> Option<ZhsProgress> {
 }
 
 fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, String> {
-    if let Some(child) = &mut task.child {
-        if let Some(code) = child.try_wait().map_err(|_| "TASK_STATUS_FAILED")? {
-            task.exit_code = code.code();
-            task.state = "exited".into();
-            task.child = None;
-            remove_zhs_snapshot(task.monitor_token.as_deref());
+    // Check process exit first, then read the atomic numeric snapshot. If the
+    // child finished between polls, its final write is now complete and can be
+    // captured before the snapshot is removed. No server-completion inference.
+    let exit_status = match task.child.as_mut() {
+        Some(child) => child.try_wait().map_err(|_| "TASK_STATUS_FAILED")?,
+        None => None,
+    };
+    if platform == "zhidao" && task.state == "running" {
+        if let Some(observation) = task.monitor_token.as_deref().and_then(read_zhs_snapshot) {
+            task.last_zhs_progress = Some(observation);
         }
+    }
+    if let Some(code) = exit_status {
+        task.exit_code = code.code();
+        task.state = "exited".into();
+        task.child = None;
+        remove_zhs_snapshot(task.monitor_token.as_deref());
     }
     Ok(LegacyStatus {
         platform: platform.into(),
@@ -156,8 +167,8 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         exit_code: task.exit_code,
         run_id: task.run_id.clone(),
         course_id: task.course_id.clone(),
-        zhs_progress: if platform == "zhidao" && task.state == "running" {
-            task.monitor_token.as_deref().and_then(read_zhs_snapshot)
+        zhs_progress: if platform == "zhidao" {
+            task.last_zhs_progress.clone()
         } else { None },
     })
 }
@@ -254,6 +265,7 @@ pub fn legacy_start(
         run_id: run_id.clone(),
         course_id: if platform == "zhidao" { course_id.clone() } else { None },
         monitor_token,
+        last_zhs_progress: None,
     });
     Ok(LegacyStatus {
         platform: platform.clone(), state: "running".into(), exit_code: None, run_id,

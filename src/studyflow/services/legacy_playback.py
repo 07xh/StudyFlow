@@ -159,11 +159,9 @@ def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = 
         return 1
     finally:
         sys.stdout = original_stdout
-        if sink is not None:
-            try:
-                sink.path.unlink(missing_ok=True)
-            except OSError:
-                pass
+        # Leave only the per-run numeric snapshot for the Tauri supervisor to
+        # collect on the next status tick; it deletes it when reaping the child.
+        # The observer output never contains cookies, request bodies or logs.
 
 
 def run_zhidao_original(course_key: str, monitor_token: str | None = None) -> int:

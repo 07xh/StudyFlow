@@ -78,24 +78,19 @@ test("first-run consent uses native bundled resources and blocks the desktop unt
 });
 
 
-test("LightC AnchorNav pattern stays compact, floating, and keeps settings in the header",()=>{
+test("LightC-style left rail is compact, permanent, and keeps settings in the header",()=>{
  const shell=source("ui/AppShell.tsx");
  const css=source("ui/foundation.css");
- assert.match(shell,/PanelLeft/);
+ assert.match(shell,/<aside className="sf-floating-nav" aria-label="主导航">/);
  assert.match(shell,/sf-settings-button/);
- assert.match(shell,/onPointerEnter=\{handlePointerEnter\} onPointerLeave=\{handlePointerLeave\}/);
- assert.doesNotMatch(shell,/systemNavigation|sf-floating-nav__brand/);
- assert.match(css,/\.sf-floating-nav__trigger\{\s*position:fixed;\s*left:12px;\s*top:50%;\s*width:32px;\s*height:32px;/);
- assert.ok(css.includes("padding:20px clamp(18px,2.4vw,34px) 26px 58px;"));
- assert.ok(css.includes("padding:15px 13px 20px 52px"));
- assert.match(shell,/function handleTriggerClick\(\)\{\s*setNavOpen\(current=>!current\);\s*\}/);
- assert.match(css,/left:12px/);
- assert.match(css,/width:max-content/);
- assert.match(css,/min-width:132px/);
- assert.doesNotMatch(css,/\.sf-shell \.main\s*\{\s*padding-left:clamp/);
- assert.ok(css.includes("padding:20px clamp(18px,2.4vw,34px) 26px 58px;"));
+ assert.match(shell,/setPlatformExpanded/);
+ assert.match(css,/grid-template-columns:clamp\(172px,16vw,202px\) minmax\(0,1fr\)/);
+ assert.match(css,/grid-template-columns:144px minmax\(0,1fr\)/);
+ assert.match(css,/position:sticky/);
+ assert.match(css,/\.sf-shell \.sf-floating-nav \.nav/);
+ assert.doesNotMatch(shell,/PanelLeft|handleTriggerClick|onPointerEnter/);
+ assert.doesNotMatch(css,/sf-floating-nav__trigger|sf-floating-nav__panel/);
 });
-
 
 test("course details render as one expanded workspace with distinct progress sources",()=>{
  const app=source("App.tsx");

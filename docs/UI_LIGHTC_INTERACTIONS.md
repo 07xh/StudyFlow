@@ -9,7 +9,7 @@
 - `PageSurface`：页面淡入位移动画，无延迟挂载和过期数据，支持“减少动态效果”系统设置。
 
 **保留**：扫码弹窗、登录桥、课程筛选、平台适配器、章节列表、深浅色/跟随系统主题、
-紧凑卡片、侧栏折叠以及既有 Python sidecar。没有修改真实课程或进度实现。
+紧凑卡片、左侧常驻窄导航栏、平台二级导航折叠以及既有 Python sidecar。没有修改真实课程或进度实现。
 
 验证建议：前端 `npm --prefix frontend run build`，
 Python `pytest -q`，Windows 打包 `scripts/build-windows.ps1`，

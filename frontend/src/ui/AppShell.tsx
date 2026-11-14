@@ -1,14 +1,7 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type FocusEvent as ReactFocusEvent,
-  type PointerEvent as ReactPointerEvent,
-  type ReactNode
-} from "react";
+import {useEffect,useState,type ReactNode} from "react";
 import {
   Activity,BookOpen,ChevronDown,History,
-  LayoutDashboard,Layers3,ListChecks,Moon,PanelLeft,
+  LayoutDashboard,Layers3,ListChecks,Moon,
   RefreshCw,Settings,Sun
 } from "lucide-react";
 import type {LucideIcon} from "lucide-react";
@@ -50,73 +43,18 @@ interface Props {
 export function AppShell({
   page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle
 }:Props){
-  const [navOpen,setNavOpen]=useState(false);
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
-  const navRootRef=useRef<HTMLDivElement|null>(null);
-  const closeTimerRef=useRef<number|null>(null);
-
-  function cancelCloseTimer(){
-    if(closeTimerRef.current!==null){
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current=null;
-    }
-  }
-  function closeNavigation(){
-    cancelCloseTimer();
-    setNavOpen(false);
-  }
-  function handleTriggerClick(){
-    setNavOpen(current=>!current);
-  }
-  function handlePointerEnter(event:ReactPointerEvent<HTMLElement>){
-    if(event.pointerType==="touch")return;
-    cancelCloseTimer();
-    setNavOpen(true);
-  }
-  function handlePointerLeave(event:ReactPointerEvent<HTMLElement>){
-    if(event.pointerType==="touch")return;
-    cancelCloseTimer();
-    closeTimerRef.current=window.setTimeout(()=>{closeTimerRef.current=null;setNavOpen(false);},150);
-  }
-  function handleNavBlur(event:ReactFocusEvent<HTMLDivElement>){
-    const nextTarget=event.relatedTarget;
-    if(nextTarget instanceof Node&&navRootRef.current?.contains(nextTarget))return;
-    setNavOpen(false);
-  }
 
   useEffect(()=>{
     try{window.localStorage.setItem("studyflow.nav.platform-expanded",String(platformExpanded));}
     catch{/* The current navigation state remains available for this session. */}
   },[platformExpanded]);
-  useEffect(()=>{
-    if(!navOpen)return;
-    const handleOutsidePointerDown=(event:PointerEvent)=>{
-      const target=event.target;
-      if(target instanceof Node&&!navRootRef.current?.contains(target)){
-        setNavOpen(false);
-      }
-    };
-    const handleKeyDown=(event:KeyboardEvent)=>{
-      if(event.key==="Escape"){
-        setNavOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown",handleOutsidePointerDown);
-    document.addEventListener("keydown",handleKeyDown);
-    return ()=>{
-      document.removeEventListener("pointerdown",handleOutsidePointerDown);
-      document.removeEventListener("keydown",handleKeyDown);
-    };
-  },[navOpen]);
-  useEffect(()=>()=>cancelCloseTimer(),[]);
-
   const platformActive=page==="platforms"||page==="platform-zhidao"||page==="platform-yuketang";
   const renderItem=(item:{id:Page;label:string;icon:LucideIcon},nested=false)=>
     <button key={item.id} type="button" title={item.label} aria-label={item.label}
-      tabIndex={navOpen?0:-1}
       aria-current={page===item.id?"page":undefined}
       className={["nav",page===item.id?"active":"",nested?"sf-nav-child":""].filter(Boolean).join(" ")}
-      onClick={()=>{onNavigate(item.id);closeNavigation();}}>
+      onClick={()=>onNavigate(item.id)}>
       <item.icon size={nested?16:18}/>
       <span className="nav-label">{item.label}</span>
       {page===item.id&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
@@ -126,15 +64,13 @@ export function AppShell({
       ?<div className="sf-platform-nav" key={item.id}>
         <div className="sf-platform-nav-parent">
           <button type="button" title="学习平台" aria-label="学习平台"
-            tabIndex={navOpen?0:-1}
             className={["nav",platformActive?"active":""].filter(Boolean).join(" ")}
             aria-current={page==="platforms"?"page":undefined}
-            onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");closeNavigation();}}>
+            onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");}}>
             <Layers3 size={18}/><span className="nav-label">学习平台</span>
             {page==="platforms"&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
           </button>
           <button type="button" className="sf-nav-expand"
-            tabIndex={navOpen?0:-1}
             aria-label={platformExpanded?"收起学习平台":"展开学习平台"}
             aria-expanded={platformExpanded} title={platformExpanded?"收起":"展开"}
             onClick={()=>setPlatformExpanded(current=>!current)}>
@@ -149,24 +85,10 @@ export function AppShell({
   </nav>;
 
   return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
-    <div className="sf-floating-nav" ref={navRootRef}
-      onFocusCapture={()=>{cancelCloseTimer();setNavOpen(true);}}
-      onBlurCapture={handleNavBlur}
-      onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
-      <button type="button"
-        className={["sf-floating-nav__trigger",navOpen?"is-open":""].filter(Boolean).join(" ")}
-        aria-label={navOpen?"关闭导航":"打开导航"}
-        aria-expanded={navOpen} aria-pressed={navOpen} aria-controls="sf-floating-navigation"
-        title={navOpen?"关闭导航":"打开导航"}
-        onClick={handleTriggerClick}>
-        <PanelLeft size={18}/>
-      </button>
-      <aside id="sf-floating-navigation"
-        className={["sf-floating-nav__panel",navOpen?"is-open":""].filter(Boolean).join(" ")}
-        aria-label="主导航" aria-hidden={!navOpen}>
-        {renderItems(workspaceNavigation)}
-      </aside>
-    </div>
+    <aside className="sf-floating-nav" aria-label="主导航">
+      <div className="sf-floating-nav__heading">功能菜单</div>
+      {renderItems(workspaceNavigation)}
+    </aside>
     <main className="main" id="main-content">
       <header className="sf-header">
         <div className="sf-page-heading"><h1>{headerTitle??titles[page]}</h1></div>

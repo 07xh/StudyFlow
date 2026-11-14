@@ -4,7 +4,7 @@
 
 ## 界面结构
 
-- 使用石墨灰玻璃面板、绿色强调色、圆角侧栏与可折叠导航。
+- 使用石墨灰玻璃面板、绿色强调色、圆角常驻窄侧栏与可展开的平台二级导航。
 - 七个真实页面：首页、课程中心、学习任务、平台管理、学习记录、日志中心、设置。
 - 首页展示知到与雨课堂平台卡片、真实课程统计和最近课程。
 - 小窗口下导航收窄、平台卡片单列、登录表单单列、课程行换行。
@@ -38,7 +38,7 @@ Windows 默认窗口 1150×780，最小窗口 720×560；布局使用弹性网�
 
 ## 代码入口
 
-- `frontend/src/ui/AppShell.tsx`：七项导航、主题、刷新和可折叠侧栏
+- `frontend/src/ui/AppShell.tsx`：常驻侧栏导航、主题、刷新和可折叠的平台二级菜单
 - `frontend/src/ui/PlatformCard.tsx`：平台卡片与所属登录展开区
 - `frontend/src/components/ZhidaoMigration.tsx`：知到登录面板
 - `frontend/src/components/YuketangLoginPanel.tsx`：雨课堂会话配置

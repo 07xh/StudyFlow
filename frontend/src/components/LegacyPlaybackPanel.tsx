@@ -32,8 +32,8 @@ export function LegacyPlaybackPanel({
   const aiCourses = courses.filter(c => c.platform === "zhidao" && c.course_type === "ai");
   const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
     .filter(item => item.presentation.percent !== null);
-  const liveZhs = platform === "zhidao" && status?.state === "running" &&
-    status.course_id === selection ? status.zhs_progress : null;
+  const liveZhs = platform === "zhidao" && status?.course_id === selection
+    ? status.zhs_progress : null;
   const selectedCourse=courses.find(course=>course.course_id===selection)??null;
 
   const updateStatus = useCallback(async () => {
@@ -117,9 +117,11 @@ export function LegacyPlaybackPanel({
               </div>
             : <small>{status?.state==="running"
                 ? status.course_id===selection ? "等待原版输出" : "请选择正在运行的课程"
-                : "任务未运行"}</small>}
+                : liveZhs ? "上次运行的最终采样" : "未获取到进度记录"}</small>}
           {liveZhs?.resource_index!=null&&liveZhs.resource_total!=null&&
             <small>当前知识点资源 {liveZhs.resource_index}/{liveZhs.resource_total}</small>}
+          {status?.state === "exited" && liveZhs &&
+            <small>任务已结束 · 显示结束前最后一次真实采样</small>}
           <small>仅原版本地输出，非服务器确认进度</small>
         </div>}
       </div>
@@ -210,7 +212,12 @@ export function LegacyPlaybackPanel({
         onClick={()=>void updateStatus()}><RefreshCw size={16}/> 查询运行状态</button>
     </div>
     {status?.state==="exited"&&<p className="legacy-state-note">
-      原版进程退出码：{status.exit_code ?? "未知"}。退出码不等于服务器心跳或学习完成确认。
+      原版进程退出码：{status.exit_code ?? "未知"}。
+      {status.exit_code === 0
+        ? liveZhs
+          ? "记录到本地播放片段，但尚未核验服务器学习进度。"
+          : "进程正常退出，但未采集到播放进度；请核对本次课程是否有可播放内容并使用服务器只读核验。"
+        : "任务发生异常；本次进度不能视为完成，请检查登录状态及本机运行环境。"}
     </p>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
     <p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>
