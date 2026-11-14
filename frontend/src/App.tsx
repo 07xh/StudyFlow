@@ -144,7 +144,7 @@ export default function App(){
       {platformRegistry.map(definition=><PlatformCard key={definition.id}
         definition={definition} state={platforms[definition.id]} desktop={desktop}
         busy={Boolean(busy)} onSync={()=>void sync(definition.id)}
-        onLogin={()=>void openZhidao()} onVideos={()=>void showVideos()}/>)}
+        onManage={()=>setPage(definition.id==="zhidao"?"platform-zhidao":"platform-yuketang")}/>)}
     </div>
   </section>;
 
@@ -210,14 +210,39 @@ export default function App(){
       {renderCourses(true)}
     </>}
     {page==="courses"&&renderCourses(false)}
-    {page==="platforms"&&<>
-      {renderPlatforms()}
+    {page==="platforms"&&renderPlatforms()}
+    {page==="platform-zhidao"&&<>
+      <section className="settings-card">
+        <div className="section-head">
+          <div><h3>知到</h3><p>{platforms.zhidao.message}</p></div>
+          <div className="actions">
+            <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+              onClick={()=>void refresh()}><RefreshCw size={16}/>检测连接</button>
+            <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+              onClick={()=>void sync("zhidao")}><RefreshCw size={16}/>同步课程</button>
+          </div>
+        </div>
+      </section>
+      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
+        onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}
+        onImported={()=>{void refresh().then(()=>sync("zhidao"));}}/>
       <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
         desktop={desktop} connected={platforms.zhidao.status==="connected"}/>
-      <LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
-        desktop={desktop} connected={platforms.yuketang.status==="connected"}/>
-      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}
-        onImported={()=>{void refresh().then(()=>sync("zhidao"));}}/>
+    </>}
+    {page==="platform-yuketang"&&<>
+      <section className="settings-card">
+        <div className="section-head">
+          <div><h3>雨课堂</h3><p>{platforms.yuketang.message}</p></div>
+          <div className="actions">
+            <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+              onClick={()=>void refresh()}><RefreshCw size={16}/>检测连接</button>
+            <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+              onClick={()=>void sync("yuketang")}><RefreshCw size={16}/>同步课程</button>
+            <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+              onClick={()=>void showVideos()}><BookOpen size={16}/>章节与视频</button>
+          </div>
+        </div>
+      </section>
       {platformRegistry.some(item=>item.capabilities.sessionConfiguration&&item.id==="yuketang")&&
         <section className="settings-card">
           <h3>雨课堂登录会话</h3>
@@ -246,6 +271,8 @@ export default function App(){
           </div>)}
         </div>
       </section>}
+      <LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
+        desktop={desktop} connected={platforms.yuketang.status==="connected"}/>
     </>}
     {page==="settings"&&<>
       <section className="settings-card">

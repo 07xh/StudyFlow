@@ -1,0 +1,61 @@
+{
+  "source_revisions": {
+    "zhidao": {
+      "repository": "07xh/zhidao-assistant",
+      "commit": "53c92446d40b2cd1732c9aa1884d9f3b3a3fe55a"
+    },
+    "yuketang": {
+      "repository": "07xh/yuketang-heartbeat",
+      "commit": "a81cf336d7f2d635d7500b5d6698e251e88c5a73"
+    }
+  },
+  "blobs": {
+    "legacy/zhidao/AppLifecycle.ps1": "808e7485d261f185373af3d93aff88792a9d5ea9",
+    "legacy/zhidao/Consent-UI.xaml": "e3ee10a72391beb957d1daea17bdb9fad7ee4707",
+    "legacy/zhidao/CookieImport.ps1": "d149dd35191ea99e2d7bc53fa32e316295f660ac",
+    "legacy/zhidao/HeartbeatMonitor.ps1": "1a466a76eb0c2339add85cd3953a6a3711731f8b",
+    "legacy/zhidao/HeartbeatView.ps1": "7d89dafb4f60373b97b635560416495c0f4146c7",
+    "legacy/zhidao/Install-WebView2.ps1": "aa212cfcea31f5886d9be35bf9160f3d458b3bae",
+    "legacy/zhidao/Install.ps1": "d4313c2c8ce37876c0d7b19f4061f58e27280e57",
+    "legacy/zhidao/InstallerManifest.ps1": "3072c03348c8df2b18ab53afca24911472efa72a",
+    "legacy/zhidao/LICENSE-GPL-3.0.txt": "f288702d2fa16d3cdf0035b15a9fcbc552cd88e7",
+    "legacy/zhidao/LegacyCleanup.ps1": "e6dc4e5eb7a0a69fb1dd04391c301ad51e231ac5",
+    "legacy/zhidao/Official-MediaController.js": "fed27706722d6339028863ab4a839796eaedb527",
+    "legacy/zhidao/Official-Player.ps1": "5c71d9551886450b0480cba9434072b71ad10fc6",
+    "legacy/zhidao/Patch-ZHS-0.1.5.py": "2a8430cfd636158a9932645d712f704e236d0ce0",
+    "legacy/zhidao/QrLoginView.ps1": "17ba44131072a525243cc53893a2ab3e9cb98782",
+    "legacy/zhidao/README-使用说明.txt": "71c1489610724accab9f34516167a5e4c41e5d2a",
+    "legacy/zhidao/SOURCE.md": "38e09782d9012a37313e2f067b4c31e4f186c388",
+    "legacy/zhidao/SessionState.ps1": "64160d1fd69033516ac0943e9cab5ecc864a99e6",
+    "legacy/zhidao/UiAppearance.ps1": "14434bed3fe9a3329a50810ac10e14e676bba03d",
+    "legacy/zhidao/UiCourseCards.ps1": "554ad0489c3174dedfe2d71586d163b7a9474e1a",
+    "legacy/zhidao/Uninstall.ps1": "a33de8dc707e4b36b17037c10286c975d6632e3f",
+    "legacy/zhidao/Verify-Environment.py": "47e29f1f941a6e569aca8783aef743ef797a15ac",
+    "legacy/zhidao/Windows-Preflight.ps1": "e5ecdeabdd16cc34d992a6f39e9077a16fb5f2d4",
+    "legacy/zhidao/ZHS-ConsoleMonitor.py": "fbff5bce350245ddf4dfde42ea8a18db944ff307",
+    "legacy/zhidao/ZHS-QRLogin.py": "96b2af0f070fcc28ff3b7b8cc80b6688c8052111",
+    "legacy/zhidao/Zhidao-GUI.ps1": "8781bcb01ed3c4d1c746873478070f7c8cf9821d",
+    "legacy/zhidao/Zhidao-Task.cmd": "8c4d45265a48e47479ce8129887ebe08976e0e36",
+    "legacy/zhidao/Zhidao-UI.xaml": "46e6162e13ed4ebbb89c00ce7fa79264fabd1af8",
+    "legacy/zhidao/apply_http_safety_v3.py": "5bbf107d4919cb452977f194e52bd25ea7730026",
+    "legacy/zhidao/apply_safe_fixes_v2.py": "985dbe63655d42da11c623c3373015fdda352d1f",
+    "legacy/zhidao/install-files.json": "d75f4abe618a63222450ca06dbf283e77d33a5aa",
+    "legacy/zhidao/verify_and_integrate_v4.py": "cf16d23acfaf3203b4ecf0fc06318022cbdab922",
+    "legacy/zhidao/zhidao_courses.py": "5fc8dbb85990f40c717d1d86a39472f3f04e712b",
+    "legacy/zhidao/zhidao_diagnostics.py": "d785cfd7e63387e3c0bf50f35da52110fb8d9c89",
+    "legacy/zhidao/zhidao_only.py": "394a0524eb4b23b9937bc78506f138fcfdba0f9c",
+    "legacy/zhidao/使用条款与第三方声明.txt": "3af28ab12c801495291fd7b75f28b4865eb9a066",
+    "legacy/zhidao/隐私政策与数据说明.txt": "949ab286f06449ba50a9483f6cdd2f6cc5ddf116",
+    "legacy/yuketang/.github/workflows/windows-exe.yml": "91d0df962a90faea33beb1420e5646ca81f4b877",
+    "legacy/yuketang/.gitignore": "2c8ff85ddf5a3c5881e21fb75620afe536310f69",
+    "legacy/yuketang/FIXES.md": "570cc89b697de0fc9aba4566606dc38777504376",
+    "legacy/yuketang/README.md": "27f587be0fd718172c771c375e3a60423f312780",
+    "legacy/yuketang/SECURITY.md": "2991fbdf878f4e2af63bee64eb919f601fc76e05",
+    "legacy/yuketang/changes.patch": "4a39743b785b6b67c9d4f9484e91992ac7302d8f",
+    "legacy/yuketang/exe_entry.py": "7a3399f3cd30d8b046225fa25940b5b835938cf8",
+    "legacy/yuketang/main.py": "1e64ab67376c43060e1dcdf4dfa9949b6bb27b8c",
+    "legacy/yuketang/requirements.txt": "ac5f657f4c989d82ea5d1d82eebed91bccb0f8ce",
+    "legacy/yuketang/test_launcher.py": "740200c449ab1d954ca8fcf90a9733a52bd7d47c",
+    "legacy/yuketang/test_雨课堂_心跳稳定性.py": "233a6e05ab62c9b94fbbf25fc904a9e3f2a7cfd0"
+  }
+}

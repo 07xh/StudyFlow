@@ -1,5 +1,6 @@
 import {invoke} from "@tauri-apps/api/core";
 import type {Platform, PlatformState, Course} from "./types";
+import type {OriginalYktOptions} from "./legacyPlayback";
 
 export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
@@ -10,6 +11,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
   | {id: string; version: 1; operation: "yuketang.clear"}
+  | {id: string; version: 1; operation: "yuketang.settings.get"}
+  | {id: string; version: 1; operation: "yuketang.settings.save"; settings: OriginalYktOptions}
   | {id: string; version: 1; operation: "zhidao.cookie.import"; content: string; mode: "file" | "text"}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
@@ -55,7 +58,8 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
   if (!result.ok) {
     const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED",
-                             "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED"]);
+                             "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
+                             "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -141,6 +145,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
     case "PLATFORM_NOT_READY": return "真实平台课程读取失败；请检查账号、网络和原版运行时。";
     case "CREDENTIAL_STORAGE_FAILED": return "Windows 凭据管理器保存失败。";
+    case "YUKETANG_SETTINGS_UNAVAILABLE": return "原版雨课堂配置未能读取或保存；旧配置未被覆盖。";
+    case "INVALID_YUKETANG_SETTINGS": return "雨课堂参数不符合原版可用范围，未保存。";
     case "UNSUPPORTED_VERSION": return "桌面端与数据服务协议版本不一致。";
     case "UNKNOWN_PLATFORM": return "不支持该学习平台。";
     case "INVALID_REQUEST": return "本机请求格式有误。";

@@ -18,6 +18,7 @@ from studyflow.platforms.zhidao.cookie_import import import_cookie
 atexit.register(qr_runtime.cancel)
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
+from studyflow.platforms.yuketang.legacy_config import read_settings as get_original_ykt_settings, save_settings as save_original_ykt_settings
 
 MAX_LINE = 600000
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
@@ -81,6 +82,19 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": ADAPTERS["yuketang"].list_videos()}
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+    if operation == "yuketang.settings.get":
+        try:
+            return {"id": request_id, "ok": True, "data": get_original_ykt_settings()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "YUKETANG_SETTINGS_UNAVAILABLE"}
+    if operation == "yuketang.settings.save":
+        try:
+            data = save_original_ykt_settings(request.get("settings"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_YUKETANG_SETTINGS"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "YUKETANG_SETTINGS_UNAVAILABLE"}
     if operation == "yuketang.configure":
         try:
             credentials.save(request.get("configuration"))
