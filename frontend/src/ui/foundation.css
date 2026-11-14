@@ -756,9 +756,6 @@
 .sf-shell .sf-task-shortcut>.secondary{flex:none;min-height:34px;margin:0}
 .sf-shell .sf-platform-card-head{min-height:45px}
 .sf-shell .sf-platform-nav-parent>.nav.active{box-shadow:inset 3px 0 var(--accent)}
-.sf-shell.sf-collapsed .sf-nav-expand{display:none}
-.sf-shell.sf-collapsed .sf-subnav{margin-left:0;padding:3px 0;border:0}
-.sf-shell.sf-collapsed .sf-subnav .nav{justify-content:center;padding:9px 8px}
 @media(max-width:1020px){
   .sf-shell .sf-task-shortcuts{grid-template-columns:1fr}
   .sf-shell .sf-platform-detail .sf-platform-login{grid-template-columns:1fr}

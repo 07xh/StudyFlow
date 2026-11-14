@@ -30,6 +30,7 @@ test("LightC-style floating navigation overlays the workspace and keeps all page
   assert.match(css,/backdrop-filter:blur/);
   assert.match(css,/\.sf-shell \.sf-floating-nav__panel \.sf-subnav/);
   assert.doesNotMatch(css,/\.sf-shell \.sidebar\s*\{/);
+  assert.doesNotMatch(css,/\.sf-shell\.sf-collapsed/);
   assert.doesNotMatch(shell,/className="sidebar"/);
   assert.doesNotMatch(shell,/studyflow\.nav\.collapsed|setCollapsed/);
 });
