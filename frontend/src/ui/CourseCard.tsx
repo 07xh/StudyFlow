@@ -13,7 +13,7 @@ export function CourseCard({course,onInspect}:{course:Course;onInspect:(item:Cou
       <span className="course-provider">{definition?.name??course.platform}</span>
     </div>
     <strong title={course.title}>{course.title}</strong>
-    <small>{course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"} · ID：{course.course_id}</small>
+    <small>{course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"}{course.platform==="zhidao"?"":" · ID："+course.course_id}</small>
     <div className="sf-course-evidence">{progress.label} · {progress.detail}</div>
     <div className="sf-progress-area">
       <div className="sf-progress-label">
