@@ -75,7 +75,11 @@ def test_original_cli_still_runs_unpatched_while_local_snapshot_is_collected(mon
     assert observed[0]["videoSegmentPercent"] == 75.0
     assert observed[0]["resourceIndex"] == 1
     assert "playing" in original.getvalue()
-    assert not list((tmp_path / "StudyFlow").glob("monitor-zhs-*.json"))
+    # The supervisor, not the worker, owns terminal telemetry cleanup.
+    snapshots = list((tmp_path / "StudyFlow").glob("monitor-zhs-*.json"))
+    assert len(snapshots) == 1
+    assert json.loads(snapshots[0].read_text(encoding="utf-8"))["videoSegmentPercent"] == 75.0
+    snapshots[0].unlink()
     assert sys.stdout is original
 
 
@@ -90,7 +94,9 @@ def test_ui_status_cannot_be_conflated_with_server_progress():
     panel = (ROOT / "frontend" / "src" / "components" / "LegacyPlaybackPanel.tsx").read_text(encoding="utf-8")
     rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
     assert "zhs_progress: ZhsLocalProgress | null" in legacy_types
-    assert 'status.course_id === selection' in panel
+    assert 'status?.course_id === selection' in panel
     assert "本地模拟片段" in panel and "非服务器确认进度" in panel
     assert 'now - observed > 18.0' in rust
     assert "remove_zhs_snapshot(job.monitor_token.as_deref())" in rust
+    assert "last_zhs_progress" in rust
+    assert "结束前最后一次真实采样" in panel
