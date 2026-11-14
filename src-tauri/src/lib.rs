@@ -30,15 +30,15 @@ impl QrBridgeWorker {
         Ok(Self { child, input, output })
     }
 
-    fn request(&mut self, message: &[u8]) -> Result<serde_json::Value, String> {
+    fn request(&mut self, message: &[u8], expected_id: &str) -> Result<serde_json::Value, String> {
         self.input.write_all(message).map_err(|_| "QR service request failed")?;
         self.input.flush().map_err(|_| "QR service flush failed")?;
         let mut line = String::new();
         self.output.read_line(&mut line).map_err(|_| "QR service response failed")?;
-        if line.is_empty() || line.len() > 2_000_000 {
+        if line.is_empty() || line.len() > 1_048_576 {
             return Err("QR service returned invalid data".into());
         }
-        serde_json::from_str(&line).map_err(|_| "QR service protocol error".into())
+        parse_jsonl_reply(line.as_bytes(), expected_id)
     }
 }
 
@@ -46,7 +46,10 @@ impl Drop for QrBridgeWorker {
     fn drop(&mut self) {
         // Ask Python to stop the QR child and clear only its ephemeral PNG.
         if self.child.try_wait().ok().flatten().is_none() {
-            let _ = self.request(b"{\"id\":\"shutdown\",\"version\":1,\"operation\":\"zhidao.qr.cancel\"}\n");
+            let _ = self.request(
+                b"{\"id\":\"shutdown\",\"version\":1,\"operation\":\"zhidao.qr.cancel\"}\n",
+                "shutdown",
+            );
         }
         let _ = self.child.kill();
         let _ = self.child.wait();
@@ -277,7 +280,8 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
             if slot.is_none() {
                 *slot = Some(QrBridgeWorker::start(&binary)?);
             }
-            let reply = slot.as_mut().ok_or("QR service unavailable")?.request(&message);
+            let reply = slot.as_mut().ok_or("QR service unavailable")?
+                .request(&message, &expected_id);
             if reply.is_err() { *slot = None; }
             reply
         }).await.map_err(|_| "QR service worker crashed".to_string())?;
@@ -408,6 +412,18 @@ mod ipc_validation_tests {
         ).is_err());
         assert!(parse_jsonl_reply(
             b"{\"id\":\"other\",\"ok\":true}\n",
+            "req-1",
+        ).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_or_untyped_jsonl_responses() {
+        assert!(parse_jsonl_reply(
+            b"{\"id\":\"req-1\",\"ok\":true}\n{\"id\":\"req-1\",\"ok\":true}\n",
+            "req-1",
+        ).is_err());
+        assert!(parse_jsonl_reply(
+            b"{\"id\":\"req-1\",\"ok\":\"true\"}\n",
             "req-1",
         ).is_err());
     }
