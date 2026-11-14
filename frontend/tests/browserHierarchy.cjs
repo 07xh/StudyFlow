@@ -22,6 +22,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByRole('progressbar').count(),0,'Empty account cannot have percentage progress');
    await page.getByRole('button',{name:'雨课堂',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-login').count(),0,'Account form starts collapsed until requested');
+   assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),1,'Scope saving belongs beside scope inputs');
    await page.mouse.move(0,0);
    await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
    await page.getByRole('button',{name:'登录平台',exact:true}).click();

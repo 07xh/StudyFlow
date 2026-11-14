@@ -25,7 +25,7 @@ import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
   fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,request
 } from "./bridge";
-import type {Config,Video,ZhidaoPlayerSettings} from "./bridge";
+import type {Config,Video,ZhidaoPlayerSettings,YuketangScope} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {CollapsibleSection} from "./ui/CollapsibleSection";
@@ -73,6 +73,10 @@ export default function App(){
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   const [notice,setNotice]=useState("");
   const [scopeDirty,setScopeDirty]=useState(false);
+  const [hasYuketangSession,setHasYuketangSession]=useState(false);
+  const [hasYuketangSign,setHasYuketangSign]=useState(false);
+  const [signDirty,setSignDirty]=useState(false);
+  const configurationRevision=useRef(0);
   const [courseModes,setCourseModes]=useState<Record<string,"official"|"zhs-original">>({});
   const [clearDialogOpen,setClearDialogOpen]=useState(false);
   const [qrOpen,setQrOpen]=useState(false);
@@ -169,6 +173,14 @@ export default function App(){
     if(!consentAccepted||initialized.current)return;
     initialized.current=true;
     void refresh();
+    if(desktop){
+      const revision=configurationRevision.current;
+      void request<YuketangScope>({operation:"yuketang.scope.get"}).then(scope=>{
+        if(revision!==configurationRevision.current||typeof scope.classroom_id!=="string"||typeof scope.university_id!=="string")return;
+        setConfig(previous=>({...previous,classroom_id:scope.classroom_id,university_id:scope.university_id}));
+        setHasYuketangSession(scope.has_session===true);setHasYuketangSign(scope.has_sign===true);
+      }).catch(()=>{});
+    }
   },[refresh,consentAccepted]);
 
   async function sync(platform:Platform){
@@ -192,7 +204,8 @@ export default function App(){
     try{
       await request<{cleared:boolean}>({operation:"yuketang.clear"});
       invalidatePlatform("yuketang",true);
-      setConfig(emptyConfiguration);setScopeDirty(false);setClearDialogOpen(false);
+      configurationRevision.current++;
+      setConfig(emptyConfiguration);setScopeDirty(false);setSignDirty(false);setHasYuketangSession(false);setHasYuketangSign(false);setClearDialogOpen(false);
       await refresh();
       setNotice("已清除学序保存的雨课堂凭据；原版客户端不受影响。");
       recordEvent("雨课堂","退出并清除凭据","success","已清除学序凭据");
@@ -227,8 +240,10 @@ export default function App(){
   }
 
   function updateConfiguration(field:keyof Config,value:string){
+    configurationRevision.current++;
     setConfig(previous=>({...previous,[field]:value}));
     if(field==="classroom_id"||field==="university_id"||field==="sign"){setVideos([]);setScopeDirty(true);}
+    if(field==="sign")setSignDirty(true);
   }
   function inspectCourse(course:Course){
     setSelectedCourse(course);setCoursePlatform(course.platform);setPage("courses");
@@ -309,11 +324,11 @@ export default function App(){
         </CollapsibleSection>
       </>:<>
         <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容">
-          <YuketangContentPanel config={config} videos={videos} desktop={desktop} busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"&&!scopeDirty} onChange={updateConfiguration} onShowVideos={()=>void showVideos()}/>
+          <YuketangContentPanel config={config} videos={videos} desktop={desktop} busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"} dirty={scopeDirty} hasSession={hasYuketangSession} hasSign={hasYuketangSign} onChange={updateConfiguration} onSave={()=>void saveYuketangScope()} onShowVideos={()=>void showVideos()}/>
         </CollapsibleSection>
         <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务与默认参数">
           <p className={scopeDirty?"sf-task-context":"sf-muted"}>启动和停止作用于雨课堂已保存的课堂范围，不限定为当前浏览的单门课程。{scopeDirty&&" 新编辑的课堂范围尚未保存。"}</p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"} events={activity}
+          <YuketangTaskArea courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
         </CollapsibleSection>
       </>}
@@ -328,6 +343,8 @@ export default function App(){
     try{
       await request<{saved:boolean}>({operation:"yuketang.configure",configuration:config});
       invalidatePlatform("yuketang");
+      configurationRevision.current++;
+      setHasYuketangSession(true);setHasYuketangSign(Boolean(config.sign));setSignDirty(false);
       setConfig(previous=>({...previous,session_id:"",csrf_token:"",sign:""}));
       recordEvent("雨课堂","保存登录会话","success","凭据已写入 Windows 凭据管理器");
       setScopeDirty(false);
@@ -337,6 +354,22 @@ export default function App(){
       const message=friendlyBridgeError(error);
       setNotice(message);recordEvent("雨课堂","保存登录会话","warning",message);
     }finally{setBusy("");}
+  }
+
+  async function saveYuketangScope(){
+    setBusy("scope");setNotice("");
+    try{
+      const saved=await request<YuketangScope>({operation:"yuketang.scope.save",scope:{
+        classroom_id:config.classroom_id,university_id:config.university_id,...(signDirty?{sign:config.sign}:{})
+      }});
+      configurationRevision.current++;
+      invalidatePlatform("yuketang",true);
+      setConfig(previous=>({...previous,classroom_id:saved.classroom_id,university_id:saved.university_id,sign:""}));
+      setHasYuketangSession(saved.has_session);setHasYuketangSign(saved.has_sign);setSignDirty(false);setScopeDirty(false);
+      recordEvent("雨课堂","保存课堂范围","success","已保存课堂范围并保留登录凭据");
+      await refresh();setNotice("课堂范围已保存，请同步当前课堂或读取章节视频。");
+    }catch(error){setNotice(friendlyBridgeError(error));}
+    finally{setBusy("");}
   }
 
   function invalidatePlatform(platform:Platform, resetStatus = false){

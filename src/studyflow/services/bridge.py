@@ -225,6 +225,20 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except (OSError, ValueError):
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": progress}
+    if operation == "yuketang.scope.get":
+        try:
+            return {"id": request_id, "ok": True, "data": credentials.scope_metadata(credentials.load())}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CREDENTIAL_STORAGE_FAILED"}
+    if operation == "yuketang.scope.save":
+        try:
+            return {"id": request_id, "ok": True, "data": credentials.save_scope(request.get("scope"))}
+        except LookupError:
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CREDENTIAL_STORAGE_FAILED"}
     if operation == "yuketang.configure":
         try:
             credentials.save(request.get("configuration"))

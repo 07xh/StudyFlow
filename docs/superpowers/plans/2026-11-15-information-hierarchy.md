@@ -38,3 +38,7 @@ An earlier revision completed Windows Rust/package/install smoke successfully. C
 ## Main reliability integration
 
 Integrated main `05ac3f1` (#56), preserving its ZHS output freshness, terminal sample handling, line parser and async status guards. Combined those guards with course/run ownership, scoped launch events and atomic expected-run stopping. The removed duplicate course totals remain in the header only. Added actual-component regressions for cross-course ZHS observations, stale samples and pre-launch status responses; updated the native idle source check because an unowned stop now rejects instead of returning idle. After integration, 170 Python tests, 65 UI/IPC tests and the production build pass. Exact integrated Windows and browser CI remain the delivery gate.
+
+## Scope save ownership
+
+Visual review identified a remaining misplaced action: Rain Classroom scope edits required reopening the credential form. Added a save action next to scope inputs and safe scope metadata/update IPC. The service reuses saved credentials internally, returns no token/Sign, preserves unchanged Sign and rejects credential replacement through the scope endpoint. Reading/starting is blocked while scope edits remain unsaved. Added Python contract tests and an actual App save-flow regression; 173 Python tests, 66 UI/IPC tests, production build and whitespace checks pass. Native operation validation and the final Windows package are CI gates.
