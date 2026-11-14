@@ -52,8 +52,8 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
           </button>
           <button className="secondary" type="button" disabled={!desktop||busy||!connected}
             onClick={onShowVideos}><BookOpen size={16}/>读取章节视频</button>
-          <button className="secondary" type="button" disabled={!desktop||busy||!connected}
-            onClick={onClear}><Trash2 size={16}/>退出并清除学序凭据</button>
+          <button className="secondary" type="button" disabled={!desktop||busy}
+            onClick={onClear}><Trash2 size={16}/>清除学序凭据</button>
         </div>
       </form>
     </div>
