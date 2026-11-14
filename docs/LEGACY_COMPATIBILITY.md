@@ -22,7 +22,7 @@
 | 播放器退出核验 | 常驻播放器监控 | 按 run_id 识别正常退出后发起一次单课只读核验 | 不提交虚假进度 |
 | 数据管理 | 知到账号与数据 | Cookie、课程缓存、WebView2 profile 分开清理 | 每个操作按明确路径执行 |
 
-知到运行时由 Windows sidecar 打包 ZHS 0.1.5 依赖，不要求用户预先安装旧版 ZHSDesktop。旧版 WPF/安装目录仍独立保留。当前会话缓存使用 Cookie HMAC 绑定，避免把其他会话的旧缓存当作当前数据。
+知到运行时由 Windows sidecar 打包 ZHS 0.1.5 依赖，优先在 sidecar 子进程中调用原版 Typer CLI；只有内置运行时不可用时，才回退到已有的外部 ZHSDesktop 启动器，不要求用户预先安装旧版 ZHSDesktop。旧版 WPF/安装目录仍独立保留。当前会话缓存使用 Cookie HMAC 绑定，避免把其他会话的旧缓存当作当前数据。
 
 ## 雨课堂接入
 
