@@ -143,7 +143,7 @@ export function LegacyPlaybackPanel({
           :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
       </div>}
     </div>
-    {platform === "yuketang" && <div className="sf-ykt-live" aria-label="雨课堂原版实时进度">
+    {platform === "yuketang" && <div className={"sf-ykt-live"+(detailMode?" sf-detail-live":"")} aria-label="雨课堂原版实时进度">
       <div className="sf-ykt-live-title"><strong>雨课堂原版进度</strong>
         <small>{yktProgress?.available ? "本次任务日志 · 每 2 秒读取" : "本次任务尚无进度记录"}</small></div>
       <div className="sf-ykt-live-grid">
