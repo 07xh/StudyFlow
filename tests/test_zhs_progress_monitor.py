@@ -16,7 +16,9 @@ VENDOR = ROOT / "legacy" / "zhidao" / "ZHS-ConsoleMonitor.py"
 
 
 def test_original_observer_is_bit_for_bit_upstream():
-    content = VENDOR.read_bytes()
+    # Windows git autocrlf can expand line endings in the working tree;
+    # compare normalized Git blob bytes, not platform-specific checkout bytes.
+    content = VENDOR.read_bytes().replace(b"\r\n", b"\n")
     blob = b"blob " + str(len(content)).encode() + b"\x00" + content
     assert hashlib.sha1(blob).hexdigest() == "fbff5bce350245ddf4dfde42ea8a18db944ff307"
 
