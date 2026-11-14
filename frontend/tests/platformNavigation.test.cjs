@@ -137,6 +137,6 @@ test("logout clears the selected course workspace for the affected platform",()=
  assert.ok(app.includes('await request<{cleared:boolean}>({operation:"yuketang.clear"});\n      invalidatePlatform("yuketang",true);'));
  assert.ok(app.includes('      await refresh();\n      setNotice("已清除学序保存的雨课堂凭据；原版客户端不受影响。");'));
  assert.match(app,/function invalidatePlatform\(platform:Platform, resetStatus = false\)/);
- assert.ok(app.includes('?initialPlatforms[platform]:{...previous[platform],courses:[]}'));
+ assert.match(app,/resetStatus\s*\?\s*initialPlatforms\[platform\]\s*:\s*\{\.\.\.previous\[platform\],courses:\[\]\}/);
  assert.ok(app.includes('onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}'));
 });
