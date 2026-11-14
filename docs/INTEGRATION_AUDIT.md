@@ -1,36 +1,63 @@
-# 学序 UI 与平台迁移审查（2026-11-14）
+# 学序原功能接入审计（2026-11-14）
 
-## 实际上游代码
+## 审计口径
 
-### 雨课堂
-- `07xh/yuketang-heartbeat/main.py`：Python 单体程序，包含 requests、dotenv、日志输出重定向、视频相关业务和线程池。
-- `exe_entry.py`：恢复版命令行入口；原 EXE 字节码未完整恢复。
-- `requirements.txt`：requests、python-dotenv。
-- 直接 `import main` 可能触发日志文件创建与标准输出替换，**不能**直接作为 GUI 插件导入。
-- 迁移顺序：只读课程数据模型 → 登录状态读取 → 课程展示 → 正常播放入口。需避免通过非官方进度伪报实现学习记录。
+本表区分三种状态：
+- **代码已接入**：仓库中存在真实调用链，UI、IPC、适配器和执行器之间有对应接口。
+- **自动化已验证**：测试或 Windows CI 检查通过；这只能证明代码和打包契约。
+- **真机待验**：必须在用户 Windows 环境使用本人账号与平台实际数据确认，不能用模拟数据或 CI 替代。
 
-### 知到
-- `07xh/zhidao-assistant/payload/Zhidao-GUI.ps1`：PowerShell/WPF GUI，约 63 KB；依赖 Windows PresentationFramework、WindowsBase 等。
-- `payload/Zhidao-UI.xaml`：WPF/XAML UI，约 21 KB，原版浅色主题。
-- `payload/zhidao_only.py`：Python 数据读取适配器，尚需逐项审查。
-- 当前 `StudyFlow` 已迁移课程身份处理与诊断两个纯 Python 模块，尚未迁移 Windows 运行时。
+## 知到
 
-### LightC-UI 2.18.3
-- 已从用户资料库重新取得 `LightC-UI-源码-2.18.3.zip` 并检查：316 个 ZIP 条目，解压文件总计 6,921,240 字节；归档 SHA-256：`bb6d3c4d48ea0d8787a29234689c32ec4a1c91d85fd03df7372e3bb3519ef3ae`。
-- 源码基于 React 19、TypeScript、Vite、Tailwind CSS 4、Framer Motion 与 Tauri 2；已检查 `SidebarNav.tsx`、主应用布局和主题样式。
-- `LICENSE` 为 LightC Source Available License v1.0。它允许查看、学习和非商业研究/修改，但限制将修改版作为独立或改名产品发布，也限制分发相应二进制、安装包或将实质性源码打包进其他产品；StudyFlow 的公开仓库和独立安装包不能仅凭“非商业”就视为获准复制。
-- 因此不把 LightC 组件、资源或源码片段迁入 StudyFlow。当前浮动导航、主题和平台页面由 StudyFlow 自有 React/TypeScript 与 CSS 独立实现；只将用户要求的交互目标作为设计参考。需要直接复用源码时，先取得权利人书面许可。
+| 原有能力 | 学序入口/实现 | 当前状态 | 尚缺验收 |
+|---|---|---|---|
+| 扫码登录与刷新 | 知到专属页面、Tauri QR dialog、Python QR worker | 代码已接入 | 本人 Windows 扫码、刷新、取消及过期场景 |
+| Cookie 文本/文件导入 | 版本化 IPC、本机导入器 | 代码已接入 | 本机文件选择器与真实 Cookie 导入 |
+| 连接诊断 | ZHS 只读诊断入口 | 代码已接入 | 本人账号在线诊断 |
+| 课程同步 | ZHS 0.1.5 只读 CLI 与适配器 | 代码已接入 | 核对真实课程、学期与当前会话 |
+| 智慧课程知识点/共享课视频详情 | 同会话课程缓存与详情读取 | 代码已接入 | 对照真实课程详情 |
+| 进度查询与核验 | 单课/全量只读查询，标注时间、stale、incomplete | 代码已接入 | 对照官方页面与真实账号 |
+| 官方 WebView2 播放器 | 原版播放器脚本、WebView2 资源与设置桥 | 代码已接入 | 登录、窗口、播放、关闭后只读核验 |
+| ZHS 0.1.5 原版任务 | 固定版本 CLI，隔离 sidecar 子进程 | 代码已接入 | 启停、编码、旧版 ZHSDesktop 并存 |
+| 本地模拟片段监控 | 原版 stdout observer + 随机 run token + Tauri 数值读取 | 代码已接入 | 真机输出编码和进度连续性 |
 
-## 架构决策
-1. `src/studyflow/ui/` 是唯一主界面，平台模块不自行创建顶层窗口。
-2. `src/studyflow/platforms/{zhidao,yuketang}/` 仅放各自的登录、只读课程、正常播放与诊断适配。
-3. GUI 通过显式调用适配器方法运行；不得通过导入启动网络请求、写日志或修改 `sys.stdout`。
-4. Cookie、缓存和本地文件放用户数据目录，不放源码仓库或 EXE 解压目录。
-5. 所有进度必须有真实平台数据来源，不能把本地估算显示成平台确认完成。
-6. 源码与第三方许可核验后才启用正式打包与发布。
+## 长江雨课堂
 
-## 阻塞项
-- LightC-UI 源码已取得并完成许可证审查；受限源码不可直接并入 StudyFlow，独立 UI 仍需 Windows 真机验收。
-- 雨课堂单体脚本的 import side effects 需要隔离。
-- 知到 WPF/PowerShell 到统一 UI 的接口需要定义和回归。
-- Windows 实机集成与 CI 尚未验收。
+| 原有能力 | 学序入口/实现 | 当前状态 | 尚缺验收 |
+|---|---|---|---|
+| 会话配置与清除 | 雨课堂专属页面、Windows Credential Manager | 代码已接入 | 本人当前会话真实保存与验证 |
+| 连接状态 | 平台适配器只读查询 | 代码已接入 | 登录有效/过期/错误会话场景 |
+| 课堂、章节、视频元数据 | 雨课堂只读适配器 | 代码已接入 | 核对真实课堂与视频列表 |
+| 原版参数读取/保存 | 原 `exe_entry.py` 的 `read_cfg/save_cfg`，保留原 `.env` 格式 | 代码已接入 | Windows 重启后读回与旧配置兼容 |
+| 参数透传 | 12 个非凭据环境参数经 Rust 校验后传给原版子进程 | 自动化已覆盖 | Windows 真实进程逐项核对 |
+| 原版业务程序 | 未修改的上游 `main.py`，由 sidecar 隔离执行 | 代码已接入 | 真实会话、课程列表与执行结果 |
+| 运行状态/停止 | Rust 子进程管理与任务状态查询 | 代码已接入 | Windows 子进程树启停 |
+| 实时诊断 | 按 run_id 读取原版日志中的模拟位置、服务端响应和批量统计 | 代码已接入 | 与实际运行日志逐项对照 |
+
+### 雨课堂参数映射核对
+
+当前上游 `main.py` 读取的非凭据设置共 12 项，均映射到雨课堂页面及类型定义：
+`VIDEO_SPEED`、`HEARTBEAT_INTERVAL`、`MAX_CONCURRENT_VIDEOS`、`COMPLETION_THRESHOLD`、`SKIP_COMPLETED`、`USE_CONCURRENT`、`TEST_MODE`、`TEST_VIDEO_COUNT`、`AUTO_RICHTEXT`、`DEBUG`、`RICHTEXT_STAY_SECONDS`、`RICHTEXT_SKIP_DELAY`。
+
+凭据 `CLASSROOM_ID`、`SIGN`、`UNIVERSITY_ID`、`CSRF_TOKEN`、`SESSION_ID` 不属于普通参数控件，由学序凭据存储提供。参数映射回归测试会从原始 `main.py` 提取 `os.getenv` 键，与适配器映射和 UI 字段做集合核对。
+
+### 明确未恢复的部分
+
+- 原雨课堂 EXE 的完整字节码没有恢复；`exe_entry.py` 自身也注明原 EXE 字节码未完全反编译。
+- StudyFlow 已承接现有源码中可确认的设置读写、运行、启动、停止与状态查询；不能据此宣称旧二进制里未知的隐藏菜单或功能均已恢复。
+- 原 `main.py` 和 `exe_entry.py` 保持与上游一致，不在本轮重写其业务算法。
+
+## 统一 UI 与架构
+
+- 知到和雨课堂各自拥有独立登录、设置、课程和任务入口；不使用通用登录页替代平台登录。
+- Tauri Rust 管理 sidecar 与原版子进程；Python JSONL bridge 处理平台适配；React 只负责交互和证据展示。
+- LightC 源码许可证限制其作为独立产品/安装包分发；StudyFlow 当前采用自有 UI 实现，只参考其交互目标。
+- 紧凑悬浮导航的最新改动在 PR #34，尚需检查通过后再合入主分支。
+
+## 自动化检查与真实验收
+
+- 已建立 Python adapter/config/IPC 回归、React 生产构建与 UI/IPC 契约测试、Windows sidecar 冻结和 NSIS 打包检查。
+- 主分支 CI 通过只证明代码与打包检查通过；不能证明本人账号已登录、平台数据映射正确或平台接受任务进度。
+- 当前仍需在 Windows 真机完成：知到扫码与真实课程/进度核验、WebView2 播放器、ZHS 原版任务；雨课堂真实会话、课堂/章节/视频读取、参数持久化与原版子进程启停；最后再做安装、升级、卸载和旧数据保留回归。
+
+**结论：两个平台的主要代码入口和原有执行器已接入统一 StudyFlow 架构；“所有原始 EXE 隐藏功能已恢复”及“真实平台端到端可用”均未得到证明。**

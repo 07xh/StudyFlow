@@ -129,3 +129,34 @@ def test_original_exe_entry_is_frozen_in_desktop_package():
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts" / "build-sidecar.ps1").read_text(encoding="utf-8")
     assert "legacy/yuketang/exe_entry.py" in script
+
+
+def test_every_original_yuketang_runtime_setting_is_exposed_in_studyflow():
+    root = Path(__file__).resolve().parents[1]
+    original_main = (root / "legacy" / "yuketang" / "main.py").read_text(encoding="utf-8")
+    runtime_keys = {
+        line.split("os.getenv(", 1)[1].split(")", 1)[0].split(",", 1)[0].strip().strip("'\\\"")
+        for line in original_main.splitlines()
+        if "os.getenv(" in line
+    }
+    credential_keys = {
+        "CLASSROOM_ID", "SIGN", "UNIVERSITY_ID", "CSRF_TOKEN", "SESSION_ID",
+    }
+
+    # Every non-credential setting read by the unchanged upstream main.py
+    # must have one typed config mapping and a visible platform-specific UI.
+    assert runtime_keys - credential_keys == set(config.FIELDS.values())
+    assert set(config.DEFAULTS) == set(config.FIELDS.values())
+
+    ui = (root / "frontend" / "src" / "components" / "YuketangTaskArea.tsx").read_text(encoding="utf-8")
+    types = (root / "frontend" / "src" / "legacyPlayback.ts").read_text(encoding="utf-8")
+    for field, env_key in config.FIELDS.items():
+        assert field in ui
+        assert field in types
+
+    # The native task supervisor must expose the same typed fields and pass
+    # every non-credential setting to the unchanged original child process.
+    rust = (root / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
+    for field, env_key in config.FIELDS.items():
+        assert field in rust
+        assert f'command.env("{env_key}"' in rust

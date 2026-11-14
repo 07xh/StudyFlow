@@ -8,10 +8,11 @@
 - 上游包含 GPL-3.0 LICENSE；正式发布前应完成整套依赖与许可证合规审查。
 
 ## 雨课堂
-- 上游仓库：`07xh/yuketang-heartbeat`
-- 审查时上游 `main` 树 SHA：`a81cf336d7f2d635d7500b5d6698e251e88c5a73`
-- 已确认 `main.py`、`exe_entry.py` 和 requirements；尚未迁入运行时模块。
-- `exe_entry.py` 自述旧 EXE 字节码未完全反编译；不能视为全部原始功能已恢复。
+- 上游仓库：`07xh/yuketang-heartbeat`；本次复核的上游 `main` 文件 blob：`main.py=1e64ab67376c43060e1dcdf4dfa9949b6bb27b8c`、`exe_entry.py=7a3399f3cd30d8b046225fa25940b5b835938cf8`。
+- `legacy/yuketang/main.py` 与 `legacy/yuketang/exe_entry.py` 均与上游对应文件逐字节一致；`tests/test_original_playback.py` 持续锁定 Git blob SHA。
+- `main.py` 由隔离的 sidecar 子进程通过 `runpy.run_path` 执行，不在 GUI/JSONL 进程中直接导入；原脚本不作改写。
+- `exe_entry.py` 的 `read_cfg/save_cfg` 由 `src/studyflow/platforms/yuketang/legacy_config.py` 直接调用。主脚本读取的 12 个非凭据环境参数均映射到雨课堂二级页面，参数校验后经 Rust 子进程环境透传；凭据独立保存在 Windows Credential Manager。
+- `exe_entry.py` 自述原 EXE 字节码未完全反编译。学序承接了可确认的运行、设置、启动/停止操作，但不能声称旧二进制所有未知菜单/行为均已恢复；这仍是明确的恢复边界。
 
 ## UI
 - 用户提供的 `LightC-UI-源码-2.18.3.zip` 已重新取得并审查，归档 SHA-256：`bb6d3c4d48ea0d8787a29234689c32ec4a1c91d85fd03df7372e3bb3519ef3ae`。
