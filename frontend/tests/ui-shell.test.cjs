@@ -17,7 +17,12 @@ test("LightC-style graphite sidebar has real platform child pages", () => {
   assert.match(shell,/setCollapsed/);
   assert.match(css,/--accent:#13d992/);
   assert.match(css,/backdrop-filter:blur/);
-  assert.match(css,/\.sf-shell\.sf-collapsed \.sidebar/);
+  assert.match(shell,/studyflow\.nav\.collapsed\.v2/);
+  assert.match(shell,/className="sf-sidebar-panel"/);
+  assert.match(css,/\.sf-shell \.sidebar\{[\s\S]*?flex:0 0 64px/);
+  assert.match(css,/\.sf-shell\.sf-collapsed \.sf-sidebar-panel:hover/);
+  assert.match(css,/\.sf-shell\.sf-collapsed \.sf-sidebar-panel:focus-within/);
+  assert.match(css,/\.sf-shell\.sf-collapsed \.sf-sidebar-panel:not\(:hover\):not\(:focus-within\)/);
   assert.match(css,/\.sf-shell \.sf-subnav/);
 });
 
@@ -81,4 +86,16 @@ test("platform task status and verified progress are placed before login control
   assert.match(playback,/presentCourse\(course\)/);
   assert.match(playback,/presentation\.percent !== null/);
   assert.doesNotMatch(playback,/Math\.random\(\)|setInterval\([^,]+,\s*[1-9]\)/);
+});
+
+
+test("sidebar is compact by default and expands as an overlay without reflow", () => {
+  const shell=read("src/ui/AppShell.tsx");
+  const css=read("src/ui/foundation.css");
+  assert.match(shell,/return saved===null\?true:saved==="true"/);
+  assert.match(css,/\.sf-shell \.sidebar\{[\s\S]*?flex:0 0 64px/);
+  assert.match(css,/\.sf-shell\.sf-collapsed \.sf-sidebar-panel:hover\s*,[\s\S]*?width:226px/);
+  assert.match(css,/\.sf-shell\.sf-collapsed \.sf-sidebar-panel:focus-within/);
+  assert.match(css,/overflow-y:auto/);
+  assert.doesNotMatch(css,/\.sf-shell\.sf-collapsed \.sidebar\{width:76px/);
 });

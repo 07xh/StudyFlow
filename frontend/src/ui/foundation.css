@@ -72,43 +72,68 @@
 .sf-shell .sidebar{
   position:sticky;
   top:12px;
-  width:238px;
+  z-index:50;
+  width:64px;
   height:calc(100vh - 24px);
-  min-height:520px;
-  flex:0 0 auto;
-  overflow:auto;
-  padding:22px 14px 14px;
+  min-height:0;
+  flex:0 0 64px;
+  overflow:visible;
+  padding:0;
   display:flex;
   flex-direction:column;
-  border:1px solid var(--line);
-  border-radius:21px;
   color:var(--text);
-  background:linear-gradient(155deg,rgba(48,56,64,.96),rgba(29,35,41,.96));
-  box-shadow:var(--soft-shadow);
+  background:transparent;
+}
+.sf-shell .sf-sidebar-panel{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  width:64px;
+  height:100%;
+  min-height:0;
+  max-height:calc(100vh - 24px);
+  overflow-x:hidden;
+  overflow-y:auto;
+  padding:14px 7px 12px;
+  border:1px solid rgba(137,119,255,.24);
+  border-radius:19px;
+  color:var(--text);
+  background:linear-gradient(155deg,rgba(27,31,59,.98),rgba(17,22,43,.98));
+  box-shadow:0 18px 48px rgba(4,7,22,.38),inset 0 1px 0 rgba(255,255,255,.055);
   backdrop-filter:blur(24px);
   -webkit-backdrop-filter:blur(24px);
+  transition:width .22s cubic-bezier(.2,.8,.2,1),border-color .18s,box-shadow .18s;
+  scrollbar-width:none;
 }
-.sf-shell:not(.dark) .sidebar{
-  background:linear-gradient(155deg,rgba(255,255,255,.97),rgba(239,246,241,.97));
+.sf-shell .sf-sidebar-panel::-webkit-scrollbar{display:none}
+.sf-shell:not(.dark) .sf-sidebar-panel{
+  border-color:rgba(106,84,210,.18);
+  background:linear-gradient(155deg,rgba(255,255,255,.98),rgba(244,242,255,.98));
+  box-shadow:0 16px 40px rgba(45,34,92,.12),inset 0 1px 0 rgba(255,255,255,.8);
 }
+.sf-shell .sf-sidebar-panel>*{flex:0 0 auto}
 .sf-shell .brand{
+  width:210px;
   display:flex;
   align-items:center;
   gap:11px;
+  min-height:43px;
   padding:0 8px;
-  margin:0 0 31px;
+  margin:0 0 24px;
 }
 .sf-shell .brand-icon{
   width:43px;height:43px;flex:none;
   display:grid;place-items:center;
   border-radius:14px;
-  color:#08291b;
-  background:linear-gradient(145deg,#55f0b0,#0acb83);
-  box-shadow:0 8px 22px rgba(10,215,139,.24);
+  color:#fff;
+  background:linear-gradient(145deg,#aa96ff,#7154e8);
+  box-shadow:0 8px 22px rgba(127,99,237,.3);
 }
 .sf-shell .brand strong{display:block;color:var(--text);font-size:19px;letter-spacing:1px;line-height:1.2}
 .sf-shell .brand small{display:block;margin-top:4px;color:var(--muted);font-size:10px;letter-spacing:1.2px}
 .sf-shell .sf-nav-head{
+  width:210px;
   display:flex;align-items:center;justify-content:space-between;gap:8px;
   padding:0 8px;margin:0 0 9px;
 }
@@ -123,12 +148,13 @@
   color:var(--muted);background:transparent;cursor:pointer;
   transition:background .16s,color .16s,border-color .16s;
 }
-.sf-shell .sf-nav-toggle:hover{color:var(--accent-text);background:var(--soft-accent);border-color:var(--line)}
-.sf-shell .sf-nav-group{margin-bottom:17px}
+.sf-shell .sf-nav-toggle:hover{color:#a995ff;background:rgba(139,116,255,.14);border-color:var(--line)}
+.sf-shell .sf-nav-group{width:210px;margin-bottom:15px}
 .sf-shell .sf-nav-group nav{display:grid;gap:5px}
 .sf-shell .nav{
-  width:100%;min-width:0;display:flex;align-items:center;gap:12px;
-  margin:0;padding:11px 12px;
+  width:100%;min-width:0;min-height:40px;
+  display:flex;align-items:center;gap:12px;
+  margin:0;padding:10px 12px;
   border:1px solid transparent;border-radius:12px;
   color:var(--muted);background:transparent;
   font-size:13px;font-weight:550;text-align:left;cursor:pointer;
@@ -136,18 +162,19 @@
 }
 .sf-shell .nav svg{flex:none}
 .sf-shell .nav-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sf-shell .nav:hover{color:var(--text);background:rgba(255,255,255,.055)}
-.sf-shell:not(.dark) .nav:hover{background:rgba(20,60,40,.05)}
+.sf-shell .nav:hover{color:var(--text);background:rgba(139,116,255,.09)}
 .sf-shell .nav.active{
-  color:var(--accent-text);
-  border-color:rgba(19,217,146,.19);
-  background:linear-gradient(95deg,rgba(19,217,146,.18),rgba(19,217,146,.07));
-  box-shadow:inset 3px 0 var(--accent),0 7px 18px rgba(0,0,0,.08);
+  color:#b8a8ff;
+  border-color:rgba(153,130,255,.25);
+  background:linear-gradient(95deg,rgba(129,101,238,.3),rgba(129,101,238,.11));
+  box-shadow:inset 3px 0 #9a83ff,0 7px 18px rgba(0,0,0,.09);
   font-weight:700;
 }
-.sf-shell .nav .right{margin-left:auto;color:var(--accent-text)}
+.sf-shell:not(.dark) .nav.active{color:#6d54d8;background:linear-gradient(95deg,rgba(129,101,238,.17),rgba(129,101,238,.07))}
+.sf-shell .nav .right{margin-left:auto;color:#b8a8ff}
 .sf-shell .sf-nav-system{margin-top:22px}
 .sf-shell .sidebar-bottom{
+  width:210px;
   margin-top:auto;padding:14px 9px 3px;
   border-top:1px solid var(--line);
   color:var(--muted);font-size:11px;
@@ -501,12 +528,12 @@
 .sf-shell button:active:not(:disabled){transform:translateY(0) scale(.985)}
 .sf-shell ::selection{color:#062719;background:rgba(30,226,151,.38)}
 @media(max-width:1050px){
-  .sf-shell .sidebar{width:210px}
   .sf-shell .main{padding:18px}
 }
 @media(max-width:720px){
   .app.sf-shell{gap:8px;padding:8px}
-  .sf-shell .sidebar{width:184px;height:calc(100vh - 16px);top:8px;padding:17px 10px 10px;border-radius:17px}
+  .sf-shell .sidebar{height:calc(100vh - 16px);top:8px}
+  .sf-shell .sf-sidebar-panel{max-height:calc(100vh - 16px);border-radius:17px}
   .sf-shell .main{min-height:calc(100vh - 16px);padding:15px 13px;border-radius:17px}
   .sf-shell .sf-header{align-items:flex-start;flex-wrap:wrap;margin-bottom:15px;padding-bottom:12px}
   .sf-shell .sf-header h1{font-size:20px}
@@ -519,7 +546,11 @@
   .sf-shell .credential-form>.actions{grid-column:auto}
 }
 @media(max-width:500px){
-  .sf-shell .sidebar{width:160px;padding:14px 9px}
+  .sf-shell .sidebar{width:64px;flex-basis:64px}
+  .sf-shell .sf-sidebar-panel{padding:12px 6px 10px}
+  .sf-shell:not(.sf-collapsed) .sf-sidebar-panel{width:min(216px,calc(100vw - 82px))}
+  .sf-shell.sf-collapsed .sf-sidebar-panel:hover,
+  .sf-shell.sf-collapsed .sf-sidebar-panel:focus-within{width:min(216px,calc(100vw - 82px))}
   .sf-shell .brand{gap:8px;padding:0 4px;margin-bottom:20px}
   .sf-shell .brand-icon{width:35px;height:35px}
   .sf-shell .brand strong{font-size:16px}
@@ -584,25 +615,82 @@
 @media(max-width:500px){.qr-backdrop .qr-dialog{padding:15px}.qr-backdrop .qr-image-area{min-height:225px}}
 
 
-/* The sidebar collapse control changes the actual rail width and content visibility. */
-.sf-shell.sf-collapsed .sidebar{width:76px;padding:20px 9px 12px}
-.sf-shell.sf-collapsed .brand{justify-content:center;padding:0;margin-bottom:26px}
-.sf-shell.sf-collapsed .brand>div:last-child,
-.sf-shell.sf-collapsed .sf-nav-head .section-label,
-.sf-shell.sf-collapsed .sf-nav-group>.section-label,
-.sf-shell.sf-collapsed .nav-label,
-.sf-shell.sf-collapsed .nav .right,
-.sf-shell.sf-collapsed .sidebar-bottom{display:none}
-.sf-shell.sf-collapsed .sf-nav-head{justify-content:center;padding:0}
-.sf-shell.sf-collapsed .nav{justify-content:center;padding:11px 8px}
-
-
-/* Keep the collapse affordance functional at every window width. */
+/* LightC-inspired compact floating rail: hover/focus expands over content without reflow. */
+.sf-shell.sf-collapsed .sf-sidebar-panel{width:64px}
+.sf-shell:not(.sf-collapsed) .sf-sidebar-panel{width:226px}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within{
+  width:226px;
+  border-color:rgba(153,130,255,.42);
+  box-shadow:0 22px 58px rgba(4,7,22,.48),inset 0 1px 0 rgba(255,255,255,.07);
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .brand{
+  width:48px;justify-content:center;padding:0;margin-bottom:22px;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .brand>div:last-child,
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-nav-head .section-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-nav-group>.section-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .nav-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .nav .right,
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sidebar-bottom{display:none}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-nav-head{
+  width:48px;justify-content:center;padding:0;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-nav-group{width:48px}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .nav{
+  justify-content:center;gap:0;padding:10px 8px;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-subnav{
+  margin-left:0;padding:3px 0;border:0;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-subnav .nav{
+  justify-content:center;padding:8px;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-nav-expand{display:none}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .brand,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .brand{
+  width:210px;justify-content:flex-start;padding:0 8px;margin-bottom:24px;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .brand>div:last-child,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .brand>div:last-child,
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sf-nav-head .section-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sf-nav-head .section-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sf-nav-group>.section-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sf-nav-group>.section-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .nav-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .nav-label,
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .nav .right,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .nav .right,
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sidebar-bottom,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sidebar-bottom{display:block}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sf-nav-head,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sf-nav-head{
+  width:210px;justify-content:space-between;padding:0 8px;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sf-nav-group,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sf-nav-group{width:210px}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .nav,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .nav{
+  justify-content:flex-start;gap:12px;padding:10px 12px;
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sf-subnav,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sf-subnav{
+  margin:3px 0 7px 24px;padding:4px 0 4px 10px;border-left:1px solid var(--line);
+}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sf-subnav .nav,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sf-subnav .nav{justify-content:flex-start;padding:8px 10px}
+.sf-shell.sf-collapsed .sf-sidebar-panel:hover .sf-nav-expand,
+.sf-shell.sf-collapsed .sf-sidebar-panel:focus-within .sf-nav-expand{display:grid}
 @media(max-width:720px){
-  .sf-shell.sf-collapsed .sidebar{width:64px;height:calc(100vh - 16px);top:8px;padding:17px 6px 10px}
+  .sf-shell .sidebar{height:calc(100vh - 16px);top:8px}
+  .sf-shell .sf-sidebar-panel{max-height:calc(100vh - 16px)}
 }
 @media(max-width:500px){
-  .sf-shell.sf-collapsed .sidebar{width:58px;padding:14px 5px}
+  .sf-shell .sf-sidebar{width:64px;flex-basis:64px}
+  .sf-shell .sf-sidebar-panel{padding:12px 6px 10px}
+  .sf-shell:not(.sf-collapsed) .sf-sidebar-panel{width:min(216px,calc(100vw - 82px))}
+  .sf-shell.sf-collapsed .sf-sidebar-panel:hover,
+  .sf-shell.sf-collapsed .sf-sidebar-panel:focus-within{width:min(216px,calc(100vw - 82px))}
 }
 
 
@@ -815,7 +903,7 @@
   border:1px solid transparent;border-radius:8px;color:var(--muted);
   background:transparent;cursor:pointer;
 }
-.sf-shell .sf-nav-expand:hover{color:var(--accent-text);background:var(--soft-accent)}
+.sf-shell .sf-nav-expand:hover{color:#a995ff;background:rgba(139,116,255,.14)}
 .sf-shell .sf-nav-expand svg{transition:transform .16s ease}
 .sf-shell .sf-chevron-closed{transform:rotate(-90deg)}
 .sf-shell .sf-subnav{
@@ -852,9 +940,9 @@
 .sf-shell .sf-task-shortcut>.secondary{flex:none;min-height:34px;margin:0}
 .sf-shell .sf-platform-card-head{min-height:45px}
 .sf-shell .sf-platform-nav-parent>.nav.active{box-shadow:inset 3px 0 var(--accent)}
-.sf-shell.sf-collapsed .sf-nav-expand{display:none}
-.sf-shell.sf-collapsed .sf-subnav{margin-left:0;padding:3px 0;border:0}
-.sf-shell.sf-collapsed .sf-subnav .nav{justify-content:center;padding:9px 8px}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-nav-expand{display:none}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-subnav{margin-left:0;padding:3px 0;border:0}
+.sf-shell.sf-collapsed .sf-sidebar-panel:not(:hover):not(:focus-within) .sf-subnav .nav{justify-content:center;padding:8px}
 @media(max-width:1020px){
   .sf-shell .sf-task-shortcuts{grid-template-columns:1fr}
   .sf-shell .sf-platform-detail .sf-platform-login{grid-template-columns:1fr}

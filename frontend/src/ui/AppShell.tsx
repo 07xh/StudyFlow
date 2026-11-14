@@ -41,15 +41,17 @@ export function AppShell({
   page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children
 }:Props){
   const [collapsed,setCollapsed]=useState(()=>{
-    try{return window.localStorage.getItem("studyflow.nav.collapsed")==="true";}
-    catch{return false;}
+    try{
+      const saved=window.localStorage.getItem("studyflow.nav.collapsed.v2");
+      return saved===null?true:saved==="true";
+    }catch{return true;}
   });
   const [platformExpanded,setPlatformExpanded]=useState(()=>{
     try{return window.localStorage.getItem("studyflow.nav.platform-expanded")!=="false";}
     catch{return true;}
   });
   useEffect(()=>{
-    try{window.localStorage.setItem("studyflow.nav.collapsed",String(collapsed));}
+    try{window.localStorage.setItem("studyflow.nav.collapsed.v2",String(collapsed));}
     catch{/* Navigation stays usable in this session. */}
   },[collapsed]);
   useEffect(()=>{
@@ -91,6 +93,7 @@ export function AppShell({
 
   return <div className={["app","sf-shell",dark?"dark":"",collapsed?"sf-collapsed":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
     <aside className="sidebar" aria-label="主导航">
+      <div className="sf-sidebar-panel">
       <div className="brand">
         <div className="brand-icon"><GraduationCap size={23}/></div>
         <div><strong>学序</strong><small>StudyFlow</small></div>
@@ -113,6 +116,7 @@ export function AppShell({
         <div className="sf-side-status"><span className="sf-side-dot"/>
           {desktop?"Windows 桌面":"浏览器预览"}
         </div>
+      </div>
       </div>
     </aside>
     <main className="main" id="main-content">
