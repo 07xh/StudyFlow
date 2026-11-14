@@ -165,7 +165,7 @@ export function AppShell({
       :renderItem(item))}
   </nav>;
 
-  return <div className={["app","sf-shell",dark?"dark":"","sf-compact"].filter(Boolean).join(" ")}>
+  return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
     <div className="sf-floating-nav" ref={navRootRef}
       onFocusCapture={()=>{cancelCloseTimer();setNavOpen(true);}}
       onBlurCapture={handleNavBlur}>
