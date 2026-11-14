@@ -4,6 +4,8 @@ Set-Location (Resolve-Path (Join-Path $PSScriptRoot '..'))
 $flags = @('--noconfirm','--clean','--onefile','--console',
   '--name','studyflow-bridge','--paths','src',
   '--collect-all','keyring','--collect-all','zhs','--copy-metadata','zhs',
+  '--add-data',"$((Resolve-Path 'legacy/yuketang/main.py').Path);legacy/yuketang",
+  '--hidden-import','dotenv',
   '--distpath','packaging/sidecar','--workpath','build/pyinstaller',
   '--specpath','build/specs','packaging/bridge_entry.py')
 python -m PyInstaller @flags

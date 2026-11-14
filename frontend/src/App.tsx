@@ -2,6 +2,7 @@ import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from "reac
 import {BookOpen,ChevronRight,GraduationCap,RefreshCw,Search} from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
+import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,openLegacyZhidao,request} from "./bridge";
 import type {Config,Video} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
@@ -211,6 +212,10 @@ export default function App(){
     {page==="courses"&&renderCourses(false)}
     {page==="platforms"&&<>
       {renderPlatforms()}
+      <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
+        desktop={desktop} connected={platforms.zhidao.status==="connected"}/>
+      <LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
+        desktop={desktop} connected={platforms.yuketang.status==="connected"}/>
       <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>
       {platformRegistry.some(item=>item.capabilities.sessionConfiguration&&item.id==="yuketang")&&
         <section className="settings-card">

@@ -43,3 +43,9 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 ## 学序独立知到运行时
 
 Windows 构建使用 `zhs==0.1.5` 固定依赖和 `scripts/build-sidecar.ps1` 进行 PyInstaller 独立编译，内置仅读取的课程 CLI 及登录工作进程。安装学序时不再要求已有 `%LOCALAPPDATA%\\ZHSDesktop\\.venv`。扫码状态/临时 PNG 独立写入 `%LOCALAPPDATA%\\StudyFlow\\zhidao`；知到账号与服务端核验缓存仍沿用本人 `%USERPROFILE%\\.zhs`，不会清除旧版登录。用户真实账号登录、课程读取仍须在 Windows 上核验，CI 无法替代。
+
+## 原版模拟心跳代码恢复与进程接入
+
+学序保留用户原始知到 ZHS 0.1.5 与雨课堂 `main.py` 的心跳生成和发送算法，不以只读查询替代它们。原始文件快照位于 `legacy/`，每个 Git blob SHA 与对应原仓库一致；前端由 Tauri 负责原版任务启动、状态和停止。学序优先调用内置 ZHS 0.1.5 CLI，雨课堂执行原封不动的 `main.py`。进程运行、退出不等于平台确认学习进度。见 [完整迁移记录](docs/ORIGINAL_HEARTBEAT_RESTORE.md)。
+
+Windows 真实账号验收及雨课堂原源码许可核查仍是正式发布门槛。

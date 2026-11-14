@@ -38,6 +38,9 @@ def main() -> int:
                 pass
             print("[ZHS_RUNTIME_MISSING] bundled Zhidao dependencies unavailable")
             return 5
+        if mode in ("--legacy-yuketang", "--legacy-zhidao"):
+            from studyflow.services.legacy_playback import main as legacy_main
+            return legacy_main(sys.argv[1:])
         return 2
 
     from studyflow.services.bridge import main as bridge_main
