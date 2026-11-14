@@ -85,6 +85,27 @@ def test_original_environment_settings_do_not_override_explicit_choice(monkeypat
     assert config.os.environ["VIDEO_SPEED"] == "2.5"
 
 
+def test_run_environment_loads_persistent_settings_without_replacing_run_log_dir(monkeypatch, tmp_path):
+    settings_home = tmp_path / "persistent-settings"
+    run_home = tmp_path / "run-123"
+    settings_home.mkdir()
+    (settings_home / ".env").write_text(
+        "VIDEO_SPEED=1.8\\nDEBUG=true\\nRICHTEXT_STAY_SECONDS=11\\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("YKT_HOME", str(run_home))
+    for key in ("VIDEO_SPEED", "DEBUG", "RICHTEXT_STAY_SECONDS"):
+        monkeypatch.delenv(key, raising=False)
+
+    loaded = config.prepare_environment(settings_home)
+
+    assert loaded == settings_home
+    assert config.os.environ["YKT_HOME"] == str(run_home)
+    assert config.os.environ["VIDEO_SPEED"] == "1.8"
+    assert config.os.environ["DEBUG"] == "true"
+    assert config.os.environ["RICHTEXT_STAY_SECONDS"] == "11"
+
+
 def test_bridge_exposes_only_known_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("YKT_HOME", str(tmp_path))
     (tmp_path / ".env").write_text("OTHER_SECRET=sensitive\n", encoding="utf-8")
