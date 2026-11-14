@@ -3,10 +3,19 @@ import type {Platform} from "./types";
 import {isDesktop} from "./bridge";
 
 export type LegacyTaskState = "idle" | "running" | "exited" | "stopped";
+export type ZhsLocalProgress = {
+  video_segment_percent: number | null;
+  resource_index: number | null;
+  resource_total: number | null;
+};
+
+// Original ZHS CLI's local simulated segment only, not remote learning progress.
 export type LegacyTaskStatus = {
   platform: Platform;
   state: LegacyTaskState;
   exit_code: number | null;
+  course_id: string | null; // local opaque course key, not a platform credential
+  zhs_progress: ZhsLocalProgress | null;
 };
 
 // Names and defaults are the original YKT main.py environment settings.
