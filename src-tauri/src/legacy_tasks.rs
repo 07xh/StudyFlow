@@ -317,7 +317,7 @@ pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String) -> Result<Le
         }
         return status_of(&platform, job);
     }
-    Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None})
+    Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_stale: false})
 }
 
 #[cfg(test)]
