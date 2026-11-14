@@ -65,6 +65,7 @@ export default function App(){
   const [platforms,setPlatforms]=useState<Record<Platform,PlatformState>>(initialPlatforms);
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
+  const [platformCourseId,setPlatformCourseId]=useState<Record<Platform,string>>({zhidao:"",yuketang:""});
   const [notice,setNotice]=useState("");
   const [clearDialogOpen,setClearDialogOpen]=useState(false);
   const [qrOpen,setQrOpen]=useState(false);
@@ -74,7 +75,7 @@ export default function App(){
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
-  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>({zhidao:true,yuketang:true});
+  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>({zhidao:false,yuketang:false});
   const initialized=useRef(false);
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
@@ -287,14 +288,18 @@ export default function App(){
         <ZhidaoAccountTools desktop={desktop} dark={dark}
           onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
       </>}
-      <section className="sf-platform-section sf-platform-detail">
-        <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
-          busy={Boolean(busy)} expanded={platformLoginExpanded[platform]}
-          onSync={()=>void sync(platform)}
-          onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}
-          onEnterCourses={()=>enterCourses(platform)}>
+      <section className="sf-platform-section sf-platform-detail sf-platform-login-inline">
+        <div className="section-head">
+          <h3>登录与连接</h3>
+          <button className="secondary" type="button"
+            aria-expanded={platformLoginExpanded[platform]}
+            onClick={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
+            {platformLoginExpanded[platform]?"收起":"展开"}
+          </button>
+        </div>
+        {platformLoginExpanded[platform]&&<div className="sf-login-content">
           {renderPlatformLogin(platform)}
-        </PlatformCard>
+        </div>}
       </section>
 
     </>;
@@ -389,12 +394,6 @@ export default function App(){
   </section>;
 
   const renderCourseWorkspace=(course:Course)=>{
-    const definition=platformInfo(course.platform);
-    const progress=presentCourse(course);
-    const percent=progress.percent;
-    const metric=course.course_type==="ai"?"已达满进度知识点占比":
-      course.course_type==="shared"?"已完成视频占比":"服务端确认进度";
-    const verifiedAt=course.verified_at?new Date(course.verified_at).toLocaleString():"尚无服务器核验时间";
     const updateCourses=(list:Course[])=>setPlatforms(previous=>({
       ...previous,[course.platform]:{...previous[course.platform],courses:list}
     }));
@@ -404,29 +403,6 @@ export default function App(){
           <ArrowLeft size={15}/>返回课程列表
         </button>
       </div>
-      <section className="sf-course-total-progress" aria-label="课程进度总览">
-        <div className="sf-course-total-head">
-          <div className="sf-course-total-copy">
-            <span className="eyebrow">{definition?.name??platformNames[course.platform]} / {course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"}</span>
-            <h2>{course.title}</h2>
-            <p>{progress.label}</p>
-          </div>
-          <div className="sf-course-total-value">
-            <strong>{percent===null?"—":percent.toFixed(1)+"%"}</strong>
-            <small>进度总览</small>
-          </div>
-        </div>
-        <div className={"sf-course-total-track"+(percent===null?" is-empty":"")} role="progressbar"
-          aria-label="服务器已核验课程进度" aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={percent??0}>
-          <span style={{width:(percent??0)+"%"}}/>
-        </div>
-        <div className="sf-course-total-meta">
-          <span>{metric}</span>
-          <span>{percent===null?"等待服务器核验":"核验时间 "+verifiedAt}</span>
-        </div>
-        <p className="sf-course-total-note">{progress.detail}</p>
-      </section>
       {course.platform==="zhidao"
         ?<>
           <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
@@ -458,6 +434,18 @@ export default function App(){
   };
 
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
+  const activePlatform:Platform|null=page==="platform-zhidao"?"zhidao":
+    page==="platform-yuketang"?"yuketang":activeSelectedCourse?.platform??null;
+  const platformCourseList=activePlatform&&page.startsWith("platform-")
+    ?platforms[activePlatform].courses:[];
+  const headerCourseModel=activeSelectedCourse??(
+    platformCourseList.find(c=>c.course_id===platformCourseId[activePlatform??"zhidao"])??
+    platformCourseList[0]??null
+  );
+  const courseHeader=headerCourseModel
+    ?{courseId:headerCourseModel.course_id,title:headerCourseModel.title,
+      percent:presentCourse(headerCourseModel).percent}
+    :null;
 
   const renderCourses=()=> activeSelectedCourse
     ?renderCourseWorkspace(activeSelectedCourse)
@@ -538,7 +526,15 @@ export default function App(){
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
       compact={compactCards}
-      headerTitle={activeSelectedCourse?platformNames[activeSelectedCourse.platform]+" / 课程详情":undefined}>
+      headerTitle={activeSelectedCourse?platformNames[activeSelectedCourse.platform]+" / 课程详情":undefined}
+      activePlatform={activePlatform}
+      headerCourse={courseHeader}
+      headerCourseOptions={platformCourseList.map(course=>({
+        courseId:course.course_id,title:course.title,percent:presentCourse(course).percent
+      }))}
+      onHeaderCourseChange={id=>{
+        if(activePlatform)setPlatformCourseId(previous=>({...previous,[activePlatform]:id}));
+      }}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
