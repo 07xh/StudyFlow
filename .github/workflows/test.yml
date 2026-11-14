@@ -40,6 +40,17 @@ jobs:
       - name: Check course evidence and IPC boundary
         run: npm test
 
+  license-worker:
+    name: Cloudflare D1 license API tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run license API tests
+        run: node --test license-server/test/*.test.mjs
+
   windows-package:
     name: Windows NSIS + bundled Zhidao runtime
     # The main-branch push has its own package workflow. Keep this full

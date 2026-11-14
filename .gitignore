@@ -23,3 +23,10 @@ node_modules/
 src-tauri/target/
 packaging/sidecar/
 src-tauri/icons/
+
+# Local license service secrets and cache
+license-server/.private-key.b64
+license-server/.public-key.b64
+license-server/.code-pepper
+license-server/.dev.vars
+license-server/.wrangler/
