@@ -10,6 +10,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
   | {id: string; version: 1; operation: "yuketang.clear"}
+  | {id: string; version: 1; operation: "zhidao.cookie.import"; content: string; mode: "file" | "text"}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
 export type BridgeResponse<T> =
@@ -54,7 +55,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
   if (!result.ok) {
     const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED",
-                             "ZHIDAO_QR_UNAVAILABLE"]);
+                             "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -144,6 +145,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "UNKNOWN_PLATFORM": return "不支持该学习平台。";
     case "INVALID_REQUEST": return "本机请求格式有误。";
     case "ZHIDAO_QR_UNAVAILABLE": return "知到扫码服务尚不可用，检查原版安装与网络。";
+    case "INVALID_COOKIE_IMPORT": return "Cookie 内容为空、格式不正确或超过原版支持的大小。";
+    case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
     default: return "本机服务调用失败，请检查运行环境。";
   }
 }

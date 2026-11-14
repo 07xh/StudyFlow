@@ -80,6 +80,9 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
         "yuketang.configure" if request.get("configuration").map_or(false, |x| x.is_object()) => Ok(()),
+        "zhidao.cookie.import"
+            if request.get("content").and_then(|v| v.as_str()).map_or(false, |v| v.as_bytes().len() <= 262_144)
+                && matches!(request.get("mode").and_then(|v| v.as_str()), Some("file" | "text")) => Ok(()),
         _ => Err("Operation not permitted".into()),
     }
 }
@@ -90,7 +93,7 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     validate(&request)?;
     let binary = bridge_binary(&app)?;
     let mut message = serde_json::to_vec(&request).map_err(|_| "Request encoding failed")?;
-    if message.len() > 60_000 {
+    if message.len() > 600_000 {
         return Err("Request is too large".into());
     }
     message.push(b'\n');

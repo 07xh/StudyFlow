@@ -216,7 +216,8 @@ export default function App(){
         desktop={desktop} connected={platforms.zhidao.status==="connected"}/>
       <LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
         desktop={desktop} connected={platforms.yuketang.status==="connected"}/>
-      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>
+      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}
+        onImported={()=>{void refresh().then(()=>sync("zhidao"));}}/>
       {platformRegistry.some(item=>item.capabilities.sessionConfiguration&&item.id==="yuketang")&&
         <section className="settings-card">
           <h3>雨课堂登录会话</h3>
