@@ -28,6 +28,7 @@ impl OriginalYktOptions {
         if !self.video_speed.is_finite() || self.video_speed < 0.1 || self.video_speed > 4.0
             || self.heartbeat_interval < 1 || self.heartbeat_interval > 120
             || self.max_concurrent_videos < 1 || self.max_concurrent_videos > 32
+            || self.completion_threshold > 100
             || self.test_video_count < 1 || self.test_video_count > 10000 {
             return Err("INVALID_SETTINGS".into());
         }
@@ -297,5 +298,35 @@ mod tests {
     fn progress_tokens_reject_path_traversal() {
         assert!(zhs_snapshot_path("../bad").is_none());
         assert!(zhs_snapshot_path(&"A".repeat(32)).is_none());
+    }
+
+    fn valid_yuketang_options() -> OriginalYktOptions {
+        OriginalYktOptions {
+            video_speed: 1.5,
+            heartbeat_interval: 5,
+            max_concurrent_videos: 3,
+            completion_threshold: 90,
+            skip_completed: true,
+            use_concurrent: true,
+            test_mode: false,
+            test_video_count: 5,
+            auto_richtext: false,
+        }
+    }
+
+    #[test]
+    fn yuketang_options_accept_supported_completion_threshold_boundaries() {
+        let mut options = valid_yuketang_options();
+        options.completion_threshold = 0;
+        assert!(options.validate().is_ok());
+        options.completion_threshold = 100;
+        assert!(options.validate().is_ok());
+    }
+
+    #[test]
+    fn yuketang_options_reject_completion_threshold_above_100() {
+        let mut options = valid_yuketang_options();
+        options.completion_threshold = 101;
+        assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
     }
 }
