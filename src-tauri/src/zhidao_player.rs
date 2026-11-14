@@ -28,6 +28,7 @@ struct ZhidaoPlayerJob {
 pub struct OfficialPlayerStatus {
     state: String,
     course_key: Option<String>,
+    run_id: Option<String>,
     exit_code: Option<i32>,
     event: Option<String>,
     position_seconds: Option<u64>,
@@ -196,6 +197,7 @@ fn status_of(job: &mut ZhidaoPlayerJob) -> OfficialPlayerStatus {
     OfficialPlayerStatus {
         state: job.state.clone(),
         course_key: Some(job.course_key.clone()),
+        run_id: Some(job.token.clone()),
         exit_code: job.exit_code,
         event: event.clone(),
         position_seconds: position,
@@ -332,7 +334,7 @@ pub fn zhidao_player_status(state: State<'_, ZhidaoPlayerManager>) -> Result<Off
     match guard.as_mut() {
         Some(job) => Ok(status_of(job)),
         None => Ok(OfficialPlayerStatus {
-            state: "idle".into(), course_key: None, exit_code: None,
+            state: "idle".into(), course_key: None, run_id: None, exit_code: None,
             event: None, position_seconds: None, duration_seconds: None,
             visible: None, observed_at: None, message: "官方播放器尚未启动".into(),
         }),
@@ -344,7 +346,7 @@ pub fn zhidao_player_stop(state: State<'_, ZhidaoPlayerManager>) -> Result<Offic
     let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
     let Some(job) = guard.as_mut() else {
         return Ok(OfficialPlayerStatus {
-            state: "idle".into(), course_key: None, exit_code: None,
+            state: "idle".into(), course_key: None, run_id: None, exit_code: None,
             event: None, position_seconds: None, duration_seconds: None,
             visible: None, observed_at: None, message: "官方播放器尚未启动".into(),
         });

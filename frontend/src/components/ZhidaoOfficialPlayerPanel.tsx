@@ -8,6 +8,7 @@ import {Switch} from "../ui/Switch";
 type PlayerStatus={
   state:"idle"|"running"|"exited"|"stopped";
   courseKey:string|null;
+  runId:string|null;
   exitCode:number|null;
   event:string|null;
   positionSeconds:number|null;
@@ -27,7 +28,7 @@ const defaults:ZhidaoPlayerSettings={
 };
 const speeds:["1","1.25","1.5","2"]=["1","1.25","1.5","2"];
 const initialStatus:PlayerStatus={
-  state:"idle",courseKey:null,exitCode:null,event:null,positionSeconds:null,
+  state:"idle",courseKey:null,runId:null,exitCode:null,event:null,positionSeconds:null,
   durationSeconds:null,visible:null,observedAt:null,message:"官方播放器尚未启动"
 };
 function timeLabel(value:number|null){
@@ -55,8 +56,6 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
   const [settingsLoaded,setSettingsLoaded]=useState(false);
   const [observations,setObservations]=useState<Array<{event:string;position:number;at:string}>>([]);
   const lastObservation=useRef("");
-  const previousState=useRef<PlayerStatus["state"]>("idle");
-  const verifiedAfterClose=useRef("");
   const active= status.state==="running";
 
   useEffect(()=>{
@@ -73,23 +72,6 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
     return ()=>{live=false;};
   },[desktop]);
 
-  const verifyAfterPlayerClose=useCallback(async(courseKey:string)=>{
-    try{
-      const snapshot=await request<ZhidaoProgressSnapshot>({
-        operation:"zhidao.progress.verify",course_key:courseKey
-      });
-      onCoursesUpdated(snapshot.courses);
-      const result=snapshot.incomplete
-        ?"播放器已关闭；单课核验返回部分数据，未确认记录不会标记为完成。"
-        :"播放器已关闭；已重新读取该课程的服务器学习记录。";
-      setMessage(result);
-      onEvent?.("播放器关闭后核验",snapshot.incomplete?"warning":"success",result);
-    }catch(error){
-      const result="播放器已关闭，但服务器核验失败："+playerError(error);
-      setMessage(result);onEvent?.("播放器关闭后核验","warning",result);
-    }
-  },[onCoursesUpdated,onEvent]);
-
   const refreshStatus=useCallback(async()=>{
     if(!desktop)return;
     try{
@@ -102,16 +84,10 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
           setObservations(previous=>[{event:next.event!,position:next.positionSeconds!,at:next.observedAt||new Date().toISOString()},...previous].slice(0,10));
         }
       }
-      if(previousState.current==="running"&&next.state==="exited"&&next.exitCode===0&&
-         next.courseKey&&verifiedAfterClose.current!==next.courseKey){
-        verifiedAfterClose.current=next.courseKey;
-        void verifyAfterPlayerClose(next.courseKey);
-      }
-      previousState.current=next.state;
     }catch(error){
       setMessage(playerError(error));
     }
-  },[desktop,verifyAfterPlayerClose]);
+  },[desktop]);
 
   useEffect(()=>{
     void refreshStatus();
@@ -159,8 +135,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
         courseKey:selected,speed:settings.speed,allowMinimize:settings.allowMinimize,
         autoStart:settings.autoStart,autoNext:settings.autoNext
       });
-      setStatus(next);previousState.current=next.state;
-      verifiedAfterClose.current="";
+      setStatus(next);
       const result="已启动原版官方 WebView2 播放器。请在网页内登录并进入课程；实际播放以页面状态为准。";
       setMessage(result);onEvent?.("启动官方播放器","success",result);
     }catch(error){
@@ -173,7 +148,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
     setBusy("stop");setMessage("");
     try{
       const next=await invoke<PlayerStatus>("zhidao_player_stop");
-      setStatus(next);previousState.current=next.state;
+      setStatus(next);
       const result="已停止学序启动的官方播放器；可手动核验服务器课程记录。";
       setMessage(result);onEvent?.("停止官方播放器","success",result);
     }catch(error){
