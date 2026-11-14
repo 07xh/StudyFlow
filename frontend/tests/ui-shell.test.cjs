@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const read = relative => fs.readFileSync(path.join(__dirname,"..",relative),"utf8");
 
-test("LightC-style graphite sidebar has real platform child pages", () => {
+test("LightC-style floating navigation overlays the workspace and keeps all page routes", () => {
   const shell=read("src/ui/AppShell.tsx");
   const css=read("src/ui/foundation.css");
   for(const page of ["home","courses","tasks","platforms","records","logs","settings"])
@@ -12,13 +12,21 @@ test("LightC-style graphite sidebar has real platform child pages", () => {
   assert.match(shell,/id:"platform-zhidao"/);
   assert.match(shell,/id:"platform-yuketang"/);
   assert.match(shell,/platformExpanded/);
-  assert.match(shell,/onNavigate\(item\.id\)/);
+  assert.match(shell,/onNavigate\\(item\\.id\\)/);
+  assert.match(shell,/onPointerEnter=\\{handlePointerEnter\\}/);
+  assert.match(shell,/onPointerLeave=\\{handlePointerLeave\\}/);
+  assert.match(shell,/navPinned/);
+  assert.match(shell,/setNavOpen\\(true\\)/);
+  assert.match(shell,/Escape/);
+  assert.match(shell,/aria-expanded=\\{navOpen\\}/);
   assert.match(shell,/onRefresh/);
-  assert.match(shell,/setCollapsed/);
   assert.match(css,/--accent:#13d992/);
+  assert.match(css,/\\.sf-shell \\.sf-floating-nav__panel\\s*\\{[^}]*position:fixed/s);
+  assert.match(css,/\\.app\\.sf-shell\\s*\\{[^}]*display:block/s);
+  assert.match(css,/\\.sf-shell \\.main\\s*\\{[^}]*width:100%/s);
   assert.match(css,/backdrop-filter:blur/);
-  assert.match(css,/\.sf-shell\.sf-collapsed \.sidebar/);
-  assert.match(css,/\.sf-shell \.sf-subnav/);
+  assert.match(css,/\\.sf-shell \\.sf-floating-nav__panel \\.sf-subnav/);
+  assert.doesNotMatch(shell,/studyflow\\.nav\\.collapsed|setCollapsed/);
 });
 
 test("dashboard only shows real course and server-verified live progress", () => {
