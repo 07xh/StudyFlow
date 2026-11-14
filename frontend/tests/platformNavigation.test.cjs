@@ -105,7 +105,7 @@ test("course details render as one expanded workspace with distinct progress sou
  assert.match(app,/renderCourseWorkspace/);
  assert.doesNotMatch(app,/sf-course-total-progress/);
  assert.match(app,/sf-course-identity/);
- assert.match(app,/sidebarCourse=\{activeSelectedCourse\?/);
+ assert.match(app,/sidebarCourse=\{activeSelectedCourse&&activeSelectedCourse\.platform===contextPlatform\?/);
  assert.match(app,/WorkspaceSection storageKey=\{scope\+"task"\}/);
  assert.match(app,/WorkspaceSection storageKey=\{scope\+"logs"\}/);
  assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);

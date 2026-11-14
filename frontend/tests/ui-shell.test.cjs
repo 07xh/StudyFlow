@@ -163,7 +163,7 @@ test("selected course sidebar progress never substitutes local simulation data",
   const app=read("src/App.tsx");
   const shell=read("src/ui/AppShell.tsx");
   assert.match(app,/sidebarProgress=activeSelectedCourse\?presentCourse\(activeSelectedCourse\):null/);
-  assert.match(app,/sidebarCourse=\{activeSelectedCourse\?/);
+  assert.match(app,/sidebarCourse=\{activeSelectedCourse&&activeSelectedCourse\.platform===contextPlatform\?/);
   assert.match(shell,/sidebarCourse\.percent\.toFixed\(1\)/);
   assert.match(shell,/aria-label="课程服务器核验进度"/);
   assert.match(app,/zhidaoPlaybackMode==="official"/);
