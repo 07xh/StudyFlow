@@ -44,7 +44,7 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         return Err("Request is too large".into());
     }
     message.push(b'\n');
-    tauri::async_runtime::spawn_blocking(move || {
+    tauri::async_runtime::spawn_blocking(move || -> Result<serde_json::Value, String> {
         let mut command = Command::new(binary);
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         #[cfg(windows)]

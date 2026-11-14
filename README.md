@@ -1,18 +1,35 @@
-# 学序 · StudyFlow
+# 学序 StudyFlow
 
-Windows 多平台学习助手。统一 UI、课程列表与任务管理，平台登录及业务模块保持隔离。
+**非商业用途的 Windows 学习助手**：将知到、长江雨课堂统一到独立设计的 React + Tauri 2 桌面界面，后端使用 Python 模块，通过本地 IPC 读取真实平台数据。
 
-> 状态：初始工程基线。知到、雨课堂与 LightC-UI 的真实源码尚未完成移植；目前不宣称可登录或播放。
+## 已有实现
 
-## 目录
-- `src/studyflow/ui/`：LightC-UI 界面适配
-- `src/studyflow/platforms/zhidao/`：知到适配
-- `src/studyflow/platforms/yuketang/`：雨课堂适配
-- `src/studyflow/core/`：统一课程数据契约
-- `src/studyflow/services/`：业务编排
-- `src/studyflow/storage/`：本地数据
-- `tests/`：单元与集成测试
-- `packaging/`：Windows 打包配置
-- `docs/`：架构与迁移记录
+- 自主编写的深色 / 浅色桌面 UI、课程卡片、平台状态、课程同步和章节视频列表。
+- 知到：调用原有 Windows ZHSDesktop 的服务端登录检查与课程同步，读取同会话绑定的缓存。
+- 雨课堂：读取课堂信息、章节和视频元数据。会话存储在 Windows Credential Manager。
+- Tauri 2 Rust IPC 调用 PyInstaller 打包的 Python sidecar。
+- Windows NSIS 安装包构建脚本，详见 [构建指南](docs/BUILD_WINDOWS.md)。
 
-构建源仅为本仓库。旧项目只作为迁移来源，需核对许可、依赖、凭据与真实功能后逐模块接入。
+## 使用条件
+
+- 知到原版程序需已安装且通过自身扫码登录；**学序不会修改或删除原版程序**。
+- 雨课堂需要本人有效的现有登录会话及课堂 ID；未登录或未连接时明确显示失败。
+- 真实平台登录、课程读取和 Windows 安装包尚未经过用户环境的端到端验收，不能据此宣称全部已可用。
+
+## 构建
+
+在 Windows 上安装 Python 3.11、Node.js 22、Rust stable、VS C++ Build Tools、WebView2 后：
+
+\`\`\`powershell
+powershell -NoProfile -File .\scripts\build-windows.ps1
+\`\`\`
+
+或者在 GitHub Actions 手动运行 **Build Windows EXE (manual)**，成功后下载 NSIS 构建产物。为了节省 Actions 时间，默认不会每次提交自动打包。
+
+## 上游保留
+
+- \`07xh/zhidao-assistant\` — 未更改的旧版 WPF/Python/Go 安装程序。
+- \`07xh/yuketang-heartbeat\` — 未更改的旧版 Python 单体程序。
+- LightC-UI 仅作为设计参考；本仓库 UI 独立实现，不包含其受限素材或源代码。
+
+新程序不会模拟平台已完成的学习进度，不提供伪造学习记录的接口。
