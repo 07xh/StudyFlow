@@ -20,8 +20,8 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/renderPlatformLogin\(platform\)/);
  assert.match(app,/platformLoginExpanded/);
  assert.match(app,/Record<Platform,boolean>/);
- assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
- assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.{3}previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
+ assert.match(app,/aria-expanded=\{platformLoginExpanded\[platform\]\}/);
+ assert.match(app,/onClick=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.\.\.previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
  assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
  assert.match(app,/YuketangLoginPanel/);
  assert.match(app,/ZhidaoLoginPanel/);
@@ -81,8 +81,9 @@ test("first-run consent uses native bundled resources and blocks the desktop unt
 test("LightC-style left rail is compact, permanent, and keeps settings in the header",()=>{
  const shell=source("ui/AppShell.tsx");
  const css=source("ui/foundation.css");
- assert.match(shell,/<aside className="sf-floating-nav" aria-label="主导航">/);
+ assert.match(shell,/<aside className="sf-floating-nav" aria-label="常驻侧栏">/);
  assert.match(shell,/sf-settings-button/);
+ assert.match(shell,/sf-sidebar-brand/);
  assert.match(shell,/setPlatformExpanded/);
  assert.match(css,/grid-template-columns:clamp\(172px,16vw,202px\) minmax\(0,1fr\)/);
  assert.match(css,/grid-template-columns:144px minmax\(0,1fr\)/);
@@ -102,7 +103,8 @@ test("course details render as one expanded workspace with distinct progress sou
  const yuketang=source("components/YuketangTaskArea.tsx");
  const css=source("ui/foundation.css");
  assert.match(app,/renderCourseWorkspace/);
- assert.match(app,/sf-course-total-progress/);
+ assert.doesNotMatch(app,/<section className="sf-course-total-progress"/);
+ assert.match(source("ui/AppShell.tsx"),/sf-header-course/);
  assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);
  assert.match(app,/activeSelectedCourse/);
  assert.match(app,/expandedByDefault/);
