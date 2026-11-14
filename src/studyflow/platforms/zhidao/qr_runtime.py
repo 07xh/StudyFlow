@@ -56,6 +56,22 @@ def _cleanup_qr(token: str | None) -> None:
         pass
 
 
+def _cleanup_attempt(token: str | None) -> bool:
+    """Remove only the previous attempt's QR and status files.
+
+    A force-killed child cannot execute its finally block. Refuse to start a
+    new login if the previous one-use QR cannot be removed.
+    """
+    if not token:
+        return True
+    try:
+        _qr_path(token).unlink(missing_ok=True)
+        _status_path(token).unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
 def _read_stage(token: str, started: float) -> str | None:
     try:
         path = _status_path(token)
@@ -94,6 +110,11 @@ def start() -> dict:
     with _LOCK:
         if _WORKER is not None and _WORKER.poll() is None:
             return {"stage": "busy"}
+        # A force-killed QR child may leave its one-use image behind because
+        # its finally block never ran. Clean the previous attempt before
+        # replacing _TOKEN, otherwise that image becomes unreachable.
+        if not _cleanup_attempt(_TOKEN):
+            return {"stage": "environment-error"}
         python = python_executable()
         if not python.is_file():
             return {"stage": "environment-error"}
