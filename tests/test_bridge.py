@@ -63,3 +63,27 @@ def test_zhidao_single_course_verify_rejects_bad_key(monkeypatch):
     result = dispatch({"id": "z2", "version": 1, "operation": "zhidao.progress.verify",
                        "course_key": "../invalid"})
     assert result == {"id": "z2", "ok": False, "error": "INVALID_REQUEST"}
+
+
+
+def test_zhidao_player_target_and_settings_bridge(monkeypatch):
+    monkeypatch.setattr(bridge, "resolve_zhidao_course", lambda key: {
+        "course_key": key, "course_type": "ai", "course_id": "11",
+        "class_id": "21", "recruit_and_course_id": "", "title": "智慧课程",
+    })
+    target = dispatch({"id":"p1","version":1,"operation":"zhidao.player.target","course_key":"a"*64})
+    assert target["ok"] and target["data"]["course_id"] == "11"
+
+    monkeypatch.setattr(bridge, "get_zhidao_player_settings", lambda: {"speed":"1.5"})
+    settings = dispatch({"id":"p2","version":1,"operation":"zhidao.player.settings.get"})
+    assert settings["ok"] and settings["data"]["speed"] == "1.5"
+
+
+def test_zhidao_account_and_legal_operations_use_fixed_handlers(monkeypatch):
+    monkeypatch.setattr(bridge.qr_runtime, "cancel", lambda: {"stage":"cancelled"})
+    monkeypatch.setattr(bridge, "clear_zhidao_session", lambda: {"removed":2})
+    assert dispatch({"id":"a1","version":1,"operation":"zhidao.session.clear"})["data"]["removed"] == 2
+    monkeypatch.setattr(bridge, "clear_zhidao_course_cache", lambda: {"removed":2})
+    assert dispatch({"id":"a2","version":1,"operation":"zhidao.cache.clear"})["data"]["removed"] == 2
+    monkeypatch.setattr(bridge, "read_zhidao_document", lambda key: {"id":key,"content":"safe"})
+    assert dispatch({"id":"a3","version":1,"operation":"zhidao.document.read","document_id":"privacy"})["data"]["content"] == "safe"
