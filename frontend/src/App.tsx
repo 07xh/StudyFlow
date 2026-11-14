@@ -38,6 +38,13 @@ const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",uni
 type EventResult="success"|"warning"|"info";
 type ActivityEntry={id:string;at:string;platform:string;action:string;result:EventResult;detail:string};
 const ACTIVITY_KEY="studyflow.activity.v1";
+const PLATFORM_LOGIN_EXPANDED_KEY="studyflow.platform-login.expanded.v1";
+function readPlatformLoginExpanded():Record<Platform,boolean>{
+  try{
+    const saved=JSON.parse(window.localStorage.getItem(PLATFORM_LOGIN_EXPANDED_KEY)||"{}");
+    return {zhidao:saved.zhidao!==false,yuketang:saved.yuketang!==false};
+  }catch{return {zhidao:true,yuketang:true};}
+}
 
 function readActivity():ActivityEntry[]{
   try{
@@ -75,7 +82,11 @@ export default function App(){
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
-  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>({zhidao:true,yuketang:true});
+  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
+  useEffect(()=>{
+    try{window.localStorage.setItem(PLATFORM_LOGIN_EXPANDED_KEY,JSON.stringify(platformLoginExpanded));}
+    catch{/* Local visual preference only. */}
+  },[platformLoginExpanded]);
   const initialized=useRef(false);
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
@@ -212,7 +223,6 @@ export default function App(){
 
   function goPlatform(platform:Platform){
     setSelectedCourse(null);
-    setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
