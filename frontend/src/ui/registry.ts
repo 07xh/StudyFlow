@@ -25,8 +25,10 @@ export function platformInfo(id:Platform):PlatformDefinition|undefined {
 }
 
 export function createInitialPlatformStates():Record<Platform,PlatformState> {
-  return Object.fromEntries(platformRegistry.map(item=>[item.id,{
-    platform:item.id,status:"not_connected" as const,
-    message:"等待检测真实登录状态",courses:[]
-  }])) as Record<Platform,PlatformState>;
+  const states={} as Record<Platform,PlatformState>;
+  for (const item of platformRegistry) {
+    states[item.id]={platform:item.id,status:"not_connected",
+      message:"等待检测真实登录状态",courses:[]};
+  }
+  return states;
 }
