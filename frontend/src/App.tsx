@@ -23,6 +23,7 @@ import {
 import type {Config,Video,ZhidaoPlayerSettings} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
+import {CollapsibleSection} from "./ui/CollapsibleSection";
 import {presentCourse,platformNames,selectedSessionCourse} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
@@ -249,9 +250,10 @@ export default function App(){
   const renderPlatformDetail=(platform:Platform)=>{
     const definition=platformInfo(platform);
     if(!definition)return null;
-    return <>
+    return <div className="sf-platform-workspace">
       
-      {platform==="zhidao"&&<section className="sf-zd-mode-selector">
+      <CollapsibleSection id={"platform:zhidao:mode"} title="播放模式" defaultExpanded={false}>
+{platform==="zhidao"&&<section className="sf-zd-mode-selector">
         <div><strong>知到播放模式</strong><small>选择本次要运行的原版播放方式</small></div>
         <div className="sf-zd-mode-options">
           <button type="button" aria-pressed={zhidaoPlaybackMode==="official"}
@@ -262,7 +264,9 @@ export default function App(){
             onClick={()=>void changeZhidaoPlaybackMode("zhs-original")}>ZHS 0.1.5 原版任务</button>
         </div>
       </section>}
-      <section className="sf-platform-task-section">
+        </CollapsibleSection>
+      <CollapsibleSection id={"platform:"+platform+":tasks"} title="当前任务与进度">
+<section className="sf-platform-task-section">
         {platform==="zhidao"
           ?<div hidden={zhidaoPlaybackMode!=="official"}>
             <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
@@ -273,19 +277,28 @@ export default function App(){
             desktop={desktop} connected={platforms.yuketang.status==="connected"}
             onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>}
       </section>
+        </CollapsibleSection>
       {platform==="zhidao"&&<>
-        <section className="sf-platform-task-section" hidden={zhidaoPlaybackMode!=="zhs-original"}>
+        <CollapsibleSection id={"platform:zhidao:original"} title="ZHS 原版任务" defaultExpanded={false}>
+<section className="sf-platform-task-section" hidden={zhidaoPlaybackMode!=="zhs-original"}>
           <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
             desktop={desktop} connected={platforms.zhidao.status==="connected"}
             onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
         </section>
-        <ZhidaoProgressPanel courses={platforms.zhidao.courses}
+        </CollapsibleSection>
+        <CollapsibleSection id={"platform:zhidao:progress"} title="进度核验">
+<ZhidaoProgressPanel courses={platforms.zhidao.courses}
           desktop={desktop} connected={platforms.zhidao.status==="connected"}
           onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
           onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-        <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")}/>
-        <ZhidaoAccountTools desktop={desktop} dark={dark}
+        </CollapsibleSection>
+        <CollapsibleSection id={"platform:zhidao:logs"} title="运行记录" defaultExpanded={false}>
+<ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")}/>
+        </CollapsibleSection>
+        <CollapsibleSection id={"platform:zhidao:account"} title="账号与数据" defaultExpanded={false}>
+<ZhidaoAccountTools desktop={desktop} dark={dark}
           onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
+        </CollapsibleSection>
       </>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
@@ -297,7 +310,7 @@ export default function App(){
         </PlatformCard>
       </section>
 
-    </>;
+    </div>;
   };
 
   async function configureFromPanel(){
@@ -389,75 +402,68 @@ export default function App(){
   </section>;
 
   const renderCourseWorkspace=(course:Course)=>{
-    const definition=platformInfo(course.platform);
     const progress=presentCourse(course);
-    const percent=progress.percent;
-    const metric=course.course_type==="ai"?"已达满进度知识点占比":
-      course.course_type==="shared"?"已完成视频占比":"服务端确认进度";
-    const verifiedAt=course.verified_at?new Date(course.verified_at).toLocaleString():"尚无服务器核验时间";
     const updateCourses=(list:Course[])=>setPlatforms(previous=>({
       ...previous,[course.platform]:{...previous[course.platform],courses:list}
     }));
+    const scope="course:"+course.platform+":"+course.course_id+":";
     return <section className="sf-course-workspace">
       <div className="sf-course-detail-topline">
         <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>
           <ArrowLeft size={15}/>返回课程列表
         </button>
       </div>
-      <section className="sf-course-total-progress" aria-label="课程进度总览">
-        <div className="sf-course-total-head">
-          <div className="sf-course-total-copy">
-            <span className="eyebrow">{definition?.name??platformNames[course.platform]} / {course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"}</span>
-            <h2>{course.title}</h2>
-            <p>{progress.label}</p>
-          </div>
-          <div className="sf-course-total-value">
-            <strong>{percent===null?"—":percent.toFixed(1)+"%"}</strong>
-            <small>进度总览</small>
-          </div>
-        </div>
-        <div className={"sf-course-total-track"+(percent===null?" is-empty":"")} role="progressbar"
-          aria-label="服务器已核验课程进度" aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={percent??0}>
-          <span style={{width:(percent??0)+"%"}}/>
-        </div>
-        <div className="sf-course-total-meta">
-          <span>{metric}</span>
-          <span>{percent===null?"等待服务器核验":"核验时间 "+verifiedAt}</span>
-        </div>
-        <p className="sf-course-total-note">{progress.detail}</p>
-      </section>
+      <span className="sf-course-evidence">{progress.detail}</span>
       {course.platform==="zhidao"
         ?<>
-          <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
-          <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")} expandedByDefault/>
-          <ZhidaoProgressPanel courses={platforms.zhidao.courses}
+          <CollapsibleSection id={scope+"chapters"} title="章节与任务进度">
+<ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
+        </CollapsibleSection>
+          <CollapsibleSection id={scope+"logs"} title="课程运行记录" defaultExpanded={false}>
+<ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")} expandedByDefault/>
+        </CollapsibleSection>
+          <CollapsibleSection id={scope+"server"} title="平台进度核验">
+<ZhidaoProgressPanel courses={platforms.zhidao.courses}
             desktop={desktop} connected={platforms.zhidao.status==="connected"}
             onCoursesUpdated={updateCourses}
             onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}
             courseId={course.course_id} courseTitle={course.title} detailMode/>
-          <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
+        </CollapsibleSection>
+          <CollapsibleSection id={scope+"original"} title="ZHS 原版任务" defaultExpanded={false}>
+<LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
             desktop={desktop} connected={platforms.zhidao.status==="connected"}
             courseId={course.course_id} detailMode
             onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-          <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
+        </CollapsibleSection>
+          <CollapsibleSection id={scope+"runtime"} title="当前任务与运行进度">
+<ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
             courseId={course.course_id} detailMode onCoursesUpdated={updateCourses}
             onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+        </CollapsibleSection>
         </>
         :<>
-          <section className="sf-course-chapter-note">
+          <CollapsibleSection id={scope+"chapters"} title="章节进度">
+<section className="sf-course-chapter-note">
             <div className="section-head"><h3>章节进度</h3></div>
             <p>当前接口尚未返回这门课程可核验的章节进度明细。</p>
           </section>
-          <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="雨课堂")} expandedByDefault/>
-          <YuketangTaskArea courses={[course]} desktop={desktop}
+        </CollapsibleSection>
+          <CollapsibleSection id={scope+"logs"} title="课程运行记录" defaultExpanded={false}>
+<ZhidaoActivityPanel events={activity.filter(item=>item.platform==="雨课堂")} expandedByDefault/>
+        </CollapsibleSection>
+          <CollapsibleSection id={scope+"runtime"} title="当前任务与运行进度">
+<YuketangTaskArea courses={[course]} desktop={desktop}
             connected={platforms.yuketang.status==="connected"} detailMode
             onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>
+        </CollapsibleSection>
         </>}
     </section>;
   };
 
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
+  const headerPlatform:Platform|null=activeSelectedCourse?.platform??
+    (page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null);
+  const activeCourseProgress=activeSelectedCourse?presentCourse(activeSelectedCourse).percent:null;
 
   const renderCourses=()=> activeSelectedCourse
     ?renderCourseWorkspace(activeSelectedCourse)
@@ -538,7 +544,9 @@ export default function App(){
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
       compact={compactCards}
-      headerTitle={activeSelectedCourse?platformNames[activeSelectedCourse.platform]+" / 课程详情":undefined}>
+      headerTitle={activeSelectedCourse?"课程详情":undefined}
+       currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
+       currentCourseTitle={activeSelectedCourse?.title} courseProgress={activeCourseProgress}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
