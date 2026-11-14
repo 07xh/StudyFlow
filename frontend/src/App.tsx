@@ -9,6 +9,7 @@ import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
+import {ZhidaoCourseDetailPanel} from "./components/ZhidaoCourseDetailPanel";
 import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
 import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
@@ -369,8 +370,10 @@ export default function App(){
       :<EmptyState icon={BookOpen} title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
         description={courses.length>0?"可以更换搜索词或平台筛选。":"在平台卡片中完成登录并同步后，真实课程会显示在这里。"}
         action={courses.length===0?<button className="secondary" type="button" onClick={()=>setPage("platforms")}>前往平台登录</button>:undefined}/>}
-    {selectedCourse&&<div className="course-v2-detail" role="region" aria-label="课程详情">
-      <div><span className="eyebrow">{platformNames[selectedCourse.platform]} / 课程详情</span>
+    {selectedCourse?.platform==="zhidao"&&<ZhidaoCourseDetailPanel course={selectedCourse}
+      desktop={desktop} onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}/>}
+    {selectedCourse?.platform==="yuketang"&&<div className="course-v2-detail" role="region" aria-label="课程详情">
+      <div><span className="eyebrow">雨课堂 / 课程详情</span>
         <h3>{selectedCourse.title}</h3>
         <p>{presentCourse(selectedCourse).detail}；学习进度只有平台服务端确认后才会展示。</p>
       </div>
@@ -402,8 +405,10 @@ export default function App(){
         <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
       :<EmptyState icon={History} title="暂无已核验学习记录"
         description="当前课程接口没有返回可验证的学习进度，不会用本地播放计数代替平台记录。"/>}
-    {selectedCourse&&<div className="course-v2-detail">
-      <div><span className="eyebrow">{platformNames[selectedCourse.platform]} / 学习记录</span>
+    {selectedCourse?.platform==="zhidao"&&<ZhidaoCourseDetailPanel course={selectedCourse}
+      desktop={desktop} onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}/>}
+    {selectedCourse?.platform==="yuketang"&&<div className="course-v2-detail">
+      <div><span className="eyebrow">雨课堂 / 学习记录</span>
         <h3>{selectedCourse.title}</h3><p>{presentCourse(selectedCourse).detail}</p></div>
       <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>关闭</button>
     </div>}

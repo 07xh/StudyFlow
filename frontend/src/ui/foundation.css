@@ -1062,3 +1062,51 @@
   .sf-document-overlay{padding:10px}
   .sf-document-body{padding:13px}
 }
+
+
+/* Original Zhidao course-detail content: knowledge points and video records. */
+.sf-shell .sf-zhidao-course-detail{display:block;padding:17px 18px}
+.sf-shell .sf-zd-detail-heading{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:14px;
+}
+.sf-shell .sf-zd-detail-heading h3{margin:5px 0;color:var(--text);font-size:17px}
+.sf-shell .sf-zd-detail-heading p{margin:5px 0 0;color:var(--muted);font-size:11px}
+.sf-shell .sf-zd-detail-actions{display:flex;flex-wrap:wrap;gap:8px;flex:none}
+.sf-shell .sf-zd-detail-summary{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:14px;
+}
+.sf-shell .sf-zd-detail-summary>div{
+  display:grid;gap:5px;padding:11px 13px;border:1px solid var(--line);
+  border-radius:11px;background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-zd-detail-summary span{color:var(--muted);font-size:10px}
+.sf-shell .sf-zd-detail-summary strong{color:var(--text);font-size:17px;font-variant-numeric:tabular-nums}
+.sf-shell .sf-zd-detail-list{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));
+  gap:9px;margin-top:13px;max-height:520px;overflow:auto;padding-right:3px;
+}
+.sf-shell .sf-zd-detail-item{
+  min-width:0;padding:11px 13px;border:1px solid var(--line);
+  border-radius:11px;background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-zd-detail-item-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:9px;
+}
+.sf-shell .sf-zd-detail-item-head strong{
+  min-width:0;color:var(--text);font-size:12px;overflow-wrap:anywhere;
+}
+.sf-shell .sf-zd-detail-item-head span{
+  flex:none;color:var(--accent-text);font-size:10px;font-weight:650;
+}
+.sf-shell .sf-zd-detail-item small{display:block;margin-top:6px;color:var(--muted);font-size:10px}
+.sf-shell .sf-zd-detail-track{
+  height:5px;overflow:hidden;margin-top:8px;border-radius:999px;background:var(--line);
+}
+.sf-shell .sf-zd-detail-track span{
+  display:block;height:100%;border-radius:inherit;background:var(--accent);
+}
+.sf-shell .sf-zd-detail-list>p{color:var(--muted);font-size:12px}
+@media(max-width:650px){
+  .sf-shell .sf-zd-detail-heading{display:grid}
+  .sf-shell .sf-zd-detail-summary{grid-template-columns:1fr}
+}
