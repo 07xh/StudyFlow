@@ -21,9 +21,10 @@ function storedOptions(): OriginalYktOptions {
 }
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected
+  platform, courses, desktop, connected, onEvent
 }: {
-  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean
+  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
+  onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,7 +65,8 @@ export function LegacyPlaybackPanel({
         platform === "yuketang" ? options : undefined);
       setStatus(next);
       setMessage("已启动原版任务进程。进程运行不代表服务器已经接受心跳或确认学习进度。");
-    } catch (error) {setMessage(legacyError(error));}
+      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
+    } catch (error) {setMessage(legacyError(error));onEvent?.("启动原版任务","warning",legacyError(error));}
     finally {setBusy(false);}
   }
 
@@ -73,7 +75,8 @@ export function LegacyPlaybackPanel({
     try {
       setStatus(await stopLegacy(platform));
       setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
-    } catch(error) {setMessage(legacyError(error));}
+      onEvent?.("停止原版任务","success","已停止学序托管的原版进程");
+    } catch(error) {setMessage(legacyError(error));onEvent?.("停止原版任务","warning",legacyError(error));}
     finally {setBusy(false);}
   }
 
