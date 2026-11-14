@@ -103,7 +103,7 @@ export function LegacyPlaybackPanel({
         {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
     </div>
-    <div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
+    <div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")+(hideVerifiedCourseProgress?" sf-no-server-summary":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
         <strong>{status ? labels[status.state] : desktop ? "检测中" : "未连接桌面端"}</strong>

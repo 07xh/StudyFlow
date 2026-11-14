@@ -1674,3 +1674,8 @@
 .sf-shell .main .sf-course-evidence,
 .sf-shell .main .sf-platform-status,
 .sf-shell .main .sf-recent-progress-label{font-size:11px;line-height:1.55}
+
+/* When the dedicated verification panel owns server progress, let the ZHS sample use the full row. */
+.sf-shell .sf-live-progress-summary.sf-no-server-summary{
+  grid-template-columns:minmax(0,1fr);
+}
