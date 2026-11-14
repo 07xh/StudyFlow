@@ -81,7 +81,7 @@ def test_probe_login_uses_authentication_only_command(monkeypatch):
     calls = []
     result = SimpleNamespace(
         returncode=0,
-        stdout="[SESSION_OK] 服务端登录校验通过。\\n",
+        stdout="[SESSION_OK] 服务端登录校验通过。\n",
     )
     def fake_run(command, timeout):
         calls.append((command, timeout))
