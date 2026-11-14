@@ -1240,6 +1240,14 @@
   display:flex;align-items:center;gap:13px;padding:18px 20px;
   border-bottom:1px solid var(--line);
 }
+.sf-consent-header>div{flex:1;min-width:0}
+.sf-consent-exit{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;
+  border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+  color:var(--muted);background:transparent;font:inherit;font-size:12px;cursor:pointer;
+}
+.sf-consent-exit:hover{color:var(--text);background:var(--soft-accent)}
+.sf-consent-exit:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .sf-consent-header>span{
   width:42px;height:42px;display:grid;place-items:center;flex:none;
   border-radius:13px;color:#062a1b;background:linear-gradient(145deg,#55f0b0,#0acb83);

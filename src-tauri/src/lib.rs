@@ -1,10 +1,12 @@
 mod legacy_tasks;
 mod zhidao_player;
 
+use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 struct QrBridgeWorker {
@@ -67,6 +69,128 @@ pub(crate) fn bridge_binary(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         }
     }
     Err("Python learning service is missing; reinstall StudyFlow".into())
+}
+
+fn consent_flag_path() -> Result<PathBuf, String> {
+    let base = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("USERPROFILE").map(|home| {
+            PathBuf::from(home).join("AppData").join("Local")
+        }))
+        .ok_or_else(|| "CONSENT_STORAGE_FAILED".to_string())?;
+    Ok(base.join("StudyFlow").join("privacy-accepted-v1.flag"))
+}
+
+fn read_legal_resource(app: &tauri::AppHandle, name: &str, max_bytes: u64) -> Result<String, String> {
+    let packaged = app.path().resource_dir().ok().map(|dir| dir.join("legal").join(name));
+    let development = if cfg!(debug_assertions) {
+        Some(PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("..").join("legacy").join("zhidao").join(name))
+    } else {
+        None
+    };
+    let path = packaged.filter(|path| path.is_file())
+        .or_else(|| development.filter(|path| path.is_file()))
+        .ok_or_else(|| "DOCUMENT_UNAVAILABLE".to_string())?;
+    let metadata = fs::symlink_metadata(&path).map_err(|_| "DOCUMENT_UNAVAILABLE".to_string())?;
+    if metadata.file_type().is_symlink() || metadata.len() > max_bytes {
+        return Err("DOCUMENT_UNAVAILABLE".into());
+    }
+    fs::read_to_string(path).map_err(|_| "DOCUMENT_UNAVAILABLE".into())
+}
+
+// Legal disclosure is read directly from Tauri's bundled resources. It must
+// remain available even when the optional Python sidecar cannot be started.
+#[tauri::command]
+fn studyflow_consent_status() -> Result<serde_json::Value, String> {
+    let path = consent_flag_path()?;
+    let accepted = match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || metadata.len() > 256 => false,
+        Ok(_) => fs::read_to_string(&path)
+            .map(|value| value.starts_with("StudyFlow privacy notice v1 accepted at "))
+            .unwrap_or(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => false,
+    };
+    Ok(serde_json::json!({"accepted": accepted}))
+}
+
+#[tauri::command]
+fn studyflow_consent_accept() -> Result<serde_json::Value, String> {
+    let path = consent_flag_path()?;
+    let parent = path.parent().ok_or_else(|| "CONSENT_STORAGE_FAILED".to_string())?;
+    fs::create_dir_all(parent).map_err(|_| "CONSENT_STORAGE_FAILED".to_string())?;
+    if let Ok(metadata) = fs::symlink_metadata(&path) {
+        if metadata.file_type().is_symlink() {
+            return Err("CONSENT_STORAGE_FAILED".into());
+        }
+    }
+
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let temporary = parent.join(format!(".consent-{}-{stamp}.tmp", std::process::id()));
+    let value = format!(
+        "StudyFlow privacy notice v1 accepted at {}",
+        chrono_free_timestamp()
+    );
+    let write_result = (|| -> Result<(), String> {
+        let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary)
+            .map_err(|_| "CONSENT_STORAGE_FAILED".to_string())?;
+        file.write_all(value.as_bytes()).map_err(|_| "CONSENT_STORAGE_FAILED".to_string())?;
+        file.sync_all().map_err(|_| "CONSENT_STORAGE_FAILED".to_string())?;
+        drop(file);
+
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() {
+                    return Err("CONSENT_STORAGE_FAILED".into());
+                }
+                fs::remove_file(&path).map_err(|_| "CONSENT_STORAGE_FAILED".to_string())?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err("CONSENT_STORAGE_FAILED".into()),
+        }
+        fs::rename(&temporary, &path).map_err(|_| "CONSENT_STORAGE_FAILED".to_string())?;
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    write_result?;
+    Ok(serde_json::json!({"accepted": true}))
+}
+
+fn chrono_free_timestamp() -> String {
+    // A stable UTC timestamp without adding another runtime dependency.
+    let seconds = SystemTime::now().duration_since(UNIX_EPOCH)
+        .unwrap_or_default().as_secs();
+    format!("unix-{seconds}")
+}
+
+#[tauri::command]
+fn studyflow_read_document(
+    app: tauri::AppHandle,
+    document_id: String,
+) -> Result<serde_json::Value, String> {
+    let (filename, title) = match document_id.as_str() {
+        "terms" => ("使用条款与第三方声明.txt", "使用条款与第三方声明.txt"),
+        "privacy" => ("隐私政策与数据说明.txt", "隐私政策与数据说明.txt"),
+        "license" => ("LICENSE-GPL-3.0.txt", "GPL-3.0 开源许可"),
+        "source" => ("SOURCE.md", "第三方源码说明"),
+        _ => return Err("INVALID_DOCUMENT".into()),
+    };
+    let mut content = read_legal_resource(&app, filename, 512 * 1024)?;
+    if document_id == "privacy" {
+        content.push_str("\n\n");
+        content.push_str(&read_legal_resource(
+            &app, "StudyFlow-隐私补充说明.txt", 128 * 1024
+        )?);
+    }
+    Ok(serde_json::json!({
+        "id": document_id,
+        "title": title,
+        "content": content
+    }))
 }
 
 fn validate(request: &serde_json::Value) -> Result<(), String> {
@@ -226,6 +350,7 @@ pub fn run() {
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
             bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit,
+            studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
             zhidao_player::zhidao_player_clear_web_profile,

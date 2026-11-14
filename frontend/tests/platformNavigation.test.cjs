@@ -60,12 +60,16 @@ test("Zhidao course detail restores knowledge points and shared-video records",(
 });
 
 
-test("first-run consent blocks the desktop until both legal documents are loaded and accepted",()=>{
+test("first-run consent uses native bundled resources and blocks the desktop until accepted",()=>{
  const gate=source("components/StudyFlowConsentGate.tsx");
  const app=source("App.tsx");
- assert.match(gate,/studyflow\.consent\.status/);
- assert.match(gate,/studyflow\.consent\.accept/);
+ assert.match(gate,/studyflow_consent_status/);
+ assert.match(gate,/studyflow_consent_accept/);
+ assert.match(gate,/studyflow_read_document/);
  assert.match(gate,/我已阅读并同意/);
- assert.match(gate,/zhidao\.document\.read/);
+ assert.match(gate,/退出学序/);
+ assert.match(gate,/studyflow_exit/);
+ assert.doesNotMatch(gate,/studyflow\.consent\.status|studyflow\.consent\.accept|zhidao\.document\.read/);
  assert.match(app,/StudyFlowConsentGate desktop=\{desktop\}/);
+ assert.match(app,/consentAccepted&&<ZhidaoPlayerMonitor/);
 });

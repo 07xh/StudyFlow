@@ -1,7 +1,7 @@
 import {useEffect,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {BookOpen,ShieldCheck} from "lucide-react";
-import {friendlyBridgeError,request,type ZhidaoDocument} from "../bridge";
+import {BookOpen,ShieldCheck,X} from "lucide-react";
+import {friendlyBridgeError,type ZhidaoDocument} from "../bridge";
 
 type Props={desktop:boolean;dark:boolean;onAccepted?:()=>void};
 type Phase="checking"|"required"|"accepted"|"error";
@@ -19,11 +19,11 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
   async function load(){
     setPhase("checking");setMessage("");
     try{
-      const status=await request<{accepted:boolean}>({operation:"studyflow.consent.status"});
+      const status=await invoke<{accepted:boolean}>("studyflow_consent_status");
       if(status.accepted){setPhase("accepted");onAccepted?.();return;}
       const [terms,privacy]=await Promise.all([
-        request<ZhidaoDocument>({operation:"zhidao.document.read",document_id:"terms"}),
-        request<ZhidaoDocument>({operation:"zhidao.document.read",document_id:"privacy"})
+        invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"terms"}),
+        invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"privacy"})
       ]);
       setDocs({terms,privacy});setPhase("required");
     }catch(error){setMessage(friendlyBridgeError(error));setPhase("error");}
@@ -38,7 +38,7 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
     if(!checked||!docs.terms||!docs.privacy)return;
     setBusy(true);setMessage("");
     try{
-      const result=await request<{accepted:boolean}>({operation:"studyflow.consent.accept"});
+      const result=await invoke<{accepted:boolean}>("studyflow_consent_accept");
       if(result.accepted){setPhase("accepted");onAccepted?.();}
       else setMessage("声明状态未能确认保存，请重试。");
     }catch(error){setMessage(friendlyBridgeError(error));}
@@ -53,6 +53,10 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
         <span><ShieldCheck size={20}/></span>
         <div><h2 id="sf-consent-title">学序首次使用声明</h2>
           <p>继续使用前，请阅读第三方声明与隐私数据说明。</p></div>
+        <button className="sf-consent-exit" type="button"
+          onClick={()=>void invoke("studyflow_exit")} aria-label="退出学序" title="退出学序">
+          <X size={16}/><span>退出学序</span>
+        </button>
       </header>
       {phase==="checking"&&<div className="sf-consent-loading">正在读取本机声明文件…</div>}
       {phase==="error"&&<div className="sf-consent-error" role="alert">
