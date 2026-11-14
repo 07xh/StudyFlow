@@ -1,4 +1,4 @@
-""""Single packaged StudyFlow Python runtime.
+"""Single packaged StudyFlow Python runtime.
 
 The same bundled interpreter handles versioned JSONL IPC and opt-in local
 Zhidao workers. No second Python installation or old ZHSDesktop EXE needed.
