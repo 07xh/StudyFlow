@@ -106,7 +106,7 @@ export function LegacyPlaybackPanel({
       </div>
       <div className="sf-live-course-progress">
         <div className="sf-live-course-heading">
-          <span>平台学习进度</span>
+          <span>{platform==="yuketang"?"课程整体进度":"平台学习进度"}</span>
           <small>{verified.length>0?`已核验 ${verified.length} 门`:"暂无服务端核验数据"}</small>
         </div>
         {verified.length>0
@@ -121,7 +121,7 @@ export function LegacyPlaybackPanel({
               </div>
               <strong>{presentation.percent?.toFixed(1)}%</strong>
             </div>)}</div>
-          :<div className="sf-unverified-note">未接入可验证的实时百分比</div>}
+          :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
       </div>
     </div>
     {platform === "yuketang" && <div className="sf-ykt-live" aria-label="雨课堂原版实时进度">
