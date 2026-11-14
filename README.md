@@ -39,3 +39,7 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 从 `zhidao-assistant@53c9244` 迁入学序统一 React 界面：课程动态卡片、核验证据标签、深色主题持久化、课程筛选及小窗口布局。保留原版 WPF 扫码入口；原版登录流程没有被覆盖。
 
 对只读课程缓存继续进行 HMAC 会话绑定验证；原版知到、雨课堂账号和旧仓库全部保留。测试通过不等于真实 Windows 登录与平台学习进度已验证。详见 [知到 UI 迁移记录](docs/ZHIDAO_UI_MIGRATION.md)。
+
+## 原版模拟心跳代码保留与接入
+
+知到 ZHS 0.1.5、雨课堂原始 `main.py` 的心跳发送算法保持不变。本仓库的原版源码快照位于 `legacy/{zhidao,yuketang}`，通过单独子进程调用，不覆盖原版软件。学序 UI 可以启动、查询、停止自身创建的原版任务；进程退出不等于服务器学习进度确认。详见 [原版心跳迁移记录](docs/ORIGINAL_HEARTBEAT_RESTORE.md)。**真实 Windows 与平台验收及第三方许可审查尚未完成。**
