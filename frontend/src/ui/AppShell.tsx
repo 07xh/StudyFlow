@@ -84,7 +84,7 @@ export function AppShell({
   function handlePointerLeave(event:ReactPointerEvent<HTMLElement>){
     if(event.pointerType==="touch")return;
     cancelCloseTimer();
-    closeTimerRef.current=window.setTimeout(()=>{closeTimerRef.current=null;setNavOpen(false);},180);
+    closeTimerRef.current=window.setTimeout(()=>{closeTimerRef.current=null;setNavOpen(false);},150);
   }
   function handleNavBlur(event:ReactFocusEvent<HTMLDivElement>){
     const nextTarget=event.relatedTarget;
