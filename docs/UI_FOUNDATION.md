@@ -32,8 +32,9 @@
 
 ## 第三方源码来源说明
 
-LightC-UI 2.18.3 用户上传源码已找到。本轮只选择性适配通用控件和侧栏的交互设计，
-并移除了原项目特定模块依赖；平台业务和通信契约保持原状。
+当前工作分支没有 LightC-UI 2.18.3 的原始 ZIP，因而**没有宣称复制其组件源码**。
+该分支在既有 StudyFlow 独立 UI 基线上完成抽象与重构。未来拿到可核验源文件和再分发授权后，
+可按具体组件替换 UI 实现；底层的平台数据契约和登录功能不受影响。
 
 ## 验收
 
@@ -48,6 +49,3 @@ LightC-UI 2.18.3 用户上传源码已找到。本轮只选择性适配通用控
 落地在 `ThemeModeSelector`、`Switch`、`EmptyState` 和 `AppShell`。
 移除了原应用的清理模块、i18n、Tailwind、专属 Context 等依赖，保留 StudyFlow 的
 Tauri IPC、平台登录及真实课程读取逻辑。不复制原应用的完整界面或无关业务。
-
-## 并行知到迁移兼容
-保留最新主分支的 `ZhidaoLoginPanel`、服务端核验契约 `presentCourse`、`fetchCoursesFromDesktop` 输入校验以及 `Course` 的 `progress_evidence/stale/verified_at`，避免把未核验进度展示成真实进度。
