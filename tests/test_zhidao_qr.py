@@ -51,7 +51,7 @@ def test_qr_status_reads_only_current_png(monkeypatch, tmp_path):
     started = __import__("time").time()
     LoginObservation(token, root=tmp_path).record("ready")
     png = tmp_path / "qrcode.png"
-    png.write_bytes(b"\\x89PNG\\r\\n\\x1a\\n" + b"0" * 150)
+    png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 150)
     monkeypatch.setattr(qr_runtime, "_TOKEN", token)
     monkeypatch.setattr(qr_runtime, "_STARTED", started)
     monkeypatch.setattr(qr_runtime, "_WORKER", SimpleNamespace(poll=lambda: None))
