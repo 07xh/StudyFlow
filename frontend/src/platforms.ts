@@ -1,7 +1,4 @@
-import type {Platform,PlatformState} from "./types";
+import {createInitialPlatformStates} from "./ui/registry";
 
-/** Explicitly disconnected until a real local service has been connected. */
-export const initialPlatforms: Record<Platform,PlatformState> = {
-  zhidao: {platform:"zhidao",status:"not_connected",message:"尚未接入知到登录与课程服务",courses:[]},
-  yuketang: {platform:"yuketang",status:"not_connected",message:"尚未接入雨课堂登录与课程服务",courses:[]}
-};
+/** Do not populate preview state with demo data or assumed login status. */
+export const initialPlatforms = createInitialPlatformStates();
