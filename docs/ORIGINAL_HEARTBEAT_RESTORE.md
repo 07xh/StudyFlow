@@ -32,9 +32,17 @@
 - 停止：由 Rust 管理**学序启动的**子进程树；不会触碰用户在其他窗口单独运行的原版程序。关闭学序主窗口时，托管子进程清理。强制退出任务后需重新核验服务器记录。
 - 状态：只说明托管进程启动、运行、退出和退出码。**不能由退出码推断远端心跳被接受或完成课程。** 服务端进度仍使用已有平台只读接口查询。
 
-## 保留的参数
+## 原版配置与菜单接入
 
-雨课堂原版：`VIDEO_SPEED`、`HEARTBEAT_INTERVAL`、`MAX_CONCURRENT_VIDEOS`、`COMPLETION_THRESHOLD`、`SKIP_COMPLETED`、`USE_CONCURRENT`、`TEST_MODE`、`TEST_VIDEO_COUNT`、`AUTO_RICHTEXT`。UI 只把这些原参数作为环境变量传递，不改变原程序算法。当前并未迁入原版完整交互式终端菜单操作，已保留对应源文件。
+雨课堂 `main.py` 实际读取的 12 个非凭据参数，现已全部映射到学序雨课堂专属参数页：
+
+- 视频：`VIDEO_SPEED`、`HEARTBEAT_INTERVAL`、`MAX_CONCURRENT_VIDEOS`
+- 本地统计与批量选项：`COMPLETION_THRESHOLD`、`SKIP_COMPLETED`、`USE_CONCURRENT`、`TEST_MODE`、`TEST_VIDEO_COUNT`
+- 图文与诊断：`AUTO_RICHTEXT`、`RICHTEXT_STAY_SECONDS`、`RICHTEXT_SKIP_DELAY`、`DEBUG`
+
+UI 通过原 `exe_entry.py` 的 `read_cfg/save_cfg` 读写本机 `.env` 格式；启动时再由 Tauri Rust 对同一组已校验值设置子进程环境变量。凭据 `CLASSROOM_ID`、`SIGN`、`UNIVERSITY_ID`、`CSRF_TOKEN`、`SESSION_ID` 仍由学序凭据存储提供，不作为普通参数暴露。图文和 DEBUG 参数默认折叠；DEBUG 日志可能包含课程/视频标识。
+
+StudyFlow UI 已承接可确认的菜单操作：读取/保存参数、启动任务、查询状态、停止任务。**原 EXE 的完整字节码尚未恢复**，因此无法证明旧二进制中是否存在 `exe_entry.py` 以外的隐藏菜单或行为；不得把这一部分标为已恢复。原 `main.py` 和 `exe_entry.py` 保持原字节内容，源文件哈希由 `tests/test_original_playback.py` 保护。
 
 ## 发布与验证边界
 
