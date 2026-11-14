@@ -57,7 +57,7 @@ def test_original_cli_still_runs_unpatched_while_local_snapshot_is_collected(mon
     def app(*, args, standalone_mode):
         assert args == ["play", "-c", "20:30", "--type", "ai"]
         assert standalone_mode is False
-        print("处理资源 1/2")
+        print("处理资源 1/2", file=sys.stderr)
         print("\rplaying [=====] 75.0%", end="")
         path = tmp_path / "StudyFlow" / ("monitor-zhs-" + "b" * 32 + ".json")
         observed.append(json.loads(path.read_text(encoding="utf-8")))
@@ -68,19 +68,48 @@ def test_original_cli_still_runs_unpatched_while_local_snapshot_is_collected(mon
     monkeypatch.setattr(metadata, "version", lambda name: "0.1.5" if name == "zhs" else "0")
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     original = io.StringIO()
+    original_stderr = io.StringIO()
     monkeypatch.setattr(sys, "stdout", original)
+    monkeypatch.setattr(sys, "stderr", original_stderr)
 
     assert legacy._run_bundled_zhs("20", "30", "b" * 32) == 0
     assert len(observed) == 1
     assert observed[0]["videoSegmentPercent"] == 75.0
     assert observed[0]["resourceIndex"] == 1
     assert "playing" in original.getvalue()
+    assert "处理资源 1/2" in original_stderr.getvalue()
     # The supervisor, not the worker, owns terminal telemetry cleanup.
     snapshots = list((tmp_path / "StudyFlow").glob("monitor-zhs-*.json"))
     assert len(snapshots) == 1
     assert json.loads(snapshots[0].read_text(encoding="utf-8"))["videoSegmentPercent"] == 75.0
     snapshots[0].unlink()
     assert sys.stdout is original
+    assert sys.stderr is original_stderr
+
+
+def test_repeated_original_progress_output_refreshes_local_observation(monkeypatch, tmp_path):
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    raw = vendor["NumericTelemetry"]("d" * 32, directory=tmp_path)
+    clock = [100.0]
+    monkeypatch.setattr(legacy.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(legacy.time, "time", lambda: clock[0])
+    sink = legacy._RefreshingZhsSink(raw)
+
+    sink.receive("playing [====] 50.0%")
+    assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 100.0
+
+    clock[0] = 104.0
+    sink.receive("playing [====] 50.0%")
+    assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 100.0
+
+    clock[0] = 105.0
+    sink.receive("ordinary CLI diagnostic without numeric progress")
+    assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 100.0
+    assert raw.last_snapshot == (50.0, None, None)
+
+    clock[0] = 106.0
+    sink.receive("playing [====] 50.0%")
+    assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 106.0
 
 
 def test_invalid_monitor_token_does_not_start_legacy_task(monkeypatch):
@@ -99,7 +128,29 @@ def test_ui_status_cannot_be_conflated_with_server_progress():
     assert 'now - observed > 18.0' in rust
     assert "remove_zhs_snapshot(job.monitor_token.as_deref())" in rust
     assert "last_zhs_progress" in rust
+    assert "fresh_zhs_progress" in rust and "zhs_stale" in rust
+    assert "status.zhs_stale" in panel
     status = rust.split("fn status_of", 1)[1].split("fn terminate_tree", 1)[0]
     assert status.index("child.try_wait()") < status.index("read_zhs_snapshot")
     assert status.index("read_zhs_snapshot") < status.index("remove_zhs_snapshot")
     assert "结束前最后一次真实采样" in panel
+
+
+def test_rust_idle_status_always_initializes_telemetry_freshness():
+    rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
+    # Validate both idle return branches without relying on indentation or
+    # the position of a closing brace on the following line.
+    idle_statuses = [
+        line.strip() for line in rust.splitlines()
+        if 'Ok(LegacyStatus {platform, state: "idle"' in line
+    ]
+    assert len(idle_statuses) == 2
+    assert all("zhs_stale: false" in line for line in idle_statuses)
+
+
+def test_monitor_remains_a_read_only_observer():
+    # Keep the original vendor and upstream sender byte-for-byte untouched.
+    wrapper = (ROOT / "src" / "studyflow" / "services" / "legacy_playback.py").read_text(encoding="utf-8")
+    assert 'zhs_app(args=arguments, standalone_mode=False)' in wrapper
+    assert 'monitor_token' in wrapper
+    assert 'sys.stdout = original_stdout' in wrapper

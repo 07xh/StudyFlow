@@ -76,7 +76,7 @@ test("unknown host errors remain generic and do not leak credentials", () => {
 test("desktop status keeps live ZHS telemetry distinct from verified course progress", async () => {
   const sample = {
     platform:"zhidao", state:"running", exit_code:null, course_id:"c".repeat(64),
-    zhs_progress:{video_segment_percent:48.5, resource_index:2, resource_total:5}
+    zhs_progress:{video_segment_percent:48.5, resource_index:2, resource_total:5}, zhs_stale:false
   };
   const calls = [];
   const legacy = loadWithStub(async (operation, props) => {
@@ -95,6 +95,8 @@ test("the ZHS original segment is displayed only for the selected running course
   assert.match(panel, /非服务器确认进度/);
   assert.match(panel, /结束前最后一次真实采样/);
   assert.match(panel, /未采集到播放进度/);
+  assert.match(panel, /status\.zhs_stale/);
+  assert.match(panel, /本地进度输出已过期/);
 });
 
 
@@ -128,4 +130,30 @@ test("original Zhidao task UI offers fresh AI and shared courses, not stale sess
   assert.match(panel, /course_type === "ai" \|\| c\.course_type === "shared"/);
   assert.match(panel, /!c\.stale/);
   assert.match(panel, /legacyExitMessage\(status\)/);
+});
+
+test("server-verified course progress is scoped to the current platform and timestamped", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /courses\.filter\(course => course\.platform === platform\)/);
+  assert.match(panel, /presentation\.status === "verified"/);
+  assert.match(panel, /title=\{course\.verified_at/);
+  assert.match(panel, /course\.platform==="zhidao"&&course\.course_id===selection/);
+});
+
+test("out-of-order task status polls cannot replace newer task state", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /latestStatusRequest = useRef\(0\)/);
+  assert.match(panel, /requestId !== latestStatusRequest\.current/);
+  assert.match(panel, /return \(\) => \{ window\.clearInterval\(timer\); latestStatusRequest\.current\+\+; \}/);
+  assert.match(panel, /requestId === latestStatusRequest\.current && currentPlatform\.current === platform\) setStatus\(next\)/);
+});
+
+test("ZHS status polling cannot race a start/stop action or carry across platforms", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /const taskActionInFlight = useRef\(false\)/);
+  assert.match(panel, /if \(!desktop \|\| taskActionInFlight\.current\) return/);
+  assert.match(panel, /requestId !== latestStatusRequest\.current \|\| taskActionInFlight\.current \|\| currentPlatform\.current !== platform/);
+  assert.match(panel, /taskActionInFlight\.current = true/);
+  assert.match(panel, /taskActionInFlight\.current = false/);
+  assert.match(panel, /currentPlatform\.current === platform\) void updateStatus\(\)/);
 });

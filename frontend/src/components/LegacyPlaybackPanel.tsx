@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError} from "../bridge";
@@ -24,22 +24,29 @@ export function LegacyPlaybackPanel({
   detailMode?:boolean;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
+  const latestStatusRequest = useRef(0);
+  const taskActionInFlight = useRef(false);
+  const currentPlatform = useRef(platform);
+  currentPlatform.current = platform;
   const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState(courseId??"");
   const options = yuketangOptions ?? {...originalYktDefaults};
   const playableCourses = courses.filter(c => c.platform === "zhidao" && (c.course_type === "ai" || c.course_type === "shared") && !c.stale);
-  const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
-    .filter(item => item.presentation.percent !== null);
+  const verified = courses.filter(course => course.platform === platform)
+    .map(course => ({course, presentation: presentCourse(course)}))
+    .filter(item => item.presentation.status === "verified" && item.presentation.percent !== null);
   const liveZhs = platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
-  const selectedCourse=courses.find(course=>course.course_id===selection)??null;
+  const selectedCourse=courses.find(course=>course.platform==="zhidao"&&course.course_id===selection)??null;
 
   const updateStatus = useCallback(async () => {
-    if (!desktop) return;
+    if (!desktop || taskActionInFlight.current) return;
+    const requestId = ++latestStatusRequest.current;
     try {
       const next = await getLegacyStatus(platform);
+      if (requestId !== latestStatusRequest.current || taskActionInFlight.current || currentPlatform.current !== platform) return;
       if (platform==="zhidao" && next.state==="running" && next.course_id) {
         setSelection(previous => previous || next.course_id || "");
       }
@@ -48,10 +55,17 @@ export function LegacyPlaybackPanel({
         setMessage("");
       }
       if (platform === "yuketang" && next.run_id) {
-        try { setYktProgress(await getYuketangLiveProgress(next.run_id)); }
-        catch { setYktProgress(null); }
+        try {
+          const progress = await getYuketangLiveProgress(next.run_id);
+          if (requestId === latestStatusRequest.current && !taskActionInFlight.current && currentPlatform.current === platform) setYktProgress(progress);
+        } catch {
+          if (requestId === latestStatusRequest.current && !taskActionInFlight.current && currentPlatform.current === platform) setYktProgress(null);
+        }
       } else setYktProgress(null);
-    } catch { setStatus(null);setYktProgress(null); }
+    } catch {
+      if (requestId !== latestStatusRequest.current || taskActionInFlight.current || currentPlatform.current !== platform) return;
+      setStatus(null);setYktProgress(null);
+    }
   }, [desktop, platform]);
 
   useEffect(() => {
@@ -59,38 +73,63 @@ export function LegacyPlaybackPanel({
   },[courseId]);
 
   useEffect(() => {
+    setStatus(null);
+    setYktProgress(null);
+    setMessage("");
+  }, [platform]);
+
+  useEffect(() => {
     void updateStatus();
     if (!desktop) return;
     const timer = window.setInterval(() => { void updateStatus(); }, 2000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearInterval(timer); latestStatusRequest.current++; };
   }, [desktop, updateStatus]);
 
 
 
   async function start() {
+    if (taskActionInFlight.current) return;
+    taskActionInFlight.current = true;
+    const requestId = ++latestStatusRequest.current;
     setBusy(true); setMessage("");setYktProgress(null);
     try {
       if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined);
-      setStatus(next);
-      setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
+      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
+      if (currentPlatform.current === platform) setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
       onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
-      setMessage(msg);onEvent?.("启动原版任务","warning",msg);
+      if (currentPlatform.current === platform) setMessage(msg);
+      onEvent?.("启动原版任务","warning",msg);
     }
-    finally {setBusy(false);}
+    finally {
+      taskActionInFlight.current = false;
+      setBusy(false);
+      if (currentPlatform.current === platform) void updateStatus();
+    }
   }
 
   async function stop() {
+    if (taskActionInFlight.current) return;
+    taskActionInFlight.current = true;
+    const requestId = ++latestStatusRequest.current;
     setBusy(true);setMessage("");
     try {
-      setStatus(await stopLegacy(platform));
-      setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
+      const next = await stopLegacy(platform);
+      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
+      if (currentPlatform.current === platform) setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
       onEvent?.("停止原版任务","success","已停止学序托管的原版进程");
-    } catch(error) {setMessage(legacyError(error));onEvent?.("停止原版任务","warning",legacyError(error));}
-    finally {setBusy(false);}
+    } catch(error) {
+      if (currentPlatform.current === platform) setMessage(legacyError(error));
+      onEvent?.("停止原版任务","warning",legacyError(error));
+    }
+    finally {
+      taskActionInFlight.current = false;
+      setBusy(false);
+      if (currentPlatform.current === platform) void updateStatus();
+    }
   }
 
   return <section className="legacy-playback-panel">
@@ -119,8 +158,12 @@ export function LegacyPlaybackPanel({
                 <span style={{width:liveZhs.video_segment_percent+"%"}}/>
               </div>
             : <small>{status?.state==="running"
-                ? status.course_id===selection ? "等待原版输出" : "请选择正在运行的课程"
+                ? status.course_id===selection
+                  ? status.zhs_stale ? "本地进度输出已过期，等待新的原版输出" : "等待原版输出"
+                  : "请选择正在运行的课程"
                 : liveZhs ? "上次运行的最终采样" : "未获取到进度记录"}</small>}
+          {status?.state==="running"&&status.course_id===selection&&status.zhs_stale&&
+            <small role="status">任务进程仍在运行，但最近的本地进度采样已过期；不代表服务器学习失败或完成。</small>}
           {liveZhs?.resource_index!=null&&liveZhs.resource_total!=null&&
             <small>当前知识点资源 {liveZhs.resource_index}/{liveZhs.resource_total}</small>}
           {status?.state === "exited" && liveZhs &&
@@ -143,7 +186,9 @@ export function LegacyPlaybackPanel({
                 aria-valuenow={presentation.percent??0}>
                 <span style={{width:(presentation.percent??0)+"%"}}/>
               </div>
-              <strong>{presentation.percent?.toFixed(1)}%</strong>
+              <strong title={course.verified_at ? "服务器核验：" + course.verified_at : "服务器核验"}>
+                {presentation.percent?.toFixed(1)}%
+              </strong>
             </div>)}</div>
           :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
       </div>}
