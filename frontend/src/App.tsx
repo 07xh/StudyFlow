@@ -74,6 +74,15 @@ export default function App(){
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const initialized=useRef(false);
   const desktop=isDesktop();
+  const [consentAccepted,setConsentAccepted]=useState(!desktop);
+  useEffect(()=>{
+    if(!desktop){setConsentAccepted(true);return;}
+    let live=true;
+    void request<{accepted:boolean}>({operation:"studyflow.consent.status"})
+      .then(result=>{if(live)setConsentAccepted(result.accepted);})
+      .catch(()=>{if(live)setConsentAccepted(false);});
+    return ()=>{live=false;};
+  },[desktop]);
 
   useEffect(()=>{
     if(!desktop)return;
@@ -148,10 +157,10 @@ export default function App(){
   },[desktop,recordEvent]);
 
   useEffect(()=>{
-    if(initialized.current)return;
+    if(!consentAccepted||initialized.current)return;
     initialized.current=true;
     void refresh();
-  },[refresh]);
+  },[refresh,consentAccepted]);
 
   async function sync(platform:Platform){
     const name=platformNames[platform]??platform;
@@ -496,7 +505,7 @@ export default function App(){
         </section>
       </>}
     </AppShell>
-    <StudyFlowConsentGate desktop={desktop} dark={dark}/>
+    <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setNotice("知到登录已通过服务端核验；正在检测连接。");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");void refresh();}}/>}

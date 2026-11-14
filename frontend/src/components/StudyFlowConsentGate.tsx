@@ -3,10 +3,10 @@ import {invoke} from "@tauri-apps/api/core";
 import {BookOpen,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoDocument} from "../bridge";
 
-type Props={desktop:boolean;dark:boolean};
+type Props={desktop:boolean;dark:boolean;onAccepted?:()=>void};
 type Phase="checking"|"required"|"accepted"|"error";
 type Tab="terms"|"privacy";
-export function StudyFlowConsentGate({desktop,dark}:Props){
+export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
   const [phase,setPhase]=useState<Phase>(desktop?"checking":"accepted");
   const [tab,setTab]=useState<Tab>("terms");
   const [checked,setChecked]=useState(false);
@@ -39,7 +39,7 @@ export function StudyFlowConsentGate({desktop,dark}:Props){
     setBusy(true);setMessage("");
     try{
       const result=await request<{accepted:boolean}>({operation:"studyflow.consent.accept"});
-      if(result.accepted)setPhase("accepted");
+      if(result.accepted){setPhase("accepted");onAccepted?.();}
       else setMessage("声明状态未能确认保存，请重试。");
     }catch(error){setMessage(friendlyBridgeError(error));}
     finally{setBusy(false);}
