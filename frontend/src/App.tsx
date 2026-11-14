@@ -406,10 +406,10 @@ export default function App(){
       onVerified={()=>{setNotice("知到登录已通过服务端核验；正在检测连接。");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");void refresh();}}/>}
     <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}
-      title="退出雨课堂并清除学序会话？"
+      title="清除学序保存的雨课堂凭据？"
       description="此操作将清除学序在 Windows 凭据管理器中保存的雨课堂登录会话。"
       warning="需要重新配置会话才能继续读取课程；不会删除原版雨课堂文件或课程记录。"
-      confirmLabel="确认退出" cancelLabel="保留登录"
+      confirmLabel="确认清除" cancelLabel="保留登录"
       onConfirm={()=>void clear()} onCancel={()=>setClearDialogOpen(false)}/>
   </>;
 }
