@@ -87,3 +87,15 @@ def test_zhidao_account_and_legal_operations_use_fixed_handlers(monkeypatch):
     assert dispatch({"id":"a2","version":1,"operation":"zhidao.cache.clear"})["data"]["removed"] == 2
     monkeypatch.setattr(bridge, "read_zhidao_document", lambda key: {"id":key,"content":"safe"})
     assert dispatch({"id":"a3","version":1,"operation":"zhidao.document.read","document_id":"privacy"})["data"]["content"] == "safe"
+
+
+
+def test_zhidao_course_detail_bridge_returns_sanitized_details(monkeypatch):
+    monkeypatch.setattr(bridge, "read_zhidao_course_detail", lambda key: {
+        "course_key": key, "title": "课程", "course_type": "ai",
+        "verified": True, "stale": False, "verified_at": "2026-11-14T10:00:00Z",
+        "done": 1, "total": 2, "percent": 50.0,
+        "items": [{"name":"知识点","progress_percent":100,"fully_progressed":True}],
+    })
+    result = dispatch({"id":"d1","version":1,"operation":"zhidao.course.detail","course_key":"a"*64})
+    assert result["ok"] and result["data"]["items"][0]["progress_percent"] == 100

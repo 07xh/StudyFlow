@@ -228,3 +228,37 @@ def test_legal_document_reader_is_allowlisted():
     assert "第三方" in document["title"]
     with pytest.raises(ValueError, match="INVALID_DOCUMENT"):
         legacy_runtime.read_document("../cookies.json")
+
+
+
+def test_course_detail_restores_ai_knowledge_points_and_shared_videos(installed_reader):
+    _, _, directory, fingerprint = installed_reader
+    ai = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "智慧课程"}
+    shared = {"courseType": "shared", "courseId": "13",
+              "recruitAndCourseId": "route_13", "name": "共享课程"}
+    (directory / "zhidao-courses.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+        "incomplete": False, "courses": [ai, shared],
+    }), encoding="utf-8")
+    (directory / "zhidao-progress.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+        "incomplete": False, "courses": [
+            {**ai, "knowledgePointCount": 2, "fullProgressPoints": 1,
+             "knowledgePoints": [
+                 {"name": "基础概念", "theme": "第一章", "progressPercent": 100},
+                 {"name": "应用分析", "theme": "第二章", "progressPercent": 40},
+             ], "lastVerifiedAt": "2026-11-14T10:00:00+00:00"},
+            {**shared, "videoCount": 2, "completedVideos": 1,
+             "videos": [
+                 {"name": "第一讲", "durationSeconds": 600, "studiedSeconds": 600, "serverCompleted": True},
+                 {"name": "第二讲", "durationSeconds": 900, "studiedSeconds": 120, "serverCompleted": False},
+             ], "lastVerifiedAt": "2026-11-14T10:00:00+00:00"},
+        ],
+    }), encoding="utf-8")
+    ai_detail = legacy_runtime.read_course_detail(legacy_runtime.progress_key(ai))
+    shared_detail = legacy_runtime.read_course_detail(legacy_runtime.progress_key(shared))
+    assert ai_detail["done"] == 1 and ai_detail["total"] == 2
+    assert ai_detail["items"][0]["fully_progressed"] is True
+    assert shared_detail["done"] == 1 and shared_detail["total"] == 2
+    assert shared_detail["items"][1]["studied_seconds"] == 120
+    assert shared_detail["items"][1]["server_completed"] is False

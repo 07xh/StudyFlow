@@ -36,3 +36,13 @@ test("original settings and cookie import use the Python bridge instead of local
  assert.doesNotMatch(panel,/localStorage/);
  assert.match(login,/zhidao.cookie.import/);
 });
+
+
+test("Zhidao course detail restores knowledge points and shared-video records",()=>{
+ const detail=source("components/ZhidaoCourseDetailPanel.tsx");
+ const bridge=source("bridge.ts");
+ assert.match(detail,/zhidao\.course\.detail/);
+ assert.match(detail,/knowledge-point|知识点/);
+ assert.match(detail,/server_completed/);
+ assert.match(bridge,/ZhidaoCourseDetail/);
+});

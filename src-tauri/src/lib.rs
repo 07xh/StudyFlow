@@ -235,6 +235,7 @@ mod ipc_validation_tests {
         assert!(validate(&json!({"id":"g","version":1,"operation":"zhidao.cache.clear"})).is_ok());
         assert!(validate(&json!({"id":"h","version":1,"operation":"zhidao.document.read","document_id":"privacy"})).is_ok());
         assert!(validate(&json!({"id":"i","version":1,"operation":"zhidao.player.settings.save","settings":{}})).is_ok());
+        assert!(validate(&json!({"id":"j","version":1,"operation":"zhidao.course.detail","course_key":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"})).is_ok());
     }
 
     #[test]
