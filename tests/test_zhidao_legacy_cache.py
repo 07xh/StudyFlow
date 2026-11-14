@@ -226,6 +226,10 @@ def test_legal_document_reader_is_allowlisted():
     document = legacy_runtime.read_document("terms")
     assert document["id"] == "terms"
     assert "第三方" in document["title"]
+    privacy = legacy_runtime.read_document("privacy")
+    assert "StudyFlow" in privacy["content"]
+    assert "zhidao-player" in privacy["content"]
+    assert "ZHS 0.1.5 原版任务" in privacy["content"]
     with pytest.raises(ValueError, match="INVALID_DOCUMENT"):
         legacy_runtime.read_document("../cookies.json")
 
