@@ -131,3 +131,16 @@ test("first-run consent remains readable without Python sidecar and can exit on 
   assert.match(bridge,/BRIDGE_BINARY_MISSING/);
   assert.match(bridge,/BRIDGE_START_FAILED/);
 });
+
+
+test("verified Zhidao QR login closes the dialog and refreshes platform status", () => {
+  const app = read("src/App.tsx");
+  const qr = read("src/ZhidaoQrDialog.tsx");
+  assert.match(qr, /if\(next\.stage==="verified"\)onVerifiedRef\.current\(\)/);
+  const handlerStart = app.indexOf("onVerified=");
+  const handlerEnd = app.indexOf("/>}", handlerStart);
+  assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+  const handler = app.slice(handlerStart, handlerEnd);
+  assert.match(handler, /setQrOpen\(false\)/);
+  assert.match(handler, /void refresh\(\)/);
+});
