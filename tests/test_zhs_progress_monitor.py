@@ -138,11 +138,14 @@ def test_ui_status_cannot_be_conflated_with_server_progress():
 
 def test_rust_idle_status_always_initializes_telemetry_freshness():
     rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
-    # Prevent missing new struct fields in an uncommon idle return branch.
-    for line in rust.splitlines():
-        if 'Ok(LegacyStatus {platform, state: "idle"' in line:
-            assert "zhs_stale: false" in line
-    assert 'zhs_stale: false}),\n}' in rust
+    # Validate both idle return branches without relying on indentation or
+    # the position of a closing brace on the following line.
+    idle_statuses = [
+        line.strip() for line in rust.splitlines()
+        if 'Ok(LegacyStatus {platform, state: "idle"' in line
+    ]
+    assert len(idle_statuses) == 2
+    assert all("zhs_stale: false" in line for line in idle_statuses)
 
 
 def test_monitor_remains_a_read_only_observer():
