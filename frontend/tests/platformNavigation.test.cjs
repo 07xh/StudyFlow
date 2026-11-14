@@ -108,7 +108,7 @@ test("course details render as one expanded workspace with distinct progress sou
  assert.match(app,/sidebarCourse=\{activeSelectedCourse&&activeSelectedCourse\.platform===contextPlatform\?/);
  assert.match(app,/WorkspaceSection storageKey=\{scope\+"task"\}/);
  assert.match(app,/WorkspaceSection storageKey=\{scope\+"logs"\}/);
- assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);
+ assert.match(app,/headerTitle=\{activeSelectedCourse&&\(page==="courses"\|\|page==="records"\)\?platformNames/);
  assert.match(app,/activeSelectedCourse/);
  assert.match(app,/embedded events=/);
  assert.match(app,/zhidaoPlaybackMode==="official"/);
