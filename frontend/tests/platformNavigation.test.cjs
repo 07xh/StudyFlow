@@ -114,8 +114,9 @@ test("course details render as one expanded workspace with distinct progress sou
  assert.match(app,/sf-course-identity/);
  assert.match(app,/sidebarCourse=\{activeSelectedCourse&&activeSelectedCourse\.platform===contextPlatform\?/);
  assert.match(app,/WorkspaceSection storageKey=\{scope\+"task"\}/);
- assert.match(app,/className="sf-workspace-fold__body" hidden=\{!open\}>\{children\}<\/div>/);
- assert.doesNotMatch(app,/\{open&&<div className="sf-workspace-fold__body"/);
+ assert.match(app,/keepMounted\?\s*<div className="sf-workspace-fold__body" hidden=\{!open\}>\{children\}<\/div>/);
+ assert.match(app,/WorkspaceSection storageKey=\{scope\+"task"\} title="任务运行" initiallyOpen keepMounted/);
+ assert.match(app,/open&&<div className="sf-workspace-fold__body"/);
  assert.match(app,/WorkspaceSection storageKey=\{scope\+"logs"\}/);
  assert.match(app,/headerTitle=\{activeSelectedCourse&&\(page==="courses"\|\|page==="records"\)\?platformNames/);
  assert.match(app,/activeSelectedCourse/);

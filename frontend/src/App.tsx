@@ -52,8 +52,8 @@ function readActivity():ActivityEntry[]{
 
 
 function WorkspaceSection({
-  storageKey,title,initiallyOpen=true,children
-}:{storageKey:string;title:string;initiallyOpen?:boolean;children:ReactNode}){
+  storageKey,title,initiallyOpen=true,keepMounted=false,children
+}:{storageKey:string;title:string;initiallyOpen?:boolean;keepMounted?:boolean;children:ReactNode}){
   const [open,setOpen]=useState(()=>{
     try{
       const stored=window.localStorage.getItem(storageKey);
@@ -68,7 +68,9 @@ function WorkspaceSection({
       onClick={()=>setOpen(previous=>!previous)}>
       <strong>{title}</strong><ChevronDown size={16} aria-hidden="true"/>
     </button>
-    <div className="sf-workspace-fold__body" hidden={!open}>{children}</div>
+    {keepMounted
+      ?<div className="sf-workspace-fold__body" hidden={!open}>{children}</div>
+      :open&&<div className="sf-workspace-fold__body">{children}</div>}
   </section>;
 }
 
@@ -449,7 +451,7 @@ export default function App(){
         <span className="sf-course-identity-evidence" title={progress.detail}>{progress.label} · {verifiedAt}</span>
       </div>
       {course.platform==="zhidao"&&renderZhidaoModeSwitch()}
-      <WorkspaceSection storageKey={scope+"task"} title="任务运行" initiallyOpen>
+      <WorkspaceSection storageKey={scope+"task"} title="任务运行" initiallyOpen keepMounted>
         {course.platform==="zhidao"
           ?zhidaoPlaybackMode==="official"
             ?<ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
