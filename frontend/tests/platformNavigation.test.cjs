@@ -22,7 +22,9 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/ZhidaoLoginPanel/);
  assert.match(app,/ZhidaoOfficialPlayerPanel/);
  assert.match(app,/LegacyPlaybackPanel platform="zhidao"/);
- assert.match(app,/LegacyPlaybackPanel platform="yuketang"/);
+ assert.match(app,/YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
+ const yuketang=source("components/YuketangTaskArea.tsx");
+ assert.match(yuketang,/<LegacyPlaybackPanel platform="yuketang"/);
  assert.match(app,/onImported=/);
  assert.match(app,/ZhidaoAccountTools/);
  assert.match(app,/ZhidaoProgressPanel/);
@@ -33,11 +35,14 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
 });
 
 test("original settings and cookie import use the Python bridge instead of localStorage",()=>{
- const panel=source("components/LegacyPlaybackPanel.tsx");
+ const panel=source("components/YuketangTaskArea.tsx");
+ const legacy=source("components/LegacyPlaybackPanel.tsx");
  const login=source("components/ZhidaoMigration.tsx");
  assert.match(panel,/yuketang.settings.get/);
  assert.match(panel,/yuketang.settings.save/);
+ assert.match(panel,/LegacyPlaybackPanel platform="yuketang"/);
  assert.doesNotMatch(panel,/localStorage/);
+ assert.doesNotMatch(legacy,/localStorage/);
  assert.match(login,/zhidao.cookie.import/);
 });
 
