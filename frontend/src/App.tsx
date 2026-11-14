@@ -385,11 +385,6 @@ export default function App(){
     }));
     return <section className="sf-course-workspace">
       <div className="sf-course-detail-topline">
-        <div className="sf-course-breadcrumb">
-          <span>{definition?.name??platformNames[course.platform]}</span>
-          <ChevronRight size={14}/>
-          <strong>课程详情</strong>
-        </div>
         <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>
           <ArrowLeft size={15}/>返回课程列表
         </button>
@@ -529,7 +524,8 @@ export default function App(){
     <AppShell page={page} onNavigate={next=>{setPage(next);setSelectedCourse(null);}}
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
-      compact={compactCards}>
+      compact={compactCards}
+      headerTitle={activeSelectedCourse?platformNames[activeSelectedCourse.platform]+" / 课程详情":undefined}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
