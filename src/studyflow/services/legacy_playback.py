@@ -79,8 +79,9 @@ def run_yuketang_original() -> int:
         return 1
 
 
-def _course_ids_for_current_session(key: str) -> tuple[str, str]:
-    if COURSE_KEY.fullmatch(key) is None:
+def _current_course_row(key: str) -> dict:
+    """Resolve only a fresh course from the currently authenticated cache."""
+    if not isinstance(key, str) or COURSE_KEY.fullmatch(key) is None:
         raise RuntimeError("INVALID_COURSE")
     data_dir = Path.home() / ".zhs"
     try:
@@ -102,17 +103,44 @@ def _course_ids_for_current_session(key: str) -> tuple[str, str]:
     if not isinstance(cache.get("courses"), list):
         raise RuntimeError("INVALID_CACHE")
     matches = [c for c in cache["courses"]
-               if isinstance(c, dict) and c.get("courseType") == "ai"
-               and progress_key(c) == key]
+               if isinstance(c, dict) and c.get("courseType") in ("ai", "shared")
+               and progress_key(c) == key and c.get("stale") is not True]
     if len(matches) != 1:
         raise RuntimeError("COURSE_NOT_FOUND")
-    selected = matches[0]
-    course_id, class_id = str(selected.get("courseId") or ""), str(selected.get("classId") or "")
+    return matches[0]
+
+
+def _ai_course_ids(row: dict) -> tuple[str, str]:
+    course_id, class_id = str(row.get("courseId") or ""), str(row.get("classId") or "")
     if not ID.fullmatch(course_id) or not ID.fullmatch(class_id):
         raise RuntimeError("INVALID_COURSE")
     if int(course_id) <= 0 or int(class_id) <= 0:
         raise RuntimeError("INVALID_COURSE")
     return course_id, class_id
+
+
+def _course_ids_for_current_session(key: str) -> tuple[str, str]:
+    """Retain the original AI-course helper for existing integrations."""
+    row = _current_course_row(key)
+    if row.get("courseType") != "ai":
+        raise RuntimeError("COURSE_NOT_AI")
+    return _ai_course_ids(row)
+
+
+_SHARED_ROUTE = re.compile(r"^[A-Za-z0-9_+./=:-]{1,512}$")
+
+
+def _shared_play_arguments(row: dict) -> list[str]:
+    """Use the upstream ZHS shared-course URL resolver, never a guessed ID."""
+    from urllib.parse import quote
+    route = str(row.get("recruitAndCourseId") or "").strip()
+    if _SHARED_ROUTE.fullmatch(route):
+        url = "https://studyvideoh5.zhihuishu.com/stuStudy?recruitAndCourseId=" + quote(route, safe="")
+        return ["play", "--url", url]
+    course_id = str(row.get("courseId") or "").strip()
+    if ID.fullmatch(course_id) and int(course_id) > 0:
+        return ["play", "-c", course_id, "--type", "zhidao"]
+    raise RuntimeError("COURSE_ROUTE_UNAVAILABLE")
 
 
 def _zhs_monitor_source() -> Path:
@@ -122,12 +150,8 @@ def _zhs_monitor_source() -> Path:
     return Path(__file__).resolve().parents[3] / "legacy" / "zhidao" / "ZHS-ConsoleMonitor.py"
 
 
-def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = None) -> int | None:
-    """Invoke the exact ZHS 0.1.5 Typer CLI inside the bundled sidecar.
-
-    No source monkey-patches and no reimplementation of the heartbeat code.
-    None means an external legacy installation must be used instead.
-    """
+def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None) -> int | None:
+    """Run upstream ZHS 0.1.5 CLI unchanged; None means no bundled runtime."""
     from importlib.metadata import PackageNotFoundError, version
     try:
         if version("zhs") != "0.1.5":
@@ -141,7 +165,6 @@ def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = 
         if monitor_token:
             try:
                 original = _zhs_monitor_source()
-                # Observer is optional: failure to monitor never changes the ZHS CLI.
                 if original.is_file():
                     observer = runpy.run_path(str(original), run_name="studyflow_vendor_zhs_monitor")
                     root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
@@ -150,43 +173,71 @@ def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = 
             except (OSError, ValueError, KeyError):
                 sink = None
                 sys.stdout = original_stdout
-        zhs_app(args=["play", "-c", f"{course_id}:{class_id}", "--type", "ai"],
-                standalone_mode=False)
-        return 0
+        # Do not change upstream progress, heartbeat or login behavior.
+        result = zhs_app(args=arguments, standalone_mode=False)
+        # Click/Typer may return an exit code when standalone_mode is false.
+        return result if isinstance(result, int) else 0
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 1
-    except Exception:
+    except EOFError:
+        # A hidden, noninteractive process cannot answer an upstream prompt.
+        return 9
+    except Exception as exc:
+        # Click's Exit(code) is not SystemExit; do not mark an exit(0) as a failure.
+        if type(exc).__name__ == "Exit" and isinstance(getattr(exc, "exit_code", None), int):
+            return exc.exit_code
         return 1
     finally:
         sys.stdout = original_stdout
-        # Leave only the per-run numeric snapshot for the Tauri supervisor to
-        # collect on the next status tick; it deletes it when reaping the child.
-        # The observer output never contains cookies, request bodies or logs.
+        if sink is not None:
+            try:
+                sink.path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = None) -> int | None:
+    """Compatibility wrapper for the original AI-course invocation."""
+    return _run_bundled_zhs_args(
+        ["play", "-c", f"{course_id}:{class_id}", "--type", "ai"], monitor_token
+    )
 
 
 def run_zhidao_original(course_key: str, monitor_token: str | None = None) -> int:
-    # Resolve the opaque UI key only inside the authenticated local session.
     if monitor_token is not None and MONITOR_TOKEN.fullmatch(monitor_token) is None:
         return 2
     try:
-        course_id, class_id = _course_ids_for_current_session(course_key)
-    except RuntimeError:
+        course = _current_course_row(course_key)
+        is_ai = course["courseType"] == "ai"
+        if is_ai:
+            course_id, class_id = _ai_course_ids(course)
+            arguments = ["play", "-c", f"{course_id}:{class_id}", "--type", "ai"]
+        else:
+            arguments = _shared_play_arguments(course)
+    except RuntimeError as exc:
+        if str(exc) in ("INVALID_COURSE", "COURSE_NOT_FOUND", "COURSE_NOT_AI", "COURSE_ROUTE_UNAVAILABLE"):
+            return 6
         return 4
-    bundled = _run_bundled_zhs(course_id, class_id, monitor_token)
+
+    # Retain the original AI wrapper; shared courses use ZHS's existing --url.
+    bundled = (_run_bundled_zhs(course_id, class_id, monitor_token) if is_ai
+               else _run_bundled_zhs_args(arguments, monitor_token))
     if bundled is not None:
         return bundled
-    # Older installs can still run exactly as before, if a pinned packaged
-    # ZHS runtime is not available. Never modify the external ZHSDesktop.
+
+    # Older ZHSDesktop installs are a fallback only; no upstream files edited.
     installed = installation_root()
-    launcher = installed / "Zhidao-Task.cmd"
-    if not launcher.is_file():
+    if is_ai:
+        executable = installed / "Zhidao-Task.cmd"
+        command = [str(executable), "play-ai", course_id, class_id]
+    else:
+        executable = installed / ".venv" / "Scripts" / "zhs.exe"
+        command = [str(executable), *arguments]
+    if not executable.is_file():
         return 5
-    # Exactly the upstream launcher and its original ZHS 0.1.5 implementation.
-    # No synthetic request generation or sender is rewritten here.
     try:
         completed = subprocess.run(
-            [str(launcher), "play-ai", course_id, class_id],
-            cwd=Path.home(), stdin=subprocess.DEVNULL, check=False,
+            command, cwd=Path.home(), stdin=subprocess.DEVNULL, check=False,
         )
         return completed.returncode
     except OSError:
