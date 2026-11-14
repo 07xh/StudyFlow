@@ -10,6 +10,7 @@ import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
 import {ZhidaoCourseDetailPanel} from "./components/ZhidaoCourseDetailPanel";
+import {StudyFlowConsentGate} from "./components/StudyFlowConsentGate";
 import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
 import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
@@ -458,6 +459,7 @@ export default function App(){
         </section>
       </>}
     </AppShell>
+    <StudyFlowConsentGate desktop={desktop} dark={dark}/>
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setNotice("知到登录已通过服务端核验；正在检测连接。");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");void refresh();}}/>}
