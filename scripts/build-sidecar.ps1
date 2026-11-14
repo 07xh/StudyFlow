@@ -41,4 +41,12 @@ if ($settings.id -cne 'packaging-settings' -or -not $settings.ok -or
     $settings.data.speed -notin @('1','1.25','1.5','2')) {
   throw 'Frozen StudyFlow local settings JSONL contract mismatch'
 }
-Write-Host '[READY] Frozen ZHS, clean JSONL output and local settings handler verified without server access.'
+$yktSettings = Invoke-JsonlProbe '{"id":"packaging-ykt-settings","version":1,"operation":"yuketang.settings.get"}'
+if ($yktSettings.id -cne 'packaging-ykt-settings' -or -not $yktSettings.ok -or
+    $yktSettings.data.video_speed -ne 1.5 -or $yktSettings.data.heartbeat_interval -ne 5 -or
+    $yktSettings.data.max_concurrent_videos -ne 3 -or
+    $yktSettings.data.completion_threshold -ne 90 -or
+    $yktSettings.data.debug -ne $false) {
+  throw 'Frozen original Rain Classroom settings JSONL contract mismatch'
+}
+Write-Host '[READY] Frozen ZHS, Rain Classroom, clean JSONL settings and original module imports verified without server access.'
