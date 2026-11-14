@@ -19,6 +19,8 @@ def test_packaged_entry_exposes_only_readonly_progress_and_single_course_verify(
     # and CI intentionally does not install the user's external ZHS runtime.
     reader = ModuleType("zhidao_only")
     reader.main = lambda mode: 0 if mode == "progress" else 2
+    reader.doctor_session = lambda: 0
+    reader.doctor_server = lambda: 0
     monkeypatch.setattr(upstream, "zhidao_only", reader, raising=False)
     monkeypatch.setitem(sys.modules, "studyflow.platforms.zhidao.upstream.zhidao_only", reader)
     monkeypatch.setattr(verify_entry, "main", lambda args: 0 if args == ["a" * 64] else 2)
@@ -29,6 +31,10 @@ def test_packaged_entry_exposes_only_readonly_progress_and_single_course_verify(
     spec.loader.exec_module(module)
 
     monkeypatch.setattr(sys, "argv", ["studyflow-bridge.exe", "--zhidao-readonly", "progress"])
+    assert module.main() == 0
+    monkeypatch.setattr(sys, "argv", ["studyflow-bridge.exe", "--zhidao-readonly", "session-check"])
+    assert module.main() == 0
+    monkeypatch.setattr(sys, "argv", ["studyflow-bridge.exe", "--zhidao-readonly", "doctor-server"])
     assert module.main() == 0
     monkeypatch.setattr(sys, "argv", ["studyflow-bridge.exe", "--zhidao-readonly", "verify-one"])
     assert module.main() == 2
@@ -44,9 +50,9 @@ def test_readonly_operations_use_this_app_python_not_legacy_venv(monkeypatch):
         return SimpleNamespace(returncode=0, stdout="[SESSION_OK]", stderr="")
     monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    result = legacy_runtime._run_readonly("doctor-server", 5)
+    result = legacy_runtime._run_readonly("session-check", 5)
     assert result.returncode == 0
-    assert seen["args"] == [sys.executable, "--zhidao-readonly", "doctor-server"]
+    assert seen["args"] == [sys.executable, "--zhidao-readonly", "session-check"]
     assert "ZHSDesktop" not in " ".join(seen["args"])
 
 

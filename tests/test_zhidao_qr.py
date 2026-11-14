@@ -77,15 +77,18 @@ def test_qr_cancel_does_not_delete_cookies(monkeypatch, tmp_path):
     assert (tmp_path / "cookies.json").read_text() == "PRESERVE"
 
 
-def test_probe_login_uses_session_proof_when_course_apis_fail(monkeypatch):
-    # doctor-server returns 6 when both course sources fail, even though the
-    # preceding [SESSION_OK] marker proves the account session is valid.
+def test_probe_login_uses_authentication_only_command(monkeypatch):
+    calls = []
     result = SimpleNamespace(
-        returncode=6,
-        stdout="[SESSION_OK] 服务端登录校验通过\\n[SERVER_UNCONFIRMED] 两类只读接口均失败",
+        returncode=0,
+        stdout="[SESSION_OK] 服务端登录校验通过。\n",
     )
-    monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda *_: result)
+    def fake_run(command, timeout):
+        calls.append((command, timeout))
+        return result
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", fake_run)
     assert legacy_runtime.probe_login() is True
+    assert calls == [("session-check", 65)]
 
 
 def test_probe_login_requires_explicit_server_session_proof(monkeypatch):

@@ -37,7 +37,7 @@ def python_executable() -> Path:
 
 
 def _run_readonly(command: str, timeout: int) -> subprocess.CompletedProcess[str]:
-    if command not in ("doctor-server", "courses", "progress"):
+    if command not in ("session-check", "doctor-server", "courses", "progress"):
         raise RuntimeError("Unsupported Zhidao read-only operation")
     if getattr(sys, "frozen", False):
         arguments = [sys.executable, "--zhidao-readonly", command]
@@ -55,10 +55,9 @@ def _run_readonly(command: str, timeout: int) -> subprocess.CompletedProcess[str
 
 def probe_login() -> bool:
     try:
-        result = _run_readonly("doctor-server", 65)
-        # doctor-server also checks course APIs and may exit with 6 after
-        # authentication has already succeeded. Keep login state independent
-        # from the availability of the course-reading endpoints.
+        # Use the authentication-only command. The full doctor-server
+        # path also queries course APIs and must not delay or redefine login state.
+        result = _run_readonly("session-check", 65)
         return any(line.startswith("[SESSION_OK]") for line in (result.stdout or "").splitlines())
     except RuntimeError:
         return False

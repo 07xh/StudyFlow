@@ -201,6 +201,34 @@ def local_login_file_state() -> str:
     return "present"
 
 
+def doctor_session() -> int:
+    """Check only the authenticated account session; never query course APIs."""
+    state = local_login_file_state()
+    if state == "missing":
+        print("[AUTH] 未找到扫码凭证，请先登录。")
+        return 3
+    if state == "invalid":
+        print("[AUTH_LOCAL_INVALID] 本地登录凭证格式无效；未联系服务器，建议重新扫码登录。")
+        return 8
+
+    os.chdir(Path.home())
+    session = None
+    try:
+        loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
+        if loaded is None:
+            print("[SESSION_UNCONFIRMED] 服务端登录状态未确认；请检查网络或重新扫码。")
+            return 4
+        _, session = loaded
+        print("[SESSION_OK] 服务端登录校验通过。")
+        return 0
+    except Exception as exc:
+        code, advice = diagnose(exc)
+        print(f"[SESSION_CHECK_ERROR] 登录状态检测未完成：{advice}")
+        return 5
+    finally:
+        safe_close(session)
+
+
 def doctor_server() -> int:
     """Verify read-only platform endpoints, not just local cookie parsing.
 
@@ -630,6 +658,8 @@ if __name__ == "__main__":
     try:
         if len(sys.argv) == 2 and sys.argv[1] == "doctor":
             sys.exit(doctor())
+        elif len(sys.argv) == 2 and sys.argv[1] == "session-check":
+            sys.exit(doctor_session())
         elif len(sys.argv) == 2 and sys.argv[1] == "doctor-server":
             sys.exit(doctor_server())
         elif len(sys.argv) == 5 and sys.argv[1] == "verify-one":

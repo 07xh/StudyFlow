@@ -41,10 +41,12 @@ def main() -> int:
             return qr_main([sys.argv[2]])
         if mode == "--zhidao-readonly" and len(sys.argv) == 3:
             command = sys.argv[2]
-            if command not in ("doctor-server", "courses", "progress"):
+            if command not in ("session-check", "doctor-server", "courses", "progress"):
                 return 2
             from studyflow.platforms.zhidao.upstream import zhidao_only
             # Explicitly expose only non-mutating operations in StudyFlow.
+            if command == "session-check":
+                return zhidao_only.doctor_session()
             if command == "doctor-server":
                 return zhidao_only.doctor_server()
             if command == "courses":
