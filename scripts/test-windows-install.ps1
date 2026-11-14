@@ -23,6 +23,15 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Installed JSONL process failed' }
         $reply = $response | ConvertFrom-Json
         if (-not $reply.ok -or $reply.id -cne 'installed-smoke') { throw 'Installed JSONL response failed' }
+        $yktSettings = '{"id":"installed-ykt-settings","version":1,"operation":"yuketang.settings.get"}' | & $bridge
+        if ($LASTEXITCODE -ne 0) { throw 'Installed Rain Classroom settings IPC failed' }
+        $yktReply = $yktSettings | ConvertFrom-Json
+        if (-not $yktReply.ok -or $yktReply.id -cne 'installed-ykt-settings' -or
+            $yktReply.data.video_speed -ne 1.5 -or $yktReply.data.heartbeat_interval -ne 5 -or
+            $yktReply.data.max_concurrent_videos -ne 3 -or
+            $yktReply.data.completion_threshold -ne 90) {
+            throw 'Installed Rain Classroom settings JSONL contract failed'
+        }
         if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Install/upgrade changed user data' }
     }
     $executable = Join-Path $root 'studyflow.exe'
