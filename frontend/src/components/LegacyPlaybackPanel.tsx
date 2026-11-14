@@ -41,8 +41,14 @@ export function LegacyPlaybackPanel({
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
-    try { setStatus(await getLegacyStatus(platform)); }
-    catch { setStatus(null); }
+    try {
+      const current = await getLegacyStatus(platform);
+      // Restore the active selection when returning to the platform page.
+      if (platform==="zhidao" && current.state==="running" && current.course_id) {
+        setSelection(previous => previous || current.course_id || "");
+      }
+      setStatus(current);
+    } catch { setStatus(null); }
   }, [desktop, platform]);
 
   useEffect(() => {
