@@ -9,6 +9,7 @@ import {NoticeBanner} from "./NoticeBanner";
 import {PageSurface} from "./PageSurface";
 import "./foundation.css";
 
+type HeaderCourse={courseId:string;title:string;percent:number|null};
 export type Page="home"|"courses"|"tasks"|"platforms"|"platform-zhidao"|
   "platform-yuketang"|"records"|"logs"|"settings";
 const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
@@ -39,9 +40,13 @@ interface Props {
   onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
   compact:boolean;children:ReactNode;
   headerTitle?:string;
+  activePlatform?:"zhidao"|"yuketang"|null;
+  headerCourse?:HeaderCourse|null;
+  headerCourseOptions?:HeaderCourse[];
+  onHeaderCourseChange?:(courseId:string)=>void;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,activePlatform,headerCourse,headerCourseOptions=[],onHeaderCourseChange
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -50,6 +55,7 @@ export function AppShell({
     catch{/* The current navigation state remains available for this session. */}
   },[platformExpanded]);
   const platformActive=page==="platforms"||page==="platform-zhidao"||page==="platform-yuketang";
+  const platformLabel=activePlatform==="zhidao"?"知到":activePlatform==="yuketang"?"雨课堂":"学习平台";
   const renderItem=(item:{id:Page;label:string;icon:LucideIcon},nested=false)=>
     <button key={item.id} type="button" title={item.label} aria-label={item.label}
       aria-current={page===item.id?"page":undefined}
@@ -85,13 +91,39 @@ export function AppShell({
   </nav>;
 
   return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
-    <aside className="sf-floating-nav" aria-label="主导航">
-      <div className="sf-floating-nav__heading">功能菜单</div>
+    <aside className="sf-floating-nav" aria-label="常驻侧栏">
+      <div className="sf-sidebar-brand">
+        <span className="sf-sidebar-brand-mark">序</span>
+        <div><small>当前平台</small><strong>{platformLabel}</strong></div>
+      </div>
       {renderItems(workspaceNavigation)}
     </aside>
     <main className="main" id="main-content">
       <header className="sf-header">
         <div className="sf-page-heading"><h1>{headerTitle??titles[page]}</h1></div>
+        {(activePlatform||headerCourse)&&<div className="sf-header-course" aria-label="当前课程总进度">
+          <div className="sf-header-course-heading">
+            <div className="sf-header-course-title">
+              <small>当前课程</small>
+              {headerCourseOptions.length>1
+                ?<select aria-label="选择当前课程" value={headerCourse?.courseId??""}
+                  onChange={event=>onHeaderCourseChange?.(event.currentTarget.value)}>
+                  {headerCourseOptions.map(c=><option key={c.courseId} value={c.courseId}>{c.title}</option>)}
+                </select>
+                :<strong title={headerCourse?.title??"暂无同步课程"}>{headerCourse?.title??"暂无同步课程"}</strong>}
+            </div>
+            <div className="sf-header-course-value">
+              <strong>{headerCourse?.percent==null?"—":headerCourse.percent.toFixed(1)+"%"}</strong>
+              <small>课程总进度</small>
+            </div>
+          </div>
+          <div className="sf-header-course-track" role={headerCourse?.percent==null?undefined:"progressbar"}
+            aria-label="平台核验的课程总进度" aria-valuemin={0} aria-valuemax={100}
+            aria-valuenow={headerCourse?.percent??undefined}>
+            <span style={{width:(headerCourse?.percent??0)+"%"}}/>
+          </div>
+          <small className="sf-header-course-note">{headerCourse?.percent==null?"等待服务器核验":"来自平台已核验进度"}</small>
+        </div>}
         <div className="sf-header-actions">
           <span className="sf-mode"><span className="sf-status-dot"/>
             {desktop?"Windows 桌面":"浏览器预览"}
