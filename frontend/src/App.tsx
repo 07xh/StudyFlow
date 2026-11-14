@@ -194,6 +194,17 @@ export default function App(){
     void refresh();
   },[refresh,consentAccepted]);
 
+  function updateVerifiedZhidaoCourse(course:Course) {
+    if (course.platform !== "zhidao") return;
+    setPlatforms(previous=>({
+      ...previous,zhidao:{
+        ...previous.zhidao,
+        courses:previous.zhidao.courses.map(item=>
+          item.platform==="zhidao"&&item.course_id===course.course_id?course:item)
+      }
+    }));
+  }
+
   async function sync(platform:Platform){
     const name=platformNames[platform]??platform;
     if(!platformInfo(platform))return;
@@ -320,7 +331,7 @@ export default function App(){
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
             :<LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
               desktop={desktop} connected={platforms.zhidao.status==="connected"}
-              onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+              onCourseVerified={updateVerifiedZhidaoCourse}
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
           :<YuketangTaskArea courses={platforms.yuketang.courses}
             desktop={desktop} connected={platforms.yuketang.status==="connected"}
@@ -457,7 +468,7 @@ export default function App(){
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
             :<LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
               desktop={desktop} connected={platforms.zhidao.status==="connected"}
-              courseId={course.course_id} detailMode onCoursesUpdated={updateCourses}
+              courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse}
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
           :<YuketangTaskArea courses={[course]} desktop={desktop}
             connected={platforms.yuketang.status==="connected"} detailMode
