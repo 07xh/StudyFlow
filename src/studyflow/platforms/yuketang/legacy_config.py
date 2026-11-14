@@ -45,15 +45,34 @@ def _project_root() -> Path:
 
 
 def config_home() -> Path:
-    existing = os.environ.get("YKT_HOME")
-    if existing:
-        root = Path(existing).expanduser()
+    """Return the stable settings directory, never the per-run log directory."""
+    configured = os.environ.get("STUDYFLOW_YKT_CONFIG_HOME")
+    if configured:
+        root = Path(configured).expanduser()
     else:
+        # Keep the established location so existing StudyFlow .env settings
+        # survive this fix. YKT_HOME is reserved for each task's log directory.
         local = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
         root = local / "StudyFlow" / "legacy-logs"
     root.mkdir(parents=True, exist_ok=True)
-    os.environ["YKT_HOME"] = str(root)
     return root
+
+
+def _read_or_write_original_config(method: str, *args):
+    """Call the recovered exe_entry API with YKT_HOME temporarily set to config."""
+    root = config_home()
+    had_ykt_home = "YKT_HOME" in os.environ
+    previous_ykt_home = os.environ.get("YKT_HOME")
+    os.environ["YKT_HOME"] = str(root)
+    try:
+        launcher = _launcher()
+        operation = getattr(launcher, method)
+        return operation(*args)
+    finally:
+        if had_ykt_home:
+            os.environ["YKT_HOME"] = previous_ykt_home or ""
+        else:
+            os.environ.pop("YKT_HOME", None)
 
 
 def _launcher():
@@ -69,8 +88,7 @@ def _launcher():
 
 
 def _raw_config() -> dict[str, str]:
-    config_home()
-    raw = _launcher().read_cfg()
+    raw = _read_or_write_original_config("read_cfg")
     if not isinstance(raw, dict):
         raise RuntimeError("Original Rain Classroom configuration is invalid")
     return {**DEFAULTS, **{str(k): str(v) for k, v in raw.items()}}
@@ -147,13 +165,12 @@ def _validated(settings: Any) -> dict[str, str]:
 
 def save_settings(settings: Any) -> dict[str, Any]:
     changes = _validated(settings)
-    config_home()
-    _launcher().save_cfg(changes)
+    _read_or_write_original_config("save_cfg", changes)
     return read_settings()
 
 
 def prepare_environment() -> Path:
-    """Load original launcher settings without overriding explicit UI options."""
+    """Load stable UI settings while leaving YKT_HOME scoped to task logs."""
     root = config_home()
     for key, value in _raw_config().items():
         if isinstance(key, str) and isinstance(value, str):
