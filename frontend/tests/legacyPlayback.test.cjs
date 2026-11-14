@@ -27,7 +27,12 @@ test("YKT legacy options preserve original main.py defaults", () => {
   assert.equal(d.max_concurrent_videos, 3);
   assert.equal(d.completion_threshold, 90);
   assert.equal(d.test_mode, false);
+  assert.equal(d.debug, false);
+  assert.equal(d.richtext_stay_seconds, 3);
+  assert.equal(d.richtext_skip_delay, 1);
   assert.equal(legacy.validateOriginalOptions(d), true);
+  assert.equal(legacy.validateOriginalOptions({...d, richtext_stay_seconds: 3601}), false);
+  assert.equal(legacy.validateOriginalOptions({...d, richtext_skip_delay: Infinity}), false);
 });
 
 test("invalid legacy options are rejected before any original process starts", async () => {
@@ -57,6 +62,9 @@ test("real desktop bridge invokes original platform task, never reimplements net
   ]);
   assert.equal(calls[0].props.courseId, zhsKey);
   assert.equal(calls[1].props.options.max_concurrent_videos, 3);
+  assert.equal(calls[1].props.options.richtext_stay_seconds, 3);
+  assert.equal(calls[1].props.options.richtext_skip_delay, 1);
+  assert.equal(calls[1].props.options.debug, false);
   assert.equal(calls[1].props.courseId, null);
 });
 
@@ -85,4 +93,14 @@ test("the ZHS original segment is displayed only for the selected running course
   assert.match(panel, /status\?\.state === "running"/);
   assert.match(panel, /liveZhs\?\.video_segment_percent/);
   assert.match(panel, /非服务器确认进度/);
+});
+
+
+test("Rain Classroom advanced settings are exposed without expanding the default panel", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","YuketangTaskArea.tsx"),"utf8");
+  assert.match(panel, /<details className="sf-ykt-advanced-options">/);
+  assert.match(panel, /options\.richtext_stay_seconds/);
+  assert.match(panel, /options\.richtext_skip_delay/);
+  assert.match(panel, /options\.debug/);
+  assert.match(panel, /RICHTEXT_STAY_SECONDS/);
 });

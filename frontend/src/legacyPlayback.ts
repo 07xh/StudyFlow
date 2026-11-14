@@ -41,7 +41,7 @@ export type YuketangLiveProgress = {
   rich_failed: number;
 };
 
-/** Reads only the current executor run\u2019s original logged progress. */
+/** Reads only the current executor run’s original logged progress. */
 export async function getYuketangLiveProgress(runId: string): Promise<YuketangLiveProgress> {
   ensureDesktop();
   if (!/^[0-9]{1,15}-[0-9]{1,20}$/.test(runId)) throw new Error("INVALID_REQUEST");
@@ -62,6 +62,9 @@ export type OriginalYktOptions = {
   test_mode: boolean;
   test_video_count: number;
   auto_richtext: boolean;
+  debug: boolean;
+  richtext_stay_seconds: number;
+  richtext_skip_delay: number;
 };
 
 export const originalYktDefaults: Readonly<OriginalYktOptions> = Object.freeze({
@@ -73,7 +76,10 @@ export const originalYktDefaults: Readonly<OriginalYktOptions> = Object.freeze({
   use_concurrent: true,
   test_mode: false,
   test_video_count: 5,
-  auto_richtext: false
+  auto_richtext: false,
+  debug: false,
+  richtext_stay_seconds: 3,
+  richtext_skip_delay: 1
 });
 
 export function validateOriginalOptions(input: OriginalYktOptions): boolean {
@@ -82,8 +88,11 @@ export function validateOriginalOptions(input: OriginalYktOptions): boolean {
     Number.isInteger(input.max_concurrent_videos) && input.max_concurrent_videos >= 1 && input.max_concurrent_videos <= 32 &&
     Number.isInteger(input.completion_threshold) && input.completion_threshold >= 0 && input.completion_threshold <= 100 &&
     Number.isInteger(input.test_video_count) && input.test_video_count >= 1 && input.test_video_count <= 10000 &&
+    Number.isInteger(input.richtext_stay_seconds) && input.richtext_stay_seconds >= 0 && input.richtext_stay_seconds <= 3600 &&
+    Number.isFinite(input.richtext_skip_delay) && input.richtext_skip_delay >= 0 && input.richtext_skip_delay <= 3600 &&
     typeof input.skip_completed === "boolean" && typeof input.use_concurrent === "boolean" &&
-    typeof input.test_mode === "boolean" && typeof input.auto_richtext === "boolean";
+    typeof input.test_mode === "boolean" && typeof input.auto_richtext === "boolean" &&
+    typeof input.debug === "boolean";
 }
 
 function ensureDesktop() {

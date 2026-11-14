@@ -407,6 +407,22 @@
 .sf-shell .legacy-flags{display:flex;flex-wrap:wrap;gap:8px 14px;padding:12px 0 2px}
 .sf-shell .legacy-flags label{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:10px;cursor:pointer}
 .sf-shell .legacy-flags input{accent-color:var(--accent)}
+.sf-shell .sf-ykt-advanced-options{
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+}
+.sf-shell .sf-ykt-advanced-options>summary{
+  color:var(--muted);font-size:10px;font-weight:650;cursor:pointer;
+  list-style:none;user-select:none;
+}
+.sf-shell .sf-ykt-advanced-options>summary::-webkit-details-marker{display:none}
+.sf-shell .sf-ykt-advanced-options>summary::after{
+  content:"＋";float:right;color:var(--accent-text);font-size:12px;
+}
+.sf-shell .sf-ykt-advanced-options[open]>summary::after{content:"−"}
+.sf-shell .sf-ykt-advanced-options .legacy-option-grid{margin-top:11px}
+.sf-shell .sf-ykt-advanced-note{
+  margin:7px 0 0;color:var(--muted);font-size:9px;line-height:1.5;
+}
 .sf-shell .legacy-actions{margin-top:13px}
 .sf-shell .legacy-state-note,.sf-shell .legacy-disclaimer{
   margin:10px 0 0;color:var(--muted);font-size:10px;line-height:1.5;

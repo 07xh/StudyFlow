@@ -19,7 +19,7 @@ import sys
 from studyflow.platforms.zhidao.courses import progress_key
 from studyflow.platforms.zhidao.legacy_runtime import installation_root
 from studyflow.platforms.yuketang.credentials import load as load_yuketang
-from studyflow.platforms.yuketang.legacy_config import prepare_environment
+from studyflow.platforms.yuketang.legacy_config import default_config_home, prepare_environment
 
 COURSE_KEY = re.compile(r"^[a-f0-9]{64}$")
 ID = re.compile(r"^[0-9]{1,20}$")
@@ -62,7 +62,7 @@ def run_yuketang_original() -> int:
     os.environ["YKT_HOME"] = str(log_dir)
     # Keep scoped progress logs and load original launcher options.
     try:
-        prepare_environment()
+        prepare_environment(default_config_home())
     except Exception:
         return 5
     # Upstream main.py configures its own task settings and app logger.

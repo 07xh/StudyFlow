@@ -15,23 +15,37 @@ def test_original_launcher_is_configuration_source(monkeypatch, tmp_path):
     monkeypatch.delenv("VIDEO_SPEED", raising=False)
     original = config._launcher()
     assert Path(original.__file__).name == "exe_entry.py"
-    assert config.read_settings()["completion_threshold"] == 90
+    defaults = config.read_settings()
+    assert defaults["completion_threshold"] == 90
+    assert defaults["debug"] is False
+    assert defaults["richtext_stay_seconds"] == 3
+    assert defaults["richtext_skip_delay"] == 1.0
 
     (tmp_path / ".env").write_text(
-        "# keep personal comment\nOTHER_SETTING=preserve\nVIDEO_SPEED=1.0\n",
+        "# keep personal comment\nOTHER_SETTING=preserve\nVIDEO_SPEED=1.0\n"
+        "DEBUG=true\nRICHTEXT_STAY_SECONDS=7\nRICHTEXT_SKIP_DELAY=1.5\n",
         encoding="utf-8",
     )
     settings = config.read_settings()
     assert settings["video_speed"] == 1.0
-    settings["max_concurrent_videos"] == 3
+    assert settings["debug"] is True
+    assert settings["richtext_stay_seconds"] == 7
+    assert settings["richtext_skip_delay"] == 1.5
+    assert settings["max_concurrent_videos"] == 3
 
-    edited = {**settings, "video_speed": 1.5, "completion_threshold": 95}
+    edited = {
+        **settings, "video_speed": 1.5, "completion_threshold": 95,
+        "debug": False, "richtext_stay_seconds": 9, "richtext_skip_delay": 2.5,
+    }
     assert config.save_settings(edited) == edited
     persisted = (tmp_path / ".env").read_text(encoding="utf-8")
     assert "# keep personal comment" in persisted
     assert "OTHER_SETTING=preserve" in persisted
     assert "VIDEO_SPEED=1.5" in persisted
     assert "COMPLETION_THRESHOLD=95" in persisted
+    assert "DEBUG=false" in persisted
+    assert "RICHTEXT_STAY_SECONDS=9" in persisted
+    assert "RICHTEXT_SKIP_DELAY=2.5" in persisted
 
 
 @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -1, 101])
@@ -43,6 +57,25 @@ def test_invalid_threshold_never_overwrites_original_env(monkeypatch, tmp_path, 
     assert not (tmp_path / ".env").exists()
 
 
+@pytest.mark.parametrize(
+    "field,bad_value",
+    [
+        ("richtext_stay_seconds", -1),
+        ("richtext_stay_seconds", 3601),
+        ("richtext_skip_delay", float("nan")),
+        ("richtext_skip_delay", -0.1),
+        ("richtext_skip_delay", 3601),
+        ("debug", "true"),
+    ],
+)
+def test_invalid_restored_original_options_never_overwrite_env(monkeypatch, tmp_path, field, bad_value):
+    monkeypatch.setenv("YKT_HOME", str(tmp_path))
+    original = config.read_settings()
+    with pytest.raises(ValueError):
+        config.save_settings({**original, field: bad_value})
+    assert not (tmp_path / ".env").exists()
+
+
 def test_original_environment_settings_do_not_override_explicit_choice(monkeypatch, tmp_path):
     monkeypatch.setenv("YKT_HOME", str(tmp_path))
     monkeypatch.setenv("VIDEO_SPEED", "2.5")
@@ -50,6 +83,27 @@ def test_original_environment_settings_do_not_override_explicit_choice(monkeypat
     assert config.prepare_environment() == tmp_path
     assert config.read_settings()["video_speed"] == 1.0
     assert config.os.environ["VIDEO_SPEED"] == "2.5"
+
+
+def test_run_environment_loads_persistent_settings_without_replacing_run_log_dir(monkeypatch, tmp_path):
+    settings_home = tmp_path / "persistent-settings"
+    run_home = tmp_path / "run-123"
+    settings_home.mkdir()
+    (settings_home / ".env").write_text(
+        "VIDEO_SPEED=1.8\nDEBUG=true\nRICHTEXT_STAY_SECONDS=11\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("YKT_HOME", str(run_home))
+    for key in ("VIDEO_SPEED", "DEBUG", "RICHTEXT_STAY_SECONDS"):
+        monkeypatch.delenv(key, raising=False)
+
+    loaded = config.prepare_environment(settings_home)
+
+    assert loaded == settings_home
+    assert config.os.environ["YKT_HOME"] == str(run_home)
+    assert config.os.environ["VIDEO_SPEED"] == "1.8"
+    assert config.os.environ["DEBUG"] == "true"
+    assert config.os.environ["RICHTEXT_STAY_SECONDS"] == "11"
 
 
 def test_bridge_exposes_only_known_settings(monkeypatch, tmp_path):

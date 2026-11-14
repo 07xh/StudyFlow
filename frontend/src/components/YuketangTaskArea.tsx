@@ -88,6 +88,31 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent}:Props){
               onChange={event=>update(id,event.currentTarget.checked)}/>{label}
           </label>)}
         </div>
+        <details className="sf-ykt-advanced-options">
+          <summary>图文与诊断参数</summary>
+          <div className="legacy-option-grid">
+            <label>
+              <span>每篇图文停留（秒）</span>
+              <input type="number" min={0} max={3600} step={1}
+                value={options.richtext_stay_seconds} disabled={!desktop||busy!==null}
+                onChange={event=>update("richtext_stay_seconds",Number(event.target.value))}/>
+            </label>
+            <label>
+              <span>图文间隔（秒）</span>
+              <input type="number" min={0} max={3600} step={0.1}
+                value={options.richtext_skip_delay} disabled={!desktop||busy!==null}
+                onChange={event=>update("richtext_skip_delay",Number(event.target.value))}/>
+            </label>
+          </div>
+          <div className="legacy-flags">
+            <label>
+              <input type="checkbox" checked={options.debug} disabled={!desktop||busy!==null}
+                onChange={event=>update("debug",event.currentTarget.checked)}/>
+              调试输出（仅本机日志）
+            </label>
+          </div>
+          <p className="sf-ykt-advanced-note">沿用原版 DEBUG、RICHTEXT_STAY_SECONDS、RICHTEXT_SKIP_DELAY 配置；调试日志可能包含课程和视频标识，分享前请检查日志内容。</p>
+        </details>
         {!validateOriginalOptions(options)&&<p className="sf-validation-error" role="alert">
           参数不在原版支持范围内，修正后才允许启动任务。
         </p>}

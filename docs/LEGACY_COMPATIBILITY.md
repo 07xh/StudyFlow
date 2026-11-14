@@ -30,12 +30,14 @@
 |---|---|---|---|
 | 会话配置 | 雨课堂二级页面 | Python adapter → Windows Credential Manager | 需本人真实会话验证 |
 | 课堂/章节/视频读取 | 雨课堂登录管理 | 只读接口与章节视频元数据读取 | 真实数据需 Windows 实测 |
-| 原版参数 | 雨课堂原版参数区 | 复用 `exe_entry.py` 的 `read_cfg/save_cfg`，保存原版 `.env` 配置格式 | 参数通过 IPC 校验后传给子进程 |
+| 原版参数 | 雨课堂原版参数区 | 复用 `exe_entry.py` 的 `read_cfg/save_cfg`，保存原版 `.env` 配置格式；包括视频、并发、图文停留/间隔与 DEBUG 开关 | 参数通过 IPC 校验后传给子进程；DEBUG 默认写入本机日志；分享前需检查日志内容 |
 | 原版任务 | 雨课堂原版任务区 | 独立 sidecar 子进程执行仓库中的 `legacy/yuketang/main.py` | 不在 UI 重写原版发送逻辑 |
 | 实时运行状态 | 雨课堂原版任务区 | Tauri 子进程状态 | 进程退出不等于任务成功 |
 | 进度诊断 | 雨课堂原版任务区 | 按 run_id 读取本次任务日志的数值摘要 | 本机模拟位置、日志中的服务端响应和批量统计分开展示 |
 
 雨课堂凭据与原版任务参数分开保存：会话凭据存入 Windows Credential Manager；参数通过原版 `exe_entry.py` 的配置读写逻辑保存在学序本地配置目录；每次任务使用独立 run_id 日志目录。原版 `main.py` 不由 UI 直接导入，避免其全局日志/标准输出副作用影响 IPC 服务。
+
+雨课堂原版参数完整映射当前 `main.py` 使用的 `VIDEO_SPEED`、`HEARTBEAT_INTERVAL`、`MAX_CONCURRENT_VIDEOS`、`COMPLETION_THRESHOLD`、`SKIP_COMPLETED`、`USE_CONCURRENT`、`TEST_MODE`、`TEST_VIDEO_COUNT`、`AUTO_RICHTEXT`、`DEBUG`、`RICHTEXT_STAY_SECONDS` 与 `RICHTEXT_SKIP_DELAY`。图文与诊断参数默认折叠；调试输出默认写入本机日志，可能包含课程/视频标识，分享前请检查日志内容。
 
 ## 统一 UI 与运行时
 
