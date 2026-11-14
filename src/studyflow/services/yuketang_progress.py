@@ -24,8 +24,21 @@ RICH_TOTAL = re.compile(r"准备浏览\s*(\d+)\s*个图文")
 RICH_CURRENT = re.compile(r"正在处理第\s*(\d+)/(\d+)\s*个图文")
 RICH_RESULT = re.compile(r"图文浏览结果:\s*共(\d+)篇,\s*成功(\d+)篇,\s*失败(\d+)篇")
 BATCH_SUMMARY = re.compile(r"(总视频数|成功观看|跳过（已完成）|失败|手动停止):\s*(\d+)\s*$")
-# The original serializer reports one worker's progress without its video ID.
-# In concurrent mode, NEVER attribute these values to a particular video.
+# The original serializer reports heartbeats without any worker/video identity.
+# Worker-N is the index of a queued VIDEO (not the permanent thread slot).
+# We may show independent task states but never assign an untagged heartbeat to a lane.
+WORKER_MAX = re.compile(r"开始并发观看视频.*?(?:最大并发数|并发数):\s*(\d+)")
+WORKER_START = re.compile(r"\[Worker-(\d{1,6})\]\s*开始处理视频")
+WORKER_WATCHING = re.compile(r"\[Worker-(\d{1,6})\].*?开始观看视频")
+WORKER_END = re.compile(r"\[Worker-(\d{1,6})\].*?(配置视频参数失败|视频已完成|视频观看完成|已停止|视频观看失败|处理视频时发生异常)")
+WORKER_RESULT = {
+    "配置视频参数失败": "failed",
+    "视频已完成": "skipped",
+    "视频观看完成": "completed",
+    "已停止": "stopped",
+    "视频观看失败": "failed",
+    "处理视频时发生异常": "failed",
+}
 
 
 def empty_progress(available: bool = False) -> dict:
@@ -45,6 +58,7 @@ def empty_progress(available: bool = False) -> dict:
         "failed": 0,
         "stopped": 0,
         "concurrent": None,
+        "worker_slots": [],
         "rich_total": None,
         "rich_current": None,
         "rich_processed": 0,
@@ -66,8 +80,45 @@ def parse_original_log(text: str) -> dict:
     result = empty_progress(bool(text.strip()))
     rich_summary = False
     video_summary = False
+    worker_slots: list[dict] = []
+    active_workers: dict[int, int] = {}
     for raw in text.splitlines():
         line = raw.strip()
+        if "开始并发观看视频" in line:
+            # A new batch starts; all slot assignments belong to this batch.
+            concurrent_match = WORKER_MAX.search(line)
+            if concurrent_match:
+                count = max(1, min(32, int(concurrent_match.group(1))))
+                worker_slots = [
+                    {"slot": index, "video_index": None, "state": "waiting"}
+                    for index in range(1, count + 1)
+                ]
+            active_workers.clear()
+        match = WORKER_START.search(line)
+        if match and worker_slots:
+            video_index = int(match.group(1))
+            if video_index not in active_workers:
+                occupied = set(active_workers.values())
+                slot_index = next(
+                    (idx for idx in range(len(worker_slots)) if idx not in occupied), None
+                )
+                if slot_index is not None:
+                    active_workers[video_index] = slot_index
+                    worker_slots[slot_index] = {
+                        "slot": slot_index + 1, "video_index": video_index,
+                        "state": "preparing",
+                    }
+        match = WORKER_WATCHING.search(line)
+        if match:
+            slot_index = active_workers.get(int(match.group(1)))
+            if slot_index is not None:
+                worker_slots[slot_index]["state"] = "watching"
+        match = WORKER_END.search(line)
+        if match:
+            video_index = int(match.group(1))
+            slot_index = active_workers.pop(video_index, None)
+            if slot_index is not None:
+                worker_slots[slot_index]["state"] = WORKER_RESULT[match.group(2)]
         if "开始批量浏览图文内容" in line:
             rich_summary = False
         if "图文批量浏览完成" in line:
@@ -191,6 +242,11 @@ def parse_original_log(text: str) -> dict:
                                + result["failed"] + result["stopped"])
     if result["total"] is not None:
         result["processed"] = min(result["processed"], result["total"])
+    # A truncated log can lose a worker's ending line. Never say it completed.
+    if video_summary:
+        for index in active_workers.values():
+            worker_slots[index]["state"] = "unknown"
+    result["worker_slots"] = worker_slots
     return result
 
 
