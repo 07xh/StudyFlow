@@ -141,5 +141,6 @@ test("verified Zhidao QR login closes the dialog and refreshes platform status",
   assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
   const handler = app.slice(handlerStart, handlerEnd);
   assert.match(handler, /setQrOpen\(false\)/);
-  assert.match(handler, /void refresh\(\)/);
+  assert.match(handler, /void refresh\(\)\.then\(/);
+  assert.match(handler, /setNotice\(previous=>previous\|\|/);
 });
