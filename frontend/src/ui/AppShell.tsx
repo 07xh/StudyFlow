@@ -33,7 +33,7 @@ export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,onDi
   },[collapsed]);
   const renderItems=(items:typeof workspaceNavigation,label:string)=><nav aria-label={label}>
     {items.map(item=><button key={item.id} type="button"
-      title={collapsed?item.label:undefined} aria-current={page===item.id?"page":undefined}
+      title={item.label} aria-label={item.label} aria-current={page===item.id?"page":undefined}
       className={page===item.id?"nav active":"nav"}
       onClick={()=>onNavigate(item.id)}>
       <item.icon size={19}/><span className="nav-label">{item.label}</span>

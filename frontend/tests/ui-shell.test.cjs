@@ -20,6 +20,7 @@ test("sidebar navigation remains interactive and grouped", () => {
   assert.match(shell, /systemNavigation/);
   assert.match(shell, /onNavigate\(item\.id\)/);
   assert.match(shell, /setCollapsed/);
+  assert.match(shell, /aria-label={item.label}/);
   assert.match(shell, /onThemeToggle/);
 });
 

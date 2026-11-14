@@ -469,23 +469,12 @@
 .sf-shell button:active:not(:disabled){transform:translateY(0) scale(.985)}
 .sf-shell ::selection{color:#062719;background:rgba(30,226,151,.38)}
 @media(max-width:1050px){
-  .sf-shell .sidebar{width:76px;padding:20px 9px 12px}
-  .sf-shell .brand{justify-content:center;padding:0;margin-bottom:26px}
-  .sf-shell .brand>div:last-child{display:none}
-  .sf-shell .sf-nav-head{justify-content:center;padding:0}
-  .sf-shell .sf-nav-head .section-label,.sf-shell .section-label{display:none}
-  .sf-shell .sf-nav-toggle{width:32px}
-  .sf-shell .nav{justify-content:center;padding:11px 8px}
-  .sf-shell .nav-label,.sf-shell .nav .right{display:none}
-  .sf-shell .sidebar-bottom{padding:12px 0 2px}
-  .sf-shell .sf-side-status{justify-content:center;font-size:0}
-  .sf-shell .sf-side-dot{margin:0}
+  .sf-shell .sidebar{width:210px}
   .sf-shell .main{padding:18px}
 }
 @media(max-width:720px){
   .app.sf-shell{gap:8px;padding:8px}
-  .sf-shell .sidebar{width:64px;height:calc(100vh - 16px);top:8px;padding:17px 6px 10px;border-radius:17px}
-  .sf-shell .brand-icon{width:39px;height:39px}
+  .sf-shell .sidebar{width:184px;height:calc(100vh - 16px);top:8px;padding:17px 10px 10px;border-radius:17px}
   .sf-shell .main{min-height:calc(100vh - 16px);padding:15px 13px;border-radius:17px}
   .sf-shell .sf-header{align-items:flex-start;flex-wrap:wrap;margin-bottom:15px;padding-bottom:12px}
   .sf-shell .sf-header h1{font-size:20px}
@@ -498,6 +487,11 @@
   .sf-shell .credential-form>.actions{grid-column:auto}
 }
 @media(max-width:500px){
+  .sf-shell .sidebar{width:160px;padding:14px 9px}
+  .sf-shell .brand{gap:8px;padding:0 4px;margin-bottom:20px}
+  .sf-shell .brand-icon{width:35px;height:35px}
+  .sf-shell .brand strong{font-size:16px}
+  .sf-shell .brand small{font-size:9px}
   .sf-shell .sf-mode{padding:7px 8px;font-size:9px}
   .sf-shell .theme-button{width:34px;height:34px}
   .sf-shell .metrics{grid-template-columns:1fr 1fr}
@@ -569,3 +563,12 @@
 .sf-shell.sf-collapsed .sidebar-bottom{display:none}
 .sf-shell.sf-collapsed .sf-nav-head{justify-content:center;padding:0}
 .sf-shell.sf-collapsed .nav{justify-content:center;padding:11px 8px}
+
+
+/* Keep the collapse affordance functional at every window width. */
+@media(max-width:720px){
+  .sf-shell.sf-collapsed .sidebar{width:64px;height:calc(100vh - 16px);top:8px;padding:17px 6px 10px}
+}
+@media(max-width:500px){
+  .sf-shell.sf-collapsed .sidebar{width:58px;padding:14px 5px}
+}
