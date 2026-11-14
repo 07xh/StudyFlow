@@ -148,7 +148,8 @@ export function LegacyPlaybackPanel({
             <span style={{width:yktProgress.server_percent+"%"}}/></div>}
           <small>{yktProgress?.server_source==="final"?"最终查询":
             yktProgress?.server_source==="periodic"?"定期查询":
-            yktProgress?.server_source==="initial"?"开始前查询":"等待服务器返回"}</small>
+            yktProgress?.server_source==="initial"?"开始前查询":"等待服务器返回"}
+            {yktProgress?.server_position != null ? " · 最后位置 "+yktProgress.server_position.toFixed(1)+" 秒" : ""}</small>
         </div>
         <div className="sf-ykt-live-item">
           <span>批量任务</span>
