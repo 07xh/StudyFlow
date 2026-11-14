@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useState} from "react";
 import {Play, Square, RefreshCw, SlidersHorizontal, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
+import {request,friendlyBridgeError} from "../bridge";
 import {presentCourse} from "../presentation";
 import {
   getLegacyStatus, getYuketangLiveProgress, legacyError, originalYktDefaults, startLegacy, stopLegacy,
@@ -11,15 +12,6 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
   idle: "未启动", running: "原版进程运行中",
   exited: "原版进程已退出", stopped: "已终止"
 };
-
-function storedOptions(): OriginalYktOptions {
-  try {
-    const json = JSON.parse(window.localStorage.getItem("studyflow.ykt.original-options") || "null");
-    if (json && typeof json === "object" && validateOriginalOptions(json as OriginalYktOptions))
-      return json as OriginalYktOptions;
-  } catch { /* No credentials or raw task results stored here. */ }
-  return {...originalYktDefaults};
-}
 
 export function LegacyPlaybackPanel({
   platform, courses, desktop, connected, onEvent
@@ -32,7 +24,7 @@ export function LegacyPlaybackPanel({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState("");
-  const [options, setOptions] = useState<OriginalYktOptions>(storedOptions);
+  const [options, setOptions] = useState<OriginalYktOptions>({...originalYktDefaults});
   const aiCourses = courses.filter(c => c.platform === "zhidao" && c.course_type === "ai");
   const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
     .filter(item => item.presentation.percent !== null);
@@ -56,27 +48,47 @@ export function LegacyPlaybackPanel({
     return () => window.clearInterval(timer);
   }, [desktop, updateStatus]);
 
-  function updateOption<K extends keyof OriginalYktOptions>(key: K, value: OriginalYktOptions[K]) {
-    setOptions(current => {
-      const next = {...current, [key]: value};
-      // UI preferences only; session credentials remain in Windows Credential Manager.
-      if (validateOriginalOptions(next)) {
-        try {window.localStorage.setItem("studyflow.ykt.original-options", JSON.stringify(next));}
-        catch {/* Persistence is optional. */}
-      }
-      return next;
-    });
+  useEffect(()=>{
+    if(!desktop||platform!=="yuketang")return;
+    let live=true;
+    void request<OriginalYktOptions>({operation:"yuketang.settings.get"})
+      .then(settings=>{if(live&&validateOriginalOptions(settings))setOptions(settings);})
+      .catch(error=>{if(live)setMessage(friendlyBridgeError(error));});
+    return ()=>{live=false;};
+  },[desktop,platform]);
+
+  function updateOption<K extends keyof OriginalYktOptions>(key:K,value:OriginalYktOptions[K]){
+    setOptions(previous=>({...previous,[key]:value}));
+  }
+
+  async function saveOriginalSettings(){
+    if(platform!=="yuketang"||!validateOriginalOptions(options))return;
+    setBusy(true);setMessage("");
+    try{
+      const saved=await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
+      if(!validateOriginalOptions(saved))throw new Error("INVALID_IPC_RESPONSE");
+      setOptions(saved);
+      setMessage("已通过原版 exe_entry.py 保存雨课堂配置。");
+      onEvent?.("保存原版参数","success","参数已保存至学序本机配置");
+    }catch(error){
+      const message=friendlyBridgeError(error);
+      setMessage(message);onEvent?.("保存原版参数","warning",message);
+    }finally{setBusy(false);}
   }
 
   async function start() {
     setBusy(true); setMessage("");setYktProgress(null);
     try {
+      if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined);
       setStatus(next);
       setMessage("已启动原版任务进程。进程运行不代表服务器已经接受心跳或确认学习进度。");
       onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
-    } catch (error) {setMessage(legacyError(error));onEvent?.("启动原版任务","warning",legacyError(error));}
+    } catch (error) {
+      const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
+      setMessage(msg);onEvent?.("启动原版任务","warning",msg);
+    }
     finally {setBusy(false);}
   }
 
@@ -202,6 +214,10 @@ export function LegacyPlaybackPanel({
               <input type="checkbox" checked={options[id]}
                 onChange={event=>updateOption(id,event.target.checked)}/>{label}
             </label>)}
+          </div>
+          <div className="actions">
+            <button className="secondary" type="button" disabled={!desktop||busy||!validateOriginalOptions(options)}
+              onClick={()=>void saveOriginalSettings()}>保存原版参数</button>
           </div>
         </div>}
     <div className="actions legacy-actions">

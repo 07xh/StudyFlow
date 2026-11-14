@@ -193,7 +193,8 @@ export default function App(){
 
   function renderPlatformLogin(platform:Platform){
     if(platform==="zhidao")return <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
-      onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>;
+      onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}
+      onImported={()=>{recordEvent("知到","导入 Cookie","success","服务器已确认会话");void refresh();}}/>;
     if(platform==="yuketang")return <YuketangLoginPanel config={config}
       desktop={desktop} busy={Boolean(busy)}
       connected={platforms.yuketang.status==="connected"} videos={videos}
