@@ -1638,3 +1638,50 @@
 }
 
 .sf-shell .sf-course-workspace>section{margin:0}
+
+/* Platform context above the always-visible navigation, and verified course total. */
+.sf-shell .sf-sidebar-brand{display:flex;align-items:center;gap:9px;padding:2px 8px 12px;border-bottom:1px solid var(--line)}
+.sf-shell .sf-sidebar-brand-mark{width:32px;height:32px;display:grid;place-items:center;flex:none;border-radius:9px;background:var(--soft-accent);color:var(--accent-text);font-size:16px;font-weight:800}
+.sf-shell .sf-sidebar-brand div{min-width:0}
+.sf-shell .sf-sidebar-brand small{display:block;font-size:10px;color:var(--muted)}
+.sf-shell .sf-sidebar-brand strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:13px}
+.sf-shell .sf-header:has(.sf-header-course){display:grid;align-items:center;grid-template-columns:minmax(110px,.55fr) minmax(240px,1.35fr) auto;gap:14px}
+.sf-shell .sf-header h1{font-size:20px}
+.sf-shell .sf-header-course{min-width:0;padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+.sf-shell .sf-header-course-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.sf-shell .sf-header-course-title{min-width:0;flex:1}
+.sf-shell .sf-header-course-title>small{display:block;color:var(--muted);font-size:10px}
+.sf-shell .sf-header-course-title>strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:12px}
+.sf-shell .sf-header-course-title select{display:block;width:100%;min-height:29px!important;padding:3px 7px;border:1px solid var(--line);border-radius:8px;background:var(--panel-raised);color:var(--text);font-size:11px!important}
+.sf-shell .sf-header-course-value{flex:none;text-align:right}
+.sf-shell .sf-header-course-value strong{display:block;color:var(--accent-text);font-size:21px;line-height:1.15;font-variant-numeric:tabular-nums}
+.sf-shell .sf-header-course-value small{font-size:9px;color:var(--muted)}
+.sf-shell .sf-header-course-track{height:6px;overflow:hidden;margin-top:7px;border-radius:99px;background:var(--line)}
+.sf-shell .sf-header-course-track span{display:block;height:100%;border-radius:inherit;background:var(--accent)}
+.sf-shell .sf-header-course-note{display:block;margin-top:3px;font-size:9px;color:var(--muted)}
+.sf-shell .sf-platform-login-inline{padding:12px 14px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}
+.sf-shell .sf-platform-login-inline .section-head{margin-bottom:0}
+.sf-shell .sf-platform-login-inline .sf-login-content{padding-top:12px}
+.sf-shell .sf-ykt-worker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px}
+.sf-shell .sf-ykt-worker{display:grid;gap:6px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.025)}
+.sf-shell .sf-ykt-worker-heading{display:flex;justify-content:space-between;gap:10px}
+.sf-shell .sf-ykt-worker-heading strong{font-size:12px;color:var(--text)}
+.sf-shell .sf-ykt-worker-heading span{font-size:11px;color:var(--accent-text)}
+.sf-shell .sf-ykt-worker>small{color:var(--muted);font-size:10px}
+.sf-shell .sf-ykt-worker-track{height:5px;border-radius:99px;background:var(--line);overflow:hidden}
+.sf-shell .sf-ykt-worker-track span{display:block;width:0;height:100%;background:var(--accent)}
+.sf-shell .sf-ykt-diagnostics{margin-top:13px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.sf-shell .sf-ykt-diagnostics>summary{cursor:pointer;color:var(--muted);font-size:11px;font-weight:650}
+.sf-shell .sf-ykt-diagnostics .sf-ykt-live-grid{margin-top:12px}
+.sf-shell .sf-ykt-live.sf-detail-live .sf-ykt-live-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+@media(max-width:1000px){
+ .sf-shell .sf-header:has(.sf-header-course){grid-template-columns:minmax(0,1fr) auto}
+ .sf-shell .sf-header-course{grid-column:1/-1;grid-row:2}
+ .sf-shell .sf-header-actions{grid-column:2;grid-row:1}
+}
+@media(max-width:500px){
+ .sf-shell .sf-sidebar-brand{gap:5px;padding:0 3px 10px}
+ .sf-shell .sf-sidebar-brand-mark{width:25px;height:25px}
+ .sf-shell .sf-sidebar-brand small{font-size:8px}
+ .sf-shell .sf-sidebar-brand strong{font-size:10px}
+}
