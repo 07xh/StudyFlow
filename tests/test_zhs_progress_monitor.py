@@ -134,3 +134,20 @@ def test_ui_status_cannot_be_conflated_with_server_progress():
     assert status.index("child.try_wait()") < status.index("read_zhs_snapshot")
     assert status.index("read_zhs_snapshot") < status.index("remove_zhs_snapshot")
     assert "结束前最后一次真实采样" in panel
+
+
+def test_rust_idle_status_always_initializes_telemetry_freshness():
+    rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
+    # Prevent missing new struct fields in an uncommon idle return branch.
+    for line in rust.splitlines():
+        if 'Ok(LegacyStatus {platform, state: "idle"' in line:
+            assert "zhs_stale: false" in line
+    assert 'zhs_stale: false}),\n}' in rust
+
+
+def test_monitor_remains_a_read_only_observer():
+    # Keep the original vendor and upstream sender byte-for-byte untouched.
+    wrapper = (ROOT / "src" / "studyflow" / "services" / "legacy_playback.py").read_text(encoding="utf-8")
+    assert 'zhs_app(args=arguments, standalone_mode=False)' in wrapper
+    assert 'monitor_token' in wrapper
+    assert 'sys.stdout = original_stdout' in wrapper
