@@ -55,8 +55,8 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(app,/<ZhidaoOfficialPlayerPanel/);
   assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
   assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
-  assert.match(app,/expanded=\{platformLoginExpanded\}/);
-  assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(value=>!value\)\}/);
+  assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
+  assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.{3}previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
   assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
   const yuketang=read("src/components/YuketangTaskArea.tsx");
   assert.match(yuketang,/<LegacyPlaybackPanel platform="yuketang"/);
@@ -129,4 +129,18 @@ test("StudyFlow shared controls keep their own accessible interaction contracts"
   assert.match(theme,/onChange\("system"\)/);
   for(const source of [toggle,empty,theme])
     assert.doesNotMatch(source,/LightC-UI|Evan Lau/);
+});
+
+test("consent requires one explicit decision and keeps a single exit action", () => {
+  const gate=read("src/components/StudyFlowConsentGate.tsx");
+  const css=read("src/ui/foundation.css");
+  assert.doesNotMatch(gate,/type="checkbox"/);
+  assert.doesNotMatch(gate,/sf-consent-exit/);
+  assert.match(gate,/点击“同意并继续使用”即表示你已阅读并同意/);
+  assert.match(gate,/不同意并退出/);
+  assert.match(gate,/同意并继续使用/);
+  assert.match(css,/--accent-text:#078f5c/);
+  assert.match(css,/sf-consent-confirmation/);
+  assert.match(css,/sf-zd-progress-grid/);
+  assert.match(css,/sf-zd-player-settings/);
 });
