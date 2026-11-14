@@ -361,7 +361,7 @@ export default function App(){
                 {course.stale&&<span>数据可能已过期</span>}
               </div>
               {data.percent!==null&&<div className="sf-recent-track" role="progressbar"
-                aria-label="服务器已核验课程进度" aria-valuemin={0} aria-valuemax={100}
+                aria-label="服务器已核验进度" aria-valuemin={0} aria-valuemax={100}
                 aria-valuenow={data.percent}><span style={{width:data.percent+"%"}}/></div>}
             </div>
             <button className="secondary sf-recent-detail" type="button"
@@ -389,7 +389,7 @@ export default function App(){
           <ArrowLeft size={15}/>返回课程列表
         </button>
       </div>
-      <section className="sf-course-total-progress" aria-label="课程总进度">
+      <section className="sf-course-total-progress" aria-label="课程进度总览">
         <div className="sf-course-total-head">
           <div className="sf-course-total-copy">
             <span className="eyebrow">{definition?.name??platformNames[course.platform]} / {course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"}</span>
@@ -398,7 +398,7 @@ export default function App(){
           </div>
           <div className="sf-course-total-value">
             <strong>{percent===null?"—":percent.toFixed(1)+"%"}</strong>
-            <small>课程总进度</small>
+            <small>进度总览</small>
           </div>
         </div>
         <div className={"sf-course-total-track"+(percent===null?" is-empty":"")} role="progressbar"
