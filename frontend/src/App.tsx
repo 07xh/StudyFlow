@@ -73,7 +73,7 @@ export default function App(){
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
-  const [platformLoginExpanded,setPlatformLoginExpanded]=useState(true);
+  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>({zhidao:true,yuketang:true});
   const initialized=useRef(false);
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
@@ -205,7 +205,7 @@ export default function App(){
 
   function goPlatform(platform:Platform){
     setSelectedCourse(null);
-    setPlatformLoginExpanded(true);
+    setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
@@ -283,9 +283,9 @@ export default function App(){
       </>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
-          busy={Boolean(busy)} expanded={platformLoginExpanded}
+          busy={Boolean(busy)} expanded={platformLoginExpanded[platform]}
           onSync={()=>void sync(platform)}
-          onToggleLogin={()=>setPlatformLoginExpanded(value=>!value)}
+          onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}
           onEnterCourses={()=>enterCourses(platform)}>
           {renderPlatformLogin(platform)}
         </PlatformCard>

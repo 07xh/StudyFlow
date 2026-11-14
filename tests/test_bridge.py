@@ -107,3 +107,32 @@ def test_studyflow_consent_bridge_reads_and_persists_acceptance(monkeypatch):
     assert dispatch({"id":"c1","version":1,"operation":"studyflow.consent.status"})["data"]["accepted"] is False
     monkeypatch.setattr(bridge, "accept_studyflow_consent", lambda: {"accepted": True})
     assert dispatch({"id":"c2","version":1,"operation":"studyflow.consent.accept"})["data"]["accepted"] is True
+
+def test_main_keeps_diagnostics_off_jsonl_stdout(monkeypatch, capsys):
+    import io
+    from types import SimpleNamespace
+
+    request = {"id": "noisy-1", "version": 1, "operation": "ping"}
+    monkeypatch.setattr(
+        bridge.sys,
+        "stdin",
+        SimpleNamespace(buffer=io.BytesIO((__import__("json").dumps(request) + "\n").encode())),
+    )
+
+    def noisy_dispatch(value):
+        print("diagnostic that must not enter JSONL")
+        return {"id": value["id"], "ok": True, "data": {"version": 1}}
+
+    monkeypatch.setattr(bridge, "dispatch", noisy_dispatch)
+    protocol = io.StringIO()
+    assert bridge.main(protocol) == 0
+
+    rows = protocol.getvalue().splitlines()
+    assert len(rows) == 1
+    assert __import__("json").loads(rows[0]) == {
+        "id": "noisy-1", "ok": True, "data": {"version": 1}
+    }
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "diagnostic that must not enter JSONL" in captured.err
+

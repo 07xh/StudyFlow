@@ -9,7 +9,6 @@ type Tab="terms"|"privacy";
 export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
   const [phase,setPhase]=useState<Phase>(desktop?"checking":"accepted");
   const [tab,setTab]=useState<Tab>("terms");
-  const [checked,setChecked]=useState(false);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [docs,setDocs]=useState<{terms:ZhidaoDocument|null;privacy:ZhidaoDocument|null}>({
@@ -35,7 +34,7 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
   },[desktop]);
 
   async function accept(){
-    if(!checked||!docs.terms||!docs.privacy)return;
+    if(!docs.terms||!docs.privacy)return;
     setBusy(true);setMessage("");
     try{
       const result=await invoke<{accepted:boolean}>("studyflow_consent_accept");
@@ -74,15 +73,12 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
           <h3>{docs[tab]?.title}</h3>
           <pre>{docs[tab]?.content}</pre>
         </div>
-        <label className="sf-consent-check">
-          <input type="checkbox" checked={checked} onChange={event=>setChecked(event.currentTarget.checked)}/>
-          <span>我已阅读并同意上述第三方使用声明及隐私与数据说明。</span>
-        </label>
+        <p className="sf-consent-confirmation">
+          点击“同意并继续使用”即表示你已阅读并同意上述第三方使用声明及隐私与数据说明。
+        </p>
         {message&&<p className="sf-consent-message" role="alert">{message}</p>}
         <footer className="sf-consent-actions">
-          <button className="secondary" type="button" disabled={busy}
-            onClick={()=>void invoke("studyflow_exit")}>不同意并退出</button>
-          <button className="primary" type="button" disabled={!checked||busy}
+          <button className="primary" type="button" disabled={!docs.terms||!docs.privacy||busy}
             onClick={()=>void accept()}>{busy?"正在保存…":"同意并继续使用"}</button>
         </footer>
       </>}
