@@ -807,7 +807,7 @@
 /* Permanent LightC-style compact sidebar, not a hover or click overlay. */
 .app.sf-shell{
   display:grid;
-  grid-template-columns:clamp(172px,16vw,202px) minmax(0,1fr);
+  grid-template-columns:clamp(166px,15vw,190px) minmax(0,1fr);
   align-items:start;
   gap:12px;
   min-height:100vh;
@@ -910,12 +910,12 @@
   background:var(--soft-accent);
 }
 @media(max-width:900px){
-  .app.sf-shell{grid-template-columns:168px minmax(0,1fr);gap:9px;padding:9px}
+  .app.sf-shell{grid-template-columns:156px minmax(0,1fr);gap:9px;padding:9px}
   .sf-shell .sf-floating-nav{top:9px;height:calc(100vh - 18px);padding:12px 8px}
   .sf-shell .main{min-height:calc(100vh - 18px);padding:18px}
 }
 @media(max-width:720px){
-  .app.sf-shell{grid-template-columns:144px minmax(0,1fr);gap:8px;padding:8px}
+  .app.sf-shell{grid-template-columns:138px minmax(0,1fr);gap:8px;padding:8px}
   .sf-shell .sf-floating-nav{top:8px;height:calc(100vh - 16px);padding:11px 6px;border-radius:16px}
   .sf-shell .main{min-height:calc(100vh - 16px);padding:15px 12px 20px;border-radius:17px}
   .sf-shell .sf-floating-nav .nav{gap:6px;padding:7px 5px;font-size:11px}
@@ -924,7 +924,7 @@
   .sf-shell .sf-floating-nav .sf-nav-expand{width:21px}
 }
 @media(max-width:500px){
-  .app.sf-shell{grid-template-columns:126px minmax(0,1fr);gap:6px;padding:6px}
+  .app.sf-shell{grid-template-columns:118px minmax(0,1fr);gap:6px;padding:6px}
   .sf-shell .sf-floating-nav{top:6px;height:calc(100vh - 12px);padding:10px 4px}
   .sf-shell .main{min-height:calc(100vh - 12px);padding:12px 9px}
   .sf-shell .sf-floating-nav .nav{font-size:10px;gap:5px}
@@ -1638,3 +1638,43 @@
 }
 
 .sf-shell .sf-course-workspace>section{margin:0}
+
+/* UI workspace consolidation: permanent three-region sidebar and consistent panels. */
+.sf-shell .sf-sidebar-context,
+.sf-shell .sf-sidebar-course{
+  display:grid;gap:7px;min-width:0;padding:10px;
+  border:1px solid var(--line);border-radius:12px;
+  background:rgba(255,255,255,.025);
+}
+.sf-shell:not(.dark) .sf-sidebar-context,
+.sf-shell:not(.dark) .sf-sidebar-course{background:rgba(19,80,52,.025)}
+.sf-shell .sf-sidebar-caption{color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.08px}
+.sf-shell .sf-sidebar-platform{display:flex;align-items:center;gap:7px;min-width:0}
+.sf-shell .sf-sidebar-platform svg{color:var(--accent-text);flex:none}
+.sf-shell .sf-sidebar-platform strong{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:14px;line-height:1.4;
+}
+.sf-shell .sf-sidebar-platform-status{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:11px}
+.sf-shell .sf-sidebar-platform-status.is-connected{color:var(--success)}
+.sf-shell .sf-sidebar-platform-status.is-connected .sf-status-dot{background:var(--success)}
+.sf-shell .sf-sidebar-course-title{
+  min-width:0;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;
+  -webkit-box-orient:vertical;-webkit-line-clamp:2;
+  font-size:12px;font-weight:650;line-height:1.45;
+}
+.sf-shell .sf-sidebar-percent{
+  color:var(--accent-text);font-size:24px;font-weight:750;
+  font-variant-numeric:tabular-nums;line-height:1.1;
+}
+.sf-shell .sf-sidebar-track{height:7px;border-radius:99px;background:var(--line);overflow:hidden}
+.sf-shell .sf-sidebar-track>span{display:block;height:100%;border-radius:inherit;background:var(--accent)}
+.sf-shell .sf-sidebar-evidence{color:var(--muted);font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.sf-shell .sf-sidebar-course+.sf-floating-nav__heading{padding-top:8px}
+@media(max-width:720px){
+  .sf-shell .sf-sidebar-context,.sf-shell .sf-sidebar-course{padding:8px 6px}
+  .sf-shell .sf-sidebar-platform strong{font-size:12px}
+  .sf-shell .sf-sidebar-percent{font-size:19px}
+  .sf-shell .sf-sidebar-caption,.sf-shell .sf-sidebar-platform-status,
+  .sf-shell .sf-sidebar-evidence{font-size:10px}
+}

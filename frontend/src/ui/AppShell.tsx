@@ -11,6 +11,9 @@ import "./foundation.css";
 
 export type Page="home"|"courses"|"tasks"|"platforms"|"platform-zhidao"|
   "platform-yuketang"|"records"|"logs"|"settings";
+
+export type SidebarPlatform={name:string;connected:boolean};
+export type SidebarCourse={title:string;percent:number|null;evidence:string};
 const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"home",label:"首页",icon:LayoutDashboard},
   {id:"courses",label:"课程中心",icon:BookOpen},
@@ -39,9 +42,12 @@ interface Props {
   onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
   compact:boolean;children:ReactNode;
   headerTitle?:string;
+  sidebarPlatform?:SidebarPlatform;
+  sidebarCourse?:SidebarCourse;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,
+  sidebarPlatform,sidebarCourse
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -86,6 +92,31 @@ export function AppShell({
 
   return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
     <aside className="sf-floating-nav" aria-label="主导航">
+      <div className="sf-sidebar-context" aria-label="当前学习平台">
+        <span className="sf-sidebar-caption">当前学习平台</span>
+        <div className="sf-sidebar-platform">
+          <Layers3 size={18} aria-hidden="true"/>
+          <strong title={sidebarPlatform?.name??"未选择平台"}>{sidebarPlatform?.name??"未选择平台"}</strong>
+        </div>
+        <span className={"sf-sidebar-platform-status"+(sidebarPlatform?.connected?" is-connected":"")}>
+          <span className="sf-status-dot" aria-hidden="true"/>
+          {!sidebarPlatform?"选择平台后显示状态":sidebarPlatform.connected?"已连接":"尚未连接"}
+        </span>
+      </div>
+      <div className="sf-sidebar-course" aria-label="当前课程总进度">
+        <span className="sf-sidebar-caption">当前课程 · 总进度</span>
+        <strong className="sf-sidebar-course-title" title={sidebarCourse?.title??"尚未选择课程"}>
+          {sidebarCourse?.title??"尚未选择课程"}
+        </strong>
+        <div className="sf-sidebar-percent">{sidebarCourse?.percent===null||!sidebarCourse?"—":sidebarCourse.percent.toFixed(1)+"%"}</div>
+        {sidebarCourse?.percent!==null&&sidebarCourse
+          ?<div className="sf-sidebar-track" role="progressbar" aria-label="课程服务器核验进度"
+            aria-valuemin={0} aria-valuemax={100} aria-valuenow={sidebarCourse.percent}>
+            <span style={{width:sidebarCourse.percent+"%"}}/>
+          </div>
+          :<div className="sf-sidebar-track is-empty" aria-hidden="true"/>}
+        <small className="sf-sidebar-evidence">{sidebarCourse?.evidence??"选择课程后显示已核验进度"}</small>
+      </div>
       <div className="sf-floating-nav__heading">功能菜单</div>
       {renderItems(workspaceNavigation)}
     </aside>
