@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const read = relative => fs.readFileSync(path.join(__dirname,"..",relative),"utf8");
 
-test("LightC-style floating navigation overlays the workspace and keeps all page routes", () => {
+test("LightC-sized sidebar stays visible and exposes platform navigation", () => {
   const shell=read("src/ui/AppShell.tsx");
   const css=read("src/ui/foundation.css");
   for(const page of ["home","courses","tasks","platforms","records","logs"])
@@ -14,27 +14,16 @@ test("LightC-style floating navigation overlays the workspace and keeps all page
   assert.match(shell,/id:"platform-yuketang"/);
   assert.match(shell,/platformExpanded/);
   assert.match(shell,/onNavigate\(item\.id\)/);
-  assert.match(shell,/onPointerEnter=\{handlePointerEnter\}/);
-  assert.match(shell,/onPointerLeave=\{handlePointerLeave\}/);
-  assert.match(shell,/function handleTriggerClick\(\)\{\s*setNavOpen\(current=>!current\);\s*\}/);
-  assert.match(shell,/onClick=\{handleTriggerClick\}/);
-  assert.match(shell,/setNavOpen\(true\)/);
-  assert.match(shell,/Escape/);
-  assert.match(shell,/aria-expanded=\{navOpen\}/);
-  assert.match(shell,/aria-hidden=\{!navOpen\}/);
-  assert.match(shell,/onFocusCapture/);
-  assert.match(shell,/onBlurCapture/);
-  assert.match(shell,/onRefresh/);
+  assert.match(shell,/aria-label="常驻侧栏"/);
+  assert.match(shell,/sf-sidebar-brand/);
+  assert.match(shell,/headerCourseOptions/);
+  assert.match(shell,/sf-header-course-track/);
+  assert.doesNotMatch(shell,/navOpen|aria-hidden=\{!navOpen\}/);
   assert.match(css,/--accent:#13d992/);
-  assert.match(css,/\.sf-shell \.sf-floating-nav__panel\s*\{[^}]*position:fixed/s);
-  assert.match(css,/\.app\.sf-shell\s*\{[^}]*display:block/s);
-  assert.match(css,/\.sf-shell \.main\s*\{[^}]*width:100%/s);
+  assert.match(css,/grid-template-columns:176px minmax\(0,1fr\)/);
+  assert.match(css,/\.sf-shell \.sf-floating-nav\{\s*position:sticky/s);
   assert.match(css,/backdrop-filter:blur/);
-  assert.match(css,/\.sf-shell \.sf-floating-nav__panel \.sf-subnav/);
   assert.doesNotMatch(css,/\.sf-shell \.sidebar\s*\{/);
-  assert.doesNotMatch(css,/\.sf-shell\.sf-collapsed/);
-  assert.doesNotMatch(shell,/className="sidebar"/);
-  assert.doesNotMatch(shell,/studyflow\.nav\.collapsed|setCollapsed/);
 });
 
 test("dashboard only shows real course and server-verified live progress", () => {
@@ -57,8 +46,8 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(app,/<ZhidaoOfficialPlayerPanel/);
   assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
   assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
-  assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
-  assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.{3}previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
+  assert.match(app,/aria-expanded=\{platformLoginExpanded\[platform\]\}/);
+  assert.match(app,/onClick=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.\.\.previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
   assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
   const yuketang=read("src/components/YuketangTaskArea.tsx");
   assert.match(yuketang,/<LegacyPlaybackPanel platform="yuketang"/);
@@ -109,8 +98,9 @@ test("platform task status and verified progress are placed before login control
   assert.ok(start>=0&&end>start);
   assert.ok(detail.indexOf("sf-platform-task-section")<detail.indexOf("sf-platform-detail"));
   assert.match(playback,/sf-live-progress-summary/);
-  assert.match(playback,/presentCourse\(course\)/);
-  assert.match(playback,/presentation\.percent !== null/);
+  assert.match(playback,/workerSlots\.map\(slot/);
+  assert.match(playback,/单任务进度：—/);
+  assert.match(playback,/心跳无法对应到单个视频/);
   assert.doesNotMatch(playback,/Math\.random\(\)|setInterval\([^,]+,\s*[1-9]\)/);
 });
 
