@@ -1655,3 +1655,219 @@
     max-width:calc(100vw - 16px);
   }
 }
+
+
+/* Course detail is one vertical workspace: course total first, lesson detail next,
+   then runtime log, server verification, local simulation and player parameters. */
+.sf-shell .sf-course-workspace{
+  display:flex;
+  flex-direction:column;
+  gap:13px;
+  min-width:0;
+}
+.sf-shell .sf-course-detail-topline{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 0 2px;
+}
+.sf-shell .sf-course-breadcrumb{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+  color:var(--muted);
+  font-size:11px;
+}
+.sf-shell .sf-course-breadcrumb strong{
+  color:var(--text);
+  font-weight:650;
+}
+.sf-shell .sf-course-detail-topline>.secondary{
+  min-height:32px;
+  padding:6px 10px;
+  flex:none;
+}
+.sf-shell .sf-course-total-progress{
+  padding:18px 20px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.018));
+  box-shadow:var(--soft-shadow);
+}
+.sf-shell:not(.dark) .sf-course-total-progress{
+  background:linear-gradient(145deg,#fff,#f7faf8);
+}
+.sf-shell .sf-course-total-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.sf-shell .sf-course-total-copy{min-width:0}
+.sf-shell .sf-course-total-copy h2{
+  margin:5px 0 4px;
+  color:var(--text);
+  font-size:19px;
+  font-weight:720;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.sf-shell .sf-course-total-copy p{
+  margin:0;
+  color:var(--muted);
+  font-size:11px;
+}
+.sf-shell .sf-course-total-value{
+  display:grid;
+  justify-items:end;
+  flex:none;
+}
+.sf-shell .sf-course-total-value strong{
+  color:var(--accent-text);
+  font-size:29px;
+  line-height:1.1;
+  font-weight:760;
+  font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-course-total-value small{
+  margin-top:4px;
+  color:var(--muted);
+  font-size:10px;
+}
+.sf-shell .sf-course-total-track{
+  height:9px;
+  margin-top:16px;
+  overflow:hidden;
+  border-radius:999px;
+  background:rgba(255,255,255,.10);
+}
+.sf-shell:not(.dark) .sf-course-total-track{background:rgba(30,70,48,.10)}
+.sf-shell .sf-course-total-track>span{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#0ecb83,#58edb0);
+  transition:width .25s ease;
+}
+.sf-shell .sf-course-total-track.is-empty>span{width:0}
+.sf-shell .sf-course-total-meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:6px 14px;
+  margin-top:9px;
+  color:var(--muted);
+  font-size:10px;
+}
+.sf-shell .sf-course-total-note{
+  margin:7px 0 0;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.5;
+}
+.sf-shell .sf-course-workspace>.sf-zhidao-course-detail,
+.sf-shell .sf-course-workspace>.sf-zhidao-activity,
+.sf-shell .sf-course-workspace>.sf-zhidao-progress-panel,
+.sf-shell .sf-course-workspace>.legacy-playback-panel,
+.sf-shell .sf-course-workspace>.sf-yuketang-settings-panel{
+  width:100%;
+  margin:0;
+}
+.sf-shell .sf-zd-detail-summary-compact{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.sf-shell .sf-zd-detail-list-expanded{
+  max-height:none;
+  overflow:visible;
+  grid-template-columns:minmax(0,1fr);
+}
+.sf-shell .sf-zd-detail-list-expanded .sf-zd-detail-item{
+  padding:12px 14px;
+}
+.sf-shell .sf-zd-progress-grid.is-detail{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+}
+.sf-shell .sf-zd-progress-course{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:9px;
+  min-height:116px;
+  min-width:0;
+  padding:13px 14px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  color:var(--muted);
+  background:rgba(255,255,255,.025);
+  font-size:12px;
+  font-weight:600;
+}
+.sf-shell .sf-zd-progress-course strong{
+  color:var(--text);
+  font-size:13px;
+  overflow-wrap:anywhere;
+}
+.sf-shell .sf-live-progress-summary.sf-detail-simulation-only{
+  grid-template-columns:minmax(0,1fr);
+}
+.sf-shell .sf-live-progress-summary.sf-detail-simulation-only .sf-live-state{
+  min-width:0;
+}
+.sf-shell .sf-legacy-course-context{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-legacy-course-context span{
+  color:var(--muted);
+  font-size:11px;
+}
+.sf-shell .sf-legacy-course-context strong{
+  color:var(--text);
+  font-size:12px;
+  text-align:right;
+}
+.sf-shell .sf-zd-local-observations-expanded{
+  margin-top:12px;
+  padding-top:10px;
+  border-top:1px solid var(--line);
+}
+.sf-shell .sf-zd-local-observations-expanded>strong{
+  color:var(--text);
+  font-size:11px;
+}
+.sf-shell .sf-course-chapter-note{
+  padding:15px 17px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-course-chapter-note .section-head{margin-bottom:6px}
+.sf-shell .sf-course-chapter-note p{
+  margin:0;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.55;
+}
+@media(max-width:760px){
+  .sf-shell .sf-course-total-progress{padding:15px}
+  .sf-shell .sf-course-total-copy h2{font-size:16px}
+  .sf-shell .sf-course-total-value strong{font-size:24px}
+  .sf-shell .sf-zd-progress-grid.is-detail{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:520px){
+  .sf-shell .sf-course-detail-topline{align-items:flex-start}
+  .sf-shell .sf-course-detail-topline>.secondary{min-height:30px;padding:5px 7px;font-size:10px}
+  .sf-shell .sf-course-total-head{align-items:flex-start}
+  .sf-shell .sf-course-total-value strong{font-size:21px}
+  .sf-shell .sf-course-total-meta{display:grid}
+  .sf-shell .sf-zd-detail-summary-compact{grid-template-columns:minmax(0,1fr)}
+}
