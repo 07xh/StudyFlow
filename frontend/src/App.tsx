@@ -68,7 +68,7 @@ function WorkspaceSection({
       onClick={()=>setOpen(previous=>!previous)}>
       <strong>{title}</strong><ChevronDown size={16} aria-hidden="true"/>
     </button>
-    {open&&<div className="sf-workspace-fold__body">{children}</div>}
+    <div className="sf-workspace-fold__body" hidden={!open}>{children}</div>
   </section>;
 }
 
