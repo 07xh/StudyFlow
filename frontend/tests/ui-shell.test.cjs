@@ -55,6 +55,9 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(app,/<ZhidaoOfficialPlayerPanel/);
   assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
   assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
+  assert.match(app,/expanded=\{platformLoginExpanded\}/);
+  assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(value=>!value\)\}/);
+  assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
   const yuketang=read("src/components/YuketangTaskArea.tsx");
   assert.match(yuketang,/<LegacyPlaybackPanel platform="yuketang"/);
   assert.match(yuketang,/yuketang\.settings\.get/);

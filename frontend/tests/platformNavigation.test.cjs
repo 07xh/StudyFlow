@@ -18,6 +18,9 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/page==="platform-zhidao"&&renderPlatformDetail\("zhidao"\)/);
  assert.match(app,/page==="platform-yuketang"&&renderPlatformDetail\("yuketang"\)/);
  assert.match(app,/renderPlatformLogin\(platform\)/);
+ assert.match(app,/platformLoginExpanded/);
+ assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(value=>!value\)\}/);
+ assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
  assert.match(app,/YuketangLoginPanel/);
  assert.match(app,/ZhidaoLoginPanel/);
  assert.match(app,/ZhidaoOfficialPlayerPanel/);

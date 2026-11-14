@@ -17,8 +17,7 @@ import {ZhidaoPlayerMonitor} from "./components/ZhidaoPlayerMonitor";
 import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
 import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
-  fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,
-  openLegacyZhidao,request
+  fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,request
 } from "./bridge";
 import type {Config,Video,ZhidaoPlayerSettings} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
@@ -74,6 +73,7 @@ export default function App(){
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
+  const [platformLoginExpanded,setPlatformLoginExpanded]=useState(true);
   const initialized=useRef(false);
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
@@ -208,25 +208,13 @@ export default function App(){
     }finally{setBusy("");}
   }
 
-  async function openZhidao(){
-    setBusy("zhidao-login");setNotice("");
-    try{
-      await openLegacyZhidao();
-      setNotice("已打开原版知到登录窗口；完成登录后检测连接。");
-      recordEvent("知到","打开原版登录","info","已调用原版登录窗口");
-    }catch(error){
-      const message=error instanceof Error&&error.message==="LEGACY_NOT_AVAILABLE"
-        ?"未找到原版知到登录窗口，请检查原版运行时。":friendlyBridgeError(error);
-      setNotice(message);recordEvent("知到","打开原版登录","warning",message);
-    }finally{setBusy("");}
-  }
-
   function enterCourses(platform:Platform){
     setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
   }
 
   function goPlatform(platform:Platform){
     setSelectedCourse(null);
+    setPlatformLoginExpanded(true);
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
@@ -304,9 +292,9 @@ export default function App(){
       </>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
-          busy={Boolean(busy)} expanded={true}
+          busy={Boolean(busy)} expanded={platformLoginExpanded}
           onSync={()=>void sync(platform)}
-          onToggleLogin={()=>setPage("platforms")}
+          onToggleLogin={()=>setPlatformLoginExpanded(value=>!value)}
           onEnterCourses={()=>enterCourses(platform)}>
           {renderPlatformLogin(platform)}
         </PlatformCard>
