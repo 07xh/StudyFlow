@@ -1,4 +1,4 @@
-"""Single packaged StudyFlow Python runtime.
+""""Single packaged StudyFlow Python runtime.
 
 The same bundled interpreter handles versioned JSONL IPC and opt-in local
 Zhidao workers. No second Python installation or old ZHSDesktop EXE needed.
@@ -6,6 +6,59 @@ Zhidao workers. No second Python installation or old ZHSDesktop EXE needed.
 from __future__ import annotations
 
 import sys
+
+
+def _packaged_runtime_self_test() -> int:
+    """Verify both platforms and all runtime dependencies inside the frozen EXE."""
+    from pathlib import Path
+
+    if not getattr(sys, "frozen", False) or not getattr(sys, "_MEIPASS", None):
+        print("[PACKAGED_RUNTIME_FAILED] not running as a frozen executable", file=sys.stderr)
+        return 10
+
+    root = Path(sys._MEIPASS)
+    required = (
+        "legacy/yuketang/main.py",
+        "legacy/yuketang/exe_entry.py",
+        "legacy/zhidao/ZHS-ConsoleMonitor.py",
+        "legacy/zhidao/Zhidao-Task.cmd",
+        "legacy/zhidao/Official-Player.ps1",
+        "legacy/zhidao/Official-MediaController.js",
+        "legacy/zhidao/Zhidao-GUI.ps1",
+        "legacy/zhidao/Zhidao-UI.xaml",
+        "legacy/zhidao/CookieImport.ps1",
+        "legacy/zhidao/SessionState.ps1",
+    )
+    missing = [name for name in required if not (root / name).is_file()]
+    if missing:
+        print("[PACKAGED_RUNTIME_FAILED] bundled platform resources are missing: " + ", ".join(missing), file=sys.stderr)
+        return 11
+
+    try:
+        import requests  # noqa: F401
+        import dotenv  # noqa: F401
+        import keyring  # noqa: F401
+        from importlib.metadata import version
+        if version("zhs") != "0.1.5":
+            raise RuntimeError("unexpected ZHS version")
+        from zhs.login import LoginManager  # noqa: F401
+        from zhs.cli.bootstrap import load_config_and_session  # noqa: F401
+        from zhs.zhidao.course import ZhidaoCourseManager  # noqa: F401
+
+        # Exercise the actual frozen-resource resolver and recovered original
+        # launcher without executing its interactive menu or contacting a server.
+        from studyflow.platforms.yuketang import legacy_config
+        launcher = legacy_config._launcher()
+        if not callable(getattr(launcher, "read_cfg", None)) or not callable(getattr(launcher, "save_cfg", None)):
+            raise RuntimeError("original Rain Classroom settings entry is incomplete")
+        source = root / "legacy" / "yuketang" / "main.py"
+        compile(source.read_text(encoding="utf-8-sig"), str(source), "exec")
+    except Exception as exc:
+        print("[PACKAGED_RUNTIME_FAILED] dependency or source check: " + type(exc).__name__, file=sys.stderr)
+        return 12
+
+    print("[PACKAGED_RUNTIME_OK] frozen Python, dependencies, ZHS 0.1.5, Rain Classroom source and settings entry verified")
+    return 0
 
 
 def _prepare_jsonl_stdout():
@@ -36,6 +89,8 @@ def _prepare_jsonl_stdout():
 def main() -> int:
     if len(sys.argv) > 1:
         mode = sys.argv[1]
+        if mode == "--packaged-runtime-self-test" and len(sys.argv) == 2:
+            return _packaged_runtime_self_test()
         if mode == "--zhidao-qr-worker" and len(sys.argv) == 3:
             from studyflow.platforms.zhidao.qr_login_core import main as qr_main
             return qr_main([sys.argv[2]])
