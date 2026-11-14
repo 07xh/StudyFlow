@@ -373,3 +373,76 @@ def read_document(document_id: str) -> dict:
     except (OSError, UnicodeError) as exc:
         raise RuntimeError("DOCUMENT_UNAVAILABLE") from exc
     return {"id": document_id, "title": names[document_id], "content": content}
+
+
+
+def read_course_detail(course_key: str) -> dict:
+    if not isinstance(course_key, str) or COURSE_KEY.fullmatch(course_key) is None:
+        raise ValueError("INVALID_COURSE")
+    rows, fingerprint = _session_course_cache()
+    matches = [row for row in rows if progress_key(row) == course_key]
+    if len(matches) != 1:
+        raise RuntimeError("COURSE_NOT_FOUND")
+    course = matches[0]
+    progress = _progress_cache(fingerprint)
+    snapshots = progress.get("courses", [])
+    matches_progress = [
+        row for row in snapshots
+        if isinstance(row, dict) and row.get("courseType") == course.get("courseType")
+        and progress_key(row) == course_key
+    ]
+    snapshot = matches_progress[0] if len(matches_progress) == 1 else None
+    stale = course.get("stale") is True or (snapshot is not None and snapshot.get("stale") is True)
+    verified_at = snapshot.get("lastVerifiedAt") if snapshot and isinstance(snapshot.get("lastVerifiedAt"), str) else None
+    course_type = course.get("courseType")
+    items: list[dict] = []
+    done = total = 0
+    if snapshot is not None and course_type == "ai":
+        raw_items = snapshot.get("knowledgePoints")
+        if isinstance(raw_items, list):
+            for item in raw_items[:5000]:
+                if not isinstance(item, dict):
+                    continue
+                percent = item.get("progressPercent")
+                if isinstance(percent, bool) or not isinstance(percent, int) or not 0 <= percent <= 100:
+                    continue
+                items.append({
+                    "name": str(item.get("name") or "未命名知识点")[:200],
+                    "theme": str(item.get("theme") or "")[:160],
+                    "progress_percent": percent,
+                    "fully_progressed": percent >= 100,
+                })
+        total = len(items)
+        done = sum(item["fully_progressed"] for item in items)
+    elif snapshot is not None and course_type == "shared":
+        raw_items = snapshot.get("videos")
+        if isinstance(raw_items, list):
+            for item in raw_items[:5000]:
+                if not isinstance(item, dict):
+                    continue
+                duration = item.get("durationSeconds")
+                studied = item.get("studiedSeconds")
+                if (isinstance(duration, bool) or not isinstance(duration, int) or not 0 <= duration <= 864000
+                        or isinstance(studied, bool) or not isinstance(studied, int) or not 0 <= studied <= 864000):
+                    continue
+                completed = item.get("serverCompleted") is True
+                items.append({
+                    "name": str(item.get("name") or "未命名视频")[:200],
+                    "duration_seconds": duration, "studied_seconds": studied,
+                    "server_completed": completed,
+                })
+        total = len(items)
+        done = sum(item["server_completed"] for item in items)
+    else:
+        course_type = "ai" if course_type == "ai" else "shared"
+    return {
+        "course_key": course_key,
+        "title": str(course.get("name") or course.get("courseName") or "知到课程")[:250],
+        "course_type": course_type,
+        "verified": bool(snapshot is not None and verified_at and not stale),
+        "stale": stale,
+        "verified_at": verified_at,
+        "done": done, "total": total,
+        "percent": round(done * 100.0 / total, 1) if total else None,
+        "items": items,
+    }
