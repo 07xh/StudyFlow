@@ -119,8 +119,12 @@ export function LegacyPlaybackPanel({
                 <span style={{width:liveZhs.video_segment_percent+"%"}}/>
               </div>
             : <small>{status?.state==="running"
-                ? status.course_id===selection ? "等待原版输出" : "请选择正在运行的课程"
+                ? status.course_id===selection
+                  ? status.zhs_stale ? "本地进度输出已过期，等待新的原版输出" : "等待原版输出"
+                  : "请选择正在运行的课程"
                 : liveZhs ? "上次运行的最终采样" : "未获取到进度记录"}</small>}
+          {status?.state==="running"&&status.course_id===selection&&status.zhs_stale&&
+            <small role="status">任务进程仍在运行，但最近的本地进度采样已过期；不代表服务器学习失败或完成。</small>}
           {liveZhs?.resource_index!=null&&liveZhs.resource_total!=null&&
             <small>当前知识点资源 {liveZhs.resource_index}/{liveZhs.resource_total}</small>}
           {status?.state === "exited" && liveZhs &&
