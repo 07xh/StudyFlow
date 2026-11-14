@@ -135,7 +135,7 @@ def test_every_original_yuketang_runtime_setting_is_exposed_in_studyflow():
     root = Path(__file__).resolve().parents[1]
     original_main = (root / "legacy" / "yuketang" / "main.py").read_text(encoding="utf-8")
     runtime_keys = {
-        line.split("os.getenv(", 1)[1].split(")", 1)[0].strip().strip("'\\\"")
+        line.split("os.getenv(", 1)[1].split(")", 1)[0].split(",", 1)[0].strip().strip("'\\\"")
         for line in original_main.splitlines()
         if "os.getenv(" in line
     }
