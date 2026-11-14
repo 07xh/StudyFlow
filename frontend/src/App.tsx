@@ -13,7 +13,7 @@ import {
   openLegacyZhidao,request
 } from "./bridge";
 import type {Config,Video} from "./bridge";
-import type {Course,Platform} from "./types";
+import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {presentCourse,platformNames} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
