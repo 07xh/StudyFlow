@@ -52,7 +52,7 @@ export default function ZhidaoQrDialog({onClose,onVerified}:Props){
 
   useEffect(()=>{
     live.current=true;
-    void start();
+    const launch=window.setTimeout(()=>{void start()},0);
     const timer=window.setInterval(async()=>{
       if(!live.current||pollBusy.current||terminal.has(stage.current)||stage.current==="idle")return;
       pollBusy.current=true;
@@ -67,8 +67,9 @@ export default function ZhidaoQrDialog({onClose,onVerified}:Props){
     },900);
     return ()=>{
       live.current=false;generation.current++;
+      window.clearTimeout(launch);
       window.clearInterval(timer);
-      if(!terminal.has(stage.current))void zhidaoQrCommand("cancel").catch(()=>{});
+      if(!terminal.has(stage.current)&&generation.current>1)void zhidaoQrCommand("cancel").catch(()=>{});
     };
     // A dialog instance starts exactly one attempt on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
