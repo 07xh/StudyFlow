@@ -116,7 +116,7 @@ def test_main_keeps_diagnostics_off_jsonl_stdout(monkeypatch, capsys):
     monkeypatch.setattr(
         bridge.sys,
         "stdin",
-        SimpleNamespace(buffer=io.BytesIO((__import__("json").dumps(request) + "\\n").encode())),
+        SimpleNamespace(buffer=io.BytesIO((__import__("json").dumps(request) + "\n").encode())),
     )
 
     def noisy_dispatch(value):
