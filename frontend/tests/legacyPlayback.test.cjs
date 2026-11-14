@@ -131,3 +131,19 @@ test("original Zhidao task UI offers fresh AI and shared courses, not stale sess
   assert.match(panel, /!c\.stale/);
   assert.match(panel, /legacyExitMessage\(status\)/);
 });
+
+test("server-verified course progress is scoped to the current platform and timestamped", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /courses\.filter\(course => course\.platform === platform\)/);
+  assert.match(panel, /presentation\.status === "verified"/);
+  assert.match(panel, /title=\{course\.verified_at/);
+  assert.match(panel, /course\.platform==="zhidao"&&course\.course_id===selection/);
+});
+
+test("out-of-order task status polls cannot replace newer task state", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /latestStatusRequest = useRef\(0\)/);
+  assert.match(panel, /requestId !== latestStatusRequest\.current/);
+  assert.match(panel, /return \(\) => \{ window\.clearInterval\(timer\); latestStatusRequest\.current\+\+; \}/);
+  assert.match(panel, /requestId === latestStatusRequest\.current\) setStatus\(next\)/);
+});
