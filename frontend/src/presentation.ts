@@ -35,3 +35,9 @@ export function selectedSessionCourse(courses: Course[], selected: Course | null
   return selected ? courses.find(course => courseKey(course) === courseKey(selected)) ?? null : null;
 }
 
+
+/** Describe the actual server-derived measure, not a fictional official total. */
+export function courseMetric(course:Course){
+ const evidence=presentCourse(course);
+ return {...evidence,label:course.course_type==='ai'?'满进度知识点占比':course.course_type==='shared'?'已完成视频占比':'平台记录进度',evidenceLabel:evidence.label,verifiedAt:course.verified_at??null};
+}

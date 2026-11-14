@@ -1,3 +1,4 @@
+import type {ActivityEntry,TaskRecorder} from "../activity";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {ChevronDown,RefreshCw,Save,SlidersHorizontal} from "lucide-react";
 import {friendlyBridgeError,request} from "../bridge";
@@ -11,10 +12,11 @@ type Props={
   courses:Course[];
   desktop:boolean;
   connected:boolean;
-  onEvent?:(action:string,result:"success"|"warning",detail:string)=>void;
+  onEvent?:TaskRecorder;
   detailMode?:boolean;
+  events?:ActivityEntry[];
 };
-export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=false}:Props){
+export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=false,events=[]}:Props){
   const [options,setOptions]=useState<OriginalYktOptions>({...originalYktDefaults});
   const [loaded,setLoaded]=useState(false);
   const [busy,setBusy]=useState<"load"|"save"|null>(null);
@@ -68,16 +70,16 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   return <>
     <LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
       connected={connected} yuketangOptions={options} settingsReady={loaded}
-      detailMode={detailMode} onEvent={onEvent}/>
+      detailMode={detailMode} onEvent={onEvent} events={events}/>
     <div className="sf-inline-settings">
       <button type="button" className="sf-inline-settings__toggle"
         aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(previous=>!previous)}>
-        <SlidersHorizontal size={16}/><strong>雨课堂参数调整</strong>
+        <SlidersHorizontal size={16}/><strong>平台默认参数（下次启动生效）</strong>
         <ChevronDown size={16} className={settingsOpen?"is-open":""}/>
       </button>
       {settingsOpen&&<section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head">
-        <div><h3><SlidersHorizontal size={17}/>雨课堂原版参数</h3></div>
+        <div><h3><SlidersHorizontal size={17}/>雨课堂默认参数</h3></div>
         <span className="legacy-run-state">{loaded?"已读取本机配置":"等待读取配置"}</span>
       </div>
       <div className="legacy-options">
@@ -106,7 +108,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
               onChange={event=>update(id,event.currentTarget.checked)}/>{label}
           </label>)}
         </div>
-        <details className="sf-ykt-advanced-options" open={detailMode}>
+        <details className="sf-ykt-advanced-options">
           <summary>图文与诊断参数</summary>
           <div className="legacy-option-grid">
             <label>
@@ -138,7 +140,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
           <button className="secondary" type="button" disabled={!desktop||busy!==null}
             onClick={()=>void load()}><RefreshCw size={15}/>{busy==="load"?"读取中…":"重新读取"}</button>
           <button className="primary" type="button" disabled={!desktop||!loaded||busy!==null||!validateOriginalOptions(options)}
-            onClick={()=>void save()}><Save size={15}/>{busy==="save"?"保存中…":"保存参数"}</button>
+            onClick={()=>void save()}><Save size={15}/>{busy==="save"?"保存中…":"保存默认参数"}</button>
         </div>
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}

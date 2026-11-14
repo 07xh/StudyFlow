@@ -1775,8 +1775,6 @@
 .sf-shell .sf-ykt-worker-heading strong{font-size:12px;color:var(--text)}
 .sf-shell .sf-ykt-worker-heading span{font-size:11px;color:var(--accent-text)}
 .sf-shell .sf-ykt-worker>small{color:var(--muted);font-size:10px}
-.sf-shell .sf-ykt-worker-track{height:5px;border-radius:99px;background:var(--line);overflow:hidden}
-.sf-shell .sf-ykt-worker-track span{display:block;width:0;height:100%;background:var(--accent)}
 .sf-shell .sf-ykt-diagnostics{margin-top:13px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
 .sf-shell .sf-ykt-diagnostics>summary{cursor:pointer;color:var(--muted);font-size:11px;font-weight:650}
 .sf-shell .sf-ykt-diagnostics .sf-ykt-live-grid{margin-top:12px}
@@ -1814,3 +1812,44 @@
 .sf-shell .sf-inline-settings__toggle>svg:last-child.is-open{transform:rotate(180deg)}
 .sf-shell .sf-inline-settings__toggle:hover{background:var(--soft-accent)}
 .sf-shell .sf-runtime-mode[hidden]{display:none!important}
+
+/* Information ownership: identity, task actions, content and maintenance. */
+.sf-shell .sf-workspace-page-context{display:grid;gap:5px;min-width:0}
+.sf-shell .sf-workspace-page-context strong{font-size:16px;color:var(--text)}
+.sf-shell .sf-workspace-page-context small,.sf-shell .sf-header-evidence{font-size:11px;color:var(--muted)}
+.sf-shell .sf-header-evidence{display:flex;gap:10px;flex-wrap:wrap;margin-top:7px}
+.sf-shell .sf-connection-confirmed{color:var(--accent-text)!important}
+.sf-shell .sf-connection-pending{color:var(--muted)!important}
+.sf-shell .sf-mode{background:transparent;border:0;font-size:10px;color:var(--muted)}
+.sf-shell .sf-platform-toolbar{justify-content:flex-end;margin:0}
+.sf-shell .sf-muted{color:var(--muted);font-size:12px;line-height:1.6}
+.sf-shell .sf-task-context{padding:10px 12px;border-left:3px solid var(--accent);background:var(--soft-accent);font-size:12px;line-height:1.6}
+.sf-shell .sf-task-context .text-button{margin-left:8px}
+.sf-shell .sf-runtime-list{display:grid;gap:12px;min-width:0}
+.sf-shell .sf-runtime-task{padding:15px;border:1px solid var(--line);border-radius:13px;background:var(--panel);min-width:0}
+.sf-shell .sf-runtime-task h4{margin:0;font-size:14px}
+.sf-shell .sf-runtime-task>strong{display:block;overflow-wrap:anywhere;font-size:13px}
+.sf-shell .sf-runtime-task .actions{margin-top:12px}
+.sf-shell .sf-run-parameters,.sf-shell .sf-environment-tools,.sf-shell .sf-technical-note{margin-top:12px;color:var(--muted);font-size:12px;line-height:1.6}
+.sf-shell .sf-run-parameters>summary,.sf-shell .sf-environment-tools>summary,.sf-shell .sf-technical-note>summary{cursor:pointer;font-size:12px;font-weight:600}
+.sf-shell .sf-run-parameters dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.sf-shell .sf-run-parameters dl>div{padding:7px 10px;background:var(--soft-accent);border-radius:8px}
+.sf-shell .sf-run-parameters dt{font-size:11px}.sf-shell .sf-run-parameters dd{margin:2px 0 0;color:var(--text)}
+.sf-shell .sf-content-scope{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.sf-shell .sf-content-scope label{display:grid;gap:6px;font-size:12px;color:var(--muted)}
+.sf-shell .sf-content-scope input{width:100%;min-width:0;box-sizing:border-box}
+.sf-shell .sf-history-list{display:grid;gap:10px}
+.sf-shell .sf-history-list article{display:flex;align-items:flex-start;gap:14px;padding:13px;border-bottom:1px solid var(--line);min-width:0}
+.sf-shell .sf-history-list article>div{min-width:0;flex:1}
+.sf-shell .sf-history-list time,.sf-shell .sf-history-list span{font-size:11px;color:var(--muted)}
+.sf-shell .sf-history-list strong,.sf-shell .sf-history-list span{display:block}
+.sf-shell .sf-history-list p{font-size:12px;line-height:1.5;overflow-wrap:anywhere;margin:6px 0}
+.sf-shell .sf-fold-body>.settings-card,.sf-shell .sf-fold-body>.sf-runtime-mode>.legacy-playback-panel{border:0;background:transparent;box-shadow:none;padding:8px 2px;margin:0}
+.sf-shell .sf-player-defaults .actions{margin-top:14px}
+.sf-shell .sf-destructive-action{color:var(--danger,#e98a8a)}
+.sf-shell .main .sf-fold-toggle strong{font-size:14px}
+.sf-shell .main .section-head h3{font-size:14px}
+.sf-shell .sf-course-detail-topline{justify-content:space-between;flex-wrap:wrap}
+@media(max-width:800px){.sf-shell .sf-history-list article{flex-wrap:wrap}.sf-shell .sf-history-list article>time{flex-basis:100%}}
+
+.sf-shell .sf-platform-expanded .sf-zhidao-account-tools{border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;background:transparent;margin:10px 0 0;padding:12px 0 0}

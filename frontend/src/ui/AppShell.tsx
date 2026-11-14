@@ -1,3 +1,4 @@
+import type {ConnectionStatus} from "../types";
 import {useEffect,useState,type ReactNode} from "react";
 import {
   Activity,BookOpen,ChevronDown,History,
@@ -42,9 +43,10 @@ interface Props {
   currentPlatform?:string;
   currentCourseTitle?:string;
   courseProgress?:number|null;
+  metricLabel?:string;courseEvidence?:string;courseVerifiedAt?:string|null;currentPlatformStatus?:ConnectionStatus;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -93,31 +95,23 @@ export function AppShell({
         <span className="sf-workspace-platform-icon" aria-hidden="true"><Layers3 size={21}/></span>
         <div className="sf-workspace-platform-copy">
           <small>当前学习平台</small>
-          <strong>{currentPlatform??"未选择平台"}</strong>
+          <strong>{currentPlatform??"全部平台"}</strong>
+          {currentPlatform&&<small className={currentPlatformStatus==="connected"?"sf-connection-confirmed":"sf-connection-pending"}>{currentPlatformStatus==="connected"?"已连接":currentPlatformStatus==="error"?"连接异常":currentPlatformStatus==="connecting"?"连接中":"未连接"}</small>}
         </div>
       </div>
-      <div className="sf-workspace-progress" aria-label="当前课程总进度">
-        <div className="sf-workspace-progress-head">
-          <div className="sf-workspace-progress-course">
-            <small>当前课程总进度</small>
-            <strong title={currentCourseTitle??"未选择课程"}>{currentCourseTitle??"未选择课程"}</strong>
-          </div>
-          <strong className="sf-workspace-progress-value">
-            {courseProgress==null?"—":courseProgress.toFixed(1)+"%"}
-          </strong>
-        </div>
-        <div className="sf-workspace-progress-track" role="progressbar"
-          aria-label="服务器已核验课程进度" aria-valuemin={0} aria-valuemax={100}
-          aria-valuenow={courseProgress??undefined}>
-          <span style={{width:(courseProgress??0)+"%"}}/>
-        </div>
+      <div className="sf-workspace-progress" aria-label={currentCourseTitle?"当前课程进度":"页面上下文"}>
+        {currentCourseTitle?<>
+          <div className="sf-workspace-progress-head"><div className="sf-workspace-progress-course"><small>{metricLabel??"平台记录进度"}</small><strong title={currentCourseTitle}>{currentCourseTitle}</strong></div><strong className="sf-workspace-progress-value">{courseProgress==null?"—":courseProgress.toFixed(1)+"%"}</strong></div>
+          {courseProgress!=null&&<div className="sf-workspace-progress-track" role="progressbar" aria-label={metricLabel??"平台记录进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={courseProgress}><span style={{width:courseProgress+"%"}}/></div>}
+          <div className="sf-header-evidence"><span>{courseEvidence??"待核验"}</span><time>{courseVerifiedAt&&Number.isFinite(Date.parse(courseVerifiedAt))?new Date(courseVerifiedAt).toLocaleString():"暂无核验时间"}</time></div>
+        </>:<div className="sf-workspace-page-context"><strong>{titles[page]}</strong>{page==="courses"&&<small>选择课程后查看已核验进度</small>}</div>}
       </div>
       <div className="sf-header-actions">
-        <span className="sf-mode"><span className="sf-status-dot"/>
+        <span className="sf-mode">
           {desktop?"Windows 桌面":"浏览器预览"}
         </span>
-        <button className="theme-button" type="button" title="刷新连接"
-          aria-label="刷新连接" disabled={!desktop} onClick={onRefresh}>
+        <button className="theme-button" type="button" title="检测平台连接"
+          aria-label="检测平台连接" disabled={!desktop} onClick={onRefresh}>
           <RefreshCw size={17}/>
         </button>
         <button className="theme-button sf-settings-button" type="button"

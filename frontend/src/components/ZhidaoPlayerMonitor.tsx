@@ -1,3 +1,4 @@
+import type {TaskRecorder} from "../activity";
 import {useEffect,useRef} from "react";
 import {invoke} from "@tauri-apps/api/core";
 import {request,type ZhidaoProgressSnapshot} from "../bridge";
@@ -12,7 +13,7 @@ type Status={
 type Props={
   desktop:boolean;
   onCoursesUpdated:(courses:Course[])=>void;
-  onEvent?:(action:string,result:"success"|"warning",detail:string)=>void;
+  onEvent?:TaskRecorder;
 };
 
 /** Keeps the official-player close -> server verification chain alive across sidebar navigation. */
@@ -44,10 +45,10 @@ export function ZhidaoPlayerMonitor({desktop,onCoursesUpdated,onEvent}:Props){
           const detail=snapshot.incomplete
             ?"官方播放器已关闭；单课核验返回部分数据，未确认记录不会标记为完成。"
             :"官方播放器已关闭；已重新读取该课程的服务器学习记录。";
-          onEventRef.current?.("播放器关闭后核验",snapshot.incomplete?"warning":"success",detail);
+          onEventRef.current?.("播放器关闭后核验",snapshot.incomplete?"warning":"success",detail,{courseId:status.courseKey,runId:status.runId,runner:"official"});
         }catch(error){
           const detail="官方播放器已关闭，但服务器核验失败："+(error instanceof Error?error.message:"未知错误");
-          onEventRef.current?.("播放器关闭后核验","warning",detail);
+          onEventRef.current?.("播放器关闭后核验","warning",detail,{courseId:status.courseKey,runId:status.runId,runner:"official"});
         }
       }catch{
         // The monitor is best-effort; the platform page still exposes manual verification.

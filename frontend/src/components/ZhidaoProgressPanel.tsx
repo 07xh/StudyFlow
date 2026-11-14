@@ -3,6 +3,7 @@ import {RefreshCw,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoProgressSnapshot} from "../bridge";
 import {presentCourse} from "../presentation";
 import type {Course} from "../types";
+import type {TaskRecorder} from "../activity";
 import {Switch} from "../ui/Switch";
 
 type EventResult="success"|"warning";
@@ -11,7 +12,7 @@ type Props={
   desktop:boolean;
   connected:boolean;
   onCoursesUpdated:(courses:Course[])=>void;
-  onEvent?:(action:string,result:EventResult,detail:string)=>void;
+  onEvent?:TaskRecorder;
   courseId?:string;
   courseTitle?:string;
   detailMode?:boolean;
@@ -57,11 +58,11 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
           ?"进度读取已返回，但部分课程未能完成核验；未确认的数据不会显示为已核验。"
           :kind==="sync"?"已完成全部课程的服务器只读进度读取。":"已完成所选课程的服务器只读核验。";
         setMessage(text);
-        onEventRef.current?.(kind==="sync"?"同步学习进度":"核验单课进度",snapshot.incomplete?"warning":"success",text);
+        onEventRef.current?.(kind==="sync"?"同步学习进度":"核验单课进度",snapshot.incomplete?"warning":"success",text,{courseId:kind==="verify"?selected:undefined});
       }
     }catch(error){
       const text=friendlyBridgeError(error);
-      if(!quiet){setMessage(text);onEvent?.(kind==="sync"?"同步学习进度":"核验单课进度","warning",text);}
+      if(!quiet){setMessage(text);onEvent?.(kind==="sync"?"同步学习进度":"核验单课进度","warning",text,{courseId:kind==="verify"?selected:undefined});}
     }finally{
       busyRef.current=false;setBusy(null);
     }
@@ -115,14 +116,14 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
         <RefreshCw size={15}/>{busy==="sync"?"同步中…":"同步全部进度"}
       </button>}
     </div>
-    {!detailMode&&<div className="sf-zd-progress-auto">
+    {<div className="sf-zd-progress-auto">
       <div><strong>定时只读核验</strong><small>开启后每 2 分钟核验当前选中课程；默认关闭。</small></div>
       <Switch checked={monitor} onChange={setMonitor} aria-label="开启每两分钟知到单课只读核验"/>
     </div>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
-    <p className="sf-zd-progress-note">
+    <details className="sf-technical-note"><summary>核验说明</summary><p className="sf-zd-progress-note">
       {incomplete?"本次同步存在未完成项。":"只读取平台已有记录，不提交学习进度。"}
       智慧课程比例统计已达满进度的知识点；共享课比例统计已完成视频数量，均不代表官方课程总进度或观看时长。
-    </p>
+    </p></details>
   </section>;
 }

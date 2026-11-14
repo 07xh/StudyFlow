@@ -1,3 +1,4 @@
+mod run_identity;
 mod legacy_tasks;
 mod zhidao_player;
 

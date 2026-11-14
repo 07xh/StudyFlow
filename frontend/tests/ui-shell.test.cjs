@@ -32,7 +32,7 @@ test("dashboard only shows real course and server-verified live progress", () =>
   assert.match(app,/fetchCoursesFromDesktop/);
   assert.match(app,/course\.progress_evidence==="server_verified"/);
   assert.match(app,/verified_at/);
-  assert.match(app,/averageProgress===null\?"—"/);
+  assert.match(app,/activeCourseProgress=activeMetric\?\.percent\?\?null/);
   assert.doesNotMatch(app,/62%|8 门|5 门|3 门|\*\*\*\*1234/);
   assert.doesNotMatch(app,/studyflow-footer|让学习井然有序/);
 });
@@ -87,7 +87,7 @@ test("Zhidao QR dialog stays themed and platform-owned",()=>{
   const qr=read("src/ZhidaoQrDialog.tsx");
   assert.match(app,/ZhidaoQrDialog dark=\{dark\}/);
   assert.match(qr,/data-theme=\{dark\?"dark":"light"\}/);
-  assert.match(app,/if\(platform==="zhidao"\)return <ZhidaoLoginPanel/);
+  assert.match(app,/if\(platform==="zhidao"\)return <><ZhidaoLoginPanel/);
 });
 
 test("platform login is available first and worker status stays distinct from course totals",()=>{
@@ -97,7 +97,7 @@ test("platform login is available first and worker status stays distinct from co
   const end=app.indexOf("async function configureFromPanel",start);
   const detail=app.slice(start,end);
   assert.ok(start>=0&&end>start);
-  assert.ok(detail.indexOf("sf-platform-detail")<detail.indexOf("sf-platform-task-section"));
+  assert.ok(detail.indexOf("PlatformCard")<detail.indexOf("RuntimeTaskList"));
   assert.match(playback,/sf-live-progress-summary/);
   assert.match(playback,/workerSlots\.map/);
   assert.doesNotMatch(playback,/sf-live-course-progress/);
@@ -139,15 +139,15 @@ test("consent requires one explicit decision and keeps a single exit action", ()
 
 test("platform controls keep independent settings and per-platform login expansion", () => {
   const app=read("src/App.tsx");
-  const official=read("src/components/ZhidaoOfficialPlayerPanel.tsx");
+  const official=read("src/components/ZhidaoPlayerSettingsPanel.tsx");
   const progress=read("src/components/ZhidaoProgressPanel.tsx");
   const yuketang=read("src/components/YuketangTaskArea.tsx");
   assert.match(app,/Record<Platform,boolean>/);
   assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
   assert.match(app,/\[platform\]:!previous\[platform\]/);
-  assert.match(official,/update\("allowMinimize",checked\)/);
-  assert.match(official,/update\("autoStart",checked\)/);
-  assert.match(official,/update\("autoNext",checked\)/);
+  assert.match(official,/update\('allowMinimize',value\)/);
+  assert.match(official,/update\('autoStart',value\)/);
+  assert.match(official,/update\('autoNext',value\)/);
   assert.match(progress,/onChange=\{setMonitor\}/);
   assert.match(yuketang,/update\(id,event\.currentTarget\.checked\)/);
 });

@@ -56,10 +56,11 @@ test("real desktop bridge invokes original platform task, never reimplements net
   await legacy.startLegacy("zhidao", zhsKey);
   await legacy.startLegacy("yuketang", undefined, legacy.originalYktDefaults);
   await legacy.getLegacyStatus("yuketang");
-  await legacy.stopLegacy("zhidao");
+  await legacy.stopLegacy("zhidao","test-run-1");
   assert.deepEqual(calls.map(x=>x.operation), [
     "legacy_start", "legacy_start", "legacy_status", "legacy_stop"
   ]);
+  assert.equal(calls[3].props.expectedRunId,"test-run-1");
   assert.equal(calls[0].props.courseId, zhsKey);
   assert.equal(calls[1].props.options.max_concurrent_videos, 3);
   assert.equal(calls[1].props.options.richtext_stay_seconds, 3);
@@ -101,7 +102,7 @@ test("the ZHS original segment is displayed only for the selected running course
 test("Rain Classroom advanced settings are exposed without expanding the default panel", () => {
   const panel = fs.readFileSync(path.join(__dirname,"..","src","components","YuketangTaskArea.tsx"),"utf8");
   assert.match(panel, /<details className="sf-ykt-advanced-options"(?: open=\{detailMode\})?>/);
-  assert.match(panel, /open=\{detailMode\}/);
+  assert.doesNotMatch(panel, /open=\{detailMode\}/);
   assert.match(panel, /options\.richtext_stay_seconds/);
   assert.match(panel, /options\.richtext_skip_delay/);
   assert.match(panel, /options\.debug/);

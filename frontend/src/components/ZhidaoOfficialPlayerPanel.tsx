@@ -1,11 +1,12 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {ChevronDown,CirclePlay,Download,RefreshCw,SlidersHorizontal,Square,ShieldCheck} from "lucide-react";
-import {friendlyBridgeError,request,type ZhidaoPlayerSettings,type ZhidaoProgressSnapshot} from "../bridge";
+import {CirclePlay,RefreshCw,Square} from "lucide-react";
+import {friendlyBridgeError,request,type ZhidaoPlayerSettings} from "../bridge";
 import type {Course} from "../types";
-import {Switch} from "../ui/Switch";
+import type {ActivityEntry,TaskRecorder} from "../activity";
+import {RunParameters} from "./RunParameters";
 
-type PlayerStatus={
+export type PlayerStatus={
   state:"idle"|"running"|"exited"|"stopped";
   courseKey:string|null;
   runId:string|null;
@@ -21,14 +22,15 @@ type Props={
   courses:Course[];
   desktop:boolean;
   onCoursesUpdated:(courses:Course[])=>void;
-  onEvent?:(action:string,result:"success"|"warning",detail:string)=>void;
+  onEvent?:TaskRecorder;
   courseId?:string;
   detailMode?:boolean;
+  events?:ActivityEntry[];
+  onOpenTasks?:()=>void;
 };
 const defaults:ZhidaoPlayerSettings={
   speed:"1.5",allowMinimize:true,autoStart:true,autoNext:true,mode:"official"
 };
-const speeds:["1","1.25","1.5","2"]=["1","1.25","1.5","2"];
 const initialStatus:PlayerStatus={
   state:"idle",courseKey:null,runId:null,exitCode:null,event:null,positionSeconds:null,
   durationSeconds:null,visible:null,observedAt:null,message:"官方播放器尚未启动"
@@ -40,6 +42,7 @@ function timeLabel(value:number|null){
 }
 function playerError(error:unknown){
   const code=error instanceof Error?error.message:"";
+  if(code.includes("TASK_RUN_CHANGED"))return "运行任务已变化，请刷新状态后再操作。";
   if(code.includes("PLAYER_ALREADY_RUNNING"))return "官方播放器已经运行，请先关闭当前窗口。";
   if(code.includes("PLAYER_RUNNING"))return "请先关闭官方播放器，再清理网页登录数据。";
   if(code.includes("WEBVIEW2_SDK_UNAVAILABLE"))return "WebView2 组件准备失败；检查网络后可重试，原版播放器仍支持官方浏览器回退。";
@@ -49,24 +52,22 @@ function playerError(error:unknown){
   if(code.includes("PLAYER_LAUNCH_FAILED"))return "官方播放器窗口启动失败。";
   return friendlyBridgeError(error);
 }
-export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEvent,courseId,detailMode=false}:Props){
+export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEvent,courseId,detailMode=false,events=[],onOpenTasks}:Props){
   const [settings,setSettings]=useState<ZhidaoPlayerSettings>(defaults);
   const [selected,setSelected]=useState("");
   const [status,setStatus]=useState<PlayerStatus>(initialStatus);
   const [busy,setBusy]=useState<"prepare"|"start"|"stop"|"save"|null>(null);
   const [message,setMessage]=useState("");
   const [settingsLoaded,setSettingsLoaded]=useState(false);
-  const [observations,setObservations]=useState<Array<{event:string;position:number;at:string}>>([]);
-  const [settingsOpen,setSettingsOpen]=useState(()=>{
-    try{return window.localStorage.getItem("studyflow.zhidao.official-settings-open")==="true";}
-    catch{return false;}
-  });
-  useEffect(()=>{
-    try{window.localStorage.setItem("studyflow.zhidao.official-settings-open",String(settingsOpen));}
-    catch{/* Keep session preference. */}
-  },[settingsOpen]);
+  const [observations,setObservations]=useState<Array<{event:string;position:number;at:string;courseKey:string;runId:string}>>([]);
   const lastObservation=useRef("");
+  const selectedRef=useRef(selected);
+  selectedRef.current=courseId??selected;
+  const statusRevision=useRef(0);
   const active= status.state==="running";
+  const ownsStatus=Boolean(selected&&status.courseKey===selected);
+  const runningCourse=courses.find(course=>course.course_id===status.courseKey);
+  const viewObservations=ownsStatus?observations.filter(item=>item.courseKey===selected&&item.runId===status.runId):[];
 
   useEffect(()=>{
     if(courseId){
@@ -88,14 +89,16 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
 
   const refreshStatus=useCallback(async()=>{
     if(!desktop)return;
+    const revision=++statusRevision.current;
     try{
       const next=await invoke<PlayerStatus>("zhidao_player_status");
+      if(revision!==statusRevision.current)return;
       setStatus(next);
-      if(next.event&&next.positionSeconds!==null){
-        const key=[next.event,next.positionSeconds,next.visible,next.observedAt].join(":");
+      if(next.event&&next.positionSeconds!==null&&next.courseKey&&next.runId&&next.courseKey===selectedRef.current){
+        const key=[next.runId,next.courseKey,next.event,next.positionSeconds,next.visible,next.observedAt].join(":");
         if(lastObservation.current!==key){
           lastObservation.current=key;
-          setObservations(previous=>[{event:next.event!,position:next.positionSeconds!,at:next.observedAt||new Date().toISOString()},...previous].slice(0,10));
+          setObservations(previous=>[{event:next.event!,position:next.positionSeconds!,at:next.observedAt||new Date().toISOString(),courseKey:next.courseKey!,runId:next.runId!},...previous].slice(0,10));
         }
       }
     }catch(error){
@@ -107,39 +110,8 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
     void refreshStatus();
     if(!desktop)return;
     const timer=window.setInterval(()=>{void refreshStatus();},2000);
-    return ()=>window.clearInterval(timer);
+    return ()=>{statusRevision.current++;window.clearInterval(timer);};
   },[desktop,refreshStatus]);
-
-  function update<K extends keyof ZhidaoPlayerSettings>(key:K,value:ZhidaoPlayerSettings[K]){
-    setSettings(previous=>({...previous,[key]:value}));
-  }
-
-  async function saveSettings(){
-    setBusy("save");setMessage("");
-    try{
-      const stored=await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"});
-      const saved=await request<ZhidaoPlayerSettings>({
-        operation:"zhidao.player.settings.save",settings:{...settings,mode:stored.mode}
-      });
-      setSettings(saved);setMessage("知到官方播放器设置已保存。");
-      onEvent?.("保存播放参数","success","设置已保存到本机");
-    }catch(error){
-      const result=playerError(error);setMessage(result);
-      onEvent?.("保存播放参数","warning",result);
-    }finally{setBusy(null);}
-  }
-
-  async function prepare(){
-    setBusy("prepare");setMessage("正在准备官方 WebView2 播放组件，首次运行可能需要下载。");
-    try{
-      await invoke<boolean>("zhidao_player_prepare");
-      setMessage("WebView2 组件已准备完成。");
-      onEvent?.("准备 WebView2","success","官方播放器组件已就绪");
-    }catch(error){
-      const result=playerError(error);setMessage(result);
-      onEvent?.("准备 WebView2","warning",result);
-    }finally{setBusy(null);}
-  }
 
   async function start(){
     if(!selected)return;
@@ -151,42 +123,65 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
       });
       setStatus(next);
       const result="已启动原版官方 WebView2 播放器。请在网页内登录并进入课程；实际播放以页面状态为准。";
-      setMessage(result);onEvent?.("启动官方播放器","success",result);
+      setMessage(result);onEvent?.("启动官方播放器","success",result,{courseId:selected,runId:next.runId??undefined,runner:"official",parameters:{speed:settings.speed,allowMinimize:settings.allowMinimize,autoStart:settings.autoStart,autoNext:settings.autoNext}});
     }catch(error){
       const result=playerError(error);setMessage(result);
-      onEvent?.("启动官方播放器","warning",result);
+      onEvent?.("启动官方播放器","warning",result,{courseId:selected,runner:"official"});
     }finally{setBusy(null);}
   }
 
   async function stop(){
+    if(!ownsStatus||!active||!status.runId)return;
     setBusy("stop");setMessage("");
     try{
-      const next=await invoke<PlayerStatus>("zhidao_player_stop");
+      const latest=await invoke<PlayerStatus>("zhidao_player_status");
+      if(latest.courseKey!==selected||latest.runId!==status.runId||latest.state!=="running"){
+        setStatus(latest);setMessage("运行任务已变化，请查看学习任务后再操作。");return;
+      }
+      const next=await invoke<PlayerStatus>("zhidao_player_stop",{expectedRunId:status.runId});
       setStatus(next);
       const result="已停止学序启动的官方播放器；可手动核验服务器课程记录。";
-      setMessage(result);onEvent?.("停止官方播放器","success",result);
+      setMessage(result);onEvent?.("停止官方播放器","success",result,{courseId:latest.courseKey??undefined,runId:latest.runId??undefined,runner:"official"});
     }catch(error){
       const result=playerError(error);setMessage(result);
-      onEvent?.("停止官方播放器","warning",result);
+      onEvent?.("停止官方播放器","warning",result,{courseId:status.courseKey??undefined,runId:status.runId??undefined,runner:"official"});
     }finally{setBusy(null);}
   }
 
   const current=courses.find(course=>course.course_id===selected);
-  const position=timeLabel(status.positionSeconds);
-  const duration=timeLabel(status.durationSeconds);
-  const localPercent=status.positionSeconds!==null&&status.durationSeconds!==null&&status.durationSeconds>0
+  const position=timeLabel(ownsStatus?status.positionSeconds:null);
+  const duration=timeLabel(ownsStatus?status.durationSeconds:null);
+  const localPercent=ownsStatus&&status.positionSeconds!==null&&status.durationSeconds!==null&&status.durationSeconds>0
     ?Math.min(100,Math.max(0,status.positionSeconds/status.durationSeconds*100)):null;
 
   return <section className="legacy-playback-panel sf-zhidao-official-panel">
     <div className="section-head">
-      <div><h3><CirclePlay size={17}/> {detailMode?"播放状态与参数调整":"知到官方 WebView2 播放器"}</h3></div>
+      <div><h3><CirclePlay size={17}/> {detailMode?"官方播放器运行状态":"知到官方 WebView2 播放器"}</h3></div>
       <span className={"legacy-run-state"+(active?" active":"")}>
-        {active?"官方播放器运行中":status.state==="exited"?"播放器已退出":status.state==="stopped"?"已停止":"未启动"}
+        {active?(ownsStatus?"当前课程正在播放":"其他课程任务运行中"):status.state==="exited"?"播放器已退出":status.state==="stopped"?"已停止":"未启动"}
       </span>
+    </div>
+    {active&&!ownsStatus&&<p className="sf-task-context" role="status">
+      {runningCourse?runningCourse.title+" 正在运行":"运行课程未确认"}；此处不会显示该任务的播放位置或停止它。
+      {onOpenTasks&&<button className="text-button" onClick={onOpenTasks}>查看运行任务</button>}
+    </p>}
+    <div className="sf-zd-progress-actions">
+      <button className="primary" type="button" disabled={!desktop||!settingsLoaded||!selected||active||busy!==null}
+        onClick={()=>void start()}>
+        <CirclePlay size={15}/>{busy==="start"?"启动中…":"打开官方播放器"}
+      </button>
+      <button className="secondary" type="button" disabled={!desktop||!active||!ownsStatus||!status.runId||busy!==null}
+        onClick={()=>void stop()}>
+        <Square size={14}/>{busy==="stop"?"停止中…":"停止播放器"}
+      </button>
+      <button className="secondary" type="button" disabled={!desktop||busy!==null}
+        onClick={()=>void refreshStatus()}>
+        <RefreshCw size={15}/>刷新状态
+      </button>
     </div>
     <div className="sf-zd-official-grid">
       {detailMode
-        ?<div className="sf-zd-official-course"><span>当前课程</span><strong>{current?.title??"课程未同步"}</strong></div>
+        ?null
         :<label className="sf-zd-official-course">
           选择课程
           <select value={selected} onChange={event=>setSelected(event.target.value)}
@@ -199,85 +194,25 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
         </label>}
       <div className="sf-zd-player-state">
         <span>本机播放器观测</span>
-        <strong>{status.positionSeconds===null?"等待视频":position+" / "+duration}</strong>
+        <strong>{!ownsStatus?"当前课程暂无播放观测":status.positionSeconds===null?"等待视频":position+" / "+duration}</strong>
         {!detailMode&&localPercent!==null&&<div className="sf-zd-local-track" role="progressbar"
           aria-label="本机 HTML5 视频播放位置" aria-valuemin={0} aria-valuemax={100} aria-valuenow={localPercent}>
           <span style={{width:localPercent+"%"}}/>
         </div>}
-        <small>{status.message}</small>
+        {ownsStatus&&<small>{status.message}</small>}
       </div>
     </div>
-    <div className="sf-inline-settings">
-      <button type="button" className="sf-inline-settings__toggle"
-        aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(previous=>!previous)}>
-        <SlidersHorizontal size={16}/><strong>播放器参数调整</strong>
-        <ChevronDown size={16} className={settingsOpen?"is-open":""}/>
-      </button>
-      {settingsOpen&&<div className="sf-zd-player-settings">
-      <label>目标倍速
-        <select value={settings.speed} disabled={!settingsLoaded||busy!==null}
-          onChange={event=>update("speed",event.target.value as ZhidaoPlayerSettings["speed"])}>
-          {speeds.map(speed=><option key={speed} value={speed}>{speed}×</option>)}
-        </select>
-      </label>
-      <label><span>允许最小化窗口</span>
-        <Switch checked={settings.allowMinimize} disabled={!settingsLoaded||busy!==null}
-          onChange={checked=>update("allowMinimize",checked)}/>
-      </label>
-      <label><span>进入视频后自动播放</span>
-        <Switch checked={settings.autoStart} disabled={!settingsLoaded||busy!==null}
-          onChange={checked=>update("autoStart",checked)}/>
-      </label>
-      <label><span>本节结束后自动下一节</span>
-        <Switch checked={settings.autoNext} disabled={!settingsLoaded||busy!==null}
-          onChange={checked=>update("autoNext",checked)}/>
-      </label>
-      </div>}
-    </div>
-    <div className="sf-zd-progress-actions">
-      <button className="primary" type="button" disabled={!desktop||!selected||active||busy!==null}
-        onClick={()=>void start()}>
-        <CirclePlay size={15}/>{busy==="start"?"启动中…":"打开官方播放器"}
-      </button>
-      <button className="secondary" type="button" disabled={!desktop||busy!==null}
-        onClick={()=>void prepare()}>
-        <Download size={15}/>{busy==="prepare"?"准备中…":"准备 WebView2"}
-      </button>
-      <button className="secondary" type="button" disabled={!desktop||!active||busy!==null}
-        onClick={()=>void stop()}>
-        <Square size={14}/>{busy==="stop"?"停止中…":"停止播放器"}
-      </button>
-      <button className="secondary" type="button" disabled={!desktop||busy!==null}
-        onClick={()=>void saveSettings()}>
-        <ShieldCheck size={15}/>{busy==="save"?"保存中…":"保存参数"}
-      </button>
-      <button className="secondary" type="button" disabled={!desktop||busy!==null}
-        onClick={()=>void refreshStatus()}>
-        <RefreshCw size={15}/>刷新状态
-      </button>
-    </div>
+
+    {ownsStatus&&<RunParameters parameters={events.find(event=>event.runner==="official"&&event.runId===status.runId&&event.courseId===selected&&event.parameters)?.parameters}/>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
-    {detailMode
-      ?<div className="sf-zd-local-observations sf-zd-local-observations-expanded">
-        <strong>本机播放观测 · {observations.length}</strong>
-        {observations.length===0?<p>尚无可用的 HTML5 播放观测。</p>
-          :<ul>{observations.map((item,index)=><li key={index}>
-            <strong>{item.event}</strong><span>{timeLabel(item.position)}</span>
-            <time>{new Date(item.at).toLocaleTimeString()}</time>
-          </li>)}</ul>}
-      </div>
-      :<details className="sf-zd-local-observations">
-        <summary>展开本地播放观测（{observations.length}）</summary>
-        {observations.length===0?<p>尚无可用的 HTML5 播放观测。</p>
-          :<ul>{observations.map((item,index)=><li key={index}>
-            <strong>{item.event}</strong><span>{timeLabel(item.position)}</span>
-            <time>{new Date(item.at).toLocaleTimeString()}</time>
-          </li>)}</ul>}
-      </details>}
-    <p className="sf-zd-progress-note">
+    <details className="sf-zd-local-observations">
+      <summary>本地播放诊断（{viewObservations.length}）</summary>
+      {viewObservations.length===0?<p>暂无当前课程的播放采样。</p>:<ul>{viewObservations.map((item,index)=><li key={index}><strong>{item.event}</strong><span>{timeLabel(item.position)}</span><time>{new Date(item.at).toLocaleTimeString()}</time></li>)}</ul>}
+    </details>
+    <details className="sf-technical-note"><summary>进度与播放说明</summary><p className="sf-zd-progress-note">
       {current?.course_type==="shared"?"共享课使用原始课程路由；":"智慧课程使用课程与班级 ID。"}
       仅控制官网顶层页面识别到的主视频；本机播放位置不是服务器学习进度。自动下一节无法安全识别时会要求手动切换。
       正常关闭 WebView2 后会自动进行一次单课只读核验；若回退到系统浏览器则需手动核验。
-    </p>
+    </p></details>
   </section>;
 }

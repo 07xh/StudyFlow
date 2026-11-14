@@ -13,9 +13,10 @@ interface Props {
   onToggleLogin:()=>void;
   onEnterCourses:()=>void;
   children:ReactNode;
+  variant?:"overview"|"account";
 }
 export function PlatformCard({
-  definition,state,desktop,busy,expanded,onSync,onToggleLogin,onEnterCourses,children
+  definition,state,desktop,busy,expanded,onSync,onToggleLogin,onEnterCourses,children,variant="overview"
 }:Props){
   const connected=state.status==="connected";
   const statusLabel=connected?"已登录":state.status==="connecting"?"连接中":state.status==="error"?"连接异常":"未登录";
@@ -28,7 +29,7 @@ export function PlatformCard({
         </div>
         <div className="sf-platform-identity-copy">
           <div className="sf-platform-title-line">
-            <h3>{definition.name}</h3>
+            <h3>{variant==="account"?"账号与连接":definition.name}</h3>
             <span className={connected?"sf-platform-status connected":"sf-platform-status"}>
               <span className="sf-status-dot"/>{statusLabel}
             </span>
@@ -37,24 +38,26 @@ export function PlatformCard({
         </div>
       </div>
       <div className="sf-platform-actions">
-        <button className="primary sf-enter-courses" type="button" onClick={onEnterCourses}>
+        {variant==="overview"&&<>
+        <button className={(connected?"primary":"secondary")+" sf-enter-courses"} type="button" onClick={onEnterCourses}>
           <BookOpen size={16}/>进入课程<ChevronRight size={15}/>
         </button>
-        <button className="secondary" type="button" disabled={busy}
+        </>}
+        <button className={!connected?"primary":"secondary"} type="button" disabled={busy}
           aria-expanded={expanded} onClick={onToggleLogin}>
-          <Settings2 size={15}/>{expanded?"收起":"登录 / 管理"}
+          <Settings2 size={15}/>{expanded?"收起账号设置":connected?"管理账号":"登录平台"}
         </button>
-        <button className="secondary sf-sync-button" type="button" title="同步课程"
-          aria-label={definition.name+"同步课程"} disabled={!desktop||busy} onClick={onSync}>
+        {variant==="overview"&&<button className="secondary sf-sync-button" type="button" title="同步课程"
+          aria-label={definition.name+"同步课程"} disabled={!desktop||busy||!connected} onClick={onSync}>
           <RefreshCw size={16}/>
-        </button>
+        </button>}
       </div>
     </div>
     {expanded&&<div className="sf-platform-expanded">
-      <div className="sf-platform-expanded-label">
+      {variant==="overview"&&<div className="sf-platform-expanded-label">
         <span>{definition.name} · 登录与连接</span>
         
-      </div>
+      </div>}
       {children}
     </div>}
   </article>;

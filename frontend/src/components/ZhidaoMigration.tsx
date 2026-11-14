@@ -29,7 +29,7 @@ export function ZhidaoLoginPanel({desktop,busy,onOpenNative,onImported}:{
     <div className="sf-login-panel-main">
       <div className="sf-login-panel-heading">
         <span className="sf-login-symbol"><ScanLine size={20}/></span>
-        <div><h4>知到账号登录</h4><p>选择已有登录方式</p></div>
+        <div><h4>登录方式</h4></div>
       </div>
       <div className="sf-login-actions">
         <button className="primary" type="button" disabled={locked} onClick={onOpenNative}>

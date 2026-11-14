@@ -15,8 +15,8 @@ test("LightC workspace header spans both columns and the slim sidebar begins bel
   const sidebar=shell.indexOf('<aside className="sf-floating-nav" aria-label="主导航">');
   const main=shell.indexOf('<main className="main" id="main-content">');
   assert.ok(header>=0&&sidebar>header&&main>sidebar);
-  assert.match(shell,/currentPlatform\?\?"未选择平台"/);
-  assert.match(shell,/currentCourseTitle\?\?"未选择课程"/);
+  assert.match(shell,/currentPlatform\?\?"全部平台"/);
+  assert.match(shell,/currentCourseTitle\?</);
   assert.match(shell,/courseProgress==null\?"—"/);
   assert.match(css,/\.sf-shell \.sf-workspace-header\{[\s\S]*?grid-column:1 \/ -1/);
   assert.match(css,/\.sf-shell \.sf-floating-nav\{[\s\S]*?grid-column:1;[\s\S]*?grid-row:2/);
@@ -76,10 +76,10 @@ test("each fold remembers its choice and keeps mounted content hidden rather tha
 
 test("course progress uses verified evidence in header and is not repeated in body",()=>{
   const app=read("App.tsx");
-  assert.match(app,/const activeCourseProgress=workspaceCourse\?presentCourse\(workspaceCourse\)\.percent:null;/);
+  assert.match(app,/const activeCourseProgress=activeMetric\?\.percent\?\?null;/);
   assert.match(app,/courseProgress=\{activeCourseProgress\}/);
   assert.match(app,/const scope="course:"\+course\.platform\+":"\+course\.course_id\+":";/);
   assert.doesNotMatch(app,/sf-course-total-progress/);
-  assert.match(app,/title="当前任务与运行进度"/);
-  assert.match(app,/title="课程运行记录" defaultExpanded=\{false\}/);
+  assert.match(app,/title="当前课程任务"/);
+  assert.match(app,/title="当前课程操作记录" defaultExpanded=\{false\}/);
 });

@@ -117,10 +117,10 @@ test("course details use one foldable workspace and show total progress only in 
  assert.match(server,/detailMode/);
  assert.match(simulation,/sf-detail-simulation-only/);
  assert.match(simulation,/courseId\?:string/);
- assert.match(player,/sf-zd-local-observations-expanded/);
+ assert.match(player,/sf-zd-local-observations/);
  assert.match(player,/detailMode/);
  assert.match(log,/expandedByDefault/);
- assert.match(yuketang,/open=\{detailMode\}/);
+ assert.doesNotMatch(yuketang,/open=\{detailMode\}/);
  assert.match(simulation,/sf-detail-live/);
  assert.match(css,/sf-ykt-live\.sf-detail-live \.sf-ykt-live-grid/);
  assert.match(css,/\.sf-course-workspace>section\{margin:0\}/);

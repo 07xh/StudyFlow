@@ -342,7 +342,7 @@ pub fn zhidao_player_status(state: State<'_, ZhidaoPlayerManager>) -> Result<Off
 }
 
 #[tauri::command]
-pub fn zhidao_player_stop(state: State<'_, ZhidaoPlayerManager>) -> Result<OfficialPlayerStatus, String> {
+pub fn zhidao_player_stop(state: State<'_, ZhidaoPlayerManager>, expected_run_id: Option<String>) -> Result<OfficialPlayerStatus, String> {
     let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
     let Some(job) = guard.as_mut() else {
         return Ok(OfficialPlayerStatus {
@@ -351,6 +351,8 @@ pub fn zhidao_player_stop(state: State<'_, ZhidaoPlayerManager>) -> Result<Offic
             visible: None, observed_at: None, message: "官方播放器尚未启动".into(),
         });
     };
+    crate::run_identity::verify_expected_run(expected_run_id.as_deref(), Some(job.token.as_str()))
+        .map_err(|code| code.to_owned())?;
     if let Some(mut child) = job.child.take() {
         kill_child(&mut child);
         job.state = "stopped".into();

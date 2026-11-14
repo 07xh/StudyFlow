@@ -1,5 +1,7 @@
+import {RunParameters} from "./RunParameters";
 import {useCallback, useEffect, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
+import type {ActivityEntry,TaskRecorder} from "../activity";
 import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError} from "../bridge";
 import {
@@ -13,14 +15,16 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected, onEvent, yuketangOptions, settingsReady=true, courseId, detailMode=false
+  platform, courses, desktop, connected, onEvent, yuketangOptions, settingsReady=true, courseId, detailMode=false, events=[], onOpenTasks
 }: {
   platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
-  onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
+  onEvent?:TaskRecorder;
   yuketangOptions?: OriginalYktOptions;
   settingsReady?: boolean;
   courseId?:string;
   detailMode?:boolean;
+  events?:ActivityEntry[];
+  onOpenTasks?:()=>void;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
@@ -29,6 +33,7 @@ export function LegacyPlaybackPanel({
   const [selection, setSelection] = useState(courseId??"");
   const options = yuketangOptions ?? {...originalYktDefaults};
   const playableCourses = courses.filter(c => c.platform === "zhidao" && (c.course_type === "ai" || c.course_type === "shared") && !c.stale);
+  const ownsStatus=platform!=="zhidao"||Boolean(status?.course_id&&status.course_id===selection);
   const liveZhs = platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
   const selectedCourse=courses.find(course=>course.course_id===selection)??null;
@@ -89,21 +94,24 @@ export function LegacyPlaybackPanel({
         platform === "yuketang" ? options : undefined);
       setStatus(next);
       setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
-      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
+      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:undefined});
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
-      setMessage(msg);onEvent?.("启动原版任务","warning",msg);
+      setMessage(msg);onEvent?.("启动原版任务","warning",msg,{courseId:platform==="zhidao"?selection:undefined,runner:platform==="zhidao"?"zhs":"yuketang"});
     }
     finally {setBusy(false);}
   }
 
   async function stop() {
+    if(!ownsStatus||!status?.run_id||status?.state!=="running"||!status.run_id)return;
     setBusy(true);setMessage("");
     try {
-      setStatus(await stopLegacy(platform));
+      const latest=await getLegacyStatus(platform);
+      if(latest.state!=="running"||latest.run_id!==status.run_id||latest.course_id!==status.course_id){setStatus(latest);setMessage("运行任务已变化，请查看学习任务。");return;}
+      setStatus(await stopLegacy(platform,status.run_id));
       setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
-      onEvent?.("停止原版任务","success","已停止学序托管的原版进程");
-    } catch(error) {setMessage(legacyError(error));onEvent?.("停止原版任务","warning",legacyError(error));}
+      onEvent?.("停止原版任务","success","已停止学序托管的原版进程",{courseId:status?.course_id??undefined,runId:status?.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang"});
+    } catch(error) {setMessage(legacyError(error));onEvent?.("停止原版任务","warning",legacyError(error),{courseId:status?.course_id??undefined,runId:status?.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang"});}
     finally {setBusy(false);}
   }
 
@@ -112,13 +120,25 @@ export function LegacyPlaybackPanel({
       <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到原版任务" : "运行任务"}</h3>
       </div>
       <span className={status?.state === "running" ? "legacy-run-state active" : "legacy-run-state"}>
-        {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
+        {status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
+    </div>
+    {!ownsStatus&&status?.state==="running"&&<p className="sf-task-context">另一门课程的 ZHS 任务正在运行。{onOpenTasks&&<button className="text-button" onClick={onOpenTasks}>查看运行任务</button>}</p>}
+    <div className="actions legacy-actions">
+      <button className="primary" type="button" disabled={!desktop||!connected||busy||
+        status?.state==="running"||
+        (platform==="zhidao" && !playableCourses.some(c=>c.course_id===selection))||
+        (platform==="yuketang" && (!settingsReady || !validateOriginalOptions(options)))}
+        onClick={()=>void start()}><Play size={16}/> {platform==="yuketang"?"启动平台批量任务":"启动原版任务"}</button>
+      <button className="secondary" type="button" disabled={!desktop||busy||!ownsStatus||!status?.run_id||status?.state!=="running"}
+        onClick={()=>void stop()}><Square size={16}/> 停止</button>
+      <button className="secondary" type="button" disabled={!desktop||busy}
+        onClick={()=>void updateStatus()}><RefreshCw size={16}/> 查询运行状态</button>
     </div>
     {platform==="zhidao"&&<div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
-        <strong>{status ? labels[status.state] : desktop ? "检测中" : "未连接桌面端"}</strong>
+        <strong>{status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "检测中" : "未连接桌面端"}</strong>
         <small>约每 2 秒更新</small>
         {platform==="zhidao"&&<div className="sf-zhs-local" aria-label="ZHS 原版本地模拟片段">
           <div className="sf-zhs-local-heading">
@@ -147,15 +167,14 @@ export function LegacyPlaybackPanel({
       <div className="sf-ykt-live-title"><strong>并发任务进度</strong>
         <small>{yktProgress?.available ? "本次任务日志 · 每 2 秒读取" : "本次任务尚无进度记录"}</small></div>
       <div className="sf-ykt-worker-grid" aria-label="并发任务独立状态">
-        {workerSlots.map(slot=><article className="sf-ykt-worker" key={slot.slot}>
+        {status?.run_id&&status.state!=="idle"?workerSlots.map(slot=><article className="sf-ykt-worker" key={slot.slot}>
           <div className="sf-ykt-worker-heading">
             <strong>{yktProgress?.concurrent===false?"视频任务":"并发槽位 "+slot.slot}</strong>
             <span>{workerStateLabels[slot.state]??"状态待核实"}</span>
           </div>
           <small>{slot.video_index==null?(slot.state==="waiting"?"尚未分配视频":"视频归属待核实"):"视频任务 #"+slot.video_index}</small>
-          <div className="sf-ykt-worker-track" aria-hidden="true"><span/></div>
-          <small>单任务进度：—（原版日志未标注心跳归属）</small>
-        </article>)}
+          <small>暂无可归属于此视频的百分比</small>
+        </article>):<p className="sf-muted">启动批量任务后显示实际并发状态。</p>}
       </div>
       <details className="sf-ykt-diagnostics">
         <summary>运行诊断 · 最近一次响应</summary>
@@ -209,25 +228,16 @@ export function LegacyPlaybackPanel({
         {playableCourses.map(c=><option value={c.course_id} key={c.course_id}>{c.title}</option>)}
       </select>
     </div>}
-    {platform === "zhidao"&&detailMode&&<div className="legacy-field sf-legacy-course-context">
-      <span>当前运行课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
+    {platform === "zhidao"&&detailMode&&ownsStatus&&<div className="legacy-field sf-legacy-course-context">
+      <span>任务所属课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
     </div>}
-    <div className="actions legacy-actions">
-      <button className="primary" type="button" disabled={!desktop||!connected||busy||
-        status?.state==="running"||
-        (platform==="zhidao" && !playableCourses.some(c=>c.course_id===selection))||
-        (platform==="yuketang" && (!settingsReady || !validateOriginalOptions(options)))}
-        onClick={()=>void start()}><Play size={16}/> 启动原版任务</button>
-      <button className="secondary" type="button" disabled={!desktop||busy||status?.state!=="running"}
-        onClick={()=>void stop()}><Square size={16}/> 停止</button>
-      <button className="secondary" type="button" disabled={!desktop||busy}
-        onClick={()=>void updateStatus()}><RefreshCw size={16}/> 查询运行状态</button>
-    </div>
-    {status?.state==="exited"&&<p className="legacy-state-note">
+
+    {status?.state==="exited"&&ownsStatus&&<p className="legacy-state-note">
       {legacyExitMessage(status)}（退出码：{status.exit_code ?? "未知"}）
       {platform==="zhidao"&&status.exit_code===0&&!status.zhs_progress&&
         <small>未采集到播放进度；请检查课程是否有可播放内容并使用服务端只读核验。</small>}
     </p>}
+    {status?.run_id&&ownsStatus&&<RunParameters parameters={events.find(event=>event.runner===(platform==="zhidao"?"zhs":"yuketang")&&event.runId===status.run_id&&event.parameters)?.parameters}/>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
     <p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>
   </section>;

@@ -122,9 +122,10 @@ export async function startLegacy(
   });
 }
 
-export async function stopLegacy(platform: Platform): Promise<LegacyTaskStatus> {
+export async function stopLegacy(platform: Platform, expectedRunId:string): Promise<LegacyTaskStatus> {
   ensureDesktop();
-  return invoke<LegacyTaskStatus>("legacy_stop", {platform});
+  if(!expectedRunId)throw new Error("TASK_RUN_CHANGED");
+  return invoke<LegacyTaskStatus>("legacy_stop", {platform,expectedRunId});
 }
 
 export function legacyError(err: unknown): string {
@@ -132,6 +133,7 @@ export function legacyError(err: unknown): string {
   switch (code) {
     case "INVALID_COURSE": return "请先同步课程并选择有效的知到课程。";
     case "INVALID_SETTINGS": return "雨课堂原版参数超出支持范围。";
+    case "TASK_RUN_CHANGED": return "运行任务已变化，请刷新状态后再操作。";
     case "TASK_ALREADY_RUNNING": return "该平台原版任务已在运行，请先停止后再启动。";
     case "LEGACY_NOT_INSTALLED": return "缺少学序本机执行器或原版知到运行环境。";
     case "LEGACY_LAUNCH_FAILED": return "原版任务启动失败，请检查 Windows 运行环境。";
