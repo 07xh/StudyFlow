@@ -44,8 +44,8 @@ export function LegacyPlaybackPanel({
         setSelection(previous => previous || next.course_id || "");
       }
       setStatus(next);
-      if (next.state === "exited" && next.exit_code !== null) {
-        setMessage(legacyExitMessage(next));
+      if (next.state === "exited") {
+        setMessage("");
       }
       if (platform === "yuketang" && next.run_id) {
         try { setYktProgress(await getYuketangLiveProgress(next.run_id)); }
