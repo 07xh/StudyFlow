@@ -182,6 +182,7 @@ export default function App(){
     try{
       await request<{cleared:boolean}>({operation:"yuketang.clear"});
       setPlatforms(previous=>({...previous,yuketang:initialPlatforms.yuketang}));
+      setSelectedCourse(previous=>previous?.platform==="yuketang"?null:previous);
       setConfig(emptyConfiguration);setVideos([]);setClearDialogOpen(false);
       setNotice("已清除学序保存的雨课堂凭据；原版客户端不受影响。");
       recordEvent("雨课堂","退出并清除凭据","success","已清除学序凭据");
