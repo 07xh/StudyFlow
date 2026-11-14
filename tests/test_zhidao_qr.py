@@ -44,6 +44,56 @@ def test_qr_start_requires_installed_runtime(monkeypatch, tmp_path):
     assert qr_runtime.start()["stage"] == "environment-error"
 
 
+def test_start_cleans_abandoned_qr_and_status_before_new_attempt(monkeypatch, tmp_path):
+    root = tmp_path / "StudyFlow" / "zhidao"
+    root.mkdir(parents=True)
+    monkeypatch.setattr(qr_runtime, "installation_root", lambda: root)
+    monkeypatch.setattr(qr_runtime, "_qr_path", lambda token: root / f"studyflow-qr-{token}.png")
+    monkeypatch.setattr(qr_runtime, "_status_path", lambda token: root / f"monitor-qr-{token}.json")
+
+    old_token = "d" * 32
+    new_token = "e" * 32
+    old_png = root / f"studyflow-qr-{old_token}.png"
+    old_status = root / f"monitor-qr-{old_token}.json"
+    old_png.write_bytes(b"OLD_ONE_USE_QR")
+    old_status.write_text('{"v":1,"token":"' + old_token + '","stage":"ready","at":1}')
+
+    executable = tmp_path / "studyflow-bridge.exe"
+    executable.write_bytes(b"test executable")
+    worker = SimpleNamespace(poll=lambda: None)
+    monkeypatch.setattr(qr_runtime, "_WORKER", SimpleNamespace(poll=lambda: 1))
+    monkeypatch.setattr(qr_runtime, "_TOKEN", old_token)
+    monkeypatch.setattr(qr_runtime, "_FINAL_STAGE", "failed")
+    monkeypatch.setattr(qr_runtime, "python_executable", lambda: executable)
+    monkeypatch.setattr(qr_runtime.secrets, "token_hex", lambda _size: new_token)
+    monkeypatch.setattr(qr_runtime.subprocess, "Popen", lambda *_args, **_kwargs: worker)
+
+    assert qr_runtime.start()["stage"] == "requesting"
+    assert not old_png.exists()
+    assert not old_status.exists()
+    assert qr_runtime._TOKEN == new_token
+    assert qr_runtime._WORKER is worker
+
+
+def test_start_does_not_clean_an_active_qr_attempt(monkeypatch, tmp_path):
+    root = tmp_path / "StudyFlow" / "zhidao"
+    root.mkdir(parents=True)
+    monkeypatch.setattr(qr_runtime, "installation_root", lambda: root)
+    monkeypatch.setattr(qr_runtime, "_qr_path", lambda token: root / f"studyflow-qr-{token}.png")
+    monkeypatch.setattr(qr_runtime, "_status_path", lambda token: root / f"monitor-qr-{token}.json")
+    token = "f" * 32
+    png = root / f"studyflow-qr-{token}.png"
+    status = root / f"monitor-qr-{token}.json"
+    png.write_bytes(b"ACTIVE_ONE_USE_QR")
+    status.write_text('{"v":1,"token":"' + token + '","stage":"ready","at":1}')
+    monkeypatch.setattr(qr_runtime, "_TOKEN", token)
+    monkeypatch.setattr(qr_runtime, "_WORKER", SimpleNamespace(poll=lambda: None))
+
+    assert qr_runtime.start()["stage"] == "busy"
+    assert png.exists()
+    assert status.exists()
+
+
 def test_qr_status_reads_only_current_png(monkeypatch, tmp_path):
     monkeypatch.setattr(qr_runtime, "installation_root", lambda: tmp_path)
     monkeypatch.setattr(qr_runtime, "_qr_path", lambda token: tmp_path / f"studyflow-qr-{token}.png")
