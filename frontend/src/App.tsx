@@ -393,16 +393,11 @@ export default function App(){
     }));
     return <section className="sf-course-workspace">
       <div className="sf-course-detail-topline">
-        <div className="sf-course-breadcrumb">
-          <span>{definition?.name??platformNames[course.platform]}</span>
-          <ChevronRight size={14}/>
-          <strong>课程详情</strong>
-        </div>
         <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>
           <ArrowLeft size={15}/>返回课程列表
         </button>
       </div>
-      <section className="sf-course-total-progress" aria-label="课程总进度">
+      <section className="sf-course-total-progress" aria-label="课程进度总览">
         <div className="sf-course-total-head">
           <div className="sf-course-total-copy">
             <span className="eyebrow">{definition?.name??platformNames[course.platform]} / {course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"}</span>
@@ -411,7 +406,7 @@ export default function App(){
           </div>
           <div className="sf-course-total-value">
             <strong>{percent===null?"—":percent.toFixed(1)+"%"}</strong>
-            <small>课程总进度</small>
+            <small>进度总览</small>
           </div>
         </div>
         <div className={"sf-course-total-track"+(percent===null?" is-empty":"")} role="progressbar"
@@ -535,7 +530,8 @@ export default function App(){
     <AppShell page={page} onNavigate={next=>{setPage(next);setSelectedCourse(null);}}
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
-      compact={compactCards}>
+      compact={compactCards}
+      headerTitle={activeSelectedCourse?platformNames[activeSelectedCourse.platform]+" / 课程详情":undefined}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
