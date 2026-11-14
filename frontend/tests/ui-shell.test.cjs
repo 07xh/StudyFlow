@@ -19,7 +19,7 @@ test("LightC-style floating navigation overlays the workspace and keeps all page
   assert.match(shell,/setNavOpen\(true\)/);
   assert.match(shell,/Escape/);
   assert.match(shell,/aria-expanded=\{navOpen\}/);
-  assert.match(shell,/aria-hidden=\{!navOpen\}/);
+  assert.ok(!shell.includes("aria-hidden={!navOpen}"));\n  assert.ok(shell.includes("tabIndex={0}"));
   assert.match(shell,/onFocusCapture/);
   assert.match(shell,/onBlurCapture/);
   assert.match(shell,/onRefresh/);
@@ -27,7 +27,7 @@ test("LightC-style floating navigation overlays the workspace and keeps all page
   assert.match(css,/\.sf-shell \.sf-floating-nav__panel\s*\{[^}]*position:fixed/s);
   assert.match(css,/\.app\.sf-shell\s*\{[^}]*display:block/s);
   assert.match(css,/\.sf-shell \.main\s*\{[^}]*width:100%/s);
-  assert.match(css,/backdrop-filter:blur/);
+  assert.match(css,/backdrop-filter:blur/);\n  assert.match(css,/width:48px/);\n  assert.match(css,/width:min\\(236px/);\n  assert.match(css,/display:inline/);
   assert.match(css,/\.sf-shell \.sf-floating-nav__panel \.sf-subnav/);
   assert.doesNotMatch(css,/\.sf-shell \.sidebar\s*\{/);
   assert.doesNotMatch(css,/\.sf-shell\.sf-collapsed/);
