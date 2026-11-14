@@ -238,7 +238,7 @@ fn parse_jsonl_reply(stdout: &[u8], expected_id: &str) -> Result<serde_json::Val
     if stdout.is_empty() || stdout.len() > 1_048_576 {
         return Err("Python service returned an invalid response".into());
     }
-    let mut lines = stdout.split(|byte| *byte == b'\\n')
+    let mut lines = stdout.split(|byte| *byte == b'\n')
         .filter(|line| !line.iter().all(|byte| byte.is_ascii_whitespace()));
     let line = lines.next().ok_or_else(|| "Python service protocol error".to_string())?;
     if lines.next().is_some() {
@@ -393,7 +393,7 @@ mod ipc_validation_tests {
     #[test]
     fn accepts_one_correlated_jsonl_reply() {
         let reply = parse_jsonl_reply(
-            b"{\\"id\\":\\"req-1\\",\\"ok\\":true,\\"data\\":{}}\\n",
+            b"{\"id\":\"req-1\",\"ok\":true,\"data\":{}}\n",
             "req-1",
         ).unwrap();
         assert_eq!(reply["id"], "req-1");
@@ -403,11 +403,11 @@ mod ipc_validation_tests {
     #[test]
     fn rejects_stdout_noise_and_mismatched_jsonl_ids() {
         assert!(parse_jsonl_reply(
-            b"debug output\\n{\\"id\\":\\"req-1\\",\\"ok\\":true}\\n",
+            b"debug output\n{\"id\":\"req-1\",\"ok\":true}\n",
             "req-1",
         ).is_err());
         assert!(parse_jsonl_reply(
-            b"{\\"id\\":\\"other\\",\\"ok\\":true}\\n",
+            b"{\"id\":\"other\",\"ok\":true}\n",
             "req-1",
         ).is_err());
     }
