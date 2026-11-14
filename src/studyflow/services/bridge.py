@@ -17,6 +17,7 @@ from studyflow.platforms.zhidao import qr_runtime
 atexit.register(qr_runtime.cancel)
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
+from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
 
 MAX_LINE = 65536
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
@@ -72,6 +73,17 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": ADAPTERS["yuketang"].list_videos()}
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+    if operation == "yuketang.progress":
+        run_id = request.get("run_id")
+        if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        # Local, read-only snapshot of this run\u2019s existing original log.
+        # Never return log lines, credentials, video IDs or raw server data.
+        try:
+            progress = read_session_progress(run_id)
+        except (OSError, ValueError):
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+        return {"id": request_id, "ok": True, "data": progress}
     if operation == "yuketang.configure":
         try:
             credentials.save(request.get("configuration"))
