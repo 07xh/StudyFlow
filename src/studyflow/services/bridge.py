@@ -5,12 +5,16 @@ identifiers never appear in logs or error output.
 """
 from __future__ import annotations
 
+import atexit
 import json
 import sys
 from typing import Any
 
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
 from studyflow.platforms.zhidao import qr_runtime
+
+# Best-effort cleanup when the persistent JSONL process reaches normal EOF.
+atexit.register(qr_runtime.cancel)
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 
