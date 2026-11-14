@@ -1,4 +1,7 @@
+from studyflow.services import bridge
 from studyflow.services.bridge import dispatch
+from studyflow.core.models import Course, Platform
+import pytest
 
 
 def test_ping():
@@ -38,3 +41,25 @@ def test_yuketang_progress_returns_only_current_run_snapshot(tmp_path, monkeypat
 
 def test_rejects_unrecognized_request():
     assert dispatch({"id": "d", "version": 1, "operation": "delete.all"})["error"] == "UNKNOWN_OPERATION"
+
+
+
+def test_zhidao_progress_sync_returns_server_evidence(monkeypatch):
+    course = Course(Platform.ZHIDAO, "a" * 64, "智慧课程", 40.0, "ai",
+                    progress_evidence="server_verified", verified_at="2026-11-14T10:00:00Z")
+    monkeypatch.setattr(bridge, "refresh_zhidao_progress", lambda: {
+        "courses": [course], "incomplete": False, "fetched_at": "2026-11-14T10:00:00Z",
+    })
+    result = dispatch({"id": "z1", "version": 1, "operation": "zhidao.progress.sync"})
+    assert result["ok"]
+    assert result["data"]["courses"][0]["progress_percent"] == 40.0
+    assert result["data"]["courses"][0]["progress_evidence"] == "server_verified"
+    assert result["data"]["incomplete"] is False
+
+
+def test_zhidao_single_course_verify_rejects_bad_key(monkeypatch):
+    monkeypatch.setattr(bridge, "verify_zhidao_course",
+                        lambda key: pytest.fail("invalid course key must not reach verifier"))
+    result = dispatch({"id": "z2", "version": 1, "operation": "zhidao.progress.verify",
+                       "course_key": "../invalid"})
+    assert result == {"id": "z2", "ok": False, "error": "INVALID_REQUEST"}

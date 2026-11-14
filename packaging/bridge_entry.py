@@ -16,7 +16,7 @@ def main() -> int:
             return qr_main([sys.argv[2]])
         if mode == "--zhidao-readonly" and len(sys.argv) == 3:
             command = sys.argv[2]
-            if command not in ("doctor-server", "courses"):
+            if command not in ("doctor-server", "courses", "progress"):
                 return 2
             from studyflow.platforms.zhidao.upstream import zhidao_only
             # Explicitly expose only non-mutating operations in StudyFlow.
@@ -24,7 +24,12 @@ def main() -> int:
                 return zhidao_only.doctor_server()
             if command == "courses":
                 return zhidao_only.main("courses")
+            if command == "progress":
+                return zhidao_only.main("progress")
             return 2
+        if mode == "--zhidao-verify-one" and len(sys.argv) == 3:
+            from studyflow.platforms.zhidao.verify_entry import main as verify_main
+            return verify_main([sys.argv[2]])
         if mode == "--zhidao-env-check" and len(sys.argv) == 2:
             from importlib.metadata import PackageNotFoundError, version
             try:
