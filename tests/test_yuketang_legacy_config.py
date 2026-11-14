@@ -89,7 +89,7 @@ def test_task_log_home_never_shadows_persistent_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("YKT_HOME", str(run_dir))
     monkeypatch.delenv("VIDEO_SPEED", raising=False)
     (config_dir / ".env").write_text(
-        "VIDEO_SPEED=2.25\\nHEARTBEAT_INTERVAL=7\\n",
+        "VIDEO_SPEED=2.25\nHEARTBEAT_INTERVAL=7\n",
         encoding="utf-8",
     )
 
