@@ -364,4 +364,20 @@ mod tests {
         options.richtext_skip_delay = -0.1;
         assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
     }
+
+    #[test]
+    fn yuketang_options_pass_through_all_original_environment_fields() {
+        let options = valid_yuketang_options();
+        let mut command = Command::new("unused-studyflow-test-command");
+        options.apply(&mut command);
+        let env: HashMap<String, String> = command.get_envs()
+            .filter_map(|(key, value)| value.map(|value| (
+                key.to_string_lossy().into_owned(),
+                value.to_string_lossy().into_owned(),
+            )))
+            .collect();
+        assert_eq!(env.get("DEBUG").map(String::as_str), Some("false"));
+        assert_eq!(env.get("RICHTEXT_STAY_SECONDS").map(String::as_str), Some("3"));
+        assert_eq!(env.get("RICHTEXT_SKIP_DELAY").map(String::as_str), Some("1"));
+    }
 }
