@@ -88,7 +88,7 @@ export default function App(){
       course.course_id.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
   ),[courses,coursePlatform,query]);
   const verifiedCourses=useMemo(()=>courses.filter(course=>
-    course.progress_evidence==="server_verified"&&typeof course.verified_at==="string"&&
+    !course.stale&&course.progress_evidence==="server_verified"&&typeof course.verified_at==="string"&&
     course.verified_at.length>0&&course.progress_percent!==null
   ),[courses]);
   const learningCount=verifiedCourses.filter(course=>
@@ -108,7 +108,7 @@ export default function App(){
         const next={...previous};
         for(const status of statuses){
           if(!platformInfo(status.platform))continue;
-          next[status.platform]={...status,courses:previous[status.platform].courses};
+          next[status.platform]={...status,courses:status.status==="connected"&&previous[status.platform].status==="connected"?previous[status.platform].courses:[]};
         }
         return next;
       });
@@ -264,17 +264,17 @@ export default function App(){
     <article className="sf-metric-card">
       <span className="sf-metric-icon play"><ListChecks size={21}/></span>
       <div><small>学习中</small><strong>{learningCount}<em>门</em></strong>
-        <span className="sf-metric-note">仅统计服务端已核验进度</span></div>
+</div>
     </article>
     <article className="sf-metric-card">
       <span className="sf-metric-icon done"><CheckCircle2 size={21}/></span>
       <div><small>已完成</small><strong>{completedCount}<em>门</em></strong>
-        <span className="sf-metric-note">以平台确认结果为准</span></div>
+</div>
     </article>
     <article className="sf-metric-card">
       <span className="sf-metric-icon progress"><CircleGauge size={21}/></span>
       <div><small>总进度</small><strong>{averageProgress===null?"—":Math.round(averageProgress)+"%"}</strong>
-        <span className="sf-metric-note">{averageProgress===null?"暂无已核验进度":verifiedCourses.length+" 门课程的平均值"}</span>
+
         {averageProgress!==null&&<div className="sf-total-progress"><span style={{width:averageProgress+"%"}}/></div>}
       </div>
     </article>

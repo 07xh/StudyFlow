@@ -1,4 +1,4 @@
-import {BookOpen,ChevronRight,ScanLine,ShieldCheck} from "lucide-react";
+import {BookOpen,ChevronRight,ScanLine} from "lucide-react";
 import {platformNames,presentCourse} from "../presentation";
 import type {Course} from "../types";
 
@@ -35,7 +35,7 @@ export function ZhidaoLoginPanel({desktop,busy,onOpenLegacy,onOpenNative}:{
       <div className="sf-login-panel-heading">
         <span className="sf-login-symbol"><ScanLine size={20}/></span>
         <div><h4>知到账号登录</h4>
-          <p>使用知到 App 扫码，完成后由学序重新检测真实登录状态。</p>
+          <p>使用知到 App 扫码</p>
         </div>
       </div>
       <div className="sf-login-actions">
@@ -47,11 +47,5 @@ export function ZhidaoLoginPanel({desktop,busy,onOpenLegacy,onOpenNative}:{
         </button>
       </div>
     </div>
-    <aside className="sf-login-panel-aside">
-      <h4><ShieldCheck size={16}/>登录步骤</h4>
-      <ol><li>点击学序内扫码登录</li><li>使用知到 App 扫描并确认</li>
-        <li>服务端验证通过后自动更新连接状态</li></ol>
-      <p>二维码只在本次登录过程中显示，Cookie 不会进入前端存储。</p>
-    </aside>
   </div>;
 }

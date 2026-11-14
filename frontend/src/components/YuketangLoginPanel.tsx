@@ -33,7 +33,7 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
       <div className="sf-login-panel-heading">
         <span className="sf-login-symbol"><KeyRound size={19}/></span>
         <div><h4>雨课堂会话配置</h4>
-          <p>配置本人的有效会话。凭据保存在 Windows 凭据管理器，不写入浏览器存储。</p>
+          <p>凭据保存到 Windows 凭据管理器</p>
         </div>
         <span className={connected?"sf-login-state connected":"sf-login-state"}>
           <ShieldCheck size={14}/>{connected?"接口验证通过":"等待验证"}
@@ -57,13 +57,6 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
         </div>
       </form>
     </div>
-    <aside className="sf-login-panel-aside">
-      <h4>连接流程</h4>
-      <ol><li>从雨课堂官方客户端或浏览器获取本人有效会话</li>
-        <li>填写课堂与学校标识，保存到系统凭据库</li>
-        <li>由学序调用真实课堂接口验证，再同步课程</li></ol>
-      <p>清除只影响学序保存的会话，不删除原版客户端数据。</p>
-    </aside>
     {videos.length>0&&<div className="sf-ykt-videos">
       <div className="sf-ykt-videos-title"><strong>章节与视频</strong><span>{videos.length} 条真实记录</span></div>
       {videos.map((video,index)=><div className="sf-ykt-video-row" key={video.id+":"+index}>

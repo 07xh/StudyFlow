@@ -19,7 +19,7 @@ export function PlatformCard({
 }:Props){
   const connected=state.status==="connected";
   const statusLabel=connected?"已登录":state.status==="connecting"?"连接中":state.status==="error"?"连接异常":"未登录";
-  const message=state.message&&state.message!=="等待检测真实登录状态"?state.message:definition.summary;
+  const message=state.message&&state.message!=="等待检测真实登录状态"?state.message:"";
   return <article className="platform-card sf-platform-card">
     <div className="sf-platform-card-head">
       <div className="sf-platform-identity">
@@ -33,7 +33,7 @@ export function PlatformCard({
               <span className="sf-status-dot"/>{statusLabel}
             </span>
           </div>
-          <p>{message}</p>
+          {message&&<p>{message}</p>}
         </div>
       </div>
       <div className="sf-platform-actions">
@@ -53,7 +53,7 @@ export function PlatformCard({
     {expanded&&<div className="sf-platform-expanded">
       <div className="sf-platform-expanded-label">
         <span>{definition.name} · 登录与连接</span>
-        <span>{connected?"账号状态已验证":"需要完成登录或会话配置"}</span>
+        
       </div>
       {children}
     </div>}

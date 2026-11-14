@@ -836,3 +836,9 @@
   .sf-shell .sf-subnav .nav{padding:8px 6px}
   .sf-shell .sf-task-shortcut>.secondary{width:100%}
 }
+
+/* Compact login panels have no tutorial sidebar. */
+.sf-shell .sf-platform-login,
+.sf-shell .sf-platform-detail .sf-platform-login{grid-template-columns:minmax(0,1fr)}
+.sf-shell .sf-login-panel-main{padding:14px 16px}
+.sf-shell .sf-platform-card .sf-platform-identity-copy p:empty{display:none}
