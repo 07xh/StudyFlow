@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useState} from "react";
 import {Play, Square, RefreshCw, SlidersHorizontal, Activity} from "lucide-react";
 import type {Course, Platform} from "../types";
+import {presentCourse} from "../presentation";
 import {
   getLegacyStatus, legacyError, originalYktDefaults, startLegacy, stopLegacy,
   validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions
@@ -32,6 +33,8 @@ export function LegacyPlaybackPanel({
   const [selection, setSelection] = useState("");
   const [options, setOptions] = useState<OriginalYktOptions>(storedOptions);
   const aiCourses = courses.filter(c => c.platform === "zhidao" && c.course_type === "ai");
+  const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
+    .filter(item => item.presentation.percent !== null);
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
@@ -87,6 +90,32 @@ export function LegacyPlaybackPanel({
       <span className={status?.state === "running" ? "legacy-run-state active" : "legacy-run-state"}>
         {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
+    </div>
+    <div className="sf-live-progress-summary" aria-label="运行状态与已核验学习进度">
+      <div className="sf-live-state">
+        <span>任务运行状态</span>
+        <strong>{status ? labels[status.state] : desktop ? "检测中" : "未连接桌面端"}</strong>
+        <small>约每 2 秒更新</small>
+      </div>
+      <div className="sf-live-course-progress">
+        <div className="sf-live-course-heading">
+          <span>平台学习进度</span>
+          <small>{verified.length>0?`已核验 ${verified.length} 门`:"暂无服务端核验数据"}</small>
+        </div>
+        {verified.length>0
+          ?<div className="sf-verified-list">{verified.slice(0,4).map(({course,presentation})=>
+            <div className="sf-verified-row" key={course.platform+":"+course.course_id}>
+              <span title={course.title}>{course.title}</span>
+              <div className="sf-verified-track" role="progressbar"
+                aria-label={course.title+"平台已核验学习进度"}
+                aria-valuemin={0} aria-valuemax={100}
+                aria-valuenow={presentation.percent??0}>
+                <span style={{width:(presentation.percent??0)+"%"}}/>
+              </div>
+              <strong>{presentation.percent?.toFixed(1)}%</strong>
+            </div>)}</div>
+          :<div className="sf-unverified-note">未接入可验证的实时百分比</div>}
+      </div>
     </div>
     {platform === "zhidao"
       ? <div className="legacy-field">
