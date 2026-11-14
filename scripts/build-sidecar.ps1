@@ -32,10 +32,11 @@ if ($ping.id -cne 'packaging-probe' -or -not $ping.ok -or $ping.data.service -cn
   throw 'Frozen StudyFlow ping contract mismatch'
 }
 
-# Exercise an adapter-backed operation as well: imports and platform status
-# handlers must not leak diagnostics into the machine-readable stdout pipe.
-$status = Invoke-JsonlProbe '{"id":"packaging-status","version":1,"operation":"platform.status"}'
-if ($status.id -cne 'packaging-status' -or -not $status.ok -or $status.data.Count -ne 2) {
-  throw 'Frozen StudyFlow platform.status JSONL contract mismatch'
+# Exercise a real local settings handler as well; this checks the request/response
+# contract without requiring school credentials or contacting a remote platform.
+$settings = Invoke-JsonlProbe '{"id":"packaging-settings","version":1,"operation":"zhidao.player.settings.get"}'
+if ($settings.id -cne 'packaging-settings' -or -not $settings.ok -or
+    $settings.data.speed -notin @('1','1.25','1.5','2')) {
+  throw 'Frozen StudyFlow local settings JSONL contract mismatch'
 }
-Write-Host '[READY] Frozen ZHS, adapter-backed JSONL IPC and platform status verified without server access.'
+Write-Host '[READY] Frozen ZHS, clean JSONL output and local settings handler verified without server access.'
