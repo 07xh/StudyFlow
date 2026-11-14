@@ -14,8 +14,10 @@ test("LightC-style slim navigation is always visible and reserves its own column
   assert.match(shell,/id:"platform-yuketang"/);
   assert.match(shell,/platformExpanded/);
   assert.match(shell,/onNavigate\(item\.id\)/);
-  assert.match(shell,/<aside className="sf-floating-nav" aria-label="主导航">/);
+  assert.match(shell,/<aside className="sf-floating-nav" aria-label="常驻侧栏">/);
   assert.match(shell,/onRefresh/);
+  assert.match(shell,/sf-sidebar-brand/);
+  assert.match(shell,/sf-header-course-track/);
   assert.match(css,/--accent:#13d992/);
   assert.match(css,/\.app\.sf-shell\s*\{[^}]*display:grid;[^}]*grid-template-columns:clamp\(172px,16vw,202px\) minmax\(0,1fr\)/s);
   assert.match(css,/\.sf-shell \.sf-floating-nav\s*\{[^}]*position:sticky;/s);
@@ -47,8 +49,8 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(app,/<ZhidaoOfficialPlayerPanel/);
   assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
   assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
-  assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
-  assert.match(app,/onToggleLogin=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.{3}previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
+  assert.match(app,/aria-expanded=\{platformLoginExpanded\[platform\]\}/);
+  assert.match(app,/onClick=\{\(\)=>setPlatformLoginExpanded\(previous=>\(\{\.\.\.previous,\[platform\]:!previous\[platform\]\}\)\)\}/);
   assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
   const yuketang=read("src/components/YuketangTaskArea.tsx");
   assert.match(yuketang,/<LegacyPlaybackPanel platform="yuketang"/);
@@ -75,7 +77,7 @@ test("Rain Classroom original progress has three distinct UI fields and a scoped
   assert.match(view,/simulation_percent/);
   assert.match(view,/server_percent/);
   assert.match(view,/processed/);
-  assert.match(view,/并发模式下/);
+  assert.match(view,/心跳无法对应到单个视频/);
   assert.match(task,/yuketang\.progress/);
   assert.match(bridge,/operation: "yuketang\.progress"/);
   assert.match(rust,/STUDYFLOW_YKT_RUN_ID/);
@@ -99,8 +101,9 @@ test("platform task status and verified progress are placed before login control
   assert.ok(start>=0&&end>start);
   assert.ok(detail.indexOf("sf-platform-task-section")<detail.indexOf("sf-platform-detail"));
   assert.match(playback,/sf-live-progress-summary/);
-  assert.match(playback,/presentCourse\(course\)/);
-  assert.match(playback,/presentation\.percent !== null/);
+  assert.match(playback,/workerSlots\.map\(slot/);
+  assert.match(playback,/单任务进度：—/);
+  assert.match(playback,/心跳无法对应到单个视频/);
   assert.doesNotMatch(playback,/Math\.random\(\)|setInterval\([^,]+,\s*[1-9]\)/);
 });
 
@@ -143,7 +146,7 @@ test("platform controls keep independent settings and per-platform login expansi
   const progress=read("src/components/ZhidaoProgressPanel.tsx");
   const yuketang=read("src/components/YuketangTaskArea.tsx");
   assert.match(app,/Record<Platform,boolean>/);
-  assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
+  assert.match(app,/aria-expanded=\{platformLoginExpanded\[platform\]\}/);
   assert.match(app,/\[platform\]:!previous\[platform\]/);
   assert.match(official,/update\("allowMinimize",checked\)/);
   assert.match(official,/update\("autoStart",checked\)/);
