@@ -34,3 +34,7 @@ User approval: the preceding comprehensive UI audit and placement table were acc
 Real Chromium CI checks passed at 1280/960/720 CSS pixels and device scale 1.25. Reviewed empty-account screenshots at minimum width and both themes. Follow-up visual repairs remove duplicated page headings, use the header for actual course selection, collapse account forms by default while honoring saved choices, normalize content inputs, and keep notifications in document flow. Initial browser failure was a deterministic-test setup error (app defaults to dark); it was corrected without changing the product theme default. Stable captures use reduced motion and an unfocused pointer.
 
 An earlier revision completed Windows Rust/package/install smoke successfully. Current release eligibility remains tied to all checks on the final head, not to that earlier result.
+
+## Main reliability integration
+
+Integrated main `05ac3f1` (#56), preserving its ZHS output freshness, terminal sample handling, line parser and async status guards. Combined those guards with course/run ownership, scoped launch events and atomic expected-run stopping. The removed duplicate course totals remain in the header only. Added actual-component regressions for cross-course ZHS observations, stale samples and pre-launch status responses; updated the native idle source check because an unowned stop now rejects instead of returning idle. After integration, 170 Python tests, 65 UI/IPC tests and the production build pass. Exact integrated Windows and browser CI remain the delivery gate.

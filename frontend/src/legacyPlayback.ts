@@ -16,6 +16,7 @@ export type LegacyTaskStatus = {
   run_id?: string | null;
   course_id: string | null;
   zhs_progress: ZhsLocalProgress | null;
+  zhs_stale: boolean;
 };
 
 export type YuketangLiveProgress = {

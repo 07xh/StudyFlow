@@ -88,6 +88,7 @@ pub struct LegacyStatus {
     run_id: Option<String>,
     course_id: Option<String>,
     zhs_progress: Option<ZhsProgress>,
+    zhs_stale: bool, // Last sample expired while the process is still running.
 }
 
 fn zhs_snapshot_path(token: &str) -> Option<PathBuf> {
@@ -150,9 +151,11 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         Some(child) => child.try_wait().map_err(|_| "TASK_STATUS_FAILED")?,
         None => None,
     };
+    let mut fresh_zhs_progress = None;
     if platform == "zhidao" && task.state == "running" {
-        if let Some(observation) = task.monitor_token.as_deref().and_then(read_zhs_snapshot) {
-            task.last_zhs_progress = Some(observation);
+        fresh_zhs_progress = task.monitor_token.as_deref().and_then(read_zhs_snapshot);
+        if let Some(observation) = fresh_zhs_progress.as_ref() {
+            task.last_zhs_progress = Some(observation.clone());
         }
     }
     if let Some(code) = exit_status {
@@ -161,15 +164,27 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         task.child = None;
         remove_zhs_snapshot(task.monitor_token.as_deref());
     }
+    // A cached final frame must not masquerade as live progress.
+    let running = task.state == "running";
+    let zhs_stale = platform == "zhidao" && running
+        && fresh_zhs_progress.is_none() && task.last_zhs_progress.is_some();
+    let zhs_progress = if platform != "zhidao" {
+        None
+    } else if running {
+        fresh_zhs_progress
+    } else if task.state == "exited" {
+        task.last_zhs_progress.clone()
+    } else {
+        None
+    };
     Ok(LegacyStatus {
         platform: platform.into(),
         state: task.state.clone(),
         exit_code: task.exit_code,
         run_id: task.run_id.clone(),
         course_id: task.course_id.clone(),
-        zhs_progress: if platform == "zhidao" {
-            task.last_zhs_progress.clone()
-        } else { None },
+        zhs_progress,
+        zhs_stale,
     })
 }
 
@@ -270,7 +285,7 @@ pub fn legacy_start(
     Ok(LegacyStatus {
         platform: platform.clone(), state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },
-        zhs_progress: None,
+        zhs_progress: None, zhs_stale: false,
     })
 }
 
@@ -282,7 +297,7 @@ pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     match guard.get_mut(&platform) {
         Some(task) => status_of(&platform, task),
-        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None}),
+        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_stale: false}),
     }
 }
 
@@ -321,6 +336,29 @@ mod tests {
     fn progress_tokens_reject_path_traversal() {
         assert!(zhs_snapshot_path("../bad").is_none());
         assert!(zhs_snapshot_path(&"A".repeat(32)).is_none());
+    }
+
+    #[test]
+    fn expired_zhs_snapshot_is_not_presented_as_live_progress() {
+        let progress = ZhsProgress {
+            video_segment_percent: Some(32.0), resource_index: Some(1), resource_total: Some(3),
+        };
+        let mut task = LegacyJob {
+            child: None, state: "running".into(), exit_code: None, run_id: None,
+            course_id: Some("a".repeat(64)), monitor_token: None,
+            last_zhs_progress: Some(progress),
+        };
+        let running = status_of("zhidao", &mut task).unwrap();
+        assert!(running.zhs_progress.is_none());
+        assert!(running.zhs_stale);
+        task.state = "exited".into();
+        let exited = status_of("zhidao", &mut task).unwrap();
+        assert_eq!(exited.zhs_progress.unwrap().video_segment_percent, Some(32.0));
+        assert!(!exited.zhs_stale);
+        task.state = "stopped".into();
+        let stopped = status_of("zhidao", &mut task).unwrap();
+        assert!(stopped.zhs_progress.is_none());
+        assert!(!stopped.zhs_stale);
     }
 
     fn valid_yuketang_options() -> OriginalYktOptions {
