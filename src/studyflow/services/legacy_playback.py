@@ -188,12 +188,9 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
             return exc.exit_code
         return 1
     finally:
+        # The Rust supervisor reads the final numeric observation before
+        # deleting it. Removing this in the worker loses the last frame.
         sys.stdout = original_stdout
-        if sink is not None:
-            try:
-                sink.path.unlink(missing_ok=True)
-            except OSError:
-                pass
 
 
 def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = None) -> int | None:
