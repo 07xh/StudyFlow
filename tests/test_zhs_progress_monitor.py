@@ -99,4 +99,7 @@ def test_ui_status_cannot_be_conflated_with_server_progress():
     assert 'now - observed > 18.0' in rust
     assert "remove_zhs_snapshot(job.monitor_token.as_deref())" in rust
     assert "last_zhs_progress" in rust
+    status = rust.split("fn status_of", 1)[1].split("fn terminate_tree", 1)[0]
+    assert status.index("child.try_wait()") < status.index("read_zhs_snapshot")
+    assert status.index("read_zhs_snapshot") < status.index("remove_zhs_snapshot")
     assert "结束前最后一次真实采样" in panel
