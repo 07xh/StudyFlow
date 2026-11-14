@@ -27,7 +27,24 @@
     linear-gradient(145deg,#171c22,#20262d);
   transition:background .2s,color .2s;
 }
-.app.sf-shell.dark{color-scheme:dark}
+.app.sf-shell.dark{
+  color-scheme:dark;
+  --bg:#191f25;
+  --panel:rgba(43,50,57,.92);
+  --panel-raised:rgba(53,61,69,.92);
+  --text:#edf2f3;
+  --muted:#a2adb5;
+  --line:rgba(255,255,255,.095);
+  --side:rgba(31,37,43,.96);
+  --accent:#13d992;
+  --accent-strong:#08bf7b;
+  --accent-text:#56e9aa;
+  --soft-accent:rgba(19,217,146,.13);
+  --success:#4de2a2;
+  --success-bg:rgba(19,217,146,.13);
+  --warning:#e7b66d;
+  --warning-bg:rgba(231,182,109,.12);
+}
 .app.sf-shell:not(.dark){
   color-scheme:light;
   --bg:#edf2ef;
