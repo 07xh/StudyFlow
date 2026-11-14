@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useState,type FormEvent} from "react";
 import {BookOpen,LayoutDashboard,Settings,ShieldCheck,GraduationCap,RefreshCw,ChevronRight,Moon,Sun,PlayCircle} from "lucide-react";
 import {initialPlatforms} from "./platforms";
+import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {fetchStatuses,isDesktop,openLegacyZhidao,request} from "./bridge";
 import type {Config,Video} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
@@ -14,6 +15,7 @@ export default function App(){
   const [platforms,setPlatforms]=useState<Record<Platform,PlatformState>>(initialPlatforms);
   const [busy,setBusy]=useState("");
   const [notice,setNotice]=useState("");
+  const [qrOpen,setQrOpen]=useState(false);
   const [videos,setVideos]=useState<Video[]>([]);
   const [config,setConfig]=useState<Config>({session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""});
   const desktop=isDesktop();
@@ -101,7 +103,7 @@ export default function App(){
           <div className="platform-top"><div className={"platform-logo "+id}>{id==="zhidao"?"知":"雨"}</div><span className="status">{platforms[id].status==="connected"?"已验证":"未连接"}</span></div>
           <h3>{names[id]}</h3><p>{platforms[id].message}</p>
           <div className="actions"><button className="secondary" disabled={!desktop||Boolean(busy)} onClick={()=>void sync(id)}><RefreshCw size={16}/> {busy===id?"正在同步…":"同步课程"}</button>
-          {id==="zhidao"&&<button className="secondary" disabled={!desktop||Boolean(busy)} onClick={()=>void openZhidao()}>原版扫码登录</button>}
+          {id==="zhidao"&&<><button className="secondary" disabled={!desktop||Boolean(busy)} onClick={()=>setQrOpen(true)}>学序扫码登录</button><button className="secondary" disabled={!desktop||Boolean(busy)} onClick={()=>void openZhidao()}>原版登录（备用）</button></>}
           {id==="yuketang"&&<button className="secondary" disabled={!desktop||Boolean(busy)} onClick={()=>void showVideos()}><PlayCircle size={16}/>章节与视频</button>}
           </div>
         </article>)}</div>
@@ -118,5 +120,6 @@ export default function App(){
       {page==="platforms"&&videos.length>0&&<section className="settings-card"><h3>雨课堂章节视频</h3><div className="video-list">{videos.map((v,i)=><div key={v.id+":"+i}><small>{v.chapter}</small><strong>{v.name}</strong><span>视频 ID：{v.id}</span></div>)}</div></section>}
       {page==="settings"&&<section className="settings-card"><h3>外观</h3><p>深色与浅色模式仅影响显示，不修改平台数据。</p><button className="secondary" onClick={()=>setDark(!dark)}>{dark?"切换浅色模式":"切换深色模式"}</button></section>}
     </main>
+    {qrOpen&&<ZhidaoQrDialog onClose={()=>setQrOpen(false)} onVerified={()=>{setNotice("知到服务端登录验证成功，正在更新平台连接状态。");void refresh()}}/>}
   </div>;
 }
