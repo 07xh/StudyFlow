@@ -143,21 +143,23 @@ fn read_zhs_snapshot(token: &str) -> Option<ZhsProgress> {
 }
 
 fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, String> {
-    // Collect the final original numeric snapshot *before* reaping the process.
-    // This keeps a short task's last observed progress visible after exit.
-    // It is strictly local telemetry and never a server-completion signal.
+    // Check process exit first, then read the atomic numeric snapshot. If the
+    // child finished between polls, its final write is now complete and can be
+    // captured before the snapshot is removed. No server-completion inference.
+    let exit_status = match task.child.as_mut() {
+        Some(child) => child.try_wait().map_err(|_| "TASK_STATUS_FAILED")?,
+        None => None,
+    };
     if platform == "zhidao" && task.state == "running" {
         if let Some(observation) = task.monitor_token.as_deref().and_then(read_zhs_snapshot) {
             task.last_zhs_progress = Some(observation);
         }
     }
-    if let Some(child) = &mut task.child {
-        if let Some(code) = child.try_wait().map_err(|_| "TASK_STATUS_FAILED")? {
-            task.exit_code = code.code();
-            task.state = "exited".into();
-            task.child = None;
-            remove_zhs_snapshot(task.monitor_token.as_deref());
-        }
+    if let Some(code) = exit_status {
+        task.exit_code = code.code();
+        task.state = "exited".into();
+        task.child = None;
+        remove_zhs_snapshot(task.monitor_token.as_deref());
     }
     Ok(LegacyStatus {
         platform: platform.into(),
