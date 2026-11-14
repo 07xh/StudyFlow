@@ -113,6 +113,10 @@ export default function App(){
   },[]);
 
   const courses=useMemo(()=>Object.values(platforms).flatMap(item=>item.courses),[platforms]);
+  useEffect(()=>{
+    if(!selectedCourse)return;
+    if(!selectedSessionCourse(courses,selectedCourse))setSelectedCourse(null);
+  },[courses,selectedCourse]);
   const filtered=useMemo(()=>courses.filter(course=>
     (coursePlatform==="all"||course.platform===coursePlatform)&&
     (course.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())||

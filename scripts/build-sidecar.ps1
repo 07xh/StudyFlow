@@ -41,4 +41,30 @@ if ($settings.id -cne 'packaging-settings' -or -not $settings.ok -or
     $settings.data.speed -notin @('1','1.25','1.5','2')) {
   throw 'Frozen StudyFlow local settings JSONL contract mismatch'
 }
-Write-Host '[READY] Frozen ZHS, clean JSONL output and local settings handler verified without server access.'
+# Verify the unchanged Rain Classroom settings adapter inside the same frozen runtime.
+$oldYktHome = $env:YKT_HOME
+$probeHome = Join-Path $env:TEMP ('studyflow-ykt-probe-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $probeHome -Force | Out-Null
+try {
+  $env:YKT_HOME = $probeHome
+  $ykt = Invoke-JsonlProbe '{"id":"packaging-yuketang-settings","version":1,"operation":"yuketang.settings.get"}'
+  $expectedFields = @(
+    'video_speed','heartbeat_interval','max_concurrent_videos','completion_threshold',
+    'skip_completed','use_concurrent','test_mode','test_video_count','auto_richtext',
+    'debug','richtext_stay_seconds','richtext_skip_delay'
+  )
+  if ($ykt.id -cne 'packaging-yuketang-settings' -or -not $ykt.ok) {
+    throw 'Frozen Rain Classroom settings JSONL contract failed'
+  }
+  foreach ($field in $expectedFields) {
+    if ($ykt.data.PSObject.Properties.Name -notcontains $field) {
+      throw "Frozen Rain Classroom setting is missing: $field"
+    }
+  }
+} finally {
+  if ($null -eq $oldYktHome) { Remove-Item Env:YKT_HOME -ErrorAction SilentlyContinue }
+  else { $env:YKT_HOME = $oldYktHome }
+  Remove-Item -LiteralPath $probeHome -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host '[READY] Frozen ZHS, Rain Classroom, clean JSONL output and both settings adapters verified without server access.'

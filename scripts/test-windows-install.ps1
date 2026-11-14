@@ -9,7 +9,21 @@ $marker = Join-Path $markerDirectory ('install-smoke-' + [guid]::NewGuid().ToStr
 New-Item -ItemType Directory -Force $markerDirectory | Out-Null
 [IO.File]::WriteAllText($marker, 'preserve-user-data')
 $app = $null
+$oldPath = $env:PATH
+$oldYktHome = $env:YKT_HOME
+$probeYktHome = Join-Path $root 'yuketang-settings'
+New-Item -ItemType Directory -Force $probeYktHome | Out-Null
 try {
+    # Prove the bundled sidecar works without a machine-wide Python installation.
+    $env:PATH = Join-Path $env:SystemRoot 'System32'
+    $env:YKT_HOME = $probeYktHome
+    function Invoke-InstalledJsonlProbe([string]$requestJson) {
+        $lines = @($requestJson | & $bridge)
+        if ($LASTEXITCODE -ne 0) { throw 'Installed JSONL bridge failed.' }
+        if ($lines.Count -ne 1) { throw 'Installed JSONL bridge did not return exactly one response.' }
+        try { return ($lines[0] | ConvertFrom-Json -ErrorAction Stop) }
+        catch { throw 'Installed JSONL bridge returned invalid JSON.' }
+    }
     foreach ($phase in @('install','upgrade')) {
         $setup = Start-Process -FilePath $installers[0].FullName -ArgumentList @('/S', "/D=$root") -Wait -PassThru
         if ($setup.ExitCode -ne 0) { throw "NSIS $phase failed: $($setup.ExitCode)" }
@@ -19,10 +33,28 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Installed ZHS runtime failed' }
         & $bridge --yuketang-env-check
         if ($LASTEXITCODE -ne 0) { throw 'Installed Rain Classroom runtime failed' }
-        $response = '{"id":"installed-smoke","version":1,"operation":"ping"}' | & $bridge
-        if ($LASTEXITCODE -ne 0) { throw 'Installed JSONL process failed' }
-        $reply = $response | ConvertFrom-Json
-        if (-not $reply.ok -or $reply.id -cne 'installed-smoke') { throw 'Installed JSONL response failed' }
+        $ping = Invoke-InstalledJsonlProbe '{"id":"installed-smoke","version":1,"operation":"ping"}'
+        if (-not $ping.ok -or $ping.id -cne 'installed-smoke' -or $ping.data.service -cne 'studyflow') {
+            throw 'Installed JSONL response failed'
+        }
+        $zhidao = Invoke-InstalledJsonlProbe '{"id":"installed-zhidao","version":1,"operation":"zhidao.player.settings.get"}'
+        if (-not $zhidao.ok -or $zhidao.data.speed -notin @('1','1.25','1.5','2')) {
+            throw 'Installed Zhidao settings adapter failed'
+        }
+        $yuketang = Invoke-InstalledJsonlProbe '{"id":"installed-yuketang","version":1,"operation":"yuketang.settings.get"}'
+        $expectedFields = @(
+            'video_speed','heartbeat_interval','max_concurrent_videos','completion_threshold',
+            'skip_completed','use_concurrent','test_mode','test_video_count','auto_richtext',
+            'debug','richtext_stay_seconds','richtext_skip_delay'
+        )
+        if (-not $yuketang.ok -or $yuketang.id -cne 'installed-yuketang') {
+            throw 'Installed Rain Classroom settings adapter failed'
+        }
+        foreach ($field in $expectedFields) {
+            if ($yuketang.data.PSObject.Properties.Name -notcontains $field) {
+                throw "Installed Rain Classroom setting is missing: $field"
+            }
+        }
         if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Install/upgrade changed user data' }
     }
     $executable = Join-Path $root 'studyflow.exe'
@@ -40,6 +72,9 @@ try {
     if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Uninstall changed user data' }
     Write-Host '[READY] NSIS install, upgrade, installed runtimes, app launch, uninstall and data marker preserved.'
 } finally {
+    $env:PATH = $oldPath
+    if ($null -eq $oldYktHome) { Remove-Item Env:YKT_HOME -ErrorAction SilentlyContinue }
+    else { $env:YKT_HOME = $oldYktHome }
     if ($null -ne $app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
