@@ -22,6 +22,7 @@ from studyflow.platforms.yuketang.credentials import load as load_yuketang
 
 COURSE_KEY = re.compile(r"^[a-f0-9]{64}$")
 ID = re.compile(r"^[0-9]{1,20}$")
+MONITOR_TOKEN = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _legacy_source() -> Path:
@@ -101,7 +102,14 @@ def _course_ids_for_current_session(key: str) -> tuple[str, str]:
     return course_id, class_id
 
 
-def _run_bundled_zhs(course_id: str, class_id: str) -> int | None:
+def _zhs_monitor_source() -> Path:
+    """Original read-only console observer, copied byte-for-byte from ZHSDesktop."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "legacy" / "zhidao" / "ZHS-ConsoleMonitor.py"
+    return Path(__file__).resolve().parents[3] / "legacy" / "zhidao" / "ZHS-ConsoleMonitor.py"
+
+
+def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = None) -> int | None:
     """Invoke the exact ZHS 0.1.5 Typer CLI inside the bundled sidecar.
 
     No source monkey-patches and no reimplementation of the heartbeat code.
@@ -114,7 +122,21 @@ def _run_bundled_zhs(course_id: str, class_id: str) -> int | None:
         from zhs.__main__ import app as zhs_app
     except (ImportError, PackageNotFoundError, ValueError):
         return None
+    original_stdout = sys.stdout
+    sink = None
     try:
+        if monitor_token:
+            try:
+                original = _zhs_monitor_source()
+                # Observer is optional: failure to monitor never changes the ZHS CLI.
+                if original.is_file():
+                    observer = runpy.run_path(str(original), run_name="studyflow_vendor_zhs_monitor")
+                    root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+                    sink = observer["NumericTelemetry"](monitor_token, directory=root / "StudyFlow")
+                    sys.stdout = observer["StdoutObserver"](original_stdout, sink)
+            except (OSError, ValueError, KeyError):
+                sink = None
+                sys.stdout = original_stdout
         zhs_app(args=["play", "-c", f"{course_id}:{class_id}", "--type", "ai"],
                 standalone_mode=False)
         return 0
@@ -122,15 +144,24 @@ def _run_bundled_zhs(course_id: str, class_id: str) -> int | None:
         return exc.code if isinstance(exc.code, int) else 1
     except Exception:
         return 1
+    finally:
+        sys.stdout = original_stdout
+        if sink is not None:
+            try:
+                sink.path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
-def run_zhidao_original(course_key: str) -> int:
+def run_zhidao_original(course_key: str, monitor_token: str | None = None) -> int:
     # Resolve the opaque UI key only inside the authenticated local session.
+    if monitor_token is not None and MONITOR_TOKEN.fullmatch(monitor_token) is None:
+        return 2
     try:
         course_id, class_id = _course_ids_for_current_session(course_key)
     except RuntimeError:
         return 4
-    bundled = _run_bundled_zhs(course_id, class_id)
+    bundled = _run_bundled_zhs(course_id, class_id, monitor_token)
     if bundled is not None:
         return bundled
     # Older installs can still run exactly as before, if a pinned packaged
@@ -155,8 +186,8 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["--legacy-yuketang"]:
         return run_yuketang_original()
-    if len(args) == 2 and args[0] == "--legacy-zhidao":
-        return run_zhidao_original(args[1])
+    if len(args) in (2, 3) and args[0] == "--legacy-zhidao":
+        return run_zhidao_original(args[1], args[2] if len(args) == 3 else None)
     return 2
 
 
