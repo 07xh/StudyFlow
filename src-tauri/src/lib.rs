@@ -1,7 +1,50 @@
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
+
+struct QrBridgeWorker {
+    child: Child,
+    input: ChildStdin,
+    output: BufReader<ChildStdout>,
+}
+
+impl QrBridgeWorker {
+    fn start(binary: &PathBuf) -> Result<Self, String> {
+        let mut command = Command::new(binary);
+        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        let mut child = command.spawn().map_err(|_| "Could not start QR service")?;
+        let input = child.stdin.take().ok_or("QR service stdin unavailable")?;
+        let output = BufReader::new(child.stdout.take().ok_or("QR service stdout unavailable")?);
+        Ok(Self { child, input, output })
+    }
+
+    fn request(&mut self, message: &[u8]) -> Result<serde_json::Value, String> {
+        self.input.write_all(message).map_err(|_| "QR service request failed")?;
+        self.input.flush().map_err(|_| "QR service flush failed")?;
+        let mut line = String::new();
+        self.output.read_line(&mut line).map_err(|_| "QR service response failed")?;
+        if line.is_empty() || line.len() > 2_000_000 {
+            return Err("QR service returned invalid data".into());
+        }
+        serde_json::from_str(&line).map_err(|_| "QR service protocol error".into())
+    }
+}
+
+impl Drop for QrBridgeWorker {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+type QrBridgeState = Arc<Mutex<Option<QrBridgeWorker>>>;
 
 fn bridge_binary(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let packaged = app.path().resource_dir().map_err(|_| "Resource directory unavailable")?
@@ -26,7 +69,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     }
     let operation = request.get("operation").and_then(|v| v.as_str()).unwrap_or("");
     match operation {
-        "ping" | "platform.status" | "yuketang.clear" => Ok(()),
+        "ping" | "platform.status" | "yuketang.clear"
+        | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel" => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
         "yuketang.configure" if request.get("configuration").map_or(false, |x| x.is_object()) => Ok(()),
@@ -44,6 +88,22 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         return Err("Request is too large".into());
     }
     message.push(b'\n');
+    let is_qr = request.get("operation").and_then(|x| x.as_str())
+        .map_or(false, |op| op.starts_with("zhidao.qr."));
+    if is_qr {
+        // QR start/status/cancel must share the same Python process; ordinary
+        // requests intentionally retain the existing one-shot behavior.
+        let shared = app.state::<QrBridgeState>().inner().clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            let mut slot = shared.lock().map_err(|_| "QR service lock failed")?;
+            if slot.is_none() {
+                *slot = Some(QrBridgeWorker::start(&binary)?);
+            }
+            let reply = slot.as_mut().ok_or("QR service unavailable")?.request(&message);
+            if reply.is_err() { *slot = None; }
+            reply
+        }).await.map_err(|_| "QR service worker crashed".to_string())?;
+    }
     tauri::async_runtime::spawn_blocking(move || -> Result<serde_json::Value, String> {
         let mut command = Command::new(binary);
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
@@ -89,6 +149,7 @@ fn launch_zhidao_legacy() -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(Arc::new(Mutex::new(None::<QrBridgeWorker>)))
         .invoke_handler(tauri::generate_handler![bridge_request, launch_zhidao_legacy])
         .run(tauri::generate_context!())
         .expect("Failed to launch StudyFlow");
