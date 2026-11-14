@@ -556,3 +556,16 @@
   color:var(--qr-muted);font-size:10px;line-height:1.5;
 }
 @media(max-width:500px){.qr-backdrop .qr-dialog{padding:15px}.qr-backdrop .qr-image-area{min-height:225px}}
+
+
+/* The sidebar collapse control changes the actual rail width and content visibility. */
+.sf-shell.sf-collapsed .sidebar{width:76px;padding:20px 9px 12px}
+.sf-shell.sf-collapsed .brand{justify-content:center;padding:0;margin-bottom:26px}
+.sf-shell.sf-collapsed .brand>div:last-child,
+.sf-shell.sf-collapsed .sf-nav-head .section-label,
+.sf-shell.sf-collapsed .sf-nav-group>.section-label,
+.sf-shell.sf-collapsed .nav-label,
+.sf-shell.sf-collapsed .nav .right,
+.sf-shell.sf-collapsed .sidebar-bottom{display:none}
+.sf-shell.sf-collapsed .sf-nav-head{justify-content:center;padding:0}
+.sf-shell.sf-collapsed .nav{justify-content:center;padding:11px 8px}

@@ -28,7 +28,7 @@ test("the shell uses the graphite glass skin and green interaction accent", () =
   assert.match(css, /backdrop-filter:blur/);
   assert.match(css, /--accent:#13d992/);
   assert.match(css, /linear-gradient/);
-  assert.match(css, /sf-collapsed/);
+  assert.match(css, /\.sf-shell\.sf-collapsed \.sidebar/);
 });
 
 test("platform login, original task controls and real IPC actions remain wired", () => {
