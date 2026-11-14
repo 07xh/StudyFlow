@@ -10,6 +10,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
   | {id: string; version: 1; operation: "yuketang.clear"}
+  | {id: string; version: 1; operation: "yuketang.progress"; run_id: string}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
 export type BridgeResponse<T> =

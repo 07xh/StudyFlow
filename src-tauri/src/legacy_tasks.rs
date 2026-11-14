@@ -57,6 +57,7 @@ struct LegacyJob {
     child: Option<Child>,
     state: String,
     exit_code: Option<i32>,
+    run_id: Option<String>,
     course_id: Option<String>, // opaque course key, never a raw login credential
     monitor_token: Option<String>, // per-run nonce, kept out of frontend
 }
@@ -73,6 +74,7 @@ pub struct LegacyStatus {
     platform: String,
     state: String,
     exit_code: Option<i32>,
+    run_id: Option<String>,
     course_id: Option<String>,
     zhs_progress: Option<ZhsProgress>,
 }
@@ -142,6 +144,7 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         platform: platform.into(),
         state: task.state.clone(),
         exit_code: task.exit_code,
+        run_id: task.run_id.clone(),
         course_id: task.course_id.clone(),
         zhs_progress: if platform == "zhidao" && task.state == "running" {
             task.monitor_token.as_deref().and_then(read_zhs_snapshot)
@@ -208,16 +211,23 @@ pub fn legacy_start(
         }
     }
     let binary = crate::bridge_binary(&app).map_err(|_| "LEGACY_NOT_INSTALLED")?;
+    let mut command = Command::new(binary);
+    let run_id = if platform == "yuketang" {
+        let micros = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "LEGACY_LAUNCH_FAILED")?.as_micros();
+        Some(format!("{}-{micros}", std::process::id()))
+    } else { None };
     let monitor_token = if platform == "zhidao" {
         Some(Uuid::new_v4().simple().to_string())
     } else { None };
-    let mut command = Command::new(binary);
     if platform == "zhidao" {
         command.arg("--legacy-zhidao")
             .arg(course_id.as_deref().unwrap_or(""))
             .arg(monitor_token.as_deref().unwrap_or(""));
     } else {
         command.arg("--legacy-yuketang");
+        if let Some(ref id) = run_id { command.env("STUDYFLOW_YKT_RUN_ID", id); }
         if let Some(settings) = &options {
             settings.apply(&mut command);
         }
@@ -231,11 +241,12 @@ pub fn legacy_start(
     let child = command.spawn().map_err(|_| "LEGACY_LAUNCH_FAILED")?;
     guard.insert(platform.clone(), LegacyJob {
         child: Some(child), state: "running".into(), exit_code: None,
+        run_id: run_id.clone(),
         course_id: if platform == "zhidao" { course_id.clone() } else { None },
         monitor_token,
     });
     Ok(LegacyStatus {
-        platform, state: "running".into(), exit_code: None,
+        platform, state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },
         zhs_progress: None,
     })
@@ -249,7 +260,7 @@ pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     match guard.get_mut(&platform) {
         Some(task) => status_of(&platform, task),
-        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, course_id: None, zhs_progress: None}),
+        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None}),
     }
 }
 
@@ -269,7 +280,7 @@ pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String) -> Result<Le
         }
         return status_of(&platform, job);
     }
-    Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, course_id: None, zhs_progress: None})
+    Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None})
 }
 
 #[cfg(test)]
@@ -282,10 +293,9 @@ mod tests {
         assert!(!valid_course_key("123"));
         assert!(!valid_course_key(&"g".repeat(64)));
     }
-
     #[test]
-    fn telemetry_file_name_never_accepts_path_tokens() {
-        assert!(zhs_snapshot_path("../../../outside").is_none());
+    fn progress_tokens_reject_path_traversal() {
+        assert!(zhs_snapshot_path("../bad").is_none());
         assert!(zhs_snapshot_path(&"A".repeat(32)).is_none());
     }
 }

@@ -79,6 +79,13 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel" => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
+        "yuketang.progress" if request.get("run_id").and_then(|x| x.as_str())
+            .is_some_and(|id| {
+                let mut parts = id.split('-');
+                matches!((parts.next(),parts.next(),parts.next()), (Some(a), Some(b), None)
+                    if !a.is_empty() && a.len()<=15 && a.bytes().all(|ch| ch.is_ascii_digit())
+                    && !b.is_empty() && b.len()<=20 && b.bytes().all(|ch| ch.is_ascii_digit()))
+            }) => Ok(()),
         "yuketang.configure" if request.get("configuration").map_or(false, |x| x.is_object()) => Ok(()),
         _ => Err("Operation not permitted".into()),
     }

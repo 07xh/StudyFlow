@@ -1,6 +1,6 @@
 import {invoke} from "@tauri-apps/api/core";
 import type {Platform} from "./types";
-import {isDesktop} from "./bridge";
+import {isDesktop, request} from "./bridge";
 
 export type LegacyTaskState = "idle" | "running" | "exited" | "stopped";
 export type ZhsLocalProgress = {
@@ -9,14 +9,45 @@ export type ZhsLocalProgress = {
   resource_total: number | null;
 };
 
-// Original ZHS CLI's local simulated segment only, not remote learning progress.
 export type LegacyTaskStatus = {
   platform: Platform;
   state: LegacyTaskState;
   exit_code: number | null;
-  course_id: string | null; // local opaque course key, not a platform credential
+  run_id?: string | null;
+  course_id: string | null;
   zhs_progress: ZhsLocalProgress | null;
 };
+
+export type YuketangLiveProgress = {
+  available: boolean;
+  simulation_percent: number | null;
+  simulation_position: number | null;
+  simulation_duration: number | null;
+  server_percent: number | null;
+  server_position: number | null;
+  server_source: "initial" | "periodic" | "final" | null;
+  total: number | null;
+  processed: number;
+  current_index: number | null;
+  success: number;
+  skipped: number;
+  failed: number;
+  stopped: number;
+  concurrent: boolean | null;
+  rich_total: number | null;
+  rich_current: number | null;
+  rich_processed: number;
+  rich_success: number;
+  rich_failed: number;
+};
+
+/** Reads only the current executor run\u2019s original logged progress. */
+export async function getYuketangLiveProgress(runId: string): Promise<YuketangLiveProgress> {
+  ensureDesktop();
+  if (!/^[0-9]{1,15}-[0-9]{1,20}$/.test(runId)) throw new Error("INVALID_REQUEST");
+  return request<YuketangLiveProgress>({operation:"yuketang.progress", run_id:runId});
+}
+
 
 // Names and defaults are the original YKT main.py environment settings.
 // New UI only passes these parameters through. No heartbeat algorithm is copied
