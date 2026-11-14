@@ -13,7 +13,7 @@ import {
   openLegacyZhidao,request
 } from "./bridge";
 import type {Config,Video} from "./bridge";
-import type {Course,Platform,PlatformState} from "./types";
+import type {Course,Platform} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {presentCourse,platformNames} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
@@ -143,19 +143,6 @@ export default function App(){
     }finally{setBusy("");}
   }
 
-  async function configure(event:FormEvent<HTMLFormElement>){
-    event.preventDefault();setBusy("configure");setNotice("");
-    try{
-      await request<{saved:boolean}>({operation:"yuketang.configure",configuration:config});
-      setConfig(previous=>({...previous,session_id:"",csrf_token:"",sign:""}));
-      recordEvent("雨课堂","保存登录会话","success","凭据已写入 Windows 凭据管理器");
-      await refresh();
-      setNotice("雨课堂会话已保存，请确认连接状态后同步课程。");
-    }catch(error){
-      const message=friendlyBridgeError(error);
-      setNotice(message);recordEvent("雨课堂","保存登录会话","warning",message);
-    }finally{setBusy("");}
-  }
 
   async function clear(){
     setBusy("clear");setNotice("");
