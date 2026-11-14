@@ -30,15 +30,15 @@ impl QrBridgeWorker {
         Ok(Self { child, input, output })
     }
 
-    fn request(&mut self, message: &[u8]) -> Result<serde_json::Value, String> {
+    fn request(&mut self, message: &[u8], expected_id: &str) -> Result<serde_json::Value, String> {
         self.input.write_all(message).map_err(|_| "QR service request failed")?;
         self.input.flush().map_err(|_| "QR service flush failed")?;
         let mut line = String::new();
         self.output.read_line(&mut line).map_err(|_| "QR service response failed")?;
-        if line.is_empty() || line.len() > 2_000_000 {
+        if line.is_empty() || line.len() > 1_048_576 {
             return Err("QR service returned invalid data".into());
         }
-        serde_json::from_str(&line).map_err(|_| "QR service protocol error".into())
+        parse_jsonl_reply(line.as_bytes(), expected_id)
     }
 }
 
@@ -46,7 +46,10 @@ impl Drop for QrBridgeWorker {
     fn drop(&mut self) {
         // Ask Python to stop the QR child and clear only its ephemeral PNG.
         if self.child.try_wait().ok().flatten().is_none() {
-            let _ = self.request(b"{\"id\":\"shutdown\",\"version\":1,\"operation\":\"zhidao.qr.cancel\"}\n");
+            let _ = self.request(
+                b"{\"id\":\"shutdown\",\"version\":1,\"operation\":\"zhidao.qr.cancel\"}\n",
+                "shutdown",
+            );
         }
         let _ = self.child.kill();
         let _ = self.child.wait();
@@ -234,6 +237,26 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     }
 }
 
+fn parse_jsonl_reply(stdout: &[u8], expected_id: &str) -> Result<serde_json::Value, String> {
+    if stdout.is_empty() || stdout.len() > 1_048_576 {
+        return Err("Python service returned an invalid response".into());
+    }
+    let mut lines = stdout.split(|byte| *byte == b'\n')
+        .filter(|line| !line.iter().all(|byte| byte.is_ascii_whitespace()));
+    let line = lines.next().ok_or_else(|| "Python service protocol error".to_string())?;
+    if lines.next().is_some() {
+        return Err("Python service protocol error".into());
+    }
+    let value: serde_json::Value = serde_json::from_slice(line)
+        .map_err(|_| "Python service protocol error".to_string())?;
+    if value.get("id").and_then(|item| item.as_str()) != Some(expected_id)
+        || value.get("ok").and_then(|item| item.as_bool()).is_none()
+    {
+        return Err("Python service protocol error".into());
+    }
+    Ok(value)
+}
+
 #[tauri::command]
 async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     -> Result<serde_json::Value, String> {
@@ -244,6 +267,8 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         return Err("Request is too large".into());
     }
     message.push(b'\n');
+    let expected_id = request.get("id").and_then(|value| value.as_str())
+        .ok_or("Invalid request id")?.to_string();
     let is_qr = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr."));
     if is_qr {
@@ -255,7 +280,8 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
             if slot.is_none() {
                 *slot = Some(QrBridgeWorker::start(&binary)?);
             }
-            let reply = slot.as_mut().ok_or("QR service unavailable")?.request(&message);
+            let reply = slot.as_mut().ok_or("QR service unavailable")?
+                .request(&message, &expected_id);
             if reply.is_err() { *slot = None; }
             reply
         }).await.map_err(|_| "QR service worker crashed".to_string())?;
@@ -273,15 +299,10 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
             input.write_all(&message).map_err(|_| "Could not send request")?;
         }
         let output = child.wait_with_output().map_err(|_| "Python service failed")?;
-        if !output.status.success() || output.stdout.len() > 1_048_576 {
+        if !output.status.success() {
             return Err("Python service returned an invalid response".into());
         }
-        let value: serde_json::Value = serde_json::from_slice(&output.stdout)
-            .map_err(|_| "Python service protocol error")?;
-        if value.get("ok").and_then(|x| x.as_bool()).is_none() {
-            return Err("Python service protocol error".into());
-        }
-        Ok(value)
+        parse_jsonl_reply(&output.stdout, &expected_id)
     }).await.map_err(|_| "Python service worker crashed".to_string())?
 }
 
@@ -370,8 +391,42 @@ pub fn run() {
 
 #[cfg(test)]
 mod ipc_validation_tests {
-    use super::validate;
+    use super::{parse_jsonl_reply, validate};
     use serde_json::json;
+
+    #[test]
+    fn accepts_one_correlated_jsonl_reply() {
+        let reply = parse_jsonl_reply(
+            b"{\"id\":\"req-1\",\"ok\":true,\"data\":{}}\n",
+            "req-1",
+        ).unwrap();
+        assert_eq!(reply["id"], "req-1");
+        assert_eq!(reply["ok"], true);
+    }
+
+    #[test]
+    fn rejects_stdout_noise_and_mismatched_jsonl_ids() {
+        assert!(parse_jsonl_reply(
+            b"debug output\n{\"id\":\"req-1\",\"ok\":true}\n",
+            "req-1",
+        ).is_err());
+        assert!(parse_jsonl_reply(
+            b"{\"id\":\"other\",\"ok\":true}\n",
+            "req-1",
+        ).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_or_untyped_jsonl_responses() {
+        assert!(parse_jsonl_reply(
+            b"{\"id\":\"req-1\",\"ok\":true}\n{\"id\":\"req-1\",\"ok\":true}\n",
+            "req-1",
+        ).is_err());
+        assert!(parse_jsonl_reply(
+            b"{\"id\":\"req-1\",\"ok\":\"true\"}\n",
+            "req-1",
+        ).is_err());
+    }
 
     #[test]
     fn allows_zhidao_readonly_progress_operations() {
