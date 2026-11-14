@@ -33,3 +33,9 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 - LightC-UI 仅作为设计参考；本仓库 UI 独立实现，不包含其受限素材或源代码。
 
 新程序不会模拟平台已完成的学习进度，不提供伪造学习记录的接口。
+
+## 最新知到 UI 迁移
+
+从 `zhidao-assistant@53c9244` 迁入学序统一 React 界面：课程动态卡片、核验证据标签、深色主题持久化、课程筛选及小窗口布局。保留原版 WPF 扫码入口；原版登录流程没有被覆盖。
+
+对只读课程缓存继续进行 HMAC 会话绑定验证；原版知到、雨课堂账号和旧仓库全部保留。测试通过不等于真实 Windows 登录与平台学习进度已验证。详见 [知到 UI 迁移记录](docs/ZHIDAO_UI_MIGRATION.md)。

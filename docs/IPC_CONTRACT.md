@@ -32,3 +32,12 @@ Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 \`bin/st
 ## 源码兼容
 
 旧知到 WPF UI、旧雨课堂单体 \`main.py\` 保留在原仓库，并可继续独立使用；学序新增适配层，不覆盖旧文件。
+
+## 知到 UI 课程证据字段（后向兼容）
+
+`courses.list` 保留原有 `platform`、`course_id`、`title`、`progress_percent`，新增 `course_type`、`stale`、`progress_evidence`、`verified_at`。
+
+- 对已接线的知到只读缓存，`course_id` 采用稳定不可逆的教学班身份哈希；`course_type` 为 `ai` 或 `shared`。
+- `progress_evidence`、`verified_at` 目前返回 `null`。前端需要二者同时提供有效的服务器核验证据才展示进度百分比。
+- `stale=true` 始终显示「历史缓存待核验」，不使用过时进度作为当前完成率。
+- React UI 通过 Tauri `bridge_request` 发送 JSONL IPC，核对 `id` 和平台身份，拒绝跨平台记录及异常格式；保留雨课堂现有配置、清理和视频请求。
