@@ -36,7 +36,7 @@ export function LegacyPlaybackPanel({
     .filter(item => item.presentation.status === "verified" && item.presentation.percent !== null);
   const liveZhs = platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
-  const selectedCourse=courses.find(course=>course.course_id===selection)??null;
+  const selectedCourse=courses.find(course=>course.platform==="zhidao"&&course.course_id===selection)??null;
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
@@ -68,6 +68,12 @@ export function LegacyPlaybackPanel({
   useEffect(() => {
     if(courseId)setSelection(courseId);
   },[courseId]);
+
+  useEffect(() => {
+    setStatus(null);
+    setYktProgress(null);
+    setMessage("");
+  }, [platform]);
 
   useEffect(() => {
     void updateStatus();
@@ -161,8 +167,9 @@ export function LegacyPlaybackPanel({
                 aria-valuenow={presentation.percent??0}>
                 <span style={{width:(presentation.percent??0)+"%"}}/>
               </div>
-              <strong>{presentation.percent?.toFixed(1)}%</strong>
-              {course.verified_at && <small title={course.verified_at}>核验时间：{course.verified_at}</small>}
+              <strong title={course.verified_at ? "服务器核验：" + course.verified_at : "服务器核验"}>
+                {presentation.percent?.toFixed(1)}%
+              </strong>
             </div>)}</div>
           :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
       </div>}
