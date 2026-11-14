@@ -46,11 +46,11 @@ def test_qr_start_requires_installed_runtime(monkeypatch, tmp_path):
 
 def test_qr_status_reads_only_current_png(monkeypatch, tmp_path):
     monkeypatch.setattr(qr_runtime, "installation_root", lambda: tmp_path)
-    monkeypatch.setattr(qr_runtime, "_qr_path", lambda: tmp_path / "qrcode.png")
+    monkeypatch.setattr(qr_runtime, "_qr_path", lambda token: tmp_path / f"studyflow-qr-{token}.png")
     token = "b" * 32
     started = __import__("time").time()
     LoginObservation(token, root=tmp_path).record("ready")
-    png = tmp_path / "qrcode.png"
+    png = tmp_path / f"studyflow-qr-{token}.png"
     png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 150)
     monkeypatch.setattr(qr_runtime, "_TOKEN", token)
     monkeypatch.setattr(qr_runtime, "_STARTED", started)
@@ -64,12 +64,14 @@ def test_qr_status_reads_only_current_png(monkeypatch, tmp_path):
 
 
 def test_qr_cancel_does_not_delete_cookies(monkeypatch, tmp_path):
-    monkeypatch.setattr(qr_runtime, "_qr_path", lambda: tmp_path / "qrcode.png")
+    monkeypatch.setattr(qr_runtime, "_qr_path", lambda token: tmp_path / f"studyflow-qr-{token}.png")
     monkeypatch.setattr(qr_runtime, "installation_root", lambda: tmp_path)
     monkeypatch.setattr(qr_runtime, "_TOKEN", "c" * 32)
     monkeypatch.setattr(qr_runtime, "_WORKER", None)
-    (tmp_path / "qrcode.png").write_bytes(b"test")
+    (tmp_path / ("studyflow-qr-" + "c"*32 + ".png")).write_bytes(b"test")
+    (tmp_path / "qrcode.png").write_bytes(b"ORIGINAL_WPF_QR")
     (tmp_path / "cookies.json").write_text("PRESERVE")
     assert qr_runtime.cancel()["stage"] == "cancelled"
-    assert not (tmp_path / "qrcode.png").exists()
+    assert not (tmp_path / ("studyflow-qr-" + "c"*32 + ".png")).exists()
+    assert (tmp_path / "qrcode.png").read_bytes() == b"ORIGINAL_WPF_QR"
     assert (tmp_path / "cookies.json").read_text() == "PRESERVE"

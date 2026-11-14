@@ -34,13 +34,15 @@ def _status_path(token: str) -> Path:
     return installation_root() / f"monitor-qr-{token}.json"
 
 
-def _qr_path() -> Path:
-    return Path.home() / ".zhs" / "qrcode.png"
+def _qr_path(token: str) -> Path:
+    return installation_root() / f"studyflow-qr-{token}.png"
 
 
-def _cleanup_qr() -> None:
+def _cleanup_qr(token: str | None) -> None:
+    if not token:
+        return
     try:
-        _qr_path().unlink(missing_ok=True)
+        _qr_path(token).unlink(missing_ok=True)
     except OSError:
         pass
 
@@ -62,9 +64,9 @@ def _read_stage(token: str, started: float) -> str | None:
         return None
 
 
-def _fresh_image(started: float) -> str | None:
+def _fresh_image(token: str, started: float) -> str | None:
     try:
-        path = _qr_path()
+        path = _qr_path(token)
         if path.is_symlink() or not path.is_file():
             return None
         stat = path.stat()
@@ -87,10 +89,9 @@ def start() -> dict:
         worker_script = Path(__file__).with_name("qr_login_core.py")
         if not python.is_file() or not worker_script.is_file():
             return {"stage": "environment-error"}
-        _cleanup_qr()
-        if _qr_path().exists():
-            return {"stage": "environment-error"}
         token = secrets.token_hex(16)
+        if _qr_path(token).exists():
+            return {"stage": "environment-error"}
         started = time.time()
         try:
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -117,10 +118,10 @@ def status() -> dict:
             if stage not in TERMINAL:
                 stage = _FINAL_STAGE or "failed"
             _FINAL_STAGE = stage
-            _cleanup_qr()
+            _cleanup_qr(_TOKEN)
             return {"stage": stage, "image_png_base64": None}
         stage = stage or "requesting"
-        image = _fresh_image(_STARTED) if stage in ("ready", "requesting") else None
+        image = _fresh_image(_TOKEN, _STARTED) if stage in ("ready", "requesting") else None
         return {"stage": stage, "image_png_base64": image}
 
 
@@ -135,7 +136,7 @@ def cancel() -> dict:
                 _WORKER.kill()
                 _WORKER.wait(timeout=5)
         _FINAL_STAGE = "cancelled"
-        _cleanup_qr()
+        _cleanup_qr(_TOKEN)
         if _TOKEN is not None:
             try:
                 _status_path(_TOKEN).unlink(missing_ok=True)

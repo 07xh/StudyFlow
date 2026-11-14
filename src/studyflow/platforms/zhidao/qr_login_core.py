@@ -94,7 +94,7 @@ def _run_login_with_qr(config, session, observation: LoginObservation, data_dir:
     from zhs.api.session_auth import SessionStatus, verify_session
     from zhs.login import LoginManager
 
-    qr_path = data_dir / "qrcode.png"
+    qr_path = observation.root / f"studyflow-qr-{observation.token}.png"
     destination = data_dir / "cookies.json"
     observation.record("requesting")
     # Delete only the previous ephemeral QR *image*, never the login cookies.
@@ -197,10 +197,10 @@ def _run_login_with_qr(config, session, observation: LoginObservation, data_dir:
 def login_with_qr(config, session, observation: LoginObservation, data_dir: Path) -> int:
     """Run one QR attempt, then erase the ephemeral QR on EVERY exit path.
 
-    Only qrcode.png is removed. The cookies.json and persistent config remain
+    Only the session-scoped studyflow-qr image is removed. The cookies.json and persistent config remain
     untouched; the final sanitized status stays available for the GUI.
     """
-    qr_path = data_dir / "qrcode.png"
+    qr_path = observation.root / f"studyflow-qr-{observation.token}.png"
     try:
         return _run_login_with_qr(config, session, observation, data_dir)
     finally:
@@ -232,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
 
         data_dir = get_data_dir()
         config = ConfigManager().load()
-        config.qr.image_path = str(data_dir / "qrcode.png")
+        config.qr.image_path = str(observation.root / f"studyflow-qr-{observation.token}.png")
         # Never output an upstream exception that could contain QR tokens,
         # one-time passwords or cookies.
         logger.remove()
