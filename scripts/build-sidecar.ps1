@@ -5,6 +5,8 @@ $flags = @('--noconfirm','--clean','--onefile','--console',
   '--name','studyflow-bridge','--paths','src',
   '--collect-all','keyring','--collect-all','zhs','--copy-metadata','zhs',
   '--add-data',"$((Resolve-Path 'legacy/yuketang/main.py').Path);legacy/yuketang",
+  '--add-data',"$((Resolve-Path 'legacy/yuketang/exe_entry.py').Path);legacy/yuketang",
+  '--add-data',"$((Resolve-Path 'legacy/zhidao').Path);legacy/zhidao",
   '--hidden-import','dotenv',
   '--distpath','packaging/sidecar','--workpath','build/pyinstaller',
   '--specpath','build/specs','packaging/bridge_entry.py')

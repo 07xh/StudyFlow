@@ -12,14 +12,16 @@ from typing import Any
 
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
 from studyflow.platforms.zhidao import qr_runtime
+from studyflow.platforms.zhidao.cookie_import import import_cookie
 
 # Best-effort cleanup when the persistent JSONL process reaches normal EOF.
 atexit.register(qr_runtime.cancel)
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
+from studyflow.platforms.yuketang.legacy_config import read_settings as get_original_ykt_settings, save_settings as save_original_ykt_settings
 
-MAX_LINE = 65536
+MAX_LINE = 600000
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
 
 
@@ -43,6 +45,14 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": data}
         except Exception:
             return {"id": request_id, "ok": False, "error": "ZHIDAO_QR_UNAVAILABLE"}
+    if operation == "zhidao.cookie.import":
+        try:
+            data = import_cookie(request.get("content"), request.get("mode"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_COOKIE_IMPORT"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "COOKIE_IMPORT_FAILED"}
     if operation == "platform.status":
         result = []
         for name, adapter in ADAPTERS.items():
@@ -73,6 +83,19 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": ADAPTERS["yuketang"].list_videos()}
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+    if operation == "yuketang.settings.get":
+        try:
+            return {"id": request_id, "ok": True, "data": get_original_ykt_settings()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "YUKETANG_SETTINGS_UNAVAILABLE"}
+    if operation == "yuketang.settings.save":
+        try:
+            data = save_original_ykt_settings(request.get("settings"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_YUKETANG_SETTINGS"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "YUKETANG_SETTINGS_UNAVAILABLE"}
     if operation == "yuketang.progress":
         run_id = request.get("run_id")
         if not isinstance(run_id, str) or not RUN_ID.fullmatch(run_id):
