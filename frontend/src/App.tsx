@@ -491,7 +491,8 @@ export default function App(){
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
       onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
-      onVerified={()=>{setNotice("知到登录已通过服务端核验；正在检测连接。");
+      onVerified={()=>{setQrOpen(false);
+        setNotice("知到登录已通过服务端核验；正在检测连接。");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");void refresh();}}/>}
     <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}
       title="清除学序保存的雨课堂凭据？"
