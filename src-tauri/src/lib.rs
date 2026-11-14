@@ -79,7 +79,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "ping" | "platform.status" | "yuketang.clear"
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
-        | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear" => Ok(()),
+        | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
+        | "studyflow.consent.status" | "studyflow.consent.accept" => Ok(()),
         "zhidao.progress.verify" | "zhidao.player.target"
             if request.get("course_key").and_then(|x| x.as_str())
                 .is_some_and(|key| key.len() == 64
@@ -161,6 +162,29 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
 }
 
 #[tauri::command]
+fn zhidao_open_official_site() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        Command::new("cmd.exe")
+            .args(["/C", "start", "", "https://www.zhihuishu.com/"])
+            .creation_flags(0x08000000)
+            .spawn()
+            .map_err(|_| "OFFICIAL_SITE_OPEN_FAILED")?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
+#[tauri::command]
+fn studyflow_exit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
 fn zhidao_open_data_folder() -> Result<(), String> {
     let home = std::env::var_os("USERPROFILE").ok_or("USERPROFILE_UNAVAILABLE")?;
     let folder = PathBuf::from(home).join(".zhs");
@@ -201,7 +225,7 @@ pub fn run() {
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
             zhidao_player::zhidao_player_clear_web_profile,
@@ -236,6 +260,8 @@ mod ipc_validation_tests {
         assert!(validate(&json!({"id":"h","version":1,"operation":"zhidao.document.read","document_id":"privacy"})).is_ok());
         assert!(validate(&json!({"id":"i","version":1,"operation":"zhidao.player.settings.save","settings":{}})).is_ok());
         assert!(validate(&json!({"id":"j","version":1,"operation":"zhidao.course.detail","course_key":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"})).is_ok());
+        assert!(validate(&json!({"id":"k","version":1,"operation":"studyflow.consent.status"})).is_ok());
+        assert!(validate(&json!({"id":"l","version":1,"operation":"studyflow.consent.accept"})).is_ok());
     }
 
     #[test]
