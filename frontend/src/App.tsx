@@ -183,6 +183,17 @@ export default function App(){
     }
   },[refresh,consentAccepted]);
 
+  function updateVerifiedZhidaoCourse(course:Course) {
+    if (course.platform !== "zhidao") return;
+    setPlatforms(previous=>({
+      ...previous,zhidao:{
+        ...previous.zhidao,
+        courses:previous.zhidao.courses.map(item=>
+          item.platform==="zhidao"&&item.course_id===course.course_id?course:item)
+      }
+    }));
+  }
+
   async function sync(platform:Platform){
     const name=platformNames[platform]??platform;
     if(!platformInfo(platform))return;
@@ -456,7 +467,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
-            <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
+            <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </CollapsibleSection>

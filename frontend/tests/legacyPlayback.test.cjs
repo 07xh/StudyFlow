@@ -156,3 +156,22 @@ test("ZHS status polling cannot race a start/stop action or carry across platfor
   assert.match(panel, /taskActionInFlight\.current = false/);
   assert.match(panel, /currentPlatform\.current === platform\) void updateStatus\(\)/);
 });
+
+
+test("original ZHS exit triggers exactly scoped read-only course reconciliation", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  const app = fs.readFileSync(path.join(__dirname,"..","src","App.tsx"),"utf8");
+  assert.match(panel, /status\.state !== "exited" && status\.state !== "stopped"/);
+  assert.match(panel, /operation:"zhidao\.progress\.verify",course_key:status\.course_id/);
+  assert.match(panel, /verifiedRunRef\.current === marker/);
+  assert.match(panel, /target\?\.progress_evidence === "server_verified"/);
+  assert.match(panel, /target\.verified_at/);
+  assert.match(panel, /setVerificationState\("unknown"\)/);
+  assert.match(panel, /onCourseVerifiedRef\.current\?\.\(target\)/);
+  assert.match(panel, /if \(!active \|\| currentPlatform\.current !== "zhidao"\) return/);
+  assert.match(app, /detailMode onCourseVerified=\{updateVerifiedZhidaoCourse\}/);
+  assert.match(app, /onCourseVerified=\{updateVerifiedZhidaoCourse\}/);
+  assert.match(app, /courses:previous\.zhidao\.courses\.map\(item=>/);
+  // Reconcile is a read-only bridge operation, not a playback or heartbeat.
+  assert.doesNotMatch(panel, /saveDatabaseIntervalTimeV2|studyRecord\/report|generateHeartbeat/);
+});

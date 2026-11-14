@@ -42,3 +42,7 @@ Integrated main `05ac3f1` (#56), preserving its ZHS output freshness, terminal s
 ## Scope save ownership
 
 Visual review identified a remaining misplaced action: Rain Classroom scope edits required reopening the credential form. Added a save action next to scope inputs and safe scope metadata/update IPC. The service reuses saved credentials internally, returns no token/Sign, preserves unchanged Sign and rejects credential replacement through the scope endpoint. Reading/starting is blocked while scope edits remain unsaved. Added Python contract tests and an actual App save-flow regression; 173 Python tests, 66 UI/IPC tests, production build and whitespace checks pass. Native operation validation and the final Windows package are CI gates.
+
+## Terminal reconciliation integration
+
+Integrated main `c2fb8c7`, including fresh single-course server evidence and post-exit read-only reconciliation. Reconciliation is scoped to the displayed course and run; switching courses cancels late results, and verification events retain their actual course/run identity. Actual-component tests cover one verification per terminal run and cancellation on course switching. Combined local validation: 177 Python tests, 69 UI/IPC tests and production build. No original heartbeat/vendor implementation changes.

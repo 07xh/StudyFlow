@@ -264,3 +264,50 @@ def test_first_run_consent_is_persisted_in_studyflow_app_data(tmp_path, monkeypa
     assert legacy_runtime.accept_consent() == {"accepted": True}
     assert legacy_runtime.consent_status() == {"accepted": True}
     assert (tmp_path / "StudyFlow" / "privacy-accepted-v1.flag").is_file()
+
+
+@pytest.mark.parametrize("change", ["unchanged", "unrelated", "stale", "fresh"])
+def test_single_course_verification_requires_new_target_server_evidence(session_cache, monkeypatch, change):
+    """Exit 0 is insufficient unless the selected course gained fresh evidence."""
+    directory, fingerprint = session_cache
+    target = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "目标"}
+    unrelated = {"courseType": "ai", "courseId": "12", "classId": "22", "name": "其他课程"}
+    (directory / "zhidao-courses.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+        "incomplete": False, "courses": [target, unrelated],
+    }), encoding="utf-8")
+    old = "2026-11-14T10:00:00+00:00"
+    new = "2026-11-15T10:00:00+00:00"
+    path = directory / "zhidao-progress.json"
+    data = {
+        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+        "incomplete": False, "fetchedAt": old,
+        "courses": [
+            {**target, "knowledgePointCount": 4, "fullProgressPoints": 2, "lastVerifiedAt": old},
+            {**unrelated, "knowledgePointCount": 4, "fullProgressPoints": 1, "lastVerifiedAt": old},
+        ],
+    }
+    path.write_text(json.dumps(data), encoding="utf-8")
+    key = legacy_runtime.progress_key(target)
+
+    def fake_run(*args, **kwargs):
+        assert "--zhidao-verify-one" in args[0] or "studyflow.platforms.zhidao.verify_entry" in args[0]
+        assert args[0][-1] == key
+        if change in ("unrelated", "stale", "fresh"):
+            record = data["courses"][1 if change == "unrelated" else 0]
+            record["lastVerifiedAt"] = new
+            if change == "stale":
+                record["stale"] = True
+            path.write_text(json.dumps(data), encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
+    if change == "fresh":
+        snapshot = legacy_runtime.verify_course(key)
+        assert not snapshot["incomplete"]
+        chosen = next(row for row in snapshot["courses"] if row.course_id == key)
+        assert chosen.progress_evidence == "server_verified"
+        assert chosen.verified_at == new and chosen.progress_percent == 50.0
+    else:
+        with pytest.raises(RuntimeError, match="no fresh evidence"):
+            legacy_runtime.verify_course(key)

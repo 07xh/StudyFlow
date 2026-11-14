@@ -5,10 +5,10 @@ const words=n=>typeof n==='string'?n:(n.children??[]).map(words).join('');
 const course={platform:'zhidao',course_id:'A',title:'Course A',course_type:'shared'};
 const running={platform:'zhidao',state:'running',course_id:'A',run_id:'run-A',exit_code:null,zhs_stale:false,zhs_progress:{video_segment_percent:48.5}};
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
-function setup(overrides={}){
+function setup(overrides={},bridge={}){
  const previous=global.window;let tick;
  global.window={setInterval:fn=>{tick=fn;return 1;},clearInterval:()=>{}};
- const Panel=load('components/LegacyPlaybackPanel.tsx',{'legacyPlayback.ts':{
+ const Panel=load('components/LegacyPlaybackPanel.tsx',{'bridge.ts':{friendlyBridgeError:String,...bridge},'legacyPlayback.ts':{
   getLegacyStatus:async()=>running,legacyError:String,legacyExitMessage:()=>'',originalYktDefaults:{},...overrides
  }}).LegacyPlaybackPanel;
  return {Panel,tick:()=>tick(),restore:()=>{if(previous===undefined)delete global.window;else global.window=previous;}};
@@ -21,6 +21,30 @@ test('ZHS sample and stop controls remain scoped when viewing another course',as
   assert.doesNotMatch(words(view.root),/48.5%/);
   assert.match(words(view.root),/其他课程任务运行中/);
   assert.equal(view.root.findAllByType('button').find(n=>words(n)===' 停止').props.disabled,true);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
+test('terminal ZHS verification runs once per run and records the actual course and run',async()=>{
+ const calls=[],events=[],verified=[];
+ const target={...course,progress_evidence:'server_verified',verified_at:'2026-11-14T18:00:00Z',progress_percent:40};
+ const env=setup({getLegacyStatus:async()=>({...running,state:'exited',exit_code:0})},{request:async input=>{calls.push(input);return {courses:[target]};}});let view;
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,{...props,onCourseVerified:c=>verified.push(c),onEvent:(...args)=>events.push(args)}));});
+  await act(async()=>env.tick());
+  assert.equal(calls.length,1);assert.equal(calls[0].course_key,'A');assert.deepEqual(verified,[target]);
+  assert.deepEqual(events[0][3],{courseId:'A',runId:'run-A',runner:'zhs'});
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
+test('switching courses cancels a late terminal verification result and hides its status',async()=>{
+ const result=deferred(),verified=[];let requests=0;
+ const env=setup({getLegacyStatus:async()=>({...running,state:'exited',exit_code:0})},{request:async()=>{requests++;return result.promise;}});let view;
+ try{
+  const base={...props,courses:[course,{...course,course_id:'B',title:'Course B'}],onCourseVerified:c=>verified.push(c)};
+  await act(async()=>{view=create(React.createElement(env.Panel,base));});
+  assert.equal(requests,1);
+  await act(async()=>view.update(React.createElement(env.Panel,{...base,courseId:'B'})));
+  await act(async()=>result.resolve({courses:[{...course,progress_evidence:'server_verified',verified_at:'2026-11-14T18:00:00Z'}]}));
+  assert.deepEqual(verified,[]);assert.equal(requests,1);
+  assert.doesNotMatch(words(view.root),/已读取当前课程的服务器学习记录|正在只读核验/);
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
 test('expired ZHS telemetry shows waiting evidence without a percentage track',async()=>{
