@@ -1,4 +1,4 @@
-import {BookOpen,ChevronRight,ScanLine} from "lucide-react";
+import {BookOpen,ChevronRight,ScanLine,ShieldCheck} from "lucide-react";
 import {platformNames,presentCourse} from "../presentation";
 import type {Course} from "../types";
 
@@ -30,19 +30,28 @@ export function MigratedCourseCard({course,onInspect}:{course:Course;onInspect:(
 export function ZhidaoLoginPanel({desktop,busy,onOpenLegacy,onOpenNative}:{
   desktop:boolean;busy:boolean;onOpenLegacy:()=>void;onOpenNative:()=>void
 }){
-  return <section className="login-v2">
-    <div className="section-head"><h3>知到登录</h3></div>
-    <div className="sf-login-panel">
-      <div className="sf-login-icon"><ScanLine size={22}/></div>
-      <div className="sf-login-label"><strong>扫码登录</strong><span>选择登录入口</span></div>
-      <div className="actions">
+  return <div className="sf-platform-login">
+    <div className="sf-login-panel-main">
+      <div className="sf-login-panel-heading">
+        <span className="sf-login-symbol"><ScanLine size={20}/></span>
+        <div><h4>知到账号登录</h4>
+          <p>使用知到 App 扫码，完成后由学序重新检测真实登录状态。</p>
+        </div>
+      </div>
+      <div className="sf-login-actions">
         <button className="primary" type="button" disabled={!desktop||busy} onClick={onOpenNative}>
-          <ScanLine size={15}/>学序内扫码
+          <ScanLine size={16}/>学序内扫码登录
         </button>
         <button className="secondary" type="button" disabled={!desktop||busy} onClick={onOpenLegacy}>
-          原版扫码
+          打开原版登录窗口
         </button>
       </div>
     </div>
-  </section>;
+    <aside className="sf-login-panel-aside">
+      <h4><ShieldCheck size={16}/>登录步骤</h4>
+      <ol><li>点击学序内扫码登录</li><li>使用知到 App 扫描并确认</li>
+        <li>服务端验证通过后自动更新连接状态</li></ol>
+      <p>二维码只在本次登录过程中显示，Cookie 不会进入前端存储。</p>
+    </aside>
+  </div>;
 }
