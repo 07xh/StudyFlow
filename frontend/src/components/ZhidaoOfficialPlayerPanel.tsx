@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {CirclePlay,Download,RefreshCw,Square,ShieldCheck} from "lucide-react";
+import {ChevronDown,CirclePlay,Download,RefreshCw,SlidersHorizontal,Square,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoPlayerSettings,type ZhidaoProgressSnapshot} from "../bridge";
 import type {Course} from "../types";
 import {Switch} from "../ui/Switch";
@@ -57,6 +57,14 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
   const [message,setMessage]=useState("");
   const [settingsLoaded,setSettingsLoaded]=useState(false);
   const [observations,setObservations]=useState<Array<{event:string;position:number;at:string}>>([]);
+  const [settingsOpen,setSettingsOpen]=useState(()=>{
+    try{return window.localStorage.getItem("studyflow.zhidao.official-settings-open")==="true";}
+    catch{return false;}
+  });
+  useEffect(()=>{
+    try{window.localStorage.setItem("studyflow.zhidao.official-settings-open",String(settingsOpen));}
+    catch{/* Keep session preference. */}
+  },[settingsOpen]);
   const lastObservation=useRef("");
   const active= status.state==="running";
 
@@ -199,7 +207,13 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
         <small>{status.message}</small>
       </div>
     </div>
-    <div className="sf-zd-player-settings">
+    <div className="sf-inline-settings">
+      <button type="button" className="sf-inline-settings__toggle"
+        aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(previous=>!previous)}>
+        <SlidersHorizontal size={16}/><strong>播放器参数调整</strong>
+        <ChevronDown size={16} className={settingsOpen?"is-open":""}/>
+      </button>
+      {settingsOpen&&<div className="sf-zd-player-settings">
       <label>目标倍速
         <select value={settings.speed} disabled={!settingsLoaded||busy!==null}
           onChange={event=>update("speed",event.target.value as ZhidaoPlayerSettings["speed"])}>
@@ -218,6 +232,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
         <Switch checked={settings.autoNext} disabled={!settingsLoaded||busy!==null}
           onChange={checked=>update("autoNext",checked)}/>
       </label>
+      </div>}
     </div>
     <div className="sf-zd-progress-actions">
       <button className="primary" type="button" disabled={!desktop||!selected||active||busy!==null}
