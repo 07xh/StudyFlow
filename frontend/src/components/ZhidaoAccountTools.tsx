@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {BookOpen,Database,FileText,FolderOpen,KeyRound,ShieldCheck,Trash2} from "lucide-react";
+import {BookOpen,Database,ExternalLink,FileText,FolderOpen,KeyRound,ShieldCheck,Trash2} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoDiagnostic,type ZhidaoDocument} from "../bridge";
 import {ConfirmDialog} from "../ui/ConfirmDialog";
 
@@ -98,6 +98,10 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged}:Props){
         </button>
         <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void openFolder()}>
           <FolderOpen size={15}/>打开数据目录
+        </button>
+        <button className="secondary" type="button" disabled={!desktop||busy}
+          onClick={()=>void invoke("zhidao_open_official_site")}>
+          <ExternalLink size={15}/>打开知到官网
         </button>
         <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>setAction("session")}>
           <KeyRound size={15}/>退出登录

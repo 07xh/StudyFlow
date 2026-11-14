@@ -22,6 +22,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
   | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
+  | {id: string; version: 1; operation: "studyflow.consent.status" | "studyflow.consent.accept"}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
@@ -77,7 +78,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
                              "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHIDAO_DIAGNOSE_FAILED",
-                             "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE"]);
+                             "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -179,6 +180,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "ZHIDAO_DATA_CLEAR_FAILED": return "知到本地数据清理失败；未删除未列入清单的数据。";
     case "INVALID_DOCUMENT": return "请求的说明文档不存在。";
     case "DOCUMENT_UNAVAILABLE": return "说明文档暂不可读取。";
+    case "CONSENT_STORAGE_FAILED": return "首次使用声明状态无法保存，请检查本机应用数据目录。";
     case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
     default: return "本机服务调用失败，请检查运行环境。";
   }
