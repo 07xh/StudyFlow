@@ -204,11 +204,13 @@ export default function App(){
         {definition.id==="zhidao"
           ?<ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
               onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>
-          :<YuketangLoginPanel config={config} desktop={desktop} busy={Boolean(busy)}
-              connected={platforms.yuketang.status==="connected"} videos={videos}
-              onChange={(field,value)=>setConfig(previous=>({...previous,[field]:value}))}
-              onSubmit={()=>void configureFromPanel()} onClear={()=>setClearDialogOpen(true)}
-              onShowVideos={()=>void showVideos()}/>}
+          :definition.id==="yuketang"
+            ?<YuketangLoginPanel config={config} desktop={desktop} busy={Boolean(busy)}
+                connected={platforms.yuketang.status==="connected"} videos={videos}
+                onChange={(field,value)=>setConfig(previous=>({...previous,[field]:value}))}
+                onSubmit={()=>void configureFromPanel()} onClear={()=>setClearDialogOpen(true)}
+                onShowVideos={()=>void showVideos()}/>
+            :<p className="sf-platform-not-ready">该平台的登录组件尚未接入。</p>}
       </PlatformCard>)}
     </div>
   </section>;
