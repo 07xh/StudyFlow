@@ -20,6 +20,9 @@ BATCH_TOTAL = re.compile(r"(?:准备观看|找到)\s*(\d+)\s*个视频")
 BATCH_TEST = re.compile(r"测试模式：只处理前\s*(\d+)\s*个视频")
 BATCH_CURRENT = re.compile(r"正在处理第\s*(\d+)/(\d+)\s*个视频")
 BATCH_DONE = re.compile(r"\[主线程\].*?\((\d+)/(\d+)\)")
+RICH_TOTAL = re.compile(r"准备浏览\s*(\d+)\s*个图文")
+RICH_CURRENT = re.compile(r"正在处理第\s*(\d+)/(\d+)\s*个图文")
+RICH_RESULT = re.compile(r"图文浏览结果:\s*共(\d+)篇,\s*成功(\d+)篇,\s*失败(\d+)篇")
 BATCH_SUMMARY = re.compile(r"(总视频数|成功观看|跳过（已完成）|失败|手动停止):\s*(\d+)\s*$")
 # The original serializer reports one worker's progress without its video ID.
 # In concurrent mode, NEVER attribute these values to a particular video.
@@ -42,6 +45,11 @@ def empty_progress(available: bool = False) -> dict:
         "failed": 0,
         "stopped": 0,
         "concurrent": None,
+        "rich_total": None,
+        "rich_current": None,
+        "rich_processed": 0,
+        "rich_success": 0,
+        "rich_failed": 0,
     }
 
 
@@ -56,8 +64,44 @@ def _number(value: str, cap: float = 10_000_000.0) -> float | None:
 def parse_original_log(text: str) -> dict:
     """Produce numeric-only UI data; never expose log lines or identifiers."""
     result = empty_progress(bool(text.strip()))
+    rich_summary = False
+    video_summary = False
     for raw in text.splitlines():
         line = raw.strip()
+        if "开始批量浏览图文内容" in line:
+            rich_summary = False
+        if "图文批量浏览完成" in line:
+            rich_summary = True
+        if "开始批量观看视频" in line or "开始并发观看视频" in line:
+            rich_summary = False
+            video_summary = False
+        if "批量观看完成" in line or "并发观看完成" in line:
+            video_summary = True
+        match = RICH_TOTAL.search(line)
+        if match:
+            result["rich_total"] = min(int(match.group(1)), 100_000)
+        match = RICH_CURRENT.search(line)
+        if match:
+            result["rich_current"] = int(match.group(1))
+            result["rich_total"] = min(int(match.group(2)), 100_000)
+            result["rich_processed"] = max(result["rich_processed"], int(match.group(1)) - 1)
+        match = RICH_RESULT.search(line)
+        if match:
+            result["rich_total"], result["rich_success"], result["rich_failed"] = (
+                min(int(number), 100_000) for number in match.groups()
+            )
+            result["rich_processed"] = result["rich_success"] + result["rich_failed"]
+        if rich_summary:
+            for label, field in (("总图文数:", "rich_total"),
+                                 ("成功浏览:", "rich_success")):
+                match = re.search(re.escape(label) + r"\s*(\d+)\s*$", line)
+                if match:
+                    result[field] = min(int(match.group(1)), 100_000)
+            if "失败:" in line:
+                match = re.search(r"失败:\s*(\d+)\s*$", line)
+                if match:
+                    result["rich_failed"] = min(int(match.group(1)), 100_000)
+            result["rich_processed"] = result["rich_success"] + result["rich_failed"]
         if "开始并发观看视频" in line:
             result["concurrent"] = True
         elif "开始批量观看视频" in line:
@@ -138,7 +182,8 @@ def parse_original_log(text: str) -> dict:
                 "跳过（已完成）": "skipped", "失败": "failed",
                 "手动停止": "stopped",
             }[match.group(1)]
-            result[field] = min(int(match.group(2)), 100_000)
+            if match.group(1) != "失败" or video_summary:
+                result[field] = min(int(match.group(2)), 100_000)
 
     # Summary counters represent completed results, not started jobs.
     if "批量观看完成" in text or "并发观看完成" in text:
