@@ -135,9 +135,9 @@ test("consent requires one explicit decision and keeps a single exit action", ()
   const gate=read("src/components/StudyFlowConsentGate.tsx");
   const css=read("src/ui/foundation.css");
   assert.doesNotMatch(gate,/type="checkbox"/);
-  assert.doesNotMatch(gate,/sf-consent-exit/);
+  assert.match(gate,/sf-consent-exit/);
   assert.match(gate,/点击“同意并继续使用”即表示你已阅读并同意/);
-  assert.match(gate,/不同意并退出/);
+  assert.match(gate,/退出学序/);
   assert.match(gate,/同意并继续使用/);
   assert.match(css,/--accent-text:#078f5c/);
   assert.match(css,/sf-consent-confirmation/);
