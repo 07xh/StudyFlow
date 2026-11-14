@@ -73,7 +73,7 @@ export default function App(){
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
-  const [platformLoginExpanded,setPlatformLoginExpanded]=useState(true);
+  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>({zhidao:true,yuketang:true});
   const initialized=useRef(false);
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
@@ -205,7 +205,7 @@ export default function App(){
 
   function goPlatform(platform:Platform){
     setSelectedCourse(null);
-    setPlatformLoginExpanded(true);
+    setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
@@ -283,9 +283,9 @@ export default function App(){
       </>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
-          busy={Boolean(busy)} expanded={platformLoginExpanded}
+          busy={Boolean(busy)} expanded={platformLoginExpanded[platform]}
           onSync={()=>void sync(platform)}
-          onToggleLogin={()=>setPlatformLoginExpanded(value=>!value)}
+          onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}
           onEnterCourses={()=>enterCourses(platform)}>
           {renderPlatformLogin(platform)}
         </PlatformCard>
@@ -491,9 +491,8 @@ export default function App(){
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
       onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
-      onVerified={()=>{setQrOpen(false);
-        recordEvent("知到","扫码登录","success","知到服务端验证通过");
-        void refresh().then(()=>setNotice(previous=>previous||"知到登录已通过服务端核验。"));}}/>}
+      onVerified={()=>{setNotice("知到登录已通过服务端核验；正在检测连接。");
+        recordEvent("知到","扫码登录","success","知到服务端验证通过");void refresh();}}/>}
     <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}
       title="清除学序保存的雨课堂凭据？"
       description="此操作将清除学序在 Windows 凭据管理器中保存的雨课堂登录会话。"
