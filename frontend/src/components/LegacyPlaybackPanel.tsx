@@ -98,13 +98,13 @@ export function LegacyPlaybackPanel({
 
   return <section className="legacy-playback-panel">
     <div className="section-head">
-      <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到" : "雨课堂"}原版心跳任务</h3>
+      <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到原版任务" : "运行任务"}</h3>
       </div>
       <span className={status?.state === "running" ? "legacy-run-state active" : "legacy-run-state"}>
         {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
     </div>
-    <div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
+    {platform==="zhidao"&&<div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
         <strong>{status ? labels[status.state] : desktop ? "检测中" : "未连接桌面端"}</strong>
@@ -129,9 +129,9 @@ export function LegacyPlaybackPanel({
           <small>仅原版本地输出，非服务器确认进度</small>
         </div>}
       </div>
-    </div>
+    </div>}
     {platform === "yuketang" && <div className={"sf-ykt-live"+(detailMode?" sf-detail-live":"")} aria-label="雨课堂原版实时进度">
-      <div className="sf-ykt-live-title"><strong>雨课堂原版进度</strong>
+      <div className="sf-ykt-live-title"><strong>并发任务进度</strong>
         <small>{yktProgress?.available ? "本次任务日志 · 每 2 秒读取" : "本次任务尚无进度记录"}</small></div>
       <div className="sf-ykt-worker-grid" aria-label="并发任务独立状态">
         {workerSlots.map(slot=><article className="sf-ykt-worker" key={slot.slot}>
