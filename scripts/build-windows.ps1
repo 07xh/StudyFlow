@@ -10,7 +10,9 @@ npm install --prefix frontend --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Frontend npm install failed' }
 npm --prefix frontend run build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
-python -m PyInstaller --noconfirm --clean --onefile --console --name studyflow-bridge --paths src --collect-all keyring --add-data 'src/studyflow/platforms/zhidao/qr_login_core.py;studyflow/platforms/zhidao' --add-data 'legacy/yuketang/main.py;legacy/yuketang' --hidden-import=dotenv --distpath packaging/sidecar --workpath build/pyinstaller --specpath build/specs packaging/bridge_entry.py
+$qrScript = (Resolve-Path 'src/studyflow/platforms/zhidao/qr_login_core.py').Path
+$yktOriginal = (Resolve-Path 'legacy/yuketang/main.py').Path
+python -m PyInstaller --noconfirm --clean --onefile --console --name studyflow-bridge --paths src --collect-all keyring --add-data "$qrScript;studyflow/platforms/zhidao" --add-data "$yktOriginal;legacy/yuketang" --hidden-import=dotenv --distpath packaging/sidecar --workpath build/pyinstaller --specpath build/specs packaging/bridge_entry.py
 if ($LASTEXITCODE -ne 0) { throw 'Python sidecar build failed' }
 npm run tauri -- icon packaging/icon.svg
 if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed' }

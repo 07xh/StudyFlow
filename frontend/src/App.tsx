@@ -16,6 +16,7 @@ import {useAppearance} from "./ui/useAppearance";
 import {ThemeModeSelector} from "./ui/ThemeModeSelector";
 import {Switch} from "./ui/Switch";
 import {EmptyState} from "./ui/EmptyState";
+import {ConfirmDialog} from "./ui/ConfirmDialog";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const credentialFields=[
@@ -41,6 +42,7 @@ export default function App(){
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   const [notice,setNotice]=useState("");
+  const [clearDialogOpen,setClearDialogOpen]=useState(false);
   const [qrOpen,setQrOpen]=useState(false);
   const [videos,setVideos]=useState<Video[]>([]);
   const [config,setConfig]=useState<Config>(emptyConfiguration);
@@ -108,7 +110,7 @@ export default function App(){
     try{
       await request<{cleared:boolean}>({operation:"yuketang.clear"});
       setPlatforms(previous=>({...previous,yuketang:initialPlatforms.yuketang}));
-      setVideos([]);setNotice("已清除学序保存的雨课堂凭据；原程序不受影响。");
+      setVideos([]);setClearDialogOpen(false);setNotice("已清除学序保存的雨课堂凭据；原程序不受影响。");
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy("");}
   }
@@ -183,7 +185,7 @@ export default function App(){
   </section>;
 
   return <><AppShell page={page} onNavigate={setPage} dark={dark} onThemeToggle={toggleTheme}
-    desktop={desktop} notice={notice} compact={compactCards}>
+    desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")} compact={compactCards}>
     {page==="home"&&<>
       <div className="hero">
         <div>
@@ -229,7 +231,7 @@ export default function App(){
             <div className="actions">
               <button className="primary" type="submit" disabled={!desktop||Boolean(busy)}>保存并验证</button>
               <button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
-                onClick={()=>void clear()}>仅清除学序凭据</button>
+                onClick={()=>setClearDialogOpen(true)}>仅清除学序凭据</button>
             </div>
           </form>
         </section>}
@@ -269,5 +271,11 @@ export default function App(){
   </AppShell>
     {qrOpen&&<ZhidaoQrDialog onClose={()=>setQrOpen(false)}
       onVerified={()=>{setNotice("知到登录已通过服务器核验；正在检测连接。");void refresh();}}/>}
+    <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}
+      title="清除雨课堂登录会话？"
+      description="此操作将清除学序在 Windows 凭据管理器中保存的雨课堂登录会话。"
+      warning="需要重新配置会话才能继续读取课程；不会删除原版雨课堂文件或课程记录。"
+      confirmLabel="确认清除" cancelLabel="保留会话"
+      onConfirm={()=>void clear()} onCancel={()=>setClearDialogOpen(false)}/>
   </>;
 }
