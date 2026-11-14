@@ -1,9 +1,7 @@
 """Local QR-login lifecycle for StudyFlow's Zhidao platform.
 
-The authentication worker is the migrated ZHS 0.1.5-compatible core. It runs
-under the existing Zhidao installation's Python environment, keeping the
-original dependencies and cookies; the UI only sees sanitized state and a
-short-lived PNG while the code is awaiting scan.
+The worker runs in StudyFlow's own Python/PyInstaller runtime. Short-lived
+QR images and status files are isolated from the old ZHSDesktop directory.
 """
 from __future__ import annotations
 
@@ -13,11 +11,22 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import sys
 import threading
 import time
 
-from .legacy_runtime import installation_root, python_executable
 from .qr_login_core import STAGES
+
+def installation_root() -> Path:
+    """Private StudyFlow QR directory, never the old Zhidao install tree."""
+    local = os.environ.get("LOCALAPPDATA")
+    return (Path(local) if local else Path.home() / "AppData" / "Local") / "StudyFlow" / "zhidao"
+
+
+def python_executable() -> Path:
+    """Own interpreter during development or PyInstaller binary when frozen."""
+    return Path(sys.executable)
+
 
 _LOCK = threading.RLock()
 _WORKER: subprocess.Popen | None = None
@@ -86,20 +95,24 @@ def start() -> dict:
         if _WORKER is not None and _WORKER.poll() is None:
             return {"stage": "busy"}
         python = python_executable()
-        worker_script = Path(__file__).with_name("qr_login_core.py")
-        if not python.is_file() or not worker_script.is_file():
+        if not python.is_file():
             return {"stage": "environment-error"}
         token = secrets.token_hex(16)
         if _qr_path(token).exists():
             return {"stage": "environment-error"}
         started = time.time()
         try:
+            installation_root().mkdir(parents=True, exist_ok=True)
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            arguments = ([str(python), "--zhidao-qr-worker", token]
+                         if getattr(sys, "frozen", False)
+                         else [str(python), "-m", "studyflow.platforms.zhidao.qr_login_core", token])
+            environment = os.environ.copy()
+            environment["STUDYFLOW_QR_STATUS_DIR"] = str(installation_root())
             worker = subprocess.Popen(
-                [str(python), str(worker_script), token],
-                cwd=str(Path.home()), stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=flags,
+                arguments, cwd=str(Path.home()), env=environment,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, creationflags=flags,
             )
         except OSError:
             return {"stage": "environment-error"}

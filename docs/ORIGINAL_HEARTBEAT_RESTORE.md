@@ -28,7 +28,7 @@
 ## 运行路径
 
 - 雨课堂：`学序 Tauri UI → Rust legacy_start(yuketang) → 打包的 studyflow-bridge.exe --legacy-yuketang → runpy.run_path(原 main.py, "__main__")`。账号会话从学序已有 Windows Credential Manager 取得，原 `main.py` 的环境变量参数沿用其原来名称和默认值。日志由原代码按原逻辑写入本机 StudyFlow 用户目录，不输出至 WebView。
-- 知到：`学序 Tauri UI → Rust legacy_start(zhidao, course hash) → Python 确认当前账号的课程 HMAC 指纹并找到原始智慧课程 ID → %LOCALAPPDATA%/ZHSDesktop/Zhidao-Task.cmd play-ai ... → 原 ZHS 0.1.5`。**仍依赖原版 ZHSDesktop 安装及其 Python 虚拟环境**。不会重写 ZHS Python 库的心跳机制。
+- 知到：`学序 Tauri UI → Rust legacy_start(zhidao, course hash) → Python 确认当前账号的课程 HMAC 指纹并找到原始智慧课程 ID → %LOCALAPPDATA%/ZHSDesktop/Zhidao-Task.cmd play-ai ... → 原 ZHS 0.1.5`。**优先使用学序内打包的 ZHS 0.1.5 原版 Typer CLI；缺失时回退到原版 ZHSDesktop 安装环境**。不会重写 ZHS Python 库的心跳机制。
 - 停止：由 Rust 管理**学序启动的**子进程树；不会触碰用户在其他窗口单独运行的原版程序。关闭学序主窗口时，托管子进程清理。强制退出任务后需重新核验服务器记录。
 - 状态：只说明托管进程启动、运行、退出和退出码。**不能由退出码推断远端心跳被接受或完成课程。** 服务端进度仍使用已有平台只读接口查询。
 
@@ -42,3 +42,5 @@
 - `yuketang-heartbeat/README.md` 明确指出其原始源码的权利/第三方材料归属尚未核清，且原仓库**未授予通用开源许可**。即使用户个人非商业使用获授权，公开发布复制件和打包 EXE 仍需对权利及许可核对。
 - 不把 LightC Source Available 限制代码复制进学序。
 - 在 Windows 进行原用户账号和官方平台端到端验收前，不发布“已完整可用”的结论。
+
+独立打包底座来自学序的 `scripts/build-sidecar.ps1`：原有 QR、只读课程入口与 zhs==0.1.5 保留，新增原雨课堂 `main.py` 资源和 `python-dotenv`。Windows 打包构建必须实际验证该入口。

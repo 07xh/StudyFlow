@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["requests>=2.31,<3", "python-dotenv>=1,<2"]
 
 [project.optional-dependencies]
-desktop = ["keyring>=25,<27"]
+desktop = ["keyring>=25,<27", "zhs==0.1.5"]
 dev = ["pytest>=8", "pyinstaller>=6"]
 
 [tool.setuptools.packages.find]

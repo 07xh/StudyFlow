@@ -30,7 +30,7 @@ class LoginObservation:
             local_app_data = os.environ.get("LOCALAPPDATA")
             if not local_app_data:
                 raise ValueError("LOCALAPPDATA unavailable")
-            root = Path(local_app_data) / "ZHSDesktop"
+            root = Path(os.environ.get("STUDYFLOW_QR_STATUS_DIR") or (Path(local_app_data) / "StudyFlow" / "zhidao"))
         self.token = token
         self.root = root
         self.path = root / f"monitor-qr-{token}.json"

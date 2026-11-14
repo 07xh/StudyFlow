@@ -40,6 +40,10 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 
 对只读课程缓存继续进行 HMAC 会话绑定验证；原版知到、雨课堂账号和旧仓库全部保留。测试通过不等于真实 Windows 登录与平台学习进度已验证。详见 [知到 UI 迁移记录](docs/ZHIDAO_UI_MIGRATION.md)。
 
-## 原版模拟心跳代码保留与接入
+## 学序独立知到运行时
 
-知到 ZHS 0.1.5、雨课堂原始 `main.py` 的心跳发送算法保持不变。本仓库的原版源码快照位于 `legacy/{zhidao,yuketang}`，通过单独子进程调用，不覆盖原版软件。学序 UI 可以启动、查询、停止自身创建的原版任务；进程退出不等于服务器学习进度确认。详见 [原版心跳迁移记录](docs/ORIGINAL_HEARTBEAT_RESTORE.md)。**真实 Windows 与平台验收及第三方许可审查尚未完成。**
+Windows 构建使用 `zhs==0.1.5` 固定依赖和 `scripts/build-sidecar.ps1` 进行 PyInstaller 独立编译，内置仅读取的课程 CLI 及登录工作进程。安装学序时不再要求已有 `%LOCALAPPDATA%\\ZHSDesktop\\.venv`。扫码状态/临时 PNG 独立写入 `%LOCALAPPDATA%\\StudyFlow\\zhidao`；知到账号与服务端核验缓存仍沿用本人 `%USERPROFILE%\\.zhs`，不会清除旧版登录。用户真实账号登录、课程读取仍须在 Windows 上核验，CI 无法替代。
+
+## 原版模拟心跳保留与接入
+
+学序通过独立任务控制直接运行未修改的 ZHS 0.1.5 及雨课堂原始 `main.py`：知到智慧课程可从已同步列表选择，雨课堂沿用原来的并发、倍速、心跳间隔和本地阈值设置。原文件逐字节保留在 `legacy/` 并由测试守护，不重写原心跳数据生成和发送。托管进程状态与服务端确认状态严格区分。见 [原版心跳恢复说明](docs/ORIGINAL_HEARTBEAT_RESTORE.md)。真实 Windows 运行/远端验收以及第三方源代码许可证核对仍是发布门槛。

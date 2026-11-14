@@ -1,7 +1,8 @@
-"""Read-only bridge to the unchanged, installed Zhidao Windows runtime.
+"""Read-only bridge to StudyFlow bundled Zhidao runtime.
 
-The upstream PowerShell/WPF app, QR flow, Python modules and cache format remain
-untouched. This adapter never treats a local cookie file as server login proof.
+The upstream CLI code is preserved within the StudyFlow Python sidecar.
+The original WPF application and ~/.zhs cache format remain untouched.
+A local cookie file alone never establishes verified server login.
 """
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 from studyflow.core.models import Course, Platform
 from studyflow.platforms.zhidao.courses import progress_key
@@ -30,12 +32,15 @@ def python_executable() -> Path:
 
 
 def _run_readonly(command: str, timeout: int) -> subprocess.CompletedProcess[str]:
-    script, python = legacy_script(), python_executable()
-    if not script.is_file() or not python.is_file():
-        raise RuntimeError("Zhidao legacy installation is missing")
+    if command not in ("doctor-server", "courses"):
+        raise RuntimeError("Unsupported Zhidao read-only operation")
+    if getattr(sys, "frozen", False):
+        arguments = [sys.executable, "--zhidao-readonly", command]
+    else:
+        arguments = [sys.executable, "-m", "studyflow.platforms.zhidao.upstream.zhidao_only", command]
     try:
         return subprocess.run(
-            [str(python), str(script), command],
+            arguments,
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=timeout, cwd=Path.home(), check=False,
         )
