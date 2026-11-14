@@ -9,7 +9,8 @@ export type BridgeRequest =
   | {id:string;version:1;operation:"courses.list";platform:Platform}
   | {id:string;version:1;operation:"videos.list";platform:"yuketang"}
   | {id:string;version:1;operation:"yuketang.configure";configuration:Config}
-  | {id:string;version:1;operation:"yuketang.clear"};
+  | {id:string;version:1;operation:"yuketang.clear"}
+  | {id:string;version:1;operation:"zhidao.qr.start"|"zhidao.qr.status"|"zhidao.qr.cancel"};
 
 export type BridgeResponse<T> =
   | {id:string|null;ok:true;data:T}
@@ -44,4 +45,15 @@ export async function fetchStatuses():Promise<PlatformState[]>{
 export async function openLegacyZhidao():Promise<void> {
   if(!isDesktop())throw new Error("请在 Windows 桌面版中使用");
   await invoke("launch_zhidao_legacy");
+}
+
+/** Ephemeral QR image, never persist or log this base64 string. */
+export type ZhidaoQrStage =
+  | "idle" | "busy" | "requesting" | "ready" | "scanned" | "confirming"
+  | "verified" | "unavailable" | "rejected" | "expired" | "cancelled"
+  | "failed" | "environment-error";
+export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null};
+
+export function zhidaoQrCommand(action:"start"|"status"|"cancel"):Promise<ZhidaoQrState>{
+  return request<ZhidaoQrState>({operation:"zhidao.qr."+action});
 }
