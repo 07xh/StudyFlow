@@ -1,5 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from "react";
-import {RefreshCw,Save,SlidersHorizontal} from "lucide-react";
+import {ChevronDown,RefreshCw,Save,SlidersHorizontal} from "lucide-react";
 import {friendlyBridgeError,request} from "../bridge";
 import type {Course} from "../types";
 import {LegacyPlaybackPanel} from "./LegacyPlaybackPanel";
@@ -19,6 +19,14 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   const [loaded,setLoaded]=useState(false);
   const [busy,setBusy]=useState<"load"|"save"|null>(null);
   const [message,setMessage]=useState("");
+  const [settingsOpen,setSettingsOpen]=useState(()=>{
+    try{return window.localStorage.getItem("studyflow.yuketang.settings-open")==="true";}
+    catch{return false;}
+  });
+  useEffect(()=>{
+    try{window.localStorage.setItem("studyflow.yuketang.settings-open",String(settingsOpen));}
+    catch{/* Keep settings expansion in this session. */}
+  },[settingsOpen]);
   const onEventRef=useRef(onEvent);
   useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
 
@@ -58,7 +66,16 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   }
 
   return <>
-    <section className="legacy-playback-panel sf-yuketang-settings-panel">
+    <LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
+      connected={connected} yuketangOptions={options} settingsReady={loaded}
+      detailMode={detailMode} onEvent={onEvent}/>
+    <div className="sf-inline-settings">
+      <button type="button" className="sf-inline-settings__toggle"
+        aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(previous=>!previous)}>
+        <SlidersHorizontal size={16}/><strong>雨课堂参数调整</strong>
+        <ChevronDown size={16} className={settingsOpen?"is-open":""}/>
+      </button>
+      {settingsOpen&&<section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head">
         <div><h3><SlidersHorizontal size={17}/>雨课堂原版参数</h3></div>
         <span className="legacy-run-state">{loaded?"已读取本机配置":"等待读取配置"}</span>
@@ -126,9 +143,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
       <p className="legacy-disclaimer">设置单独保存在雨课堂平台配置中；启动任务时由学序透传给原版执行器，不修改原版心跳逻辑。</p>
-    </section>
-    <LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
-      connected={connected} yuketangOptions={options} settingsReady={loaded}
-      detailMode={detailMode} onEvent={onEvent}/>
+      </section>}
+    </div>
   </>;
 }
