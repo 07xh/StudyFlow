@@ -53,6 +53,8 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
   const [busy,setBusy]=useState<"prepare"|"start"|"stop"|"save"|null>(null);
   const [message,setMessage]=useState("");
   const [settingsLoaded,setSettingsLoaded]=useState(false);
+  const [observations,setObservations]=useState<Array<{event:string;position:number;at:string}>>([]);
+  const lastObservation=useRef("");
   const previousState=useRef<PlayerStatus["state"]>("idle");
   const verifiedAfterClose=useRef("");
   const active= status.state==="running";
@@ -93,6 +95,13 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
     try{
       const next=await invoke<PlayerStatus>("zhidao_player_status");
       setStatus(next);
+      if(next.event&&next.positionSeconds!==null){
+        const key=[next.event,next.positionSeconds,next.visible,next.observedAt].join(":");
+        if(lastObservation.current!==key){
+          lastObservation.current=key;
+          setObservations(previous=>[{event:next.event!,position:next.positionSeconds!,at:next.observedAt||new Date().toISOString()},...previous].slice(0,10));
+        }
+      }
       if(previousState.current==="running"&&next.state==="exited"&&next.exitCode===0&&
          next.courseKey&&verifiedAfterClose.current!==next.courseKey){
         verifiedAfterClose.current=next.courseKey;
@@ -176,6 +185,8 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
   const current=courses.find(course=>course.course_id===selected);
   const position=timeLabel(status.positionSeconds);
   const duration=timeLabel(status.durationSeconds);
+  const localPercent=status.positionSeconds!==null&&status.durationSeconds!==null&&status.durationSeconds>0
+    ?Math.min(100,Math.max(0,status.positionSeconds/status.durationSeconds*100)):null;
 
   return <section className="legacy-playback-panel sf-zhidao-official-panel">
     <div className="section-head">
@@ -198,6 +209,10 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
       <div className="sf-zd-player-state">
         <span>本机播放器观测</span>
         <strong>{status.positionSeconds===null?"等待视频":position+" / "+duration}</strong>
+        {localPercent!==null&&<div className="sf-zd-local-track" role="progressbar"
+          aria-label="本机 HTML5 视频播放位置" aria-valuemin={0} aria-valuemax={100} aria-valuenow={localPercent}>
+          <span style={{width:localPercent+"%"}}/>
+        </div>}
         <small>{status.message}</small>
       </div>
     </div>
@@ -244,6 +259,14 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
       </button>
     </div>
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
+    <details className="sf-zd-local-observations">
+      <summary>展开本地播放观测（{observations.length}）</summary>
+      {observations.length===0?<p>尚无可用的 HTML5 播放观测。</p>
+        :<ul>{observations.map((item,index)=><li key={index}>
+          <strong>{item.event}</strong><span>{timeLabel(item.position)}</span>
+          <time>{new Date(item.at).toLocaleTimeString()}</time>
+        </li>)}</ul>}
+    </details>
     <p className="sf-zd-progress-note">
       {current?.course_type==="shared"?"共享课使用原始课程路由；":"智慧课程使用课程与班级 ID。"}
       仅控制官网顶层页面识别到的主视频；本机播放位置不是服务器学习进度。自动下一节无法安全识别时会要求手动切换。
