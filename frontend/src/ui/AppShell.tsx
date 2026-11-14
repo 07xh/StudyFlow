@@ -7,9 +7,9 @@ import {
   type ReactNode
 } from "react";
 import {
-  Activity,BookOpen,ChevronDown,GraduationCap,History,
-  LayoutDashboard,Layers3,ListChecks,Moon,Navigation,Pin,
-  RefreshCw,Settings,Sun,X
+  Activity,BookOpen,ChevronDown,History,
+  LayoutDashboard,Layers3,ListChecks,Moon,PanelLeft,
+  RefreshCw,Settings,Sun
 } from "lucide-react";
 import type {LucideIcon} from "lucide-react";
 import {NoticeBanner} from "./NoticeBanner";
@@ -29,9 +29,6 @@ const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
 const platformNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"platform-zhidao",label:"知到",icon:BookOpen},
   {id:"platform-yuketang",label:"雨课堂",icon:BookOpen}
-];
-const systemNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
-  {id:"settings",label:"设置",icon:Settings}
 ];
 const titles:Record<Page,string>={
   home:"学习总览",courses:"课程中心",tasks:"学习任务",platforms:"学习平台",
@@ -133,12 +130,12 @@ export function AppShell({
       tabIndex={navOpen?0:-1}
       aria-current={page===item.id?"page":undefined}
       className={["nav",page===item.id?"active":"",nested?"sf-nav-child":""].filter(Boolean).join(" ")}
-      onClick={()=>onNavigate(item.id)}>
+      onClick={()=>{onNavigate(item.id);closeNavigation();}}>
       <item.icon size={nested?16:18}/>
       <span className="nav-label">{item.label}</span>
       {page===item.id&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
     </button>;
-  const renderItems=(items:typeof workspaceNavigation,label:string)=><nav className="sf-floating-nav__nav" aria-label={label}>
+  const renderItems=(items:typeof workspaceNavigation)=><nav className="sf-floating-nav__nav" aria-label="主导航">
     {items.map(item=>item.id==="platforms"
       ?<div className="sf-platform-nav" key={item.id}>
         <div className="sf-platform-nav-parent">
@@ -146,7 +143,7 @@ export function AppShell({
             tabIndex={navOpen?0:-1}
             className={["nav",platformActive?"active":""].filter(Boolean).join(" ")}
             aria-current={page==="platforms"?"page":undefined}
-            onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");}}>
+            onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");closeNavigation();}}>
             <Layers3 size={18}/><span className="nav-label">学习平台</span>
             {page==="platforms"&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
           </button>
@@ -176,39 +173,13 @@ export function AppShell({
         title={navPinned?"取消固定导航":navOpen?"固定导航":"打开导航"}
         onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}
         onClick={toggleNavigationPin}>
-        <Navigation size={18}/>
+        <PanelLeft size={18}/>
       </button>
       <aside id="sf-floating-navigation"
         className={["sf-floating-nav__panel",navOpen?"is-open":""].filter(Boolean).join(" ")}
         aria-label="主导航" aria-hidden={!navOpen}
         onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
-        <div className="sf-floating-nav__header">
-          <div className="sf-floating-nav__brand">
-            <span className="sf-floating-nav__brand-icon"><GraduationCap size={18}/></span>
-            <span className="sf-floating-nav__brand-copy"><strong>学序</strong><small>StudyFlow</small></span>
-          </div>
-          <div className="sf-floating-nav__header-actions">
-            <button type="button" className={["sf-floating-nav__action",navPinned?"is-pinned":""].join(" ")}
-              title={navPinned?"取消固定导航":"固定导航"}
-              aria-label={navPinned?"取消固定导航":"固定导航"} aria-pressed={navPinned}
-              tabIndex={navOpen?0:-1} onClick={toggleNavigationPin}>
-              <Pin size={14}/>
-            </button>
-            <button type="button" className="sf-floating-nav__action"
-              title="关闭导航" aria-label="关闭导航" tabIndex={navOpen?0:-1}
-              onClick={closeNavigation}>
-              <X size={15}/>
-            </button>
-          </div>
-        </div>
-        <div className="sf-floating-nav__section">
-          <span className="sf-floating-nav__section-label">工作空间</span>
-          {renderItems(workspaceNavigation,"学习工作空间")}
-        </div>
-        <div className="sf-floating-nav__section sf-floating-nav__system">
-          <span className="sf-floating-nav__section-label">系统</span>
-          {renderItems(systemNavigation,"系统设置")}
-        </div>
+        {renderItems(workspaceNavigation)}
       </aside>
     </div>
     <main className="main" id="main-content">
@@ -222,6 +193,9 @@ export function AppShell({
             aria-label="刷新连接" disabled={!desktop} onClick={onRefresh}>
             <RefreshCw size={17}/>
           </button>
+          <button className="theme-button sf-settings-button" type="button"
+            title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
+            onClick={()=>onNavigate("settings")}><Settings size={17}/></button>
           <button className="theme-button" type="button"
             aria-label={dark?"切换浅色主题":"切换深色主题"}
             onClick={onThemeToggle}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
