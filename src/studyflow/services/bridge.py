@@ -10,6 +10,7 @@ import sys
 from typing import Any
 
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
+from studyflow.platforms.zhidao import qr_runtime
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 
@@ -26,6 +27,17 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     operation = request.get("operation")
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
+    if operation in ("zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"):
+        try:
+            if operation == "zhidao.qr.start":
+                result = qr_runtime.start()
+            elif operation == "zhidao.qr.cancel":
+                result = qr_runtime.cancel()
+            else:
+                result = qr_runtime.status()
+            return {"id": request_id, "ok": True, "data": result}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHIDAO_QR_UNAVAILABLE"}
     if operation == "platform.status":
         result = []
         for name, adapter in ADAPTERS.items():
