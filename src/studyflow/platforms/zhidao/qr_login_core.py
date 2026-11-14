@@ -27,10 +27,16 @@ class LoginObservation:
         if not MONITOR_TOKEN.fullmatch(token):
             raise ValueError("invalid local QR monitor token")
         if root is None:
-            local_app_data = os.environ.get("LOCALAPPDATA")
-            if not local_app_data:
-                raise ValueError("LOCALAPPDATA unavailable")
-            root = Path(local_app_data) / "ZHSDesktop"
+            # StudyFlow isolates observation files from the old ZHSDesktop app;
+            # the worker receives a local, app-owned directory via environment.
+            isolated = os.environ.get("STUDYFLOW_QR_STATUS_DIR")
+            if isolated:
+                root = Path(isolated)
+            else:
+                local_app_data = os.environ.get("LOCALAPPDATA")
+                if not local_app_data:
+                    raise ValueError("LOCALAPPDATA unavailable")
+                root = Path(local_app_data) / "ZHSDesktop"
         self.token = token
         self.root = root
         self.path = root / f"monitor-qr-{token}.json"
