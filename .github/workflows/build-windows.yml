@@ -1,6 +1,8 @@
 name: Build Windows EXE (manual)
 on:
   workflow_dispatch:
+  push:
+    branches: [build/one-time-windows-check]
 jobs:
   windows-package:
     runs-on: windows-latest
