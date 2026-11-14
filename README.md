@@ -39,3 +39,7 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 从 `zhidao-assistant@53c9244` 迁入学序统一 React 界面：课程动态卡片、核验证据标签、深色主题持久化、课程筛选及小窗口布局。保留原版 WPF 扫码入口；原版登录流程没有被覆盖。
 
 对只读课程缓存继续进行 HMAC 会话绑定验证；原版知到、雨课堂账号和旧仓库全部保留。测试通过不等于真实 Windows 登录与平台学习进度已验证。详见 [知到 UI 迁移记录](docs/ZHIDAO_UI_MIGRATION.md)。
+
+## 学序独立知到运行时
+
+Windows 构建使用 `zhs==0.1.5` 固定依赖和 `scripts/build-sidecar.ps1` 进行 PyInstaller 独立编译，内置仅读取的课程 CLI 及登录工作进程。安装学序时不再要求已有 `%LOCALAPPDATA%\\ZHSDesktop\\.venv`。扫码状态/临时 PNG 独立写入 `%LOCALAPPDATA%\\StudyFlow\\zhidao`；知到账号与服务端核验缓存仍沿用本人 `%USERPROFILE%\\.zhs`，不会清除旧版登录。用户真实账号登录、课程读取仍须在 Windows 上核验，CI 无法替代。
