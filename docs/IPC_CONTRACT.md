@@ -1,24 +1,43 @@
-# 学序本地 IPC 契约 v1
+# StudyFlow 本地 IPC 契约 v1（Tauri 2 + Python）
 
-Python 入口：`python -m studyflow.services.bridge`；标准输入 JSON Lines / 标准输出 JSON Lines。只读协议不输出 Cookie、原始 HTTP 响应或堆栈信息。
+Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 \`bin/studyflow-bridge.exe\`。输入输出都是每行一个 JSON；每个请求使用独立进程，互不共享敏感状态。无对外 HTTP 监听端口。
 
-```json
-{"id":"example-1","version":1,"operation":"platform.status"}
-```
+示例请求：
+\`\`\`json
+{"id":"test-1","version":1,"operation":"platform.status"}
+\`\`\`
 
-现有操作：
-- `ping`：返回服务名及协议版本。
-- `platform.status`：返回知到及雨课堂的服务端登录检测结果，不等同于 Cookie 文件存在。
-- `courses.list`：按平台返回已读取的课程列表。只有真实知到旧版运行时与缓存核验成功时才返回课程；雨课堂暂未接入，返回 `PLATFORM_NOT_READY`。
+## 已连接的操作
 
-课程字段 `platform`, `course_id`, `title`, `progress_percent`, `course_type`, `stale`, `progress_evidence`, `verified_at`。对于当前知到只读课程模块，`progress_percent=null`, `progress_evidence=null`, `verified_at=null`；页面不得伪造任何百分比。知到 `course_id` 是基于上游课程+教学班身份的不可逆哈希，不传共享课原始路由令牌。
+| 操作 | 输入 | 返回 |
+| --- | --- | --- |
+| \`ping\` | 无 | sidecar 版本 |
+| \`platform.status\` | 无 | 知到 / 雨课堂服务端状态 |
+| \`courses.list\` | \`platform\` | 真实课程记录 |
+| \`videos.list\` | \`platform:"yuketang"\` | 当前课堂的真实章节视频 |
+| \`yuketang.configure\` | \`configuration\` | 保存会话到 Windows 凭据管理器 |
+| \`yuketang.clear\` | 无 | 仅清除学序保存的会话 |
 
-错误码固定、经过净化。请求与响应 `id` 必须匹配，前端要拒绝缺少平台身份、跨平台记录和数据结构错误。
+知到扫码由 Tauri 独立调用已安装的 \`%LOCALAPPDATA%/ZHSDesktop/Zhidao-GUI.ps1\`；调用原程序的只读 \`doctor-server\` / \`courses\`，不更改旧版本。
 
-## 前端接线状态
+## 约束
 
-`frontend/src/bridge.ts` 定义 `StudyFlowTransport` 并在可信宿主存在时读取 `window.studyflowTransport`。普通浏览器预览**没有这个对象**，也不会创建假 HTTP localhost 服务。
+- Rust 限制操作白名单、输入大小和 sidecar 路径；UI 不能执行任意 shell 命令。
+- 响应仅提供公开错误码，不输出原始异常、Session ID、Cookie 或网络 URL。
+- \`yuketang.configure\` 仅接受当前用户主动输入的会话配置；存储在 Windows Credential Manager。
+- Python 子进程的 stdout 只用于 JSON 协议，不允许业务日志混入。
+- 课程进度只有真实平台返回才可展示；未知为 \`null\`。
+- 运行时路径、身份、有效会话和 Windows 安装包仍需端到端测试。不存在假登录或假课程。
 
-下一阶段需实现 Tauri 2 Windows 宿主：由受信任的 Rust 进程启动包内 Python sidecar，通过私有标准流转发上述操作。需要确保 API 白名单、每行长度限制、请求/响应关联、进程退出清理、错误脱敏和平台会话隔离。
+## 源码兼容
 
-目前还没有 Tauri 生产构建、官方 Windows EXE、真实知到扫码/浏览器登录接口及播放 IPC，不能称为已具备完整功能。
+旧知到 WPF UI、旧雨课堂单体 \`main.py\` 保留在原仓库，并可继续独立使用；学序新增适配层，不覆盖旧文件。
+
+## 知到 UI 课程证据字段（后向兼容）
+
+`courses.list` 保留原有 `platform`、`course_id`、`title`、`progress_percent`，新增 `course_type`、`stale`、`progress_evidence`、`verified_at`。
+
+- 对已接线的知到只读缓存，`course_id` 采用稳定不可逆的教学班身份哈希；`course_type` 为 `ai` 或 `shared`。
+- `progress_evidence`、`verified_at` 目前返回 `null`。前端需要二者同时提供有效的服务器核验证据才展示进度百分比。
+- `stale=true` 始终显示「历史缓存待核验」，不使用过时进度作为当前完成率。
+- React UI 通过 Tauri `bridge_request` 发送 JSONL IPC，核对 `id` 和平台身份，拒绝跨平台记录及异常格式；保留雨课堂现有配置、清理和视频请求。

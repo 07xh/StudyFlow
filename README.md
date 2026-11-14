@@ -1,42 +1,41 @@
-# 学序 · StudyFlow
+# 学序 StudyFlow
 
-知到 + 雨课堂统一学习助手。StudyFlow 是**唯一规划中的正式 Windows EXE 构建源**；旧仓库保留原样作为兼容来源。
+**非商业用途的 Windows 学习助手**：将知到、长江雨课堂统一到独立设计的 React + Tauri 2 桌面界面，后端使用 Python 模块，通过本地 IPC 读取真实平台数据。
 
-## 当前完成度
+## 已有实现
 
-- ✅ React/TypeScript 统一 UI：课程卡片、知到登录交互引导、独立平台连接状态、浅/深色主题、窄窗口响应式布局。
-- ✅ 只在真实 IPC 返回数据后生成课程卡片；历史缓存或没有明确服务器核验证据的值不显示成已完成进度。
-- ✅ 知到 Python 只读课程适配：修复旧版安装目录定位，沿用会话指纹核验，按课程及教学班生成稳定身份。
-- ✅ Python JSON Lines IPC：`ping`、`platform.status`、`courses.list`。前端协议与返回值形状验证已加入自动化测试。
-- ⏳ Windows Tauri 桌面壳和受保护 IPC 注入 **尚未完成**：浏览器预览没有真实平台连接能力。
-- ⏳ 新 UI 的扫码登录、Cookie 输入/导入、播放器与完整课程详情 **尚未接线**：按钮明确禁用，不收集凭据。
-- ⏳ 雨课堂实际登录与课程列表调用尚未打通；已有只读章节/视频元数据模块。
-- ⏳ 未构建正式 StudyFlow.exe，尚未进行 Windows 真机高 DPI、真实课程及账号端到端验收。
+- 自主编写的深色 / 浅色桌面 UI、课程卡片、平台状态、课程同步和章节视频列表。
+- 知到：调用原有 Windows ZHSDesktop 的服务端登录检查与课程同步，读取同会话绑定的缓存。
+- 雨课堂：读取课堂信息、章节和视频元数据。会话存储在 Windows Credential Manager。
+- Tauri 2 Rust IPC 调用 PyInstaller 打包的 Python sidecar。
+- Windows NSIS 安装包构建脚本，详见 [构建指南](docs/BUILD_WINDOWS.md)。
 
-不提供虚构课程、伪造进度或假登录成功状态。
+## 使用条件
 
-## 开发与测试
+- 知到原版程序需已安装且通过自身扫码登录；**学序不会修改或删除原版程序**。
+- 雨课堂需要本人有效的现有登录会话及课堂 ID；未登录或未连接时明确显示失败。
+- 真实平台登录、课程读取和 Windows 安装包尚未经过用户环境的端到端验收，不能据此宣称全部已可用。
 
-```bash
-python -m pip install -e ".[dev]"
-python -m pytest -q
-cd frontend
-npm install
-npm run build
-npm test
-npm run dev
-```
+## 构建
 
-浏览器预览无法自动启动 Python。未来的可信 Windows 宿主必须显式注入 `window.studyflowTransport`，通过本地受保护进程管道转发 `src/studyflow/services/bridge.py` 的只读协议；不启用无鉴权 localhost 服务。
+在 Windows 上安装 Python 3.11、Node.js 22、Rust stable、VS C++ Build Tools、WebView2 后：
 
-## 目录
+\`\`\`powershell
+powershell -NoProfile -File .\scripts\build-windows.ps1
+\`\`\`
 
-- `frontend/src/`：唯一目标 React UI（不复制 LightC 专有资源）
-- `src/studyflow/platforms/zhidao/`：知到只读课程和诊断适配
-- `src/studyflow/platforms/yuketang/`：雨课堂只读元数据与待集成适配
-- `src/studyflow/services/bridge.py`：本机 JSON Lines 只读 IPC
-- `src/studyflow/core/`：平台及课程契约
-- `tests/`：后端契约与缓存隔离测试
-- `docs/`：来源、协议、许可证和迁移记录
+或者在 GitHub Actions 手动运行 **Build Windows EXE (manual)**，成功后下载 NSIS 构建产物。为了节省 Actions 时间，默认不会每次提交自动打包。
 
-**知到 UI 上游基线：** `07xh/zhidao-assistant@53c92446d40b2cd1732c9aa1884d9f3b3a3fe55a`。旧知到 WPF 中的 QR 刷新、登录回滚和心跳控制仍保存在上游，并不代表它们在 StudyFlow 中已经可用。
+## 上游保留
+
+- \`07xh/zhidao-assistant\` — 未更改的旧版 WPF/Python/Go 安装程序。
+- \`07xh/yuketang-heartbeat\` — 未更改的旧版 Python 单体程序。
+- LightC-UI 仅作为设计参考；本仓库 UI 独立实现，不包含其受限素材或源代码。
+
+新程序不会模拟平台已完成的学习进度，不提供伪造学习记录的接口。
+
+## 最新知到 UI 迁移
+
+从 `zhidao-assistant@53c9244` 迁入学序统一 React 界面：课程动态卡片、核验证据标签、深色主题持久化、课程筛选及小窗口布局。保留原版 WPF 扫码入口；原版登录流程没有被覆盖。
+
+对只读课程缓存继续进行 HMAC 会话绑定验证；原版知到、雨课堂账号和旧仓库全部保留。测试通过不等于真实 Windows 登录与平台学习进度已验证。详见 [知到 UI 迁移记录](docs/ZHIDAO_UI_MIGRATION.md)。

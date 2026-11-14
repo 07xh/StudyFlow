@@ -10,7 +10,10 @@ function loadTypescript(relativePath) {
     compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020}
   }).outputText;
   const mod = {exports: {}};
-  new Function("module", "exports", "require", code)(mod, mod.exports, require);
+  const localRequire = name => name === "@tauri-apps/api/core"
+    ? {invoke: async () => {throw new Error("Tauri is not invoked in these pure tests");}}
+    : require(name);
+  new Function("module", "exports", "require", code)(mod, mod.exports, localRequire);
   return mod.exports;
 }
 

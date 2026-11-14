@@ -1,7 +1,7 @@
-"""Versioned JSON-lines IPC for a future Tauri sidecar.
+"""Versioned JSON-lines local IPC for the packaged Tauri sidecar.
 
-Only read-only status and course-model validation are exposed. No credentials,
-raw exceptions, cookies or upstream API payloads are emitted.
+Errors have fixed public codes. Private credentials, raw server payloads and
+identifiers never appear in logs or error output.
 """
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import json
 import sys
 from typing import Any
 
-from studyflow.core.models import Platform
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
+from studyflow.platforms.yuketang import credentials
 
 MAX_LINE = 65536
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
@@ -19,7 +19,7 @@ ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
 
 def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     request_id = request.get("id")
-    if not isinstance(request_id, str) or len(request_id) > 128:
+    if not isinstance(request_id, str) or not 0 < len(request_id) <= 128:
         return {"id": None, "ok": False, "error": "INVALID_REQUEST"}
     if request.get("version") != 1:
         return {"id": request_id, "ok": False, "error": "UNSUPPORTED_VERSION"}
@@ -27,10 +27,14 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
     if operation == "platform.status":
-        return {"id": request_id, "ok": True, "data": [
-            {"platform": k, "connected": (info := a.connection_info()).connected, "message": info.message}
-            for k, a in ADAPTERS.items()
-        ]}
+        result = []
+        for name, adapter in ADAPTERS.items():
+            try:
+                info = adapter.connection_info()
+                result.append({"platform": name, "connected": info.connected, "message": info.message})
+            except Exception:
+                result.append({"platform": name, "connected": False, "message": "平台状态检测失败"})
+        return {"id": request_id, "ok": True, "data": result}
     if operation == "courses.list":
         platform = request.get("platform")
         if not isinstance(platform, str) or platform not in ADAPTERS:
@@ -45,6 +49,25 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
              "stale": c.stale, "progress_evidence": None, "verified_at": None}
             for c in courses
         ]}
+    if operation == "videos.list":
+        if request.get("platform") != "yuketang":
+            return {"id": request_id, "ok": False, "error": "UNKNOWN_PLATFORM"}
+        try:
+            return {"id": request_id, "ok": True, "data": ADAPTERS["yuketang"].list_videos()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+    if operation == "yuketang.configure":
+        try:
+            credentials.save(request.get("configuration"))
+            return {"id": request_id, "ok": True, "data": {"saved": True}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CREDENTIAL_STORAGE_FAILED"}
+    if operation == "yuketang.clear":
+        try:
+            credentials.clear()
+            return {"id": request_id, "ok": True, "data": {"cleared": True}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CREDENTIAL_STORAGE_FAILED"}
     return {"id": request_id, "ok": False, "error": "UNKNOWN_OPERATION"}
 
 

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "学序 StudyFlow",
+  "version": "0.1.0",
+  "identifier": "app.studyflow.desktop",
+  "build": {
+    "beforeDevCommand": "npm --prefix frontend run dev -- --host 127.0.0.1",
+    "beforeBuildCommand": "npm --prefix frontend run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../frontend/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "学序 StudyFlow",
+        "width": 1150,
+        "height": 780,
+        "minWidth": 840,
+        "minHeight": 650,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../packaging/sidecar/studyflow-bridge.exe": "bin/studyflow-bridge.exe"
+    },
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false
+      }
+    }
+  }
+}

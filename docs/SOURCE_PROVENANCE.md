@@ -1,24 +1,30 @@
-# StudyFlow 源码来源与可追溯记录
+# 源码来源与迁移记录
 
 ## 知到
-
-- UI/业务审计基线：`07xh/zhidao-assistant@53c92446d40b2cd1732c9aa1884d9f3b3a3fe55a`。
-- 该版本保留 WPF 动态课程卡片、扫码二维码刷新与清理、Cookie 输入/导入、服务端进度分离展示及高 DPI 改造。
-- StudyFlow `frontend/src/App.tsx`、`style.css`、`presentation.ts` 只迁移对应 UI 的交互原则，使用自有 React/TypeScript 组件；未直接复制旧 XAML/WPF PowerShell GUI。
-- `platforms/zhidao/courses.py` 与 `diagnostics.py` 先前迁入自旧项目的纯 Python 只读逻辑；本轮修复 `legacy_runtime.py` 的旧安装位置，新增保留课程类型/历史缓存及去重身份标识。
-- 旧仓库及其许可证、第三方 ZHS GPL-3.0 依赖应继续保留并在发行前完成许可审查。
+- 上游仓库：`07xh/zhidao-assistant`
+- 审查时上游 `main` 树 SHA：`157c48aa2c37da8d15137c94be3ef67afc2f6cb9`
+- `payload/zhidao_courses.py` → `src/studyflow/platforms/zhidao/courses.py`：仅调整 `zhidao_diagnostics` 为包内相对导入。
+- `payload/zhidao_diagnostics.py` → `src/studyflow/platforms/zhidao/diagnostics.py`：原样迁入。
+- 上游包含 GPL-3.0 LICENSE；正式发布前应完成整套依赖与许可证合规审查。
 
 ## 雨课堂
+- 上游仓库：`07xh/yuketang-heartbeat`
+- 审查时上游 `main` 树 SHA：`a81cf336d7f2d635d7500b5d6698e251e88c5a73`
+- 已确认 `main.py`、`exe_entry.py` 和 requirements；尚未迁入运行时模块。
+- `exe_entry.py` 自述旧 EXE 字节码未完全反编译；不能视为全部原始功能已恢复。
 
-- 源码来源：`07xh/yuketang-heartbeat`。
-- 只读章节及视频元数据提取已在 `platforms/yuketang/readonly.py` 中隔离；尚未完成账号登录、课程列表适配和桌面运行时接线。
-- 不在 UI 中伪造视频进度或替换真实平台返回值。
+## UI
+- LightC-UI 2.18.3 原始 ZIP 需要重新核对实际组件和依赖后迁入，当前仓库未包含其源码。
 
-## LightC 2.18.3
+## 验收规则
+- 不使用模拟课程数据宣称真实平台可用。
+- 原仓库继续保留；正式 EXE 仅从 StudyFlow 构建。
+- 登录凭据、Cookie、HAR 与本地缓存不得提交。
 
-- 当前仓库已有审查：`docs/LIGHTC_UI_REVIEW.md`。许可证为 Source Available，不允许把受限组件作为 StudyFlow 公共发布代码直接搬用。
-- 此次 UI 使用自有 React 组件与基础 UI 模式，未复制 LightC 专有源码、品牌、图像或打包资源。
+## 2026-11-14 知到 UI 第二阶段迁移
 
-## 交付边界
-
-此轮仅建立统一 React UI + 已有只读 Python IPC 的数据绑定契约。Tauri 可信宿主尚未接入，正式 EXE 尚未构建。任何「可用」结论以真实 Windows 集成和对应测试为准。
+- 审查基线更新为 `07xh/zhidao-assistant@53c92446d40b2cd1732c9aa1884d9f3b3a3fe55a`。
+- 学序使用独立 React/TypeScript 组件表达动态课程卡片、登录入口、主题、响应式布局与三种服务器证据状态；**未直接复制 LightC 限制素材、原 XAML 或 PowerShell GUI**。
+- 原知到实际读课由已连接的 Tauri Python sidecar 转发，沿用 HMAC 会话检查；本轮新增课程类型、stale 和去重身份字段。
+- 原二维码刷新/自动清理机制仍在上游 WPF 应用；学序调用原版窗口，不声称已独立迁移其认证实现。
+- 具体实现和剩余门禁参见 `docs/ZHIDAO_UI_MIGRATION.md`。

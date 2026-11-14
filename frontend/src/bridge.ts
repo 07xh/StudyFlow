@@ -1,10 +1,15 @@
+import {invoke} from "@tauri-apps/api/core";
 import type {Platform, PlatformState, Course} from "./types";
 
-/** The host must inject this capability only into a trusted desktop window. */
+export type Video = {id: string; name: string; chapter: string};
+export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
 export type BridgeRequest =
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
-  | {id: string; version: 1; operation: "courses.list"; platform: Platform};
+  | {id: string; version: 1; operation: "courses.list"; platform: Platform}
+  | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"}
+  | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
+  | {id: string; version: 1; operation: "yuketang.clear"};
 
 export type BridgeResponse<T> =
   | {id: string | null; ok: true; data: T}
@@ -14,57 +19,69 @@ export interface StudyFlowTransport {
   request<T>(message: BridgeRequest): Promise<BridgeResponse<T>>;
 }
 
-declare global {
-  interface Window {
-    studyflowTransport?: StudyFlowTransport;
-  }
-}
-
-/** Browser preview has no data transport. Do not use a fake HTTP API or sample courses. */
-export function getStudyFlowTransport(): StudyFlowTransport | null {
-  if (typeof window === "undefined") return null;
-  const candidate = window.studyflowTransport;
-  return candidate && typeof candidate.request === "function" ? candidate : null;
-}
-
-let requestSerial = 0;
+type WithoutEnvelope<T> = T extends unknown ? Omit<T, "id" | "version"> : never;
+let serial = 0;
 function nextId(): string {
-  requestSerial += 1;
-  return "ui-" + Date.now().toString(36) + "-" + requestSerial;
+  serial += 1;
+  return "ui-" + Date.now().toString(36) + "-" + serial;
 }
 
-async function checkedRequest<T>(
-  transport: StudyFlowTransport,
-  message: BridgeRequest,
-): Promise<T> {
-  const response = await transport.request<T>(message);
-  if (!response || response.id !== message.id || typeof response.ok !== "boolean") {
+export function isDesktop(): boolean {
+  return typeof window !== "undefined" &&
+    Boolean((window as Window & {__TAURI_INTERNALS__?: unknown}).__TAURI_INTERNALS__);
+}
+
+/** Real Tauri/sidecar interface only. A browser preview never simulates a local service. */
+export function getStudyFlowTransport(): StudyFlowTransport | null {
+  if (!isDesktop()) return null;
+  return {
+    async request<T>(message: BridgeRequest): Promise<BridgeResponse<T>> {
+      try {
+        return await invoke<BridgeResponse<T>>("bridge_request", {request: message});
+      } catch {
+        throw new Error("BRIDGE_NOT_READY");
+      }
+    }
+  };
+}
+
+async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeRequest): Promise<T> {
+  const result = await transport.request<T>(message);
+  if (!result || result.id !== message.id || typeof result.ok !== "boolean") {
     throw new Error("INVALID_IPC_RESPONSE");
   }
-  if (!response.ok) {
-    // Never forward arbitrary exception text or sensitive upstream data to the UI.
-    const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM", "PLATFORM_NOT_READY", "UNKNOWN_OPERATION"]);
-    throw new Error(allowed.has(response.error) ? response.error : "PLATFORM_NOT_READY");
+  if (!result.ok) {
+    const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
+                             "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED"]);
+    throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
-  return response.data;
+  return result.data;
 }
 
-function isPlatform(value: unknown): value is Platform {
+export async function request<T>(message: WithoutEnvelope<BridgeRequest>): Promise<T> {
+  const transport = getStudyFlowTransport();
+  if (!transport) throw new Error("BRIDGE_NOT_READY");
+  const full = {...message, id: nextId(), version: 1} as BridgeRequest;
+  return checkedRequest<T>(transport, full);
+}
+
+function validPlatform(value: unknown): value is Platform {
   return value === "zhidao" || value === "yuketang";
 }
 
+/** Can be unit-tested with a fake transport; production uses the real Tauri bridge. */
 export async function fetchPlatformStatuses(transport: StudyFlowTransport): Promise<PlatformState[]> {
   const data = await checkedRequest<unknown>(transport, {id: nextId(), version: 1, operation: "platform.status"});
   if (!Array.isArray(data)) throw new Error("INVALID_IPC_RESPONSE");
   const result = new Map<Platform, PlatformState>();
-  for (const row of data) {
-    if (!row || typeof row !== "object") continue;
-    const item = row as Record<string, unknown>;
-    if (!isPlatform(item.platform) || typeof item.connected !== "boolean") continue;
-    result.set(item.platform, {
-      platform: item.platform,
-      status: item.connected ? "connected" : "not_connected",
-      message: typeof item.message === "string" ? item.message.slice(0, 180) : "连接状态未确认",
+  for (const raw of data) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = raw as Record<string, unknown>;
+    if (!validPlatform(row.platform) || typeof row.connected !== "boolean") continue;
+    result.set(row.platform, {
+      platform: row.platform,
+      status: row.connected ? "connected" : "not_connected",
+      message: typeof row.message === "string" ? row.message.slice(0, 180) : "连接状态未确认",
       courses: [],
     });
   }
@@ -72,41 +89,64 @@ export async function fetchPlatformStatuses(transport: StudyFlowTransport): Prom
   return ["zhidao", "yuketang"].map(p => result.get(p as Platform)!);
 }
 
+export async function fetchStatuses(): Promise<PlatformState[]> {
+  const transport = getStudyFlowTransport();
+  if (!transport) throw new Error("BRIDGE_NOT_READY");
+  return fetchPlatformStatuses(transport);
+}
+
 export async function fetchCourses(transport: StudyFlowTransport, platform: Platform): Promise<Course[]> {
   const data = await checkedRequest<unknown>(transport, {id: nextId(), version: 1, operation: "courses.list", platform});
   if (!Array.isArray(data)) throw new Error("INVALID_IPC_RESPONSE");
-  const courses: Course[] = [];
-  const identities = new Set<string>();
-  for (const entry of data) {
-    if (!entry || typeof entry !== "object") throw new Error("INVALID_IPC_RESPONSE");
-    const row = entry as Record<string, unknown>;
-    if (row.platform !== platform || typeof row.course_id !== "string" ||
-        !row.course_id.trim() || typeof row.title !== "string" || !row.title.trim()) {
-      throw new Error("INVALID_IPC_RESPONSE");
-    }
+  const result: Course[] = [];
+  const seen = new Set<string>();
+  for (const raw of data) {
+    if (!raw || typeof raw !== "object") throw new Error("INVALID_IPC_RESPONSE");
+    const row = raw as Record<string, unknown>;
+    if (row.platform !== platform || typeof row.course_id !== "string" || !row.course_id.trim() ||
+        typeof row.title !== "string" || !row.title.trim()) throw new Error("INVALID_IPC_RESPONSE");
     const id = row.course_id.slice(0, 128);
-    if (identities.has(id)) continue;
-    identities.add(id);
-    const percent = row.progress_percent;
-    const validPercent = typeof percent === "number" && Number.isFinite(percent) && percent >= 0 && percent <= 100;
-    courses.push({
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const numeric = row.progress_percent;
+    const progress = typeof numeric === "number" && Number.isFinite(numeric) && numeric >= 0 && numeric <= 100
+      ? numeric : null;
+    result.push({
       platform,
       course_id: id,
       title: row.title.slice(0, 250),
-      progress_percent: validPercent ? percent : null,
+      progress_percent: progress,
       course_type: row.course_type === "ai" || row.course_type === "shared" ? row.course_type : null,
       stale: row.stale === true,
       progress_evidence: row.progress_evidence === "server_verified" ? "server_verified" : null,
       verified_at: typeof row.verified_at === "string" && row.verified_at.length <= 64 ? row.verified_at : null,
     });
   }
-  return courses;
+  return result;
 }
 
-export function friendlyBridgeError(error: unknown): string {
-  const code = error instanceof Error ? error.message : "";
-  if (code === "PLATFORM_NOT_READY") return "平台运行时尚未准备完成，课程未读取。";
-  if (code === "INVALID_IPC_RESPONSE") return "本机数据通信格式异常，未加载课程。";
-  if (code === "UNSUPPORTED_VERSION") return "前后端协议版本不匹配。";
-  return "无法完成本机数据读取，请检查桌面运行时。";
+export async function fetchCoursesFromDesktop(platform: Platform): Promise<Course[]> {
+  const transport = getStudyFlowTransport();
+  if (!transport) throw new Error("BRIDGE_NOT_READY");
+  return fetchCourses(transport, platform);
+}
+
+export function friendlyBridgeError(value: unknown): string {
+  const code = value instanceof Error ? value.message : "";
+  switch (code) {
+    case "BRIDGE_NOT_READY": return "学序 Windows IPC 服务不可用；请检查桌面版和 Python sidecar。";
+    case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
+    case "PLATFORM_NOT_READY": return "真实平台课程读取失败；请检查账号、网络和原版运行时。";
+    case "CREDENTIAL_STORAGE_FAILED": return "Windows 凭据管理器保存失败。";
+    case "UNSUPPORTED_VERSION": return "桌面端与数据服务协议版本不一致。";
+    case "UNKNOWN_PLATFORM": return "不支持该学习平台。";
+    case "INVALID_REQUEST": return "本机请求格式有误。";
+    default: return "本机服务调用失败，请检查运行环境。";
+  }
+}
+
+export async function openLegacyZhidao(): Promise<void> {
+  if (!isDesktop()) throw new Error("BRIDGE_NOT_READY");
+  try { await invoke("launch_zhidao_legacy"); }
+  catch { throw new Error("LEGACY_NOT_AVAILABLE"); }
 }

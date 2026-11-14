@@ -1,20 +1,22 @@
-# 学序 · StudyFlow 独立 React UI
+# 学序独立 UI
 
-按知到 WPF/UI 迁移基线独立实现：课程类型及核验标签、动态单列/双列课程卡片、浅/深色主题、服务端会话状态与登录交互引导、窄侧边栏和高 DPI 友好布局。未复制 LightC-UI 的专有源码、资源或品牌。
+该 UI 是自主编写的 React/TypeScript 前端，借鉴常见的侧栏、卡片、渐变仪表盘等设计模式，**没有复制 LightC-UI 的源代码、资源或品牌**。
 
+## 本地运行
 ```bash
+cd frontend
 npm install
-npm run build
-npm test
 npm run dev
 ```
 
-## 真实连接与数据边界
+## 当前限制
+仅为独立 UI 基线；知到和雨课堂连接明确显示未接入，不使用模拟课程。下一步接入本地服务接口与桌面壳。正式 Windows EXE 尚未构建。
 
-页面仅使用可信桌面宿主注入的 `window.studyflowTransport.request`，请求 `platform.status` 与 `courses.list`。没有注入时，明确显示「桌面 IPC 运行时尚未接入」，课程列表为空；不使用本地模拟课程或固定成功状态。
+## 知到 UI 的新版组件（独立实现）
 
-`fetchCourses` 校验返回对象的平台、课程身份和标题；只有 `progress_evidence = "server_verified"`、非历史缓存且具有服务端核验时间时，UI 才展示百分比。**当前后端没有输出这一证据，故正常情况下不显示课程进度条。**
+- `src/components/ZhidaoMigration.tsx`：课程类型和进度证据卡片、原版扫码登录与暂不可用的 Cookie 导入引导。
+- `src/presentation.ts`：未核验/历史缓存/服务器核验的纯函数映射。没有明确服务器核验时间和来源时，不展示百分比。
+- `src/bridge.ts`：在已存在的 Tauri IPC 上增加响应 ID、平台身份及课程字段校验；雨课堂配置、清理和视频读取操作保持不变。
+- `tests/presentation.test.cjs`：Node 纯函数与错误脱敏测试，不调用真实平台。
 
-扫码登录、直接输入 Cookie、导入 Cookie 的 UI 目前只是说明选择，按钮禁用。网页前端不读取 Cookie 文件、不要求粘贴账号凭据，也不直接调用旧 WPF PowerShell 脚本。真实登录需等待受保护的 Windows 本机宿主及专属认证适配器完成验收。
-
-主题选择在当前设备浏览器 `localStorage` 中存储 `light/dark`，不含身份信息。响应式适配和桌面缩放需要额外真机验收。
+浏览器预览没有 Tauri 时只显示未接入状态。浅/深色外观偏好存储于本机 localStorage，不保存账号凭据。新界面的知到 Cookie 输入/文件导入尚未接线；原版知到 WPF 仍可独立使用。
