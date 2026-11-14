@@ -78,15 +78,6 @@ export default function App(){
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
   useEffect(()=>{
-    if(!desktop){setConsentAccepted(true);return;}
-    let live=true;
-    void request<{accepted:boolean}>({operation:"studyflow.consent.status"})
-      .then(result=>{if(live)setConsentAccepted(result.accepted);})
-      .catch(()=>{if(live)setConsentAccepted(false);});
-    return ()=>{live=false;};
-  },[desktop]);
-
-  useEffect(()=>{
     if(!desktop)return;
     let live=true;
     void request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"})
