@@ -147,3 +147,13 @@ test("out-of-order task status polls cannot replace newer task state", () => {
   assert.match(panel, /return \(\) => \{ window\.clearInterval\(timer\); latestStatusRequest\.current\+\+; \}/);
   assert.match(panel, /requestId === latestStatusRequest\.current\) setStatus\(next\)/);
 });
+
+test("ZHS status polling cannot race a start/stop action or carry across platforms", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /const taskActionInFlight = useRef\(false\)/);
+  assert.match(panel, /if \(!desktop \|\| taskActionInFlight\.current\) return/);
+  assert.match(panel, /requestId !== latestStatusRequest\.current \|\| taskActionInFlight\.current \|\| currentPlatform\.current !== platform/);
+  assert.match(panel, /taskActionInFlight\.current = true/);
+  assert.match(panel, /taskActionInFlight\.current = false/);
+  assert.match(panel, /currentPlatform\.current === platform\) void updateStatus\(\)/);
+});
