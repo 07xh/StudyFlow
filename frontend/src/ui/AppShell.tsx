@@ -7,7 +7,7 @@ import {
   type ReactNode
 } from "react";
 import {
-  Activity,BookOpen,ChevronDown,GraduationCap,History,
+  Activity,BookOpen,ChevronDown,History,
   LayoutDashboard,Layers3,ListChecks,Moon,Navigation,Pin,
   RefreshCw,Settings,Sun,X
 } from "lucide-react";
@@ -130,7 +130,7 @@ export function AppShell({
   const platformActive=page==="platforms"||page==="platform-zhidao"||page==="platform-yuketang";
   const renderItem=(item:{id:Page;label:string;icon:LucideIcon},nested=false)=>
     <button key={item.id} type="button" title={item.label} aria-label={item.label}
-      tabIndex={navOpen?0:-1}
+      tabIndex={0}
       aria-current={page===item.id?"page":undefined}
       className={["nav",page===item.id?"active":"",nested?"sf-nav-child":""].filter(Boolean).join(" ")}
       onClick={()=>onNavigate(item.id)}>
@@ -143,7 +143,7 @@ export function AppShell({
       ?<div className="sf-platform-nav" key={item.id}>
         <div className="sf-platform-nav-parent">
           <button type="button" title="学习平台" aria-label="学习平台"
-            tabIndex={navOpen?0:-1}
+            tabIndex={0}
             className={["nav",platformActive?"active":""].filter(Boolean).join(" ")}
             aria-current={page==="platforms"?"page":undefined}
             onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");}}>
@@ -151,14 +151,14 @@ export function AppShell({
             {page==="platforms"&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
           </button>
           <button type="button" className="sf-nav-expand"
-            tabIndex={navOpen?0:-1}
+            tabIndex={0}
             aria-label={platformExpanded?"收起学习平台":"展开学习平台"}
             aria-expanded={platformExpanded} title={platformExpanded?"收起":"展开"}
             onClick={()=>setPlatformExpanded(current=>!current)}>
             <ChevronDown size={15} className={platformExpanded?"":"sf-chevron-closed"}/>
           </button>
         </div>
-        {platformExpanded&&<div className="sf-subnav" role="group" aria-label="平台二级页面">
+        {navOpen&&platformExpanded&&<div className="sf-subnav" role="group" aria-label="平台二级页面">
           {platformNavigation.map(child=>renderItem(child,true))}
         </div>}
       </div>
@@ -180,26 +180,26 @@ export function AppShell({
       </button>
       <aside id="sf-floating-navigation"
         className={["sf-floating-nav__panel",navOpen?"is-open":""].filter(Boolean).join(" ")}
-        aria-label="主导航" aria-hidden={!navOpen}
+        aria-label="主导航"
         onPointerEnter={handlePointerEnter} onPointerLeave={handlePointerLeave}>
         <div className="sf-floating-nav__header">
-          <div className="sf-floating-nav__brand">
-            <span className="sf-floating-nav__brand-icon"><GraduationCap size={18}/></span>
-            <span className="sf-floating-nav__brand-copy"><strong>学序</strong><small>StudyFlow</small></span>
-          </div>
-          <div className="sf-floating-nav__header-actions">
-            <button type="button" className={["sf-floating-nav__action",navPinned?"is-pinned":""].join(" ")}
-              title={navPinned?"取消固定导航":"固定导航"}
-              aria-label={navPinned?"取消固定导航":"固定导航"} aria-pressed={navPinned}
-              tabIndex={navOpen?0:-1} onClick={toggleNavigationPin}>
-              <Pin size={14}/>
-            </button>
+          <button type="button" className="sf-floating-nav__trigger"
+            aria-label={navPinned?"取消固定并收起导航":navOpen?"固定导航":"展开导航"}
+            aria-expanded={navOpen} aria-pressed={navPinned} aria-controls="sf-floating-navigation"
+            title={navPinned?"取消固定并收起导航":navOpen?"固定导航":"展开导航"}
+            tabIndex={0} onClick={toggleNavigationPin}>
+            {navPinned?<Pin size={17}/>:<Navigation size={17}/>}
+          </button>
+          {navOpen&&<span className="sf-floating-nav__brand-copy">
+            <strong>学序</strong><small>StudyFlow</small>
+          </span>}
+          {navOpen&&<div className="sf-floating-nav__header-actions">
             <button type="button" className="sf-floating-nav__action"
-              title="关闭导航" aria-label="关闭导航" tabIndex={navOpen?0:-1}
+              title="关闭导航" aria-label="关闭导航" tabIndex={0}
               onClick={closeNavigation}>
               <X size={15}/>
             </button>
-          </div>
+          </div>}
         </div>
         <div className="sf-floating-nav__section">
           <span className="sf-floating-nav__section-label">工作空间</span>
