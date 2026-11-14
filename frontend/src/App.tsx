@@ -7,6 +7,8 @@ import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
+import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
+import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
 import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
 import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
@@ -229,14 +231,27 @@ export default function App(){
     return <>
       
       <section className="sf-platform-task-section">
-        <LegacyPlaybackPanel platform={platform} courses={platforms[platform].courses}
-          desktop={desktop} connected={platforms[platform].status==="connected"}
-          onEvent={(action,result,detail)=>recordEvent(platformNames[platform],action,result,detail)}/>
+        {platform==="zhidao"
+          ?<ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
+            onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+          :<LegacyPlaybackPanel platform="yuketang" courses={platforms.yuketang.courses}
+            desktop={desktop} connected={platforms.yuketang.status==="connected"}
+            onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>}
       </section>
-      {platform==="zhidao"&&<ZhidaoProgressPanel courses={platforms.zhidao.courses}
-        desktop={desktop} connected={platforms.zhidao.status==="connected"}
-        onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
-        onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
+      {platform==="zhidao"&&<>
+        <section className="sf-platform-task-section">
+          <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
+            desktop={desktop} connected={platforms.zhidao.status==="connected"}
+            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+        </section>
+        <ZhidaoProgressPanel courses={platforms.zhidao.courses}
+          desktop={desktop} connected={platforms.zhidao.status==="connected"}
+          onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+          onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+        <ZhidaoAccountTools desktop={desktop} dark={dark}
+          onDataChanged={()=>{setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:[]}}));void refresh();}}/>
+      </>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
           busy={Boolean(busy)} expanded={true}
