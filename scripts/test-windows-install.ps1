@@ -6,8 +6,14 @@ if ($installers.Count -ne 1) { throw 'Expected exactly one NSIS installer' }
 $root = Join-Path ([IO.Path]::GetTempPath()) ('StudyFlowSmoke-' + [guid]::NewGuid().ToString('N'))
 $markerDirectory = Join-Path $env:LOCALAPPDATA 'StudyFlow'
 $marker = Join-Path $markerDirectory ('install-smoke-' + [guid]::NewGuid().ToString('N') + '.txt')
-New-Item -ItemType Directory -Force $markerDirectory | Out-Null
+$legacyInstallDirectory = Join-Path $env:LOCALAPPDATA 'ZHSDesktop'
+$legacyInstallMarker = Join-Path $legacyInstallDirectory ('studyflow-preserve-' + [guid]::NewGuid().ToString('N') + '.txt')
+$legacyDataDirectory = Join-Path $env:USERPROFILE '.zhs'
+$legacyDataMarker = Join-Path $legacyDataDirectory ('studyflow-preserve-' + [guid]::NewGuid().ToString('N') + '.txt')
+New-Item -ItemType Directory -Force $markerDirectory,$legacyInstallDirectory,$legacyDataDirectory | Out-Null
 [IO.File]::WriteAllText($marker, 'preserve-user-data')
+[IO.File]::WriteAllText($legacyInstallMarker, 'preserve-original-zhs-install')
+[IO.File]::WriteAllText($legacyDataMarker, 'preserve-original-zhs-data')
 $app = $null
 $oldPath = $env:PATH
 $oldYktHome = $env:YKT_HOME
@@ -55,7 +61,11 @@ try {
                 throw "Installed Rain Classroom setting is missing: $field"
             }
         }
-        if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Install/upgrade changed user data' }
+        if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Install/upgrade changed StudyFlow user data' }
+        if ([IO.File]::ReadAllText($legacyInstallMarker) -cne 'preserve-original-zhs-install' -or
+            [IO.File]::ReadAllText($legacyDataMarker) -cne 'preserve-original-zhs-data') {
+            throw 'Install/upgrade changed the original ZHSDesktop installation or ~/.zhs user data'
+        }
     }
     # Restore the normal process environment before launching the desktop app.
     $env:PATH = $oldPath
@@ -73,7 +83,11 @@ try {
     if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'NSIS uninstaller missing' }
     $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "_?=$root") -Wait -PassThru
     if ($remove.ExitCode -ne 0) { throw 'NSIS uninstall failed' }
-    if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Uninstall changed user data' }
+    if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Uninstall changed StudyFlow user data' }
+    if ([IO.File]::ReadAllText($legacyInstallMarker) -cne 'preserve-original-zhs-install' -or
+        [IO.File]::ReadAllText($legacyDataMarker) -cne 'preserve-original-zhs-data') {
+        throw 'Uninstall changed the original ZHSDesktop installation or ~/.zhs user data'
+    }
     Write-Host '[READY] NSIS install, upgrade, installed runtimes, app launch, uninstall and data marker preserved.'
 } finally {
     $env:PATH = $oldPath
@@ -81,6 +95,7 @@ try {
     else { $env:YKT_HOME = $oldYktHome }
     if ($null -ne $app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $legacyInstallMarker,$legacyDataMarker -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $probeYktHome -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
