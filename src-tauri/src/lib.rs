@@ -429,6 +429,14 @@ mod ipc_validation_tests {
     }
 
     #[test]
+    fn allows_zhidao_qr_lifecycle_operations() {
+        for operation in ["zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"] {
+            let request = json!({"id":"qr-test","version":1,"operation":operation});
+            assert!(validate(&request).is_ok(), "QR operation was rejected: {operation}");
+        }
+    }
+
+    #[test]
     fn allows_zhidao_readonly_progress_operations() {
         assert!(validate(&json!({"id":"a","version":1,"operation":"zhidao.progress.sync"})).is_ok());
         assert!(validate(&json!({"id":"b","version":1,"operation":"zhidao.progress.verify","course_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})).is_ok());
