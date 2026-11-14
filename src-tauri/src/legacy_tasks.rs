@@ -21,6 +21,9 @@ pub struct OriginalYktOptions {
     test_mode: bool,
     test_video_count: u32,
     auto_richtext: bool,
+    debug: bool,
+    richtext_stay_seconds: u32,
+    richtext_skip_delay: f64,
 }
 
 impl OriginalYktOptions {
@@ -29,7 +32,10 @@ impl OriginalYktOptions {
             || self.heartbeat_interval < 1 || self.heartbeat_interval > 120
             || self.max_concurrent_videos < 1 || self.max_concurrent_videos > 32
             || self.completion_threshold > 100
-            || self.test_video_count < 1 || self.test_video_count > 10000 {
+            || self.test_video_count < 1 || self.test_video_count > 10000
+            || self.richtext_stay_seconds > 3600
+            || !self.richtext_skip_delay.is_finite()
+            || self.richtext_skip_delay < 0.0 || self.richtext_skip_delay > 3600.0 {
             return Err("INVALID_SETTINGS".into());
         }
         Ok(())
@@ -46,6 +52,9 @@ impl OriginalYktOptions {
         command.env("TEST_MODE", if self.test_mode { "true" } else { "false" });
         command.env("TEST_VIDEO_COUNT", self.test_video_count.to_string());
         command.env("AUTO_RICHTEXT", if self.auto_richtext { "true" } else { "false" });
+        command.env("DEBUG", if self.debug { "true" } else { "false" });
+        command.env("RICHTEXT_STAY_SECONDS", self.richtext_stay_seconds.to_string());
+        command.env("RICHTEXT_SKIP_DELAY", self.richtext_skip_delay.to_string());
     }
 }
 
@@ -311,6 +320,9 @@ mod tests {
             test_mode: false,
             test_video_count: 5,
             auto_richtext: false,
+            debug: false,
+            richtext_stay_seconds: 3,
+            richtext_skip_delay: 1.0,
         }
     }
 
@@ -327,6 +339,29 @@ mod tests {
     fn yuketang_options_reject_completion_threshold_above_100() {
         let mut options = valid_yuketang_options();
         options.completion_threshold = 101;
+        assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
+    }
+
+    #[test]
+    fn yuketang_richtext_options_accept_supported_boundaries() {
+        let mut options = valid_yuketang_options();
+        options.richtext_stay_seconds = 0;
+        options.richtext_skip_delay = 0.0;
+        assert!(options.validate().is_ok());
+        options.richtext_stay_seconds = 3600;
+        options.richtext_skip_delay = 3600.0;
+        assert!(options.validate().is_ok());
+    }
+
+    #[test]
+    fn yuketang_richtext_options_reject_invalid_delays() {
+        let mut options = valid_yuketang_options();
+        options.richtext_stay_seconds = 3601;
+        assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
+        options = valid_yuketang_options();
+        options.richtext_skip_delay = f64::NAN;
+        assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
+        options.richtext_skip_delay = -0.1;
         assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
     }
 }
