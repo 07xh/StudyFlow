@@ -1,0 +1,44 @@
+/* Selective LightC-UI-style interactions adapted to StudyFlow's visual tokens.
+   No global resets, no Tailwind dependency, no platform business logic. */
+.sf-dialog-overlay{position:fixed;inset:0;z-index:10050;display:flex;justify-content:center;align-items:center;
+  padding:18px;background:rgba(10,12,25,.56);backdrop-filter:blur(5px);
+  --modal-bg:#ffffff;--modal-fg:#25263b;--modal-muted:#656980;--modal-line:#e5e6ef;
+  --modal-soft:#f6f7fb;animation:sf-dim-in .17s ease both}
+.sf-dialog-overlay[data-theme="dark"]{--modal-bg:#202234;--modal-fg:#f2f1ff;
+  --modal-muted:#adb0c7;--modal-line:#37394d;--modal-soft:#292b40}
+.sf-dialog{width:min(460px,100%);max-height:min(680px,calc(100dvh - 36px));overflow:auto;
+  color:var(--modal-fg);background:var(--modal-bg);border:1px solid var(--modal-line);
+  border-radius:18px;box-shadow:0 26px 74px rgba(0,0,0,.34);animation:sf-dialog-rise .22s cubic-bezier(.18,.8,.24,1) both}
+.sf-dialog-heading,.sf-dialog-actions{padding:18px 22px;display:flex;align-items:center;gap:12px}
+.sf-dialog-heading{border-bottom:1px solid var(--modal-line)}
+.sf-dialog-heading h2{font-size:17px;line-height:1.4;margin:0;flex:1}
+.sf-dialog-symbol{background:#3bae8f20;color:#24ae84;width:39px;height:39px;border-radius:12px;display:grid;place-items:center}
+.sf-dialog-symbol.danger{background:#f59e0b20;color:#eaa032}
+.sf-dialog-close{background:transparent;border:0;color:var(--modal-muted);padding:8px;cursor:pointer;border-radius:9px}
+.sf-dialog-close:hover{background:var(--modal-soft)}
+.sf-dialog-body{padding:20px 22px;font-size:14px;color:var(--modal-muted);line-height:1.7}
+.sf-dialog-body p{margin:0}
+.sf-dialog-body .sf-dialog-warning{margin-top:12px;background:#f59e0b12;
+  border:1px solid #eab54a44;border-radius:10px;padding:12px;color:var(--modal-fg)}
+.sf-dialog-actions{justify-content:flex-end;border-top:1px solid var(--modal-line);
+  background:var(--modal-soft);flex-wrap:wrap}
+.sf-dialog-actions button{font:inherit;font-size:13px;font-weight:600;padding:10px 15px;border-radius:10px;cursor:pointer}
+.sf-dialog-actions button:disabled,.sf-dialog-close:disabled{opacity:.5;cursor:not-allowed}
+.sf-dialog-cancel{border:1px solid var(--modal-line);background:var(--modal-bg);color:var(--modal-fg)}
+.sf-dialog-confirm{border:1px solid transparent;background:#8060e5;color:#fff}
+.sf-dialog-confirm.danger{background:#d64d6b}
+.sf-dialog-actions button:focus-visible,.sf-dialog-close:focus-visible{outline:2px solid #9677f5;outline-offset:2px}
+.sf-notice-banner{margin:0 0 20px;display:flex;gap:11px;align-items:flex-start;
+  padding:13px 15px;background:var(--panel);color:var(--text);border:1px solid var(--line);
+  border-left:3px solid var(--accent,#9778f2);border-radius:12px;
+  box-shadow:0 8px 28px #00000009;font-size:13px;overflow-wrap:anywhere}
+.sf-notice-banner>svg{flex:none;color:var(--accent-text,#997bf1)}
+.sf-notice-banner>span{flex:1;line-height:1.55}
+.sf-notice-banner button{flex:none;display:grid;place-items:center;color:var(--muted);border:0;border-radius:8px;
+  background:transparent;padding:3px;cursor:pointer}
+.sf-notice-banner button:hover{color:var(--text);background:var(--soft-accent)}
+.sf-page-surface{animation:sf-content-enter .2s ease-out both}
+@keyframes sf-dim-in{from{opacity:0}to{opacity:1}}
+@keyframes sf-dialog-rise{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes sf-content-enter{from{opacity:.25;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.sf-page-surface,.sf-dialog,.sf-dialog-overlay{animation:none!important}}

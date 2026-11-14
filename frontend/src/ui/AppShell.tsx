@@ -1,6 +1,8 @@
 import {useEffect,useState,type ReactNode} from "react";
 import {BookOpen,ChevronRight,GraduationCap,LayoutDashboard,Moon,PanelLeftClose,PanelLeftOpen,Settings,ShieldCheck,Sun} from "lucide-react";
 import type {LucideIcon} from "lucide-react";
+import {NoticeBanner} from "./NoticeBanner";
+import {PageSurface} from "./PageSurface";
 import "./foundation.css";
 
 export type Page="home"|"courses"|"platforms"|"settings";
@@ -16,9 +18,9 @@ const titles:Record<Page,string>={
 
 interface Props {
   page:Page;onNavigate:(next:Page)=>void;dark:boolean;onThemeToggle:()=>void;
-  desktop:boolean;notice:string;compact:boolean;children:ReactNode;
+  desktop:boolean;notice:string;onDismissNotice:()=>void;compact:boolean;children:ReactNode;
 }
-export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,compact,children}:Props){
+export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,onDismissNotice,compact,children}:Props){
   const [collapsed,setCollapsed]=useState(()=>{
     try{return window.localStorage.getItem("studyflow.nav.collapsed")==="true";}
     catch{return false;}
@@ -67,8 +69,8 @@ export function AppShell({page,onNavigate,dark,onThemeToggle,desktop,notice,comp
             onClick={onThemeToggle}>{dark?<Sun size={19}/>:<Moon size={19}/>}</button>
         </div>
       </header>
-      {notice&&<div className="notice" role="status" aria-live="polite">{notice}</div>}
-      {children}
+      <NoticeBanner message={notice} onDismiss={onDismissNotice}/>
+      <PageSurface page={page}>{children}</PageSurface>
     </main>
   </div>;
 }
