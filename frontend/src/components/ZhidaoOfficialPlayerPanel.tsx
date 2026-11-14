@@ -118,8 +118,9 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
   async function saveSettings(){
     setBusy("save");setMessage("");
     try{
+      const stored=await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"});
       const saved=await request<ZhidaoPlayerSettings>({
-        operation:"zhidao.player.settings.save",settings
+        operation:"zhidao.player.settings.save",settings:{...settings,mode:stored.mode}
       });
       setSettings(saved);setMessage("知到官方播放器设置已保存。");
       onEvent?.("保存播放参数","success","设置已保存到本机");

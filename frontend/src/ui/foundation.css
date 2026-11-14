@@ -1167,3 +1167,35 @@
   .sf-consent-actions{padding:12px 14px}
   .sf-consent-check{margin:0 14px}
 }
+
+
+/* Original Zhidao playback mode selector and expandable run-event history. */
+.sf-shell .sf-zd-mode-selector{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin:0 0 12px;padding:12px 15px;border:1px solid var(--line);
+  border-radius:13px;background:var(--panel);
+}
+.sf-shell .sf-zd-mode-selector strong{display:block;color:var(--text);font-size:12px}
+.sf-shell .sf-zd-mode-selector small{display:block;margin-top:3px;color:var(--muted);font-size:10px}
+.sf-shell .sf-zd-mode-options{display:flex;gap:7px;flex-wrap:wrap}
+.sf-shell .sf-zd-mode-options button{
+  padding:8px 11px;border:1px solid var(--line);border-radius:10px;
+  color:var(--muted);background:transparent;font-size:11px;cursor:pointer;
+}
+.sf-shell .sf-zd-mode-options button.active{
+  color:var(--accent-text);border-color:rgba(19,217,146,.28);background:var(--soft-accent);
+}
+.sf-shell .sf-zhidao-activity{padding:14px 16px}
+.sf-shell .sf-zd-activity-list{display:grid;gap:8px}
+.sf-shell .sf-zd-activity-list article{
+  display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:start;gap:10px;
+  padding:9px 0;border-top:1px solid var(--line);
+}
+.sf-shell .sf-zd-activity-list article>div{min-width:0}
+.sf-shell .sf-zd-activity-list strong{display:block;color:var(--text);font-size:11px}
+.sf-shell .sf-zd-activity-list p{margin:3px 0 0;color:var(--muted);font-size:10px;line-height:1.5}
+.sf-shell .sf-zd-activity-list time{color:var(--muted);font-size:10px;white-space:nowrap}
+.sf-shell .sf-zd-activity-list .sf-log-indicator{margin-top:4px}
+@media(max-width:640px){
+  .sf-shell .sf-zd-mode-selector{align-items:flex-start;flex-direction:column}
+}
