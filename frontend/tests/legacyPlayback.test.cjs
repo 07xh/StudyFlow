@@ -145,7 +145,7 @@ test("out-of-order task status polls cannot replace newer task state", () => {
   assert.match(panel, /latestStatusRequest = useRef\(0\)/);
   assert.match(panel, /requestId !== latestStatusRequest\.current/);
   assert.match(panel, /return \(\) => \{ window\.clearInterval\(timer\); latestStatusRequest\.current\+\+; \}/);
-  assert.match(panel, /requestId === latestStatusRequest\.current\) setStatus\(next\)/);
+  assert.match(panel, /requestId === latestStatusRequest\.current && currentPlatform\.current === platform\) setStatus\(next\)/);
 });
 
 test("ZHS status polling cannot race a start/stop action or carry across platforms", () => {
