@@ -369,7 +369,7 @@ export default function App(){
                 {course.stale&&<span>数据可能已过期</span>}
               </div>
               {data.percent!==null&&<div className="sf-recent-track" role="progressbar"
-                aria-label="服务器已核验课程进度" aria-valuemin={0} aria-valuemax={100}
+                aria-label="服务器已核验进度" aria-valuemin={0} aria-valuemax={100}
                 aria-valuenow={data.percent}><span style={{width:data.percent+"%"}}/></div>}
             </div>
             <button className="secondary sf-recent-detail" type="button"

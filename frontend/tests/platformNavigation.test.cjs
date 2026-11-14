@@ -129,3 +129,36 @@ test("course details render as one expanded workspace with distinct progress sou
  assert.match(css,/sf-course-total-progress/);
  assert.match(css,/sf-zd-detail-list-expanded/);
 });
+
+
+test("course details render as one expanded workspace with distinct progress sources",()=>{
+ const app=source("App.tsx");
+ const lesson=source("components/ZhidaoCourseDetailPanel.tsx");
+ const server=source("components/ZhidaoProgressPanel.tsx");
+ const simulation=source("components/LegacyPlaybackPanel.tsx");
+ const player=source("components/ZhidaoOfficialPlayerPanel.tsx");
+ const log=source("components/ZhidaoActivityPanel.tsx");
+ const yuketang=source("components/YuketangTaskArea.tsx");
+ const css=source("ui/foundation.css");
+ assert.match(app,/renderCourseWorkspace/);
+ assert.match(app,/sf-course-total-progress/);
+ assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);
+ assert.match(app,/activeSelectedCourse/);
+ assert.match(app,/expandedByDefault/);
+ assert.match(app,/courseId=\{course\.course_id\}.*detailMode/s);
+ assert.match(lesson,/zhidao\.course\.detail/);
+ assert.match(lesson,/章节进度/);
+ assert.doesNotMatch(lesson,/detail\.percent\.toFixed/);
+ assert.match(server,/courseId\?:string/);
+ assert.match(server,/detailMode/);
+ assert.match(simulation,/sf-detail-simulation-only/);
+ assert.match(simulation,/courseId\?:string/);
+ assert.match(player,/sf-zd-local-observations-expanded/);
+ assert.match(player,/detailMode/);
+ assert.match(log,/expandedByDefault/);
+ assert.match(yuketang,/open=\{detailMode\}/);
+ assert.match(simulation,/sf-detail-live/);
+ assert.match(css,/sf-ykt-live\.sf-detail-live \.sf-ykt-live-grid/);
+ assert.match(css,/sf-course-total-progress/);
+ assert.match(css,/sf-zd-detail-list-expanded/);
+});

@@ -27,15 +27,6 @@ def installation_root() -> Path:
     return Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "ZHSDesktop"
 
 
-def legacy_script() -> Path:
-    # Installer places payload content directly in ZHSDesktop, not /payload.
-    return installation_root() / "zhidao_only.py"
-
-
-def python_executable() -> Path:
-    return installation_root() / ".venv" / "Scripts" / "python.exe"
-
-
 def _run_readonly(command: str, timeout: int) -> subprocess.CompletedProcess[str]:
     if command not in ("session-check", "doctor-server", "courses", "progress"):
         raise RuntimeError("Unsupported Zhidao read-only operation")
