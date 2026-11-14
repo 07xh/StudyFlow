@@ -32,7 +32,7 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
     <div className="sf-login-panel-main">
       <div className="sf-login-panel-heading">
         <span className="sf-login-symbol"><KeyRound size={19}/></span>
-        <div><h4>雨课堂账号登录</h4>
+        <div><h4>雨课堂会话配置</h4>
           <p>配置本人的有效会话。凭据保存在 Windows 凭据管理器，不写入浏览器存储。</p>
         </div>
         <span className={connected?"sf-login-state connected":"sf-login-state"}>
