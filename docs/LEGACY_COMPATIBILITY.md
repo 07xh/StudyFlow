@@ -37,7 +37,7 @@
 
 雨课堂凭据与原版任务参数分开保存：会话凭据存入 Windows Credential Manager；参数通过原版 `exe_entry.py` 的配置读写逻辑保存在学序本地配置目录；每次任务使用独立 run_id 日志目录。原版 `main.py` 不由 UI 直接导入，避免其全局日志/标准输出副作用影响 IPC 服务。
 
-雨课堂原版参数完整映射当前 `main.py` 使用的 `VIDEO_SPEED`、`HEARTBEAT_INTERVAL`、`MAX_CONCURRENT_VIDEOS`、`COMPLETION_THRESHOLD`、`SKIP_COMPLETED`、`USE_CONCURRENT`、`TEST_MODE`、`TEST_VIDEO_COUNT`、`AUTO_RICHTEXT`、`DEBUG`、`RICHTEXT_STAY_SECONDS` 与 `RICHTEXT_SKIP_DELAY`。图文与诊断参数默认折叠；调试输出可能包含课程/视频标识，只保存在本机日志。
+雨课堂原版参数完整映射当前 `main.py` 使用的 `VIDEO_SPEED`、`HEARTBEAT_INTERVAL`、`MAX_CONCURRENT_VIDEOS`、`COMPLETION_THRESHOLD`、`SKIP_COMPLETED`、`USE_CONCURRENT`、`TEST_MODE`、`TEST_VIDEO_COUNT`、`AUTO_RICHTEXT`、`DEBUG`、`RICHTEXT_STAY_SECONDS` 与 `RICHTEXT_SKIP_DELAY`。图文与诊断参数默认折叠；调试输出默认写入本机日志，可能包含课程/视频标识，分享前请检查日志内容。
 
 ## 统一 UI 与运行时
 
