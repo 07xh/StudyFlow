@@ -106,6 +106,7 @@ test("course details render as one expanded workspace with distinct progress sou
  const css=source("ui/foundation.css");
  assert.match(app,/renderCourseWorkspace/);
  assert.match(app,/sf-course-total-progress/);
+ assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);
  assert.match(app,/activeSelectedCourse/);
  assert.match(app,/expandedByDefault/);
  assert.match(app,/courseId=\{course\.course_id\}.*detailMode/s);
