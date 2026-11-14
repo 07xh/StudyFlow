@@ -95,6 +95,7 @@ def test_original_zhs_resolves_only_current_session_course(monkeypatch, tmp_path
 def test_zhs_invokes_exact_original_task_without_rewriting_sender(monkeypatch, tmp_path):
     cmd = tmp_path / "Zhidao-Task.cmd"
     cmd.write_text("rem fake file, never run", encoding="utf-8")
+    monkeypatch.setattr(legacy, "_run_bundled_zhs", lambda *_a: None)
     monkeypatch.setattr(legacy, "installation_root", lambda: tmp_path)
     monkeypatch.setattr(legacy, "_course_ids_for_current_session", lambda key: ("20", "30"))
     calls = []
@@ -106,6 +107,24 @@ def test_zhs_invokes_exact_original_task_without_rewriting_sender(monkeypatch, t
     monkeypatch.setattr(legacy.subprocess, "run", no_process)
     assert legacy.run_zhidao_original("a" * 64) == 0
     assert calls == [[str(cmd), "play-ai", "20", "30"]]
+
+
+def test_bundled_zhs_calls_original_typer_app(monkeypatch):
+    import sys
+    from types import ModuleType
+    package = ModuleType("zhs")
+    cli = ModuleType("zhs.__main__")
+    calls = []
+    cli.app = lambda **kwargs: calls.append(kwargs)
+    monkeypatch.setitem(sys.modules, "zhs", package)
+    monkeypatch.setitem(sys.modules, "zhs.__main__", cli)
+    from importlib import metadata
+    monkeypatch.setattr(metadata, "version", lambda name: "0.1.5" if name == "zhs" else "0")
+    assert legacy._run_bundled_zhs("20", "30") == 0
+    assert calls == [{
+        "args": ["play", "-c", "20:30", "--type", "ai"],
+        "standalone_mode": False,
+    }]
 
 
 def test_legacy_cli_rejects_unknown_commands():
