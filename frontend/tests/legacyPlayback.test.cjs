@@ -107,3 +107,25 @@ test("Rain Classroom advanced settings are exposed without expanding the default
   assert.match(panel, /options\.debug/);
   assert.match(panel, /RICHTEXT_STAY_SECONDS/);
 });
+
+
+test("ZHS exit diagnosis distinguishes session, route, runtime, interaction and successful exit", () => {
+  const legacy = loadWithStub(async () => {});
+  const status = code => ({
+    platform:"zhidao", state:"exited", exit_code:code,
+    course_id:"a".repeat(64), zhs_progress:null
+  });
+  assert.match(legacy.legacyExitMessage(status(4)), /登录会话或课程缓存/);
+  assert.match(legacy.legacyExitMessage(status(5)), /ZHS 0\.1\.5 运行时/);
+  assert.match(legacy.legacyExitMessage(status(6)), /课程路由/);
+  assert.match(legacy.legacyExitMessage(status(9)), /交互输入/);
+  assert.match(legacy.legacyExitMessage(status(0)), /不代表服务器确认/);
+  assert.equal(legacy.legacyExitMessage({...status(1), state:"running"}), "");
+});
+
+test("original Zhidao task UI offers fresh AI and shared courses, not stale sessions", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /course_type === "ai" \|\| c\.course_type === "shared"/);
+  assert.match(panel, /!c\.stale/);
+  assert.match(panel, /legacyExitMessage\(status\)/);
+});

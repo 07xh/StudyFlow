@@ -129,7 +129,7 @@ export async function stopLegacy(platform: Platform): Promise<LegacyTaskStatus> 
 export function legacyError(err: unknown): string {
   const code = typeof err === "string" ? err : err instanceof Error ? err.message : "";
   switch (code) {
-    case "INVALID_COURSE": return "请先同步课程并选择有效的知到智慧课程。";
+    case "INVALID_COURSE": return "请先同步课程并选择有效的知到课程。";
     case "INVALID_SETTINGS": return "雨课堂原版参数超出支持范围。";
     case "TASK_ALREADY_RUNNING": return "该平台原版任务已在运行，请先停止后再启动。";
     case "LEGACY_NOT_INSTALLED": return "缺少学序本机执行器或原版知到运行环境。";
@@ -137,5 +137,24 @@ export function legacyError(err: unknown): string {
     case "TASK_STATE_UNAVAILABLE": return "无法获取本地任务状态。";
     case "RUN_NOT_AVAILABLE": return "网页版无法运行原版任务，请启动 Windows 桌面版。";
     default: return "原版任务操作失败，请检查安装与登录状态。";
+  }
+}
+
+/** UI-safe explanation of the actual local process exit, not server progress. */
+export function legacyExitMessage(status: LegacyTaskStatus): string {
+  if (status.state !== "exited") return "";
+  if (status.platform !== "zhidao") {
+    return status.exit_code === 0 ? "原版任务已结束；请核验平台记录。" :
+      `原版任务已退出（代码 ${status.exit_code ?? "未知"}），请检查该平台登录与配置。`;
+  }
+  switch (status.exit_code) {
+    case 0: return "ZHS 进程已正常退出；不代表服务器确认学习完成。";
+    case 2: return "ZHS 启动参数无效，请重新同步并选择课程。";
+    case 4: return "ZHS 登录会话或课程缓存不可用，请重新验证知到登录并同步课程。";
+    case 5: return "未找到可用的 ZHS 0.1.5 运行时，请重新安装完整学序安装包。";
+    case 6: return "所选课程不属于当前登录会话、已失效，或缺少有效课程路由，请重新同步课程。";
+    case 9: return "原版 ZHS 要求交互输入，当前无终端模式无法继续；需在应用内处理该交互。";
+    case 1: return "ZHS 已启动但原版执行失败，请检查登录、课程状态及运行环境。";
+    default: return `ZHS 意外退出（代码 ${status.exit_code ?? "未知"}），尚未确认执行成功。`;
   }
 }

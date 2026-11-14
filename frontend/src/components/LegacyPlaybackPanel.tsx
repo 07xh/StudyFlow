@@ -4,7 +4,7 @@ import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError} from "../bridge";
 import {presentCourse} from "../presentation";
 import {
-  getLegacyStatus, getYuketangLiveProgress, legacyError, originalYktDefaults, startLegacy, stopLegacy,
+  getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, originalYktDefaults, startLegacy, stopLegacy,
   validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type YuketangLiveProgress
 } from "../legacyPlayback";
 
@@ -29,7 +29,7 @@ export function LegacyPlaybackPanel({
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState(courseId??"");
   const options = yuketangOptions ?? {...originalYktDefaults};
-  const aiCourses = courses.filter(c => c.platform === "zhidao" && c.course_type === "ai");
+  const playableCourses = courses.filter(c => c.platform === "zhidao" && (c.course_type === "ai" || c.course_type === "shared") && !c.stale);
   const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
     .filter(item => item.presentation.percent !== null);
   const liveZhs = platform === "zhidao" && status?.course_id === selection
@@ -44,6 +44,9 @@ export function LegacyPlaybackPanel({
         setSelection(previous => previous || next.course_id || "");
       }
       setStatus(next);
+      if (next.state === "exited") {
+        setMessage("");
+      }
       if (platform === "yuketang" && next.run_id) {
         try { setYktProgress(await getYuketangLiveProgress(next.run_id)); }
         catch { setYktProgress(null); }
@@ -71,7 +74,7 @@ export function LegacyPlaybackPanel({
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined);
       setStatus(next);
-      setMessage("已启动原版任务进程。进程运行不代表服务器已经接受心跳或确认学习进度。");
+      setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
       onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
@@ -191,10 +194,10 @@ export function LegacyPlaybackPanel({
       <small className="sf-ykt-live-note">模拟位置不是已核验学习进度；并发模式下，原版日志未标识每条心跳所属视频，仅显示最新记录。</small>
     </div>}
     {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
-      <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择智慧课程</label>
+      <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>
       <select id="legacy-zhidao-course" value={selection} onChange={e=>setSelection(e.target.value)}>
-        <option value="">选择已同步的智慧课程</option>
-        {aiCourses.map(c=><option value={c.course_id} key={c.course_id}>{c.title}</option>)}
+        <option value="">选择已同步的知到课程</option>
+        {playableCourses.map(c=><option value={c.course_id} key={c.course_id}>{c.title}</option>)}
       </select>
     </div>}
     {platform === "zhidao"&&detailMode&&<div className="legacy-field sf-legacy-course-context">
@@ -203,7 +206,7 @@ export function LegacyPlaybackPanel({
     <div className="actions legacy-actions">
       <button className="primary" type="button" disabled={!desktop||!connected||busy||
         status?.state==="running"||
-        (platform==="zhidao" && !aiCourses.some(c=>c.course_id===selection))||
+        (platform==="zhidao" && !playableCourses.some(c=>c.course_id===selection))||
         (platform==="yuketang" && (!settingsReady || !validateOriginalOptions(options)))}
         onClick={()=>void start()}><Play size={16}/> 启动原版任务</button>
       <button className="secondary" type="button" disabled={!desktop||busy||status?.state!=="running"}
@@ -212,12 +215,9 @@ export function LegacyPlaybackPanel({
         onClick={()=>void updateStatus()}><RefreshCw size={16}/> 查询运行状态</button>
     </div>
     {status?.state==="exited"&&<p className="legacy-state-note">
-      原版进程退出码：{status.exit_code ?? "未知"}。
-      {status.exit_code === 0
-        ? liveZhs
-          ? "记录到本地播放片段，但尚未核验服务器学习进度。"
-          : "进程正常退出，但未采集到播放进度；请核对本次课程是否有可播放内容并使用服务器只读核验。"
-        : "任务发生异常；本次进度不能视为完成，请检查登录状态及本机运行环境。"}
+      {legacyExitMessage(status)}（退出码：{status.exit_code ?? "未知"}）
+      {platform==="zhidao"&&status.exit_code===0&&!status.zhs_progress&&
+        <small>未采集到播放进度；请检查课程是否有可播放内容并使用服务端只读核验。</small>}
     </p>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
     <p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>
