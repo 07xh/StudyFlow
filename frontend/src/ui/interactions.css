@@ -17,10 +17,14 @@
   box-shadow:0 26px 74px rgba(0,0,0,.38);
   animation:sf-dialog-rise .2s cubic-bezier(.18,.8,.24,1) both;
 }
-.sf-dialog-heading,
-.sf-dialog-actions{display:flex;align-items:center;gap:11px;padding:16px 19px}
+.sf-dialog-heading,.sf-dialog-actions{display:flex;align-items:center;gap:11px;padding:16px 19px}
 .sf-dialog-heading{border-bottom:1px solid var(--modal-line)}
 .sf-dialog-heading h2{flex:1;margin:0;color:var(--modal-fg);font-size:15px;line-height:1.4}
+.sf-dialog-symbol{
+  width:36px;height:36px;display:grid;place-items:center;flex:none;
+  border-radius:11px;color:#50e5a4;background:rgba(19,217,146,.13);
+}
+.sf-dialog-symbol.danger{color:#e7b66d;background:rgba(231,182,109,.13)}
 .sf-dialog-close{
   display:grid;place-items:center;padding:7px;border:0;border-radius:8px;
   color:var(--modal-muted);background:transparent;cursor:pointer;
@@ -40,10 +44,12 @@
   padding:9px 13px;border:1px solid var(--modal-line);border-radius:9px;
   color:var(--modal-fg);background:var(--modal-bg);font-size:11px;font-weight:650;cursor:pointer;
 }
-.sf-dialog-actions button:disabled,
-.sf-dialog-close:disabled{opacity:.5;cursor:not-allowed}
-.sf-dialog-actions button:focus-visible,
-.sf-dialog-close:focus-visible{
+.sf-dialog-actions .sf-dialog-confirm{
+  border-color:rgba(19,217,146,.4);color:#08291b;background:#43e6a2;
+}
+.sf-dialog-actions .sf-dialog-confirm.danger{border-color:#d96a61;color:#fff;background:#c95757}
+.sf-dialog-actions button:disabled,.sf-dialog-close:disabled{opacity:.5;cursor:not-allowed}
+.sf-dialog-actions button:focus-visible,.sf-dialog-close:focus-visible{
   outline:2px solid #37df9a;outline-offset:2px;
 }
 .sf-notice-banner{
@@ -73,8 +79,5 @@
 @keyframes sf-toast-in{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
 @media(max-width:600px){.sf-notice-banner{top:12px;right:12px;width:calc(100vw - 24px)}}
 @media(prefers-reduced-motion:reduce){
-  .sf-page-surface,
-.sf-dialog,
-.sf-dialog-overlay,
-.sf-notice-banner{animation:none!important}
+  .sf-page-surface,.sf-dialog,.sf-dialog-overlay,.sf-notice-banner{animation:none!important}
 }
