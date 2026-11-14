@@ -44,6 +44,23 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(playback,/getLegacyStatus/);
 });
 
+test("Rain Classroom original progress has three distinct UI fields and a scoped IPC", () => {
+  const view = read("src/components/LegacyPlaybackPanel.tsx");
+  const bridge = read("src/bridge.ts");
+  const task = read("src/legacyPlayback.ts");
+  const rust = read("../src-tauri/src/legacy_tasks.rs");
+  const router = read("../src-tauri/src/lib.rs");
+  assert.match(view,/getYuketangLiveProgress\(next\.run_id\)/);
+  assert.match(view,/simulation_percent/);
+  assert.match(view,/server_percent/);
+  assert.match(view,/processed/);
+  assert.match(view,/并发模式下/);
+  assert.match(task,/yuketang\.progress/);
+  assert.match(bridge,/operation: "yuketang\.progress"/);
+  assert.match(rust,/STUDYFLOW_YKT_RUN_ID/);
+  assert.match(router,/yuketang\.progress/);
+});
+
 test("Zhidao QR dialog stays themed and platform-owned",()=>{
   const app=read("src/App.tsx");
   const qr=read("src/ZhidaoQrDialog.tsx");
