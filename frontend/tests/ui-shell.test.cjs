@@ -7,15 +7,18 @@ const read = relative => fs.readFileSync(path.join(__dirname,"..",relative),"utf
 test("LightC-style floating navigation overlays the workspace and keeps all page routes", () => {
   const shell=read("src/ui/AppShell.tsx");
   const css=read("src/ui/foundation.css");
-  for(const page of ["home","courses","tasks","platforms","records","logs","settings"])
+  for(const page of ["home","courses","tasks","platforms","records","logs"])
     assert.match(shell,new RegExp('id:"'+page+'"'));
+  assert.match(shell,/sf-settings-button/);
   assert.match(shell,/id:"platform-zhidao"/);
   assert.match(shell,/id:"platform-yuketang"/);
   assert.match(shell,/platformExpanded/);
   assert.match(shell,/onNavigate\(item\.id\)/);
   assert.match(shell,/onPointerEnter=\{handlePointerEnter\}/);
   assert.match(shell,/onPointerLeave=\{handlePointerLeave\}/);
-  assert.match(shell,/navPinned/);
+  assert.match(shell,/touchTriggerRef/);
+  assert.match(shell,/handleTriggerPointerDown/);
+  assert.match(shell,/onPointerDown=\{handleTriggerPointerDown\}/);
   assert.match(shell,/setNavOpen\(true\)/);
   assert.match(shell,/Escape/);
   assert.match(shell,/aria-expanded=\{navOpen\}/);
