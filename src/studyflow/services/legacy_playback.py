@@ -101,12 +101,40 @@ def _course_ids_for_current_session(key: str) -> tuple[str, str]:
     return course_id, class_id
 
 
+def _run_bundled_zhs(course_id: str, class_id: str) -> int | None:
+    """Invoke the exact ZHS 0.1.5 Typer CLI inside the bundled sidecar.
+
+    No source monkey-patches and no reimplementation of the heartbeat code.
+    None means an external legacy installation must be used instead.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        if version("zhs") != "0.1.5":
+            return None
+        from zhs.__main__ import app as zhs_app
+    except (ImportError, PackageNotFoundError, ValueError):
+        return None
+    try:
+        zhs_app(args=["play", "-c", f"{course_id}:{class_id}", "--type", "ai"],
+                standalone_mode=False)
+        return 0
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
+    except Exception:
+        return 1
+
+
 def run_zhidao_original(course_key: str) -> int:
     # Resolve the opaque UI key only inside the authenticated local session.
     try:
         course_id, class_id = _course_ids_for_current_session(course_key)
     except RuntimeError:
         return 4
+    bundled = _run_bundled_zhs(course_id, class_id)
+    if bundled is not None:
+        return bundled
+    # Older installs can still run exactly as before, if a pinned packaged
+    # ZHS runtime is not available. Never modify the external ZHSDesktop.
     installed = installation_root()
     launcher = installed / "Zhidao-Task.cmd"
     if not launcher.is_file():
