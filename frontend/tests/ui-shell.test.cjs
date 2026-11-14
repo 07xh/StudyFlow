@@ -130,3 +130,17 @@ test("StudyFlow shared controls keep their own accessible interaction contracts"
   for(const source of [toggle,empty,theme])
     assert.doesNotMatch(source,/LightC-UI|Evan Lau/);
 });
+
+
+test("verified Zhidao QR login closes the dialog and refreshes platform status", () => {
+  const app = read("src/App.tsx");
+  const qr = read("src/ZhidaoQrDialog.tsx");
+  assert.match(qr, /if\(next\.stage==="verified"\)onVerifiedRef\.current\(\)/);
+  const handlerStart = app.indexOf("onVerified=");
+  const handlerEnd = app.indexOf("/>}", handlerStart);
+  assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+  const handler = app.slice(handlerStart, handlerEnd);
+  assert.match(handler, /setQrOpen\(false\)/);
+  assert.match(handler, /void refresh\(\)\.then\(/);
+  assert.match(handler, /setNotice\(previous=>previous\|\|/);
+});

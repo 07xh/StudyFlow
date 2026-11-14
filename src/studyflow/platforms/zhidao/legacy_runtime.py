@@ -56,7 +56,10 @@ def _run_readonly(command: str, timeout: int) -> subprocess.CompletedProcess[str
 def probe_login() -> bool:
     try:
         result = _run_readonly("doctor-server", 65)
-        return result.returncode in (0, 7) and "[SESSION_OK]" in result.stdout
+        # doctor-server also checks course APIs and may exit with 6 after
+        # authentication has already succeeded. Keep login state independent
+        # from the availability of the course-reading endpoints.
+        return any(line.startswith("[SESSION_OK]") for line in (result.stdout or "").splitlines())
     except RuntimeError:
         return False
 

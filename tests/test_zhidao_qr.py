@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from studyflow.platforms.zhidao import qr_runtime
+from studyflow.platforms.zhidao import legacy_runtime, qr_runtime
 from studyflow.platforms.zhidao.qr_login_core import LoginObservation, STAGES
 from studyflow.services.bridge import dispatch
 
@@ -75,3 +75,29 @@ def test_qr_cancel_does_not_delete_cookies(monkeypatch, tmp_path):
     assert not (tmp_path / ("studyflow-qr-" + "c"*32 + ".png")).exists()
     assert (tmp_path / "qrcode.png").read_bytes() == b"ORIGINAL_WPF_QR"
     assert (tmp_path / "cookies.json").read_text() == "PRESERVE"
+
+
+def test_probe_login_uses_session_proof_when_course_apis_fail(monkeypatch):
+    # doctor-server returns 6 when both course sources fail, even though the
+    # preceding [SESSION_OK] marker proves the account session is valid.
+    result = SimpleNamespace(
+        returncode=6,
+        stdout="[SESSION_OK] 服务端登录校验通过\\n[SERVER_UNCONFIRMED] 两类只读接口均失败",
+    )
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda *_: result)
+    assert legacy_runtime.probe_login() is True
+
+
+def test_probe_login_requires_explicit_server_session_proof(monkeypatch):
+    result = SimpleNamespace(returncode=0, stdout="[SERVER_OK] 课程接口可读，但没有登录证明")
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda *_: result)
+    assert legacy_runtime.probe_login() is False
+
+
+def test_probe_login_rejects_session_marker_embedded_in_other_output(monkeypatch):
+    result = SimpleNamespace(
+        returncode=0,
+        stdout="diagnostic: [SESSION_OK] marker copied from an example",
+    )
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda *_: result)
+    assert legacy_runtime.probe_login() is False
