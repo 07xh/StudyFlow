@@ -26,6 +26,11 @@ export type YuketangLiveProgress = {
   failed: number;
   stopped: number;
   concurrent: boolean | null;
+  rich_total: number | null;
+  rich_current: number | null;
+  rich_processed: number;
+  rich_success: number;
+  rich_failed: number;
 };
 
 /** Reads only the current executor run\u2019s original logged progress. */
