@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 import re
+import tempfile
 from pathlib import Path
 import subprocess
 import sys
@@ -197,3 +198,178 @@ def verify_course(course_key: str) -> dict:
     if result.returncode != 0:
         raise RuntimeError("Zhidao single-course verification failed")
     return _progress_snapshot()
+
+
+
+def _legacy_resource_root() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS) / "legacy" / "zhidao"
+    return Path(__file__).resolve().parents[4] / "legacy" / "zhidao"
+
+
+def resolve_course(course_key: str) -> dict:
+    if not isinstance(course_key, str) or COURSE_KEY.fullmatch(course_key) is None:
+        raise ValueError("INVALID_COURSE")
+    rows, _ = _session_course_cache()
+    matches = [row for row in rows if progress_key(row) == course_key]
+    if len(matches) != 1 or matches[0].get("stale") is True:
+        raise RuntimeError("COURSE_NOT_FOUND")
+    row = matches[0]
+    course_type = row.get("courseType")
+    course_id = str(row.get("courseId") or "0")
+    class_id = str(row.get("classId") or "0")
+    if course_type == "ai":
+        if not re.fullmatch(r"[0-9]{1,20}", course_id) or not re.fullmatch(r"[0-9]{1,20}", class_id):
+            raise RuntimeError("COURSE_ROUTE_UNAVAILABLE")
+        if int(course_id) <= 0 or int(class_id) <= 0:
+            raise RuntimeError("COURSE_ROUTE_UNAVAILABLE")
+        route = ""
+    elif course_type == "shared":
+        route = str(row.get("recruitAndCourseId") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_+./=:-]{1,512}", route):
+            raise RuntimeError("COURSE_ROUTE_UNAVAILABLE")
+        if not re.fullmatch(r"[0-9]{1,20}", course_id):
+            course_id = "0"
+        if not re.fullmatch(r"[0-9]{1,20}", class_id):
+            class_id = "0"
+    else:
+        raise RuntimeError("COURSE_ROUTE_UNAVAILABLE")
+    title = row.get("name") or row.get("courseName") or "知到课程"
+    return {
+        "course_key": course_key, "course_type": course_type,
+        "course_id": course_id, "class_id": class_id,
+        "recruit_and_course_id": route, "title": str(title)[:250],
+    }
+
+
+PLAYER_DEFAULTS = {
+    "speed": "1.5", "allowMinimize": True, "autoStart": True,
+    "autoNext": True, "mode": "official",
+}
+PLAYER_SPEEDS = {"1", "1.25", "1.5", "2"}
+
+
+def _player_settings_path() -> Path:
+    return installation_root() / "official-player-settings.json"
+
+
+def get_player_settings() -> dict:
+    path = _player_settings_path()
+    settings = dict(PLAYER_DEFAULTS)
+    try:
+        if path.is_symlink() or path.stat().st_size > 4096:
+            return settings
+        stored = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return settings
+    if not isinstance(stored, dict):
+        return settings
+    if stored.get("speed") in PLAYER_SPEEDS:
+        settings["speed"] = stored["speed"]
+    for name in ("allowMinimize", "autoStart", "autoNext"):
+        if isinstance(stored.get(name), bool):
+            settings[name] = stored[name]
+    if stored.get("mode") in ("official", "zhs-original"):
+        settings["mode"] = stored["mode"]
+    return settings
+
+
+def save_player_settings(value: object) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("INVALID_PLAYER_SETTINGS")
+    if value.get("speed") not in PLAYER_SPEEDS:
+        raise ValueError("INVALID_PLAYER_SETTINGS")
+    if any(not isinstance(value.get(name), bool) for name in ("allowMinimize", "autoStart", "autoNext")):
+        raise ValueError("INVALID_PLAYER_SETTINGS")
+    mode = value.get("mode", "official")
+    if mode not in ("official", "zhs-original"):
+        raise ValueError("INVALID_PLAYER_SETTINGS")
+    settings = {
+        "speed": value["speed"], "allowMinimize": value["allowMinimize"],
+        "autoStart": value["autoStart"], "autoNext": value["autoNext"], "mode": mode,
+    }
+    path = _player_settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise RuntimeError("PLAYER_SETTINGS_UNAVAILABLE")
+    fd, temporary = tempfile.mkstemp(prefix=".official-player-", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(settings, stream, ensure_ascii=False, separators=(",", ":"))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+    return settings
+
+
+def diagnose_server() -> dict:
+    result = _run_readonly("doctor-server", 95)
+    labels = {
+        0: "confirmed", 7: "partial", 6: "server_unconfirmed",
+        3: "no_credentials", 4: "session_unconfirmed",
+        5: "environment_error", 8: "invalid_credentials",
+    }
+    allowed = (
+        "[AUTH]", "[AUTH_LOCAL_INVALID]", "[AUTH_OR_NETWORK]", "[SESSION_OK]",
+        "[SERVER_READ_OK]", "[SERVER_READ_", "[SERVER_UNCONFIRMED]",
+        "[SERVER_PARTIAL]", "[SERVER_OK]",
+    )
+    lines = [
+        line[:240] for line in (result.stdout or "").splitlines()
+        if line.startswith(allowed)
+    ][:16]
+    return {"code": int(result.returncode), "state": labels.get(result.returncode, "unknown"), "lines": lines}
+
+
+def _unlink_zhs_files(names: tuple[str, ...]) -> dict:
+    directory = Path.home() / ".zhs"
+    if directory.is_symlink():
+        raise RuntimeError("ZHS_DATA_PATH_UNSAFE")
+    removed = 0
+    for name in names:
+        path = directory / name
+        if path.is_symlink():
+            raise RuntimeError("ZHS_DATA_PATH_UNSAFE")
+        try:
+            if path.exists():
+                if not path.is_file():
+                    raise RuntimeError("ZHS_DATA_PATH_UNSAFE")
+                path.unlink()
+                removed += 1
+        except OSError as exc:
+            raise RuntimeError("ZHS_DATA_CLEAR_FAILED") from exc
+    return {"removed": removed}
+
+
+def clear_session() -> dict:
+    # Mirrors the original GUI's sign-out allowlist: Cookie + transient QR only.
+    return _unlink_zhs_files(("cookies.json", "qrcode.png"))
+
+
+def clear_course_cache() -> dict:
+    # Mirrors the original GUI's cache-clear action; never removes credentials.
+    return _unlink_zhs_files(("zhidao-courses.json", "zhidao-progress.json"))
+
+
+def read_document(document_id: str) -> dict:
+    names = {
+        "terms": "使用条款与第三方声明.txt",
+        "privacy": "隐私政策与数据说明.txt",
+        "license": "LICENSE-GPL-3.0.txt",
+        "source": "SOURCE.md",
+    }
+    if document_id not in names:
+        raise ValueError("INVALID_DOCUMENT")
+    path = _legacy_resource_root() / names[document_id]
+    try:
+        if path.is_symlink() or path.stat().st_size > 512 * 1024:
+            raise RuntimeError("DOCUMENT_UNAVAILABLE")
+        content = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError("DOCUMENT_UNAVAILABLE") from exc
+    return {"id": document_id, "title": names[document_id], "content": content}
