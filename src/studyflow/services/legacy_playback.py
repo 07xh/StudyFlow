@@ -49,6 +49,13 @@ def run_yuketang_original() -> int:
     os.environ.update(values)
     root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
     log_dir = root / "StudyFlow" / "legacy-logs"
+    # The Tauri launcher assigns a separate log folder to each run. The
+    # original main.py is unchanged; without a launcher token, retain the
+    # original log location for standalone backwards compatibility.
+    from studyflow.services.yuketang_progress import RUN_ID
+    run_id = os.environ.get("STUDYFLOW_YKT_RUN_ID", "")
+    if run_id and RUN_ID.fullmatch(run_id):
+        log_dir = log_dir / run_id
     log_dir.mkdir(parents=True, exist_ok=True)
     os.environ["YKT_HOME"] = str(log_dir)
     # Upstream main.py configures its own task settings and app logger.
