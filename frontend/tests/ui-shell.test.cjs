@@ -15,7 +15,9 @@ test("LightC-style floating navigation overlays the workspace and keeps all page
   assert.match(shell,/onNavigate\(item\.id\)/);
   assert.match(shell,/onPointerEnter=\{handlePointerEnter\}/);
   assert.match(shell,/onPointerLeave=\{handlePointerLeave\}/);
-  assert.match(shell,/navPinned/);
+  assert.match(shell,/touchTriggerRef/);
+  assert.match(shell,/handleTriggerPointerDown/);
+  assert.match(shell,/onPointerDown=\{handleTriggerPointerDown\}/);
   assert.match(shell,/setNavOpen\(true\)/);
   assert.match(shell,/Escape/);
   assert.match(shell,/aria-expanded=\{navOpen\}/);
