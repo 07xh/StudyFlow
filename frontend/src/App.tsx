@@ -320,6 +320,7 @@ export default function App(){
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
             :<LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
               desktop={desktop} connected={platforms.zhidao.status==="connected"}
+              hideVerifiedCourseProgress
               onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
           :<YuketangTaskArea courses={platforms.yuketang.courses}
             desktop={desktop} connected={platforms.yuketang.status==="connected"}

@@ -14,9 +14,11 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected, onEvent, yuketangOptions, settingsReady=true, courseId, detailMode=false
+  platform, courses, desktop, connected, onEvent, yuketangOptions, settingsReady=true,
+  courseId, detailMode=false, hideVerifiedCourseProgress=false
 }: {
   platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
+  hideVerifiedCourseProgress?:boolean;
   onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
   yuketangOptions?: OriginalYktOptions;
   settingsReady?: boolean;
@@ -128,7 +130,7 @@ export function LegacyPlaybackPanel({
           <small>仅原版本地输出，非服务器确认进度</small>
         </div>}
       </div>
-      {!detailMode&&<div className="sf-live-course-progress">
+      {!detailMode&&!hideVerifiedCourseProgress&&<div className="sf-live-course-progress">
         <div className="sf-live-course-heading">
           <span>{platform==="yuketang"?"课程整体进度":"平台学习进度"}</span>
           <small>{verified.length>0?`已核验 ${verified.length} 门`:"暂无服务端核验数据"}</small>

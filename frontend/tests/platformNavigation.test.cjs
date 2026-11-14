@@ -26,6 +26,10 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/YuketangLoginPanel/);
  assert.match(app,/ZhidaoLoginPanel/);
  assert.match(app,/ZhidaoOfficialPlayerPanel/);
+ assert.match(app,/hideVerifiedCourseProgress/);
+ const legacyPanel=source("components/LegacyPlaybackPanel.tsx");
+ assert.match(legacyPanel,/hideVerifiedCourseProgress\?:boolean/);
+ assert.match(legacyPanel,/!detailMode&&!hideVerifiedCourseProgress/);
  assert.match(app,/LegacyPlaybackPanel platform="zhidao"/);
  assert.match(app,/YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
  const yuketang=source("components/YuketangTaskArea.tsx");
