@@ -1,10 +1,10 @@
 # 学序云端更新 A+B
 
-- **A（仅提示）**：查询 GitHub Releases、展示版本及日志；用户决定是否下载。
-- **B（默认）**：检查后后台下载，核对发布清单的 SHA-256，用户确认后交给独立安装器。
-- 稳定通道使用 GitHub Releases latest；Beta 通道可读取预发布列表。
-- 版本、通道与 A/B 偏好应保存在用户配置目录，不放安装目录。
-- 当前提供版本查询和校验下载基础服务，**尚未接入 UI、独立安装器或 Windows EXE 发布流水线**。
-- 不得从 release body 中直接执行命令。安装前应核验签名与安装器发布身份。
-- 安装器必须在主程序退出后运行，先备份可执行文件，安装失败恢复；不清除用户配置、Cookie 或课程数据。
-- 未完成 Windows 安装与回滚测试前，不应宣称支持一键安装。
+- 设置 → 版本与更新：查询 GitHub Releases，显示真实版本与更新日志。
+- A（仅提示）：启动后检查，用户选择是否下载。
+- B（默认）：启动后检查并在后台下载，通过 GitHub Release asset 的 SHA-256 digest 校验后保存在学序更新目录。
+- 稳定通道查询 latest；Beta 通道查询预发布列表。无 Release 时显示暂无已发布更新；网络错误单独提示。
+- 偏好保存在 `%LOCALAPPDATA%/StudyFlow/updates/preferences.json`；安装包也只写入该更新目录。凭据和课程数据不在更新目录内。
+- 不接受前端传入下载地址、哈希或磁盘路径。后端重新查询本仓库发布资产，只接受唯一且带 SHA-256 digest 的 Windows x64 EXE。
+- 下载完成提供“打开更新目录”；关闭学序后由用户运行 NSIS 安装程序。本轮没有实现自动退出安装、失败回滚或发布签名，因此不称为一键自动安装。
+- GitHub Actions 验证并生成 Windows NSIS artifact；artifact 和 Release 是不同渠道，未发布的 CI 包不会被更新检查误认为正式 Release。

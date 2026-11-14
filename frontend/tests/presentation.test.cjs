@@ -18,6 +18,14 @@ function loadTypescript(relativePath) {
 }
 
 const {presentCourse} = loadTypescript("src/presentation.ts");
+test("course workspace drops removed session data and follows refreshed records", () => {
+  const {selectedSessionCourse} = loadTypescript("src/presentation.ts");
+  const selected = {platform:"zhidao", course_id:"a", title:"old"};
+  assert.equal(selectedSessionCourse([], selected), null);
+  assert.equal(selectedSessionCourse([{...selected, platform:"yuketang"}], selected), null);
+  const refreshed = {...selected, title:"new"};
+  assert.equal(selectedSessionCourse([refreshed], selected), refreshed);
+});
 const {fetchPlatformStatuses, fetchCourses, friendlyBridgeError} = loadTypescript("src/bridge.ts");
 const base = {platform: "zhidao", course_id: "id-1", title: "测试课程", progress_percent: 75};
 

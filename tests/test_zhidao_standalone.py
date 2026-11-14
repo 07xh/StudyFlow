@@ -79,3 +79,18 @@ def test_frozen_qr_worker_uses_isolated_app_dir_and_pinned_token(monkeypatch, tm
 def test_zhidao_cookie_store_is_not_part_of_program_install():
     assert Path.home() / ".zhs" != qr_runtime.installation_root()
     assert "ZHSDesktop" not in str(qr_runtime.installation_root())
+
+
+def test_player_settings_migrate_readonly_without_writing_old_install(monkeypatch, tmp_path):
+    import json
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    old = tmp_path / "ZHSDesktop" / "official-player-settings.json"
+    old.parent.mkdir()
+    original = json.dumps({"speed": "2", "autoNext": False})
+    old.write_text(original, encoding="utf-8")
+    settings = legacy_runtime.get_player_settings()
+    assert settings["speed"] == "2"
+    saved = legacy_runtime.save_player_settings({**settings, "speed": "1.25"})
+    assert saved["speed"] == "1.25"
+    assert old.read_text(encoding="utf-8") == original
+    assert (tmp_path / "StudyFlow" / "zhidao" / "official-player-settings.json").is_file()

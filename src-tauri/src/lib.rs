@@ -203,11 +203,18 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     }
     let operation = request.get("operation").and_then(|v| v.as_str()).unwrap_or("");
     match operation {
-        "ping" | "platform.status" | "yuketang.clear"
+        "ping" | "platform.status" | "yuketang.clear" | "updates.settings.get"
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" => Ok(()),
+        "updates.settings.save" if request.get("settings").is_some_and(|value|
+            matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
+            && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
+        "updates.check" | "updates.download" if request.get("current_version")
+            .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 80)
+            && (operation != "updates.download" || request.get("release_version")
+                .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 80)) => Ok(()),
         "zhidao.progress.verify" | "zhidao.player.target"
             if request.get("course_key").and_then(|x| x.as_str())
                 .is_some_and(|key| key.len() == 64
@@ -330,6 +337,20 @@ fn studyflow_exit(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
+fn updates_open_folder() -> Result<(), String> {
+    let local = std::env::var_os("LOCALAPPDATA").ok_or("WINDOWS_APPDATA_UNAVAILABLE")?;
+    let folder = PathBuf::from(local).join("StudyFlow").join("updates");
+    std::fs::create_dir_all(&folder).map_err(|_| "UPDATE_FOLDER_UNAVAILABLE")?;
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe").arg(folder).spawn().map_err(|_| "UPDATE_FOLDER_UNAVAILABLE")?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    { Err("WINDOWS_ONLY".into()) }
+}
+
+#[tauri::command]
 fn zhidao_open_data_folder() -> Result<(), String> {
     let home = std::env::var_os("USERPROFILE").ok_or("USERPROFILE_UNAVAILABLE")?;
     let folder = PathBuf::from(home).join(".zhs");
@@ -370,7 +391,7 @@ pub fn run() {
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit, updates_open_folder,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,

@@ -1,4 +1,4 @@
-import type {Course, Platform, PlatformState} from "./types";
+import type {Course, Platform} from "./types";
 
 export const platformNames: Record<Platform, string> = {zhidao: "知到", yuketang: "雨课堂"};
 
@@ -31,11 +31,7 @@ export function courseKey(course: Course): string {
   return course.platform + ":" + course.course_id;
 }
 
-export function describeConnection(state: PlatformState): string {
-  switch (state.status) {
-    case "connected": return "服务端会话已核验";
-    case "connecting": return "正在检测";
-    case "error": return "检测异常";
-    default: return "尚未确认连接";
-  }
+export function selectedSessionCourse(courses: Course[], selected: Course | null): Course | null {
+  return selected ? courses.find(course => courseKey(course) === courseKey(selected)) ?? null : null;
 }
+

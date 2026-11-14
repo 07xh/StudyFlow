@@ -161,3 +161,10 @@ test("platform controls keep independent settings and per-platform login expansi
   assert.match(progress,/onChange=\{setMonitor\}/);
   assert.match(yuketang,/update\(id,event\.currentTarget\.checked\)/);
 });
+
+
+test("confirmation dialogs retain icon and primary action styling", () => {
+  const css=read("src/ui/interactions.css");
+  assert.match(css,/\.sf-dialog-symbol\s*\{/);
+  assert.match(css,/\.sf-dialog-actions \.sf-dialog-confirm\s*\{/);
+});

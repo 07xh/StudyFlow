@@ -98,7 +98,8 @@ test("the ZHS original segment is displayed only for the selected running course
 
 test("Rain Classroom advanced settings are exposed without expanding the default panel", () => {
   const panel = fs.readFileSync(path.join(__dirname,"..","src","components","YuketangTaskArea.tsx"),"utf8");
-  assert.match(panel, /<details className="sf-ykt-advanced-options">/);
+  assert.match(panel, /<details className="sf-ykt-advanced-options"(?: open=\{detailMode\})?>/);
+  assert.match(panel, /open=\{detailMode\}/);
   assert.match(panel, /options\.richtext_stay_seconds/);
   assert.match(panel, /options\.richtext_skip_delay/);
   assert.match(panel, /options\.debug/);

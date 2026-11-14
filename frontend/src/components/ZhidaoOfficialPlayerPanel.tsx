@@ -22,6 +22,8 @@ type Props={
   desktop:boolean;
   onCoursesUpdated:(courses:Course[])=>void;
   onEvent?:(action:string,result:"success"|"warning",detail:string)=>void;
+  courseId?:string;
+  detailMode?:boolean;
 };
 const defaults:ZhidaoPlayerSettings={
   speed:"1.5",allowMinimize:true,autoStart:true,autoNext:true,mode:"official"
@@ -47,7 +49,7 @@ function playerError(error:unknown){
   if(code.includes("PLAYER_LAUNCH_FAILED"))return "官方播放器窗口启动失败。";
   return friendlyBridgeError(error);
 }
-export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEvent}:Props){
+export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEvent,courseId,detailMode=false}:Props){
   const [settings,setSettings]=useState<ZhidaoPlayerSettings>(defaults);
   const [selected,setSelected]=useState("");
   const [status,setStatus]=useState<PlayerStatus>(initialStatus);
@@ -59,9 +61,13 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
   const active= status.state==="running";
 
   useEffect(()=>{
+    if(courseId){
+      if(courses.some(course=>course.course_id===courseId)&&selected!==courseId)setSelected(courseId);
+      return;
+    }
     if(!courses.some(course=>course.course_id===selected))
       setSelected(courses[0]?.course_id??"");
-  },[courses,selected]);
+  },[courses,selected,courseId]);
 
   useEffect(()=>{
     if(!desktop)return;
@@ -165,26 +171,28 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
 
   return <section className="legacy-playback-panel sf-zhidao-official-panel">
     <div className="section-head">
-      <div><h3><CirclePlay size={17}/> 知到官方 WebView2 播放器</h3></div>
+      <div><h3><CirclePlay size={17}/> {detailMode?"播放状态与参数调整":"知到官方 WebView2 播放器"}</h3></div>
       <span className={"legacy-run-state"+(active?" active":"")}>
         {active?"官方播放器运行中":status.state==="exited"?"播放器已退出":status.state==="stopped"?"已停止":"未启动"}
       </span>
     </div>
     <div className="sf-zd-official-grid">
-      <label className="sf-zd-official-course">
-        选择课程
-        <select value={selected} onChange={event=>setSelected(event.target.value)}
-          disabled={!courses.length||active||busy!==null}>
-          {courses.length===0&&<option value="">暂无已同步课程</option>}
-          {courses.map(course=><option key={course.course_id} value={course.course_id}>
-            {course.title} · {course.course_type==="ai"?"智慧课程":"共享课"}
-          </option>)}
-        </select>
-      </label>
+      {detailMode
+        ?<div className="sf-zd-official-course"><span>当前课程</span><strong>{current?.title??"课程未同步"}</strong></div>
+        :<label className="sf-zd-official-course">
+          选择课程
+          <select value={selected} onChange={event=>setSelected(event.target.value)}
+            disabled={!courses.length||active||busy!==null}>
+            {courses.length===0&&<option value="">暂无已同步课程</option>}
+            {courses.map(course=><option key={course.course_id} value={course.course_id}>
+              {course.title} · {course.course_type==="ai"?"智慧课程":"共享课"}
+            </option>)}
+          </select>
+        </label>}
       <div className="sf-zd-player-state">
         <span>本机播放器观测</span>
         <strong>{status.positionSeconds===null?"等待视频":position+" / "+duration}</strong>
-        {localPercent!==null&&<div className="sf-zd-local-track" role="progressbar"
+        {!detailMode&&localPercent!==null&&<div className="sf-zd-local-track" role="progressbar"
           aria-label="本机 HTML5 视频播放位置" aria-valuemin={0} aria-valuemax={100} aria-valuenow={localPercent}>
           <span style={{width:localPercent+"%"}}/>
         </div>}
@@ -234,14 +242,23 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEv
       </button>
     </div>
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
-    <details className="sf-zd-local-observations">
-      <summary>展开本地播放观测（{observations.length}）</summary>
-      {observations.length===0?<p>尚无可用的 HTML5 播放观测。</p>
-        :<ul>{observations.map((item,index)=><li key={index}>
-          <strong>{item.event}</strong><span>{timeLabel(item.position)}</span>
-          <time>{new Date(item.at).toLocaleTimeString()}</time>
-        </li>)}</ul>}
-    </details>
+    {detailMode
+      ?<div className="sf-zd-local-observations sf-zd-local-observations-expanded">
+        <strong>本机播放观测 · {observations.length}</strong>
+        {observations.length===0?<p>尚无可用的 HTML5 播放观测。</p>
+          :<ul>{observations.map((item,index)=><li key={index}>
+            <strong>{item.event}</strong><span>{timeLabel(item.position)}</span>
+            <time>{new Date(item.at).toLocaleTimeString()}</time>
+          </li>)}</ul>}
+      </div>
+      :<details className="sf-zd-local-observations">
+        <summary>展开本地播放观测（{observations.length}）</summary>
+        {observations.length===0?<p>尚无可用的 HTML5 播放观测。</p>
+          :<ul>{observations.map((item,index)=><li key={index}>
+            <strong>{item.event}</strong><span>{timeLabel(item.position)}</span>
+            <time>{new Date(item.at).toLocaleTimeString()}</time>
+          </li>)}</ul>}
+      </details>}
     <p className="sf-zd-progress-note">
       {current?.course_type==="shared"?"共享课使用原始课程路由；":"智慧课程使用课程与班级 ID。"}
       仅控制官网顶层页面识别到的主视频；本机播放位置不是服务器学习进度。自动下一节无法安全识别时会要求手动切换。
