@@ -12,6 +12,8 @@ npm --prefix frontend run build
 if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
 & (Join-Path $PSScriptRoot 'build-sidecar.ps1')
 # build-sidecar.ps1 throws if frozen ZHS, JSONL IPC, or bundle verification fails.
+cargo test --manifest-path src-tauri/Cargo.toml
+if ($LASTEXITCODE -ne 0) { throw 'Tauri Rust unit tests failed' }
 npm run tauri -- icon packaging/icon.svg
 if ($LASTEXITCODE -ne 0) { throw 'Icon generation failed' }
 npm run tauri -- build
