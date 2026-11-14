@@ -39,9 +39,12 @@ interface Props {
   onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
   compact:boolean;children:ReactNode;
   headerTitle?:string;
+  currentPlatform?:string;
+  currentCourseTitle?:string;
+  courseProgress?:number|null;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -85,29 +88,52 @@ export function AppShell({
   </nav>;
 
   return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
+    <header className="sf-header sf-workspace-header">
+      <div className="sf-workspace-platform" aria-label="当前学习平台">
+        <span className="sf-workspace-platform-icon" aria-hidden="true"><Layers3 size={21}/></span>
+        <div className="sf-workspace-platform-copy">
+          <small>当前学习平台</small>
+          <strong>{currentPlatform??"未选择平台"}</strong>
+        </div>
+      </div>
+      <div className="sf-workspace-progress" aria-label="当前课程总进度">
+        <div className="sf-workspace-progress-head">
+          <div className="sf-workspace-progress-course">
+            <small>当前课程总进度</small>
+            <strong title={currentCourseTitle??"未选择课程"}>{currentCourseTitle??"未选择课程"}</strong>
+          </div>
+          <strong className="sf-workspace-progress-value">
+            {courseProgress==null?"—":courseProgress.toFixed(1)+"%"}
+          </strong>
+        </div>
+        <div className="sf-workspace-progress-track" role="progressbar"
+          aria-label="服务器已核验课程进度" aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={courseProgress??undefined}>
+          <span style={{width:(courseProgress??0)+"%"}}/>
+        </div>
+      </div>
+      <div className="sf-header-actions">
+        <span className="sf-mode"><span className="sf-status-dot"/>
+          {desktop?"Windows 桌面":"浏览器预览"}
+        </span>
+        <button className="theme-button" type="button" title="刷新连接"
+          aria-label="刷新连接" disabled={!desktop} onClick={onRefresh}>
+          <RefreshCw size={17}/>
+        </button>
+        <button className="theme-button sf-settings-button" type="button"
+          title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
+          onClick={()=>onNavigate("settings")}><Settings size={17}/></button>
+        <button className="theme-button" type="button"
+          aria-label={dark?"切换浅色主题":"切换深色主题"}
+          onClick={onThemeToggle}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
+      </div>
+    </header>
     <aside className="sf-floating-nav" aria-label="主导航">
       <div className="sf-floating-nav__heading">功能菜单</div>
       {renderItems(workspaceNavigation)}
     </aside>
     <main className="main" id="main-content">
-      <header className="sf-header">
-        <div className="sf-page-heading"><h1>{headerTitle??titles[page]}</h1></div>
-        <div className="sf-header-actions">
-          <span className="sf-mode"><span className="sf-status-dot"/>
-            {desktop?"Windows 桌面":"浏览器预览"}
-          </span>
-          <button className="theme-button" type="button" title="刷新连接"
-            aria-label="刷新连接" disabled={!desktop} onClick={onRefresh}>
-            <RefreshCw size={17}/>
-          </button>
-          <button className="theme-button sf-settings-button" type="button"
-            title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
-            onClick={()=>onNavigate("settings")}><Settings size={17}/></button>
-          <button className="theme-button" type="button"
-            aria-label={dark?"切换浅色主题":"切换深色主题"}
-            onClick={onThemeToggle}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
-        </div>
-      </header>
+      <div className="sf-page-heading"><h1>{headerTitle??titles[page]}</h1></div>
       <NoticeBanner message={notice} onDismiss={onDismissNotice}/>
       <PageSurface page={page}>{children}</PageSurface>
     </main>
