@@ -1,51 +1,60 @@
 # 学序 StudyFlow
 
-**非商业用途的 Windows 学习助手**：将知到、长江雨课堂统一到独立设计的 React + Tauri 2 桌面界面，后端使用 Python 模块，通过本地 IPC 读取真实平台数据。
+**学序**是面向个人学习场景的 Windows 桌面客户端，将知到与长江雨课堂接入同一套 React + Tauri 2 UI、平台导航、账号管理和 Python sidecar。它保留原平台项目的业务实现，不把原有播放器、任务执行器改写成一套新的模拟实现。
 
-## 已有实现
+## 当前接入范围
 
-- 自主编写的深色 / 浅色桌面 UI、课程卡片、平台状态、课程同步和章节视频列表。
-- 知到：通过学序内置 ZHS 0.1.5 扫码与只读服务端诊断、课程同步，读取同会话 HMAC 绑定的缓存；原版 WPF 入口仅为可选备用。
-- 雨课堂：读取课堂信息、章节和视频元数据。会话存储在 Windows Credential Manager。
-- Tauri 2 Rust IPC 调用 PyInstaller 打包的 Python sidecar。
-- Windows NSIS 安装包构建脚本，详见 [构建指南](docs/BUILD_WINDOWS.md)。
+### 知到
 
-## 使用条件
+- 知到专属二级页面：扫码登录、Cookie 文本/文件导入、连接诊断、退出登录与数据管理。
+- 原版官方 WebView2 播放器：使用随安装包部署的播放器脚本与 WebView2 SDK 资源；支持原版设置、播放位置观测与自动下一节选项。
+- ZHS 0.1.5 原版任务：通过独立 sidecar 子进程启动原版 CLI，不在 React 前端重写原版任务逻辑。
+- 课程与进度：真实课程同步、智慧课程知识点明细、共享课程视频明细、当前会话缓存、单课/全量只读核验。
+- 运行记录与监控：区分本机播放器位置、原版任务运行状态和服务器已核验进度；播放器退出后可触发单课只读核验。
 
-- **无需预先安装原版知到助手**：学序安装包自带 ZHS Python 依赖；原版软件若存在仍独立保留，不会被修改或删除。
-- 雨课堂需要本人有效的现有登录会话及课堂 ID；未登录或未连接时明确显示失败。
-- 真实平台登录、课程读取和 Windows 安装包尚未经过用户环境的端到端验收，不能据此宣称全部已可用。
+### 长江雨课堂
 
-## 构建
+- 雨课堂专属二级页面：会话配置、连接验证、清除学序凭据、读取章节与视频元数据。
+- 原版参数页：读取并保存原版 `exe_entry.py` 的配置格式，覆盖倍速、间隔、并发、本地阈值、跳过已完成、测试模式和图文处理等现有参数。
+- 原版任务：独立 sidecar 子进程运行仓库中的 `legacy/yuketang/main.py`；React 只负责参数、启动、停止和状态展示。
+- 实时诊断：从本次运行的原版日志中读取本机模拟位置、日志记录的服务端响应、批量处理统计；不把这些不同证据合并成“已完成”。
 
-在 Windows 上安装 Python 3.13、Node.js 22、Rust stable、VS C++ Build Tools、WebView2 后：
+## 统一界面与架构
 
-\`\`\`powershell
+- LightC 风格的轻量悬浮导航：悬停/键盘焦点展开、点击固定、Esc 收起；平台登录与参数均放在对应平台二级页面。
+- 通用平台卡片、主题、课程视图、活动记录、错误提示和版本化 JSONL IPC。
+- Tauri Rust 管理 sidecar 与原版任务子进程；Python adapter 负责会话、只读数据和本地配置适配。
+- Windows NSIS 构建会打包 Python sidecar、ZHS 0.1.5 依赖及知到播放器资源。
+
+## 进度证据与边界
+
+- 本机 HTML5 播放位置、原版任务进程状态、原版日志中的模拟片段、服务器响应、带时间戳的服务器只读核验是不同数据。
+- UI 不会把本机计时或进程退出伪装成服务器确认；只有符合当前会话与证据要求的服务端记录才会标为已核验。
+- ZHS 0.1.5 与雨课堂原版任务可能按其原有逻辑与平台交互。用户需主动选择启动，并遵守学校和平台规则。
+- 原版仓库、旧版 EXE、WPF 界面和原安装目录不由学序升级程序覆盖或删除。
+
+## 构建与验收
+
+Windows 本地构建：
+
+```powershell
 powershell -NoProfile -File .\scripts\build-windows.ps1
-\`\`\`
+```
 
-或者通过 GitHub Actions 的 **Build Windows EXE** 工作流下载 NSIS 构建产物；与打包相关的主分支提交也会触发构建。构建完成必须再经用户 Windows 真机登录验收。
+也可在 GitHub Actions 的 Pull Request 检查中运行 Python 测试、React 构建/UI 测试和 Windows NSIS 打包。成功上传的 NSIS artifact 才代表该提交的安装包构建完成。
 
-## 上游保留
+**CI 构建成功不等于真实平台登录成功。** 正式发布前仍需在干净 Windows 环境使用本人账号验证知到扫码、课程/进度读取、雨课堂会话配置、课程/视频读取、安装/卸载与旧数据保留。
 
-- \`07xh/zhidao-assistant\` — 未更改的旧版 WPF/Python/Go 安装程序。
-- \`07xh/yuketang-heartbeat\` — 未更改的旧版 Python 单体程序。
-- LightC-UI 仅作为设计参考；本仓库 UI 独立实现，不包含其受限素材或源代码。
+详见：
+- [Windows 构建与验收](docs/BUILD_WINDOWS.md)
+- [原版功能接入与兼容性](docs/LEGACY_COMPATIBILITY.md)
+- [原版任务迁移记录](docs/ORIGINAL_HEARTBEAT_RESTORE.md)
+- [知到源码与许可证说明](legacy/zhidao/SOURCE.md)
 
-新程序不会模拟平台已完成的学习进度，不提供伪造学习记录的接口。
+## 上游与许可证
 
-## 最新知到 UI 迁移
+- 知到旧项目：`07xh/zhidao-assistant`；ZHS 0.1.5 上游：`pjm314159/zhs`（GPL-3.0）。
+- 雨课堂旧项目：`07xh/yuketang-heartbeat`；本仓库保留的 `main.py` 与 `exe_entry.py` 按项目迁移记录处理。
+- LightC-UI 是界面设计参考；学序保留自己的 UI 实现，不把设计参考误称为本项目业务代码。
 
-从 `zhidao-assistant@53c9244` 迁入学序统一 React 界面：课程动态卡片、核验证据标签、深色主题持久化、课程筛选及小窗口布局。保留原版 WPF 扫码入口；原版登录流程没有被覆盖。
-
-对只读课程缓存继续进行 HMAC 会话绑定验证；原版知到、雨课堂账号和旧仓库全部保留。测试通过不等于真实 Windows 登录与平台学习进度已验证。详见 [知到 UI 迁移记录](docs/ZHIDAO_UI_MIGRATION.md)。
-
-## 学序独立知到运行时
-
-Windows 构建使用 `zhs==0.1.5` 固定依赖和 `scripts/build-sidecar.ps1` 进行 PyInstaller 独立编译，内置仅读取的课程 CLI 及登录工作进程。安装学序时不再要求已有 `%LOCALAPPDATA%\\ZHSDesktop\\.venv`。扫码状态/临时 PNG 独立写入 `%LOCALAPPDATA%\\StudyFlow\\zhidao`；知到账号与服务端核验缓存仍沿用本人 `%USERPROFILE%\\.zhs`，不会清除旧版登录。用户真实账号登录、课程读取仍须在 Windows 上核验，CI 无法替代。
-
-## 原版模拟心跳代码恢复与进程接入
-
-学序保留用户原始知到 ZHS 0.1.5 与雨课堂 `main.py` 的心跳生成和发送算法，不以只读查询替代它们。原始文件快照位于 `legacy/`，每个 Git blob SHA 与对应原仓库一致；前端由 Tauri 负责原版任务启动、状态和停止。学序优先调用内置 ZHS 0.1.5 CLI，雨课堂执行原封不动的 `main.py`。进程运行、退出不等于平台确认学习进度。见 [完整迁移记录](docs/ORIGINAL_HEARTBEAT_RESTORE.md)。
-
-Windows 真实账号验收及雨课堂原源码许可核查仍是正式发布门槛。
+本项目不代表知到、智慧树或雨课堂官方产品。
