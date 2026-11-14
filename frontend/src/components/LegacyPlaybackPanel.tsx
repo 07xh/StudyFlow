@@ -216,6 +216,8 @@ export function LegacyPlaybackPanel({
     </div>
     {status?.state==="exited"&&<p className="legacy-state-note">
       {legacyExitMessage(status)}（退出码：{status.exit_code ?? "未知"}）
+      {platform==="zhidao"&&status.exit_code===0&&!status.zhs_progress&&
+        <small>未采集到播放进度；请检查课程是否有可播放内容并使用服务端只读核验。</small>}
     </p>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
     <p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>
