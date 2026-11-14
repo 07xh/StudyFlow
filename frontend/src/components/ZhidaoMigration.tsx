@@ -1,33 +1,6 @@
 import {useRef,useState} from "react";
-import {BookOpen,ChevronRight,FileJson2,KeyRound,ScanLine} from "lucide-react";
+import {FileJson2,KeyRound,ScanLine} from "lucide-react";
 import {friendlyBridgeError,request} from "../bridge";
-import {platformNames,presentCourse} from "../presentation";
-import type {Course} from "../types";
-
-export function MigratedCourseCard({course,onInspect}:{course:Course;onInspect:(course:Course)=>void}){
-  const data=presentCourse(course);
-  return <article className="course-v2">
-    <div className="course-v2-top">
-      <span className={"course-v2-type "+course.platform}>
-        {platformNames[course.platform]}
-        {course.course_type?" · "+(course.course_type==="ai"?"智慧课程":"共享课程"):""}
-      </span>
-      <span className={"course-v2-evidence "+data.status}>{data.label}</span>
-    </div>
-    <h3 title={course.title}>{course.title}</h3>
-    <p>{data.detail}</p>
-    {data.percent!==null&&<div className="course-v2-progress">
-      <div className="course-v2-track" role="progressbar" aria-label="服务器已核验进度"
-        aria-valuenow={data.percent} aria-valuemin={0} aria-valuemax={100}>
-        <div className="course-v2-fill" style={{width:data.percent+"%"}}/>
-      </div>
-      <span>{data.percent.toFixed(1)}%</span>
-    </div>}
-    <button className="secondary course-v2-button" type="button" onClick={()=>onInspect(course)}>
-      <BookOpen size={15}/>课程详情<ChevronRight size={15}/>
-    </button>
-  </article>;
-}
 
 export function ZhidaoLoginPanel({desktop,busy,onOpenNative,onImported}:{
   desktop:boolean;busy:boolean;onOpenNative:()=>void;onImported:()=>void
