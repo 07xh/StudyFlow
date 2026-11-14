@@ -102,6 +102,11 @@ def test_repeated_original_progress_output_refreshes_local_observation(monkeypat
     sink.receive("playing [====] 50.0%")
     assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 100.0
 
+    clock[0] = 105.0
+    sink.receive("ordinary CLI diagnostic without numeric progress")
+    assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 100.0
+    assert raw.last_snapshot == (50.0, None, None)
+
     clock[0] = 106.0
     sink.receive("playing [====] 50.0%")
     assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 106.0
