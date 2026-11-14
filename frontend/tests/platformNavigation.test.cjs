@@ -136,8 +136,8 @@ test("course details render as one expanded workspace with distinct progress sou
 test("clearing Rain Classroom credentials also clears its selected course",()=>{
  const app=source("App.tsx");
  const start=app.indexOf("async function clear()");
- const end=app.indexOf("\\n  async function showVideos()",start);
+ const end=app.indexOf("\n  async function showVideos()",start);
  assert.ok(start>=0&&end>start);
  const clear=app.slice(start,end);
- assert.match(clear,/setSelectedCourse\\(previous=>previous\\?\\.platform==="yuketang"\\?null:previous\\)/);
+ assert.match(clear,/setSelectedCourse\(previous=>previous\?\.platform==="yuketang"\?null:previous\)/);
 });
