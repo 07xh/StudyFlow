@@ -6,6 +6,44 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
+#[derive(serde::Deserialize)]
+pub struct OriginalYktOptions {
+    video_speed: f64,
+    heartbeat_interval: u32,
+    max_concurrent_videos: u8,
+    completion_threshold: u8,
+    skip_completed: bool,
+    use_concurrent: bool,
+    test_mode: bool,
+    test_video_count: u32,
+    auto_richtext: bool,
+}
+
+impl OriginalYktOptions {
+    fn validate(&self) -> Result<(), String> {
+        if !self.video_speed.is_finite() || self.video_speed < 0.1 || self.video_speed > 4.0
+            || self.heartbeat_interval < 1 || self.heartbeat_interval > 120
+            || self.max_concurrent_videos < 1 || self.max_concurrent_videos > 32
+            || self.test_video_count < 1 || self.test_video_count > 10000 {
+            return Err("INVALID_SETTINGS".into());
+        }
+        Ok(())
+    }
+
+    fn apply(&self, command: &mut Command) {
+        // Original main.py still owns all defaults, event creation and sending.
+        command.env("VIDEO_SPEED", self.video_speed.to_string());
+        command.env("HEARTBEAT_INTERVAL", self.heartbeat_interval.to_string());
+        command.env("MAX_CONCURRENT_VIDEOS", self.max_concurrent_videos.to_string());
+        command.env("COMPLETION_THRESHOLD", self.completion_threshold.to_string());
+        command.env("SKIP_COMPLETED", if self.skip_completed { "true" } else { "false" });
+        command.env("USE_CONCURRENT", if self.use_concurrent { "true" } else { "false" });
+        command.env("TEST_MODE", if self.test_mode { "true" } else { "false" });
+        command.env("TEST_VIDEO_COUNT", self.test_video_count.to_string());
+        command.env("AUTO_RICHTEXT", if self.auto_richtext { "true" } else { "false" });
+    }
+}
+
 #[derive(Default)]
 pub struct LegacyTasks {
     jobs: Mutex<HashMap<String, LegacyJob>>,
@@ -73,7 +111,7 @@ fn valid_course_key(key: &str) -> bool {
 #[tauri::command]
 pub fn legacy_start(
     app: AppHandle, state: State<'_, LegacyTasks>,
-    platform: String, course_id: Option<String>
+    platform: String, course_id: Option<String>, options: Option<OriginalYktOptions>
 ) -> Result<LegacyStatus, String> {
     if platform != "zhidao" && platform != "yuketang" {
         return Err("UNKNOWN_PLATFORM".into());
@@ -83,6 +121,12 @@ pub fn legacy_start(
     }
     if platform == "yuketang" && course_id.is_some() {
         return Err("INVALID_REQUEST".into());
+    }
+    if platform == "zhidao" && options.is_some() {
+        return Err("INVALID_REQUEST".into());
+    }
+    if let Some(settings) = &options {
+        settings.validate()?;
     }
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     if let Some(previous) = guard.get_mut(&platform) {
@@ -96,6 +140,9 @@ pub fn legacy_start(
         command.arg("--legacy-zhidao").arg(course_id.as_deref().unwrap_or(""));
     } else {
         command.arg("--legacy-yuketang");
+        if let Some(settings) = &options {
+            settings.apply(&mut command);
+        }
     }
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)]
