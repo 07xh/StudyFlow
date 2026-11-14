@@ -1,6 +1,8 @@
 name: Build Windows EXE
 on:
   workflow_dispatch:
+  push:
+    branches: [verification/native-qr-nsis-20261114]
 
 jobs:
   windows-package:
