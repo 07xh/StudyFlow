@@ -159,6 +159,12 @@ export function LegacyPlaybackPanel({
             " · 失败 "+yktProgress.failed+" · 停止 "+yktProgress.stopped : "等待原版任务统计"}</small>
           {yktProgress?.current_index != null && <small>正在处理第 {yktProgress.current_index} 个视频</small>}
         </div>
+        {yktProgress?.rich_total != null && <div className="sf-ykt-live-item">
+          <span>图文任务</span>
+          <strong>{yktProgress.rich_processed} / {yktProgress.rich_total}</strong>
+          <small>成功 {yktProgress.rich_success} · 失败 {yktProgress.rich_failed}</small>
+          {yktProgress.rich_current != null && <small>处理到第 {yktProgress.rich_current} 篇图文</small>}
+        </div>}
       </div>
       <small className="sf-ykt-live-note">模拟位置不是已核验学习进度；并发模式下，原版日志未标识每条心跳所属视频，仅显示最新记录。</small>
     </div>}
