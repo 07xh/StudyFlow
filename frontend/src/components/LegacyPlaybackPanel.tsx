@@ -3,8 +3,8 @@ import {Play, Square, RefreshCw, SlidersHorizontal, Activity} from "lucide-react
 import type {Course, Platform} from "../types";
 import {presentCourse} from "../presentation";
 import {
-  getLegacyStatus, legacyError, originalYktDefaults, startLegacy, stopLegacy,
-  validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions
+  getLegacyStatus, getYuketangLiveProgress, legacyError, originalYktDefaults, startLegacy, stopLegacy,
+  validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type YuketangLiveProgress
 } from "../legacyPlayback";
 
 const labels: Record<LegacyTaskStatus["state"], string> = {
@@ -28,6 +28,7 @@ export function LegacyPlaybackPanel({
   onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
+  const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState("");
@@ -38,8 +39,14 @@ export function LegacyPlaybackPanel({
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
-    try { setStatus(await getLegacyStatus(platform)); }
-    catch { setStatus(null); }
+    try {
+      const next = await getLegacyStatus(platform);
+      setStatus(next);
+      if (platform === "yuketang" && next.run_id) {
+        try { setYktProgress(await getYuketangLiveProgress(next.run_id)); }
+        catch { setYktProgress(null); }
+      } else setYktProgress(null);
+    } catch { setStatus(null);setYktProgress(null); }
   }, [desktop, platform]);
 
   useEffect(() => {
@@ -62,7 +69,7 @@ export function LegacyPlaybackPanel({
   }
 
   async function start() {
-    setBusy(true); setMessage("");
+    setBusy(true); setMessage("");setYktProgress(null);
     try {
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined);
@@ -99,7 +106,7 @@ export function LegacyPlaybackPanel({
       </div>
       <div className="sf-live-course-progress">
         <div className="sf-live-course-heading">
-          <span>平台学习进度</span>
+          <span>{platform==="yuketang"?"课程整体进度":"平台学习进度"}</span>
           <small>{verified.length>0?`已核验 ${verified.length} 门`:"暂无服务端核验数据"}</small>
         </div>
         {verified.length>0
@@ -114,9 +121,54 @@ export function LegacyPlaybackPanel({
               </div>
               <strong>{presentation.percent?.toFixed(1)}%</strong>
             </div>)}</div>
-          :<div className="sf-unverified-note">未接入可验证的实时百分比</div>}
+          :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
       </div>
     </div>
+    {platform === "yuketang" && <div className="sf-ykt-live" aria-label="雨课堂原版实时进度">
+      <div className="sf-ykt-live-title"><strong>雨课堂原版进度</strong>
+        <small>{yktProgress?.available ? "本次任务日志 · 每 2 秒读取" : "本次任务尚无进度记录"}</small></div>
+      <div className="sf-ykt-live-grid">
+        <div className="sf-ykt-live-item">
+          <span>最近一条模拟位置</span>
+          <strong>{yktProgress?.simulation_percent != null ? yktProgress.simulation_percent.toFixed(1)+"%" : "—"}</strong>
+          {yktProgress?.simulation_percent != null && <div className="sf-ykt-live-track" role="progressbar"
+            aria-label="原版最近一条模拟播放位置" aria-valuemin={0} aria-valuemax={100}
+            aria-valuenow={yktProgress.simulation_percent}>
+            <span style={{width:yktProgress.simulation_percent+"%"}}/></div>}
+          <small>{yktProgress?.simulation_position != null && yktProgress.simulation_duration != null
+            ? yktProgress.simulation_position.toFixed(1)+" / "+yktProgress.simulation_duration.toFixed(1)+" 秒"
+            : "等待原版输出"}</small>
+        </div>
+        <div className="sf-ykt-live-item">
+          <span>最近一次服务端进度响应</span>
+          <strong>{yktProgress?.server_percent != null ? yktProgress.server_percent.toFixed(1)+"%" : "—"}</strong>
+          {yktProgress?.server_percent != null && <div className="sf-ykt-live-track" role="progressbar"
+            aria-label="原版日志记录的服务端返回进度" aria-valuemin={0} aria-valuemax={100}
+            aria-valuenow={yktProgress.server_percent}>
+            <span style={{width:yktProgress.server_percent+"%"}}/></div>}
+          <small>{yktProgress?.server_source==="final"?"最终查询":
+            yktProgress?.server_source==="periodic"?"定期查询":
+            yktProgress?.server_source==="initial"?"开始前查询":"等待服务器返回"}
+            {yktProgress?.server_position != null ? " · 最后位置 "+yktProgress.server_position.toFixed(1)+" 秒" : ""}</small>
+        </div>
+        <div className="sf-ykt-live-item">
+          <span>批量任务</span>
+          <strong>{yktProgress?.available ?
+            yktProgress.processed+" / "+(yktProgress.total??"—") : "—"}</strong>
+          <small>{yktProgress?.available ?
+            "成功 "+yktProgress.success+" · 跳过 "+yktProgress.skipped+
+            " · 失败 "+yktProgress.failed+" · 停止 "+yktProgress.stopped : "等待原版任务统计"}</small>
+          {yktProgress?.current_index != null && <small>正在处理第 {yktProgress.current_index} 个视频</small>}
+        </div>
+        {yktProgress?.rich_total != null && <div className="sf-ykt-live-item">
+          <span>图文任务</span>
+          <strong>{yktProgress.rich_processed} / {yktProgress.rich_total}</strong>
+          <small>成功 {yktProgress.rich_success} · 失败 {yktProgress.rich_failed}</small>
+          {yktProgress.rich_current != null && <small>处理到第 {yktProgress.rich_current} 篇图文</small>}
+        </div>}
+      </div>
+      <small className="sf-ykt-live-note">模拟位置不是已核验学习进度；并发模式下，原版日志未标识每条心跳所属视频，仅显示最新记录。</small>
+    </div>}
     {platform === "zhidao"
       ? <div className="legacy-field">
           <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择智慧课程</label>
