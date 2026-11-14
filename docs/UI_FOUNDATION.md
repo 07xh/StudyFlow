@@ -40,7 +40,7 @@
 ## 验收
 
 - CI 执行 Python pytest 与前端 TypeScript/Vite build。
-- Windows 打包仍由手动触发的 Windows workflow 负责。
+- PR 和手动验证执行完整 Windows NSIS 构建；主分支推送由独立 Windows workflow 生成安装包。
 - CI 成功不表示已通过真实登录/课程或 Windows 安装验收。
 
 ## StudyFlow 自有通用控件
