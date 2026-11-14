@@ -71,3 +71,6 @@ jobs:
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14
+      - name: Verify clean install upgrade launch and uninstall
+        shell: pwsh
+        run: ./scripts/test-windows-install.ps1

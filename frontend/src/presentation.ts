@@ -31,6 +31,10 @@ export function courseKey(course: Course): string {
   return course.platform + ":" + course.course_id;
 }
 
+export function selectedSessionCourse(courses: Course[], selected: Course | null): Course | null {
+  return selected ? courses.find(course => courseKey(course) === courseKey(selected)) ?? null : null;
+}
+
 export function describeConnection(state: PlatformState): string {
   switch (state.status) {
     case "connected": return "服务端会话已核验";

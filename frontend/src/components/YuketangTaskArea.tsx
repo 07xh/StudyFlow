@@ -12,8 +12,9 @@ type Props={
   desktop:boolean;
   connected:boolean;
   onEvent?:(action:string,result:"success"|"warning",detail:string)=>void;
+  detailMode?:boolean;
 };
-export function YuketangTaskArea({courses,desktop,connected,onEvent}:Props){
+export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=false}:Props){
   const [options,setOptions]=useState<OriginalYktOptions>({...originalYktDefaults});
   const [loaded,setLoaded]=useState(false);
   const [busy,setBusy]=useState<"load"|"save"|null>(null);
@@ -128,6 +129,6 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent}:Props){
     </section>
     <LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
       connected={connected} yuketangOptions={options} settingsReady={loaded}
-      onEvent={onEvent}/>
+      detailMode={detailMode} onEvent={onEvent}/>
   </>;
 }

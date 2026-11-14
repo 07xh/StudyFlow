@@ -8,11 +8,12 @@ from pathlib import Path
 import re
 import tempfile
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 OWNER = "07xh"
 REPO = "StudyFlow"
 API = f"https://api.github.com/repos/{OWNER}/{REPO}/releases"
-VERSION_PATTERN = re.compile(r"^v?(\d+(?:\.\d+){1,3})(?:[-+]([0-9A-Za-z.-]+))?$")
+VERSION_PATTERN = re.compile(r"^v?(\d+(?:\.\d+){1,3})(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
 
 def version_parts(value: str) -> tuple[int, ...]:
@@ -25,7 +26,15 @@ def version_parts(value: str) -> tuple[int, ...]:
 def is_newer(candidate: str, current: str) -> bool:
     a, b = version_parts(candidate), version_parts(current)
     length = max(len(a), len(b))
-    return a + (0,) * (length - len(a)) > b + (0,) * (length - len(b))
+    numbers_a, numbers_b = a + (0,) * (length - len(a)), b + (0,) * (length - len(b))
+    if numbers_a != numbers_b:
+        return numbers_a > numbers_b
+    pre_a, pre_b = VERSION_PATTERN.fullmatch(candidate.strip()).group(2), VERSION_PATTERN.fullmatch(current.strip()).group(2)
+    if pre_a is None or pre_b is None:
+        return pre_a is None and pre_b is not None
+    def prerelease(value):
+        return tuple((0, int(part)) if part.isdigit() else (1, part) for part in value.split('.'))
+    return prerelease(pre_a) > prerelease(pre_b)
 
 
 def release_info(current_version: str, channel: str = "stable", timeout: int = 10) -> dict | None:
@@ -34,8 +43,13 @@ def release_info(current_version: str, channel: str = "stable", timeout: int = 1
         raise ValueError("Unsupported update channel")
     url = API + ("/latest" if channel == "stable" else "?per_page=20")
     req = Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "StudyFlow-Updater"})
-    with urlopen(req, timeout=timeout) as response:
-        data = json.load(response)
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            data = json.load(response)
+    except HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
     releases = [data] if isinstance(data, dict) else data
     for release in releases:
         if release.get("draft") or (channel == "stable" and release.get("prerelease")):

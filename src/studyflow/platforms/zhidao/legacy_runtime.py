@@ -253,11 +253,16 @@ PLAYER_SPEEDS = {"1", "1.25", "1.5", "2"}
 
 
 def _player_settings_path() -> Path:
-    return installation_root() / "official-player-settings.json"
+    local = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    return local / "StudyFlow" / "zhidao" / "official-player-settings.json"
 
 
 def get_player_settings() -> dict:
     path = _player_settings_path()
+    # Read the old preference only until StudyFlow has its own saved copy.
+    # Upgrading never writes back into the previous application's directory.
+    if not path.exists():
+        path = installation_root() / "official-player-settings.json"
     settings = dict(PLAYER_DEFAULTS)
     try:
         if path.is_symlink() or path.stat().st_size > 4096:

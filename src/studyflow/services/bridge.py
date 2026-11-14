@@ -29,6 +29,7 @@ atexit.register(qr_runtime.cancel)
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
+from studyflow.services import update_manager
 from studyflow.platforms.yuketang.legacy_config import read_settings as get_original_ykt_settings, save_settings as save_original_ykt_settings
 
 MAX_LINE = 600000
@@ -51,6 +52,21 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("version") != 1:
         return {"id": request_id, "ok": False, "error": "UNSUPPORTED_VERSION"}
     operation = request.get("operation")
+    if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download"):
+        try:
+            if operation == "updates.settings.get":
+                data = update_manager.preferences()
+            elif operation == "updates.settings.save":
+                data = update_manager.save_preferences(request.get("settings"))
+            elif operation == "updates.check":
+                data = update_manager.check(request.get("current_version"))
+            else:
+                data = update_manager.download(request.get("current_version"), request.get("release_version"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_UPDATE_SETTINGS"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UPDATE_FAILED"}
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
     if operation in ("zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"):

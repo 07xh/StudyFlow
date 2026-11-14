@@ -1,12 +1,13 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {
-  Activity,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
+  Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
   History,ListChecks,RefreshCw,Search
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
+import {UpdatePanel} from "./components/UpdatePanel";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
@@ -22,7 +23,7 @@ import {
 import type {Config,Video,ZhidaoPlayerSettings} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
-import {presentCourse,platformNames} from "./presentation";
+import {presentCourse,platformNames,selectedSessionCourse} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo,platformRegistry} from "./ui/registry";
@@ -212,7 +213,7 @@ export default function App(){
   function renderPlatformLogin(platform:Platform){
     if(platform==="zhidao")return <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
       onOpenNative={()=>setQrOpen(true)}
-      onImported={()=>{recordEvent("知到","导入 Cookie","success","服务器已确认会话");void refresh();}}/>;
+      onImported={()=>{invalidatePlatform("zhidao");recordEvent("知到","导入 Cookie","success","服务器已确认会话");void refresh();}}/>;
     if(platform==="yuketang")return <YuketangLoginPanel config={config}
       desktop={desktop} busy={Boolean(busy)}
       connected={platforms.yuketang.status==="connected"} videos={videos}
@@ -298,6 +299,7 @@ export default function App(){
     setBusy("configure");setNotice("");
     try{
       await request<{saved:boolean}>({operation:"yuketang.configure",configuration:config});
+      invalidatePlatform("yuketang");
       setConfig(previous=>({...previous,session_id:"",csrf_token:"",sign:""}));
       recordEvent("雨课堂","保存登录会话","success","凭据已写入 Windows 凭据管理器");
       await refresh();
@@ -306,6 +308,12 @@ export default function App(){
       const message=friendlyBridgeError(error);
       setNotice(message);recordEvent("雨课堂","保存登录会话","warning",message);
     }finally{setBusy("");}
+  }
+
+  function invalidatePlatform(platform:Platform){
+    setPlatforms(previous=>({...previous,[platform]:{...previous[platform],courses:[]}}));
+    setSelectedCourse(previous=>previous?.platform===platform?null:previous);
+    if(platform==="yuketang")setVideos([]);
   }
 
   const renderMetrics=()=> <section className="sf-metrics-grid" aria-label="学习统计">
@@ -373,41 +381,110 @@ export default function App(){
       </div>}
   </section>;
 
-  const renderCourses=()=> <section>
-    <div className="section-head">
-      <h3>课程列表</h3>
-      {coursePlatform!=="all"&&<button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
-        onClick={()=>void sync(coursePlatform as Platform)}>
-        <RefreshCw size={15}/>同步当前平台
-      </button>}
-    </div>
-    <div className="sf-search-toolbar">
-      <label className="sf-search"><Search size={16}/><input type="search"
-        placeholder="搜索课程名称或 ID" value={query} onChange={event=>setQuery(event.target.value)}
-        aria-label="搜索课程"/></label>
-      <div className="sf-filters" aria-label="按平台筛选">
-        {[{id:"all",name:"全部平台"},...platformRegistry].map(option=><button type="button"
-          key={option.id} aria-pressed={coursePlatform===option.id}
-          className={coursePlatform===option.id?"sf-filter is-selected":"sf-filter"}
-          onClick={()=>setCoursePlatform(option.id)}>{option.name}</button>)}
+  const renderCourseWorkspace=(course:Course)=>{
+    const definition=platformInfo(course.platform);
+    const progress=presentCourse(course);
+    const percent=progress.percent;
+    const metric=course.course_type==="ai"?"已达满进度知识点占比":
+      course.course_type==="shared"?"已完成视频占比":"服务端确认进度";
+    const verifiedAt=course.verified_at?new Date(course.verified_at).toLocaleString():"尚无服务器核验时间";
+    const updateCourses=(list:Course[])=>setPlatforms(previous=>({
+      ...previous,[course.platform]:{...previous[course.platform],courses:list}
+    }));
+    return <section className="sf-course-workspace">
+      <div className="sf-course-detail-topline">
+        <div className="sf-course-breadcrumb">
+          <span>{definition?.name??platformNames[course.platform]}</span>
+          <ChevronRight size={14}/>
+          <strong>课程详情</strong>
+        </div>
+        <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>
+          <ArrowLeft size={15}/>返回课程列表
+        </button>
       </div>
-    </div>
-    {filtered.length>0
-      ?<div className="course-grid">{filtered.map(course=>
-        <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
-      :<EmptyState icon={BookOpen} title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
-        description={courses.length>0?"可以更换搜索词或平台筛选。":"在平台卡片中完成登录并同步后，真实课程会显示在这里。"}
-        action={courses.length===0?<button className="secondary" type="button" onClick={()=>setPage("platforms")}>前往平台登录</button>:undefined}/>}
-    {selectedCourse?.platform==="zhidao"&&<ZhidaoCourseDetailPanel course={selectedCourse}
-      desktop={desktop} onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}/>}
-    {selectedCourse?.platform==="yuketang"&&<div className="course-v2-detail" role="region" aria-label="课程详情">
-      <div><span className="eyebrow">雨课堂 / 课程详情</span>
-        <h3>{selectedCourse.title}</h3>
-        <p>{presentCourse(selectedCourse).detail}；学习进度只有平台服务端确认后才会展示。</p>
+      <section className="sf-course-total-progress" aria-label="课程总进度">
+        <div className="sf-course-total-head">
+          <div className="sf-course-total-copy">
+            <span className="eyebrow">{definition?.name??platformNames[course.platform]} / {course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"}</span>
+            <h2>{course.title}</h2>
+            <p>{progress.label}</p>
+          </div>
+          <div className="sf-course-total-value">
+            <strong>{percent===null?"—":percent.toFixed(1)+"%"}</strong>
+            <small>课程总进度</small>
+          </div>
+        </div>
+        <div className={"sf-course-total-track"+(percent===null?" is-empty":"")} role="progressbar"
+          aria-label="服务器已核验课程进度" aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={percent??0}>
+          <span style={{width:(percent??0)+"%"}}/>
+        </div>
+        <div className="sf-course-total-meta">
+          <span>{metric}</span>
+          <span>{percent===null?"等待服务器核验":"核验时间 "+verifiedAt}</span>
+        </div>
+        <p className="sf-course-total-note">{progress.detail}</p>
+      </section>
+      {course.platform==="zhidao"
+        ?<>
+          <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
+          <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")} expandedByDefault/>
+          <ZhidaoProgressPanel courses={platforms.zhidao.courses}
+            desktop={desktop} connected={platforms.zhidao.status==="connected"}
+            onCoursesUpdated={updateCourses}
+            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}
+            courseId={course.course_id} courseTitle={course.title} detailMode/>
+          <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
+            desktop={desktop} connected={platforms.zhidao.status==="connected"}
+            courseId={course.course_id} detailMode
+            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+          <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
+            courseId={course.course_id} detailMode onCoursesUpdated={updateCourses}
+            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
+        </>
+        :<>
+          <section className="sf-course-chapter-note">
+            <div className="section-head"><h3>章节进度</h3></div>
+            <p>当前接口尚未返回这门课程可核验的章节进度明细。</p>
+          </section>
+          <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="雨课堂")} expandedByDefault/>
+          <YuketangTaskArea courses={[course]} desktop={desktop}
+            connected={platforms.yuketang.status==="connected"} detailMode
+            onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>
+        </>}
+    </section>;
+  };
+
+  const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
+
+  const renderCourses=()=> activeSelectedCourse
+    ?renderCourseWorkspace(activeSelectedCourse)
+    :<section>
+      <div className="section-head">
+        <h3>课程列表</h3>
+        {coursePlatform!=="all"&&<button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
+          onClick={()=>void sync(coursePlatform as Platform)}>
+          <RefreshCw size={15}/>同步当前平台
+        </button>}
       </div>
-      <button type="button" className="secondary" onClick={()=>setSelectedCourse(null)}>关闭</button>
-    </div>}
-  </section>;
+      <div className="sf-search-toolbar">
+        <label className="sf-search"><Search size={16}/><input type="search"
+          placeholder="搜索课程名称或 ID" value={query} onChange={event=>setQuery(event.target.value)}
+          aria-label="搜索课程"/></label>
+        <div className="sf-filters" aria-label="按平台筛选">
+          {[{id:"all",name:"全部平台"},...platformRegistry].map(option=><button type="button"
+            key={option.id} aria-pressed={coursePlatform===option.id}
+            className={coursePlatform===option.id?"sf-filter is-selected":"sf-filter"}
+            onClick={()=>setCoursePlatform(option.id)}>{option.name}</button>)}
+        </div>
+      </div>
+      {filtered.length>0
+        ?<div className="course-grid">{filtered.map(course=>
+          <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
+        :<EmptyState icon={BookOpen} title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
+          description={courses.length>0?"可以更换搜索词或平台筛选。":"在平台卡片中完成登录并同步后，真实课程会显示在这里。"}
+          action={courses.length===0?<button className="secondary" type="button" onClick={()=>setPage("platforms")}>前往平台登录</button>:undefined}/>}
+    </section>;
 
   const renderTasks=()=> <section className="sf-section">
     <div className="section-head"><h3>学习任务</h3></div>
@@ -426,21 +503,16 @@ export default function App(){
     </div>
   </section>;
 
-  const renderRecords=()=> <section>
-    <div className="section-head"><h3>已核验学习记录</h3></div>
-    {verifiedCourses.length>0
-      ?<div className="course-grid">{verifiedCourses.map(course=>
-        <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
-      :<EmptyState icon={History} title="暂无已核验学习记录"
-        description="当前课程接口没有返回可验证的学习进度，不会用本地播放计数代替平台记录。"/>}
-    {selectedCourse?.platform==="zhidao"&&<ZhidaoCourseDetailPanel course={selectedCourse}
-      desktop={desktop} onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}/>}
-    {selectedCourse?.platform==="yuketang"&&<div className="course-v2-detail">
-      <div><span className="eyebrow">雨课堂 / 学习记录</span>
-        <h3>{selectedCourse.title}</h3><p>{presentCourse(selectedCourse).detail}</p></div>
-      <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>关闭</button>
-    </div>}
-  </section>;
+  const renderRecords=()=> activeSelectedCourse
+    ?renderCourseWorkspace(activeSelectedCourse)
+    :<section>
+      <div className="section-head"><h3>已核验学习记录</h3></div>
+      {verifiedCourses.length>0
+        ?<div className="course-grid">{verifiedCourses.map(course=>
+          <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
+        :<EmptyState icon={History} title="暂无已核验学习记录"
+          description="当前课程接口没有返回可验证的学习进度，不会用本地播放计数代替平台记录。"/>}
+    </section>;
 
   const renderLogs=()=> <section>
     <div className="section-head"><h3>本机操作记录</h3>
@@ -485,6 +557,7 @@ export default function App(){
           </div>
         </section>
       </>}
+      <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice}/>
     </AppShell>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
@@ -492,6 +565,7 @@ export default function App(){
       onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setQrOpen(false);
+        invalidatePlatform("zhidao");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");
         void refresh().then(()=>setNotice(previous=>previous||"知到登录已通过服务端核验。"));}}/>}
     <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}

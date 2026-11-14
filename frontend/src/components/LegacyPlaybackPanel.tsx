@@ -14,24 +14,27 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected, onEvent, yuketangOptions, settingsReady=true
+  platform, courses, desktop, connected, onEvent, yuketangOptions, settingsReady=true, courseId, detailMode=false
 }: {
   platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
   onEvent?: (action:string,result:"success"|"warning",detail:string)=>void;
   yuketangOptions?: OriginalYktOptions;
   settingsReady?: boolean;
+  courseId?:string;
+  detailMode?:boolean;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [selection, setSelection] = useState("");
+  const [selection, setSelection] = useState(courseId??"");
   const options = yuketangOptions ?? {...originalYktDefaults};
   const aiCourses = courses.filter(c => c.platform === "zhidao" && c.course_type === "ai");
   const verified = courses.map(course => ({course, presentation: presentCourse(course)}))
     .filter(item => item.presentation.percent !== null);
   const liveZhs = platform === "zhidao" && status?.state === "running" &&
     status.course_id === selection ? status.zhs_progress : null;
+  const selectedCourse=courses.find(course=>course.course_id===selection)??null;
 
   const updateStatus = useCallback(async () => {
     if (!desktop) return;
@@ -47,6 +50,10 @@ export function LegacyPlaybackPanel({
       } else setYktProgress(null);
     } catch { setStatus(null);setYktProgress(null); }
   }, [desktop, platform]);
+
+  useEffect(() => {
+    if(courseId)setSelection(courseId);
+  },[courseId]);
 
   useEffect(() => {
     void updateStatus();
@@ -91,7 +98,7 @@ export function LegacyPlaybackPanel({
         {status ? labels[status.state] : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
     </div>
-    <div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
+    <div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
         <strong>{status ? labels[status.state] : desktop ? "检测中" : "未连接桌面端"}</strong>
@@ -116,7 +123,7 @@ export function LegacyPlaybackPanel({
           <small>仅原版本地输出，非服务器确认进度</small>
         </div>}
       </div>
-      <div className="sf-live-course-progress">
+      {!detailMode&&<div className="sf-live-course-progress">
         <div className="sf-live-course-heading">
           <span>{platform==="yuketang"?"课程整体进度":"平台学习进度"}</span>
           <small>{verified.length>0?`已核验 ${verified.length} 门`:"暂无服务端核验数据"}</small>
@@ -134,7 +141,7 @@ export function LegacyPlaybackPanel({
               <strong>{presentation.percent?.toFixed(1)}%</strong>
             </div>)}</div>
           :<div className="sf-unverified-note">{platform==="yuketang"?"课程整体进度暂无核验值；下方展示原版视频进度记录":"未接入可验证的实时百分比"}</div>}
-      </div>
+      </div>}
     </div>
     {platform === "yuketang" && <div className="sf-ykt-live" aria-label="雨课堂原版实时进度">
       <div className="sf-ykt-live-title"><strong>雨课堂原版进度</strong>
@@ -181,12 +188,15 @@ export function LegacyPlaybackPanel({
       </div>
       <small className="sf-ykt-live-note">模拟位置不是已核验学习进度；并发模式下，原版日志未标识每条心跳所属视频，仅显示最新记录。</small>
     </div>}
-    {platform === "zhidao"&&<div className="legacy-field">
+    {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
       <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择智慧课程</label>
       <select id="legacy-zhidao-course" value={selection} onChange={e=>setSelection(e.target.value)}>
         <option value="">选择已同步的智慧课程</option>
         {aiCourses.map(c=><option value={c.course_id} key={c.course_id}>{c.title}</option>)}
       </select>
+    </div>}
+    {platform === "zhidao"&&detailMode&&<div className="legacy-field sf-legacy-course-context">
+      <span>当前运行课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
     </div>}
     <div className="actions legacy-actions">
       <button className="primary" type="button" disabled={!desktop||!connected||busy||

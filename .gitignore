@@ -17,3 +17,9 @@ cookies*
 *session*.json
 *.har
 *.exe
+node_modules/
+*.tsbuildinfo
+*.egg-info/
+src-tauri/target/
+packaging/sidecar/
+src-tauri/icons/

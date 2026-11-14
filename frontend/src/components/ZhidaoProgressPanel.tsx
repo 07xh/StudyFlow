@@ -12,10 +12,13 @@ type Props={
   connected:boolean;
   onCoursesUpdated:(courses:Course[])=>void;
   onEvent?:(action:string,result:EventResult,detail:string)=>void;
+  courseId?:string;
+  courseTitle?:string;
+  detailMode?:boolean;
 };
 
-export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,onEvent}:Props){
-  const [selected,setSelected]=useState("");
+export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,onEvent,courseId,courseTitle,detailMode=false}:Props){
+  const [selected,setSelected]=useState(courseId??"");
   const [monitor,setMonitor]=useState(false);
   const [busy,setBusy]=useState<"sync"|"verify"|null>(null);
   const [message,setMessage]=useState("");
@@ -30,9 +33,13 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
   const view=current?presentCourse(current):null;
 
   useEffect(()=>{
+    if(courseId){
+      if(courses.some(course=>course.course_id===courseId)&&selected!==courseId)setSelected(courseId);
+      return;
+    }
     if(!courses.some(course=>course.course_id===selected))
       setSelected(courses[0]?.course_id??"");
-  },[courses,selected]);
+  },[courses,selected,courseId]);
 
   const run=useCallback(async(kind:"sync"|"verify",quiet=false)=>{
     if(!desktop||!connected||busyRef.current||(kind==="verify"&&!selected))return;
@@ -77,37 +84,41 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       <div><h3><ShieldCheck size={17}/> 知到服务器进度核验</h3></div>
       <span className="legacy-run-state">只读查询</span>
     </div>
-    <div className="sf-zd-progress-grid">
-      <label>
-        选择核验课程
-        <select value={selected} onChange={event=>setSelected(event.target.value)} disabled={!courses.length||busy!==null}>
-          {courses.length===0&&<option value="">暂无已同步课程</option>}
-          {courses.map(course=><option key={course.course_id} value={course.course_id}>
-            {course.title} · {course.course_type==="ai"?"智慧课程":"共享课"}
-          </option>)}
-        </select>
-      </label>
+    <div className={"sf-zd-progress-grid"+(detailMode?" is-detail":"")}>
+      {detailMode
+        ?<div className="sf-zd-progress-course"><span>当前核验课程</span><strong>{courseTitle??current?.title??"未选择课程"}</strong></div>
+        :<label>
+          选择核验课程
+          <select value={selected} onChange={event=>setSelected(event.target.value)} disabled={!courses.length||busy!==null}>
+            {courses.length===0&&<option value="">暂无已同步课程</option>}
+            {courses.map(course=><option key={course.course_id} value={course.course_id}>
+              {course.title} · {course.course_type==="ai"?"智慧课程":"共享课"}
+            </option>)}
+          </select>
+        </label>}
       <div className="sf-zd-progress-value">
-        <span>{label}</span>
-        <strong>{view?.percent===null||view?.percent===undefined?"—":view.percent.toFixed(1)+"%"}</strong>
-        <small>{view?.label??"等待课程同步"} · 单课核验：{timestamp}</small>
+        <span>{detailMode?"服务器核验状态":label}</span>
+        <strong>{detailMode?(view?.status==="verified"?"已核验":view?.status==="cached"?"历史缓存":"待核验"):
+          view?.percent===null||view?.percent===undefined?"—":view.percent.toFixed(1)+"%"}</strong>
+        <small>{detailMode?(view?.label??"等待课程同步")+" · "+timestamp:
+          (view?.label??"等待课程同步")+" · 单课核验："+timestamp}</small>
         <small>最近一次进度同步：{fetchedAt?new Date(fetchedAt).toLocaleString():"尚未同步"}</small>
       </div>
     </div>
     <div className="sf-zd-progress-actions">
       <button className="primary" type="button" disabled={!desktop||!connected||!selected||busy!==null}
         onClick={()=>void run("verify")}>
-        <ShieldCheck size={15}/>{busy==="verify"?"核验中…":"核验选中课程"}
+        <ShieldCheck size={15}/>{busy==="verify"?"核验中…":detailMode?"核验当前课程":"核验选中课程"}
       </button>
-      <button className="secondary" type="button" disabled={!desktop||!connected||busy!==null}
+      {!detailMode&&<button className="secondary" type="button" disabled={!desktop||!connected||busy!==null}
         onClick={()=>void run("sync")}>
         <RefreshCw size={15}/>{busy==="sync"?"同步中…":"同步全部进度"}
-      </button>
+      </button>}
     </div>
-    <div className="sf-zd-progress-auto">
+    {!detailMode&&<div className="sf-zd-progress-auto">
       <div><strong>定时只读核验</strong><small>开启后每 2 分钟核验当前选中课程；默认关闭。</small></div>
       <Switch checked={monitor} onChange={setMonitor} aria-label="开启每两分钟知到单课只读核验"/>
-    </div>
+    </div>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     <p className="sf-zd-progress-note">
       {incomplete?"本次同步存在未完成项。":"只读取平台已有记录，不提交学习进度。"}
