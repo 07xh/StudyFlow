@@ -70,7 +70,7 @@ test("first-run consent uses native bundled resources and blocks the desktop unt
  assert.match(gate,/studyflow_read_document/);
  assert.match(gate,/点击“同意并继续使用”即表示你已阅读并同意/);
  assert.doesNotMatch(gate,/type="checkbox"/);
- assert.match(gate,/不同意并退出/);
+ assert.match(gate,/退出学序/);
  assert.match(gate,/studyflow_exit/);
  assert.doesNotMatch(gate,/studyflow\.consent\.status|studyflow\.consent\.accept|zhidao\.document\.read/);
  assert.match(app,/StudyFlowConsentGate desktop=\{desktop\}/);
