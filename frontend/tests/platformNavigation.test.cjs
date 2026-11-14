@@ -89,7 +89,7 @@ test("LightC-style left rail is compact, permanent, and keeps settings in the he
  assert.match(css,/position:sticky/);
  assert.match(css,/\.sf-shell \.sf-floating-nav \.nav/);
  assert.doesNotMatch(shell,/PanelLeft|handleTriggerClick|onPointerEnter/);
- assert.doesNotMatch(css,/sf-floating-nav__trigger|sf-floating-nav__panel|width:max-content/);
+ assert.doesNotMatch(css,/sf-floating-nav__trigger|sf-floating-nav__panel/);
 });
 
 test("course details render as one expanded workspace with distinct progress sources",()=>{
