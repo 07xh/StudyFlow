@@ -1347,3 +1347,78 @@
   color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;
 }
 .sf-shell .sf-zd-local-observations>p{margin:9px 0 0;color:var(--muted);font-size:10px}
+
+
+/* LightC AnchorNav geometry adapted for StudyFlow: a 32px floating trigger,
+   a compact overlay menu, and no reserved sidebar column. */
+.sf-shell .main{
+  padding-left:clamp(18px,2.4vw,34px);
+}
+.sf-shell .sf-floating-nav{left:12px}
+.sf-shell .sf-floating-nav__trigger{
+  left:12px;
+  width:32px;
+  height:32px;
+  border-radius:9px;
+}
+.sf-shell .sf-floating-nav__trigger.is-open{
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(-50%) scale(.76);
+}
+.sf-shell .sf-floating-nav__panel{
+  left:12px;
+  width:min(196px,calc(100vw - 24px));
+  padding:5px;
+  border-radius:12px;
+  transform:translate(-7px,-50%) scale(.97);
+}
+.sf-shell .sf-floating-nav__panel.is-open{
+  transform:translate(0,-50%) scale(1);
+}
+.sf-shell .sf-floating-nav__header,
+.sf-shell .sf-floating-nav__section-label{
+  display:none;
+}
+.sf-shell .sf-floating-nav__section{
+  margin:0;
+  padding:0;
+  border:0;
+}
+.sf-shell .sf-floating-nav__nav{gap:2px}
+.sf-shell .sf-floating-nav__panel .nav{
+  min-height:33px;
+  margin:0;
+  gap:9px;
+  padding:7px 9px;
+  border-radius:8px;
+  font-size:12px;
+  line-height:1.25;
+}
+.sf-shell .sf-floating-nav__panel .nav svg{
+  width:16px;
+  height:16px;
+}
+.sf-shell .sf-floating-nav__panel .sf-subnav{
+  margin:2px 0 2px 13px;
+  padding-left:7px;
+}
+.sf-shell .sf-floating-nav__panel .sf-subnav .nav{
+  min-height:29px;
+  padding:6px 8px;
+  font-size:11px;
+}
+.sf-shell .sf-settings-button[aria-current="page"]{
+  color:var(--accent-text);
+  border-color:rgba(19,217,146,.28);
+  background:var(--soft-accent);
+}
+@media(max-width:720px){
+  .sf-shell .main{padding-left:13px}
+  .sf-shell .sf-floating-nav{left:8px}
+  .sf-shell .sf-floating-nav__trigger{left:8px}
+  .sf-shell .sf-floating-nav__panel{
+    left:8px;
+    width:min(196px,calc(100vw - 16px));
+  }
+}
