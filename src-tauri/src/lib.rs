@@ -1,3 +1,5 @@
+mod legacy_tasks;
+
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -46,7 +48,7 @@ impl Drop for QrBridgeWorker {
 
 type QrBridgeState = Arc<Mutex<Option<QrBridgeWorker>>>;
 
-fn bridge_binary(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn bridge_binary(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let packaged = app.path().resource_dir().map_err(|_| "Resource directory unavailable")?
         .join("bin").join("studyflow-bridge.exe");
     if packaged.is_file() {
@@ -150,7 +152,16 @@ fn launch_zhidao_legacy() -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(Mutex::new(None::<QrBridgeWorker>)))
-        .invoke_handler(tauri::generate_handler![bridge_request, launch_zhidao_legacy])
+        .manage(legacy_tasks::LegacyTasks::default())
+        .invoke_handler(tauri::generate_handler![
+            bridge_request, launch_zhidao_legacy,
+            legacy_tasks::legacy_start, legacy_tasks::legacy_status, legacy_tasks::legacy_stop
+        ])
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
+                window.state::<legacy_tasks::LegacyTasks>().shutdown();
+            }
+        })
         .run(tauri::generate_context!())
         .expect("Failed to launch StudyFlow");
 }
