@@ -144,3 +144,18 @@ test("consent requires one explicit decision and keeps a single exit action", ()
   assert.match(css,/sf-zd-progress-grid/);
   assert.match(css,/sf-zd-player-settings/);
 });
+
+test("platform controls keep independent settings and per-platform login expansion", () => {
+  const app=read("src/App.tsx");
+  const official=read("src/components/ZhidaoOfficialPlayerPanel.tsx");
+  const progress=read("src/components/ZhidaoProgressPanel.tsx");
+  const yuketang=read("src/components/YuketangTaskArea.tsx");
+  assert.match(app,/Record<Platform,boolean>/);
+  assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
+  assert.match(app,/\[platform\]:!previous\[platform\]/);
+  assert.match(official,/update\("allowMinimize",checked\)/);
+  assert.match(official,/update\("autoStart",checked\)/);
+  assert.match(official,/update\("autoNext",checked\)/);
+  assert.match(progress,/onChange=\{setMonitor\}/);
+  assert.match(yuketang,/update\(id,event\.currentTarget\.checked\)/);
+});
