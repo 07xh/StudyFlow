@@ -113,6 +113,10 @@ export default function App(){
   },[]);
 
   const courses=useMemo(()=>Object.values(platforms).flatMap(item=>item.courses),[platforms]);
+  useEffect(()=>{
+    if(!selectedCourse)return;
+    if(!selectedSessionCourse(courses,selectedCourse))setSelectedCourse(null);
+  },[courses,selectedCourse]);
   const filtered=useMemo(()=>courses.filter(course=>
     (coursePlatform==="all"||course.platform===coursePlatform)&&
     (course.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())||
@@ -177,8 +181,9 @@ export default function App(){
     setBusy("clear");setNotice("");
     try{
       await request<{cleared:boolean}>({operation:"yuketang.clear"});
-      setPlatforms(previous=>({...previous,yuketang:initialPlatforms.yuketang}));
-      setConfig(emptyConfiguration);setVideos([]);setClearDialogOpen(false);
+      invalidatePlatform("yuketang",true);
+      setConfig(emptyConfiguration);setClearDialogOpen(false);
+      await refresh();
       setNotice("已清除学序保存的雨课堂凭据；原版客户端不受影响。");
       recordEvent("雨课堂","退出并清除凭据","success","已清除学序凭据");
     }catch(error){
@@ -280,7 +285,7 @@ export default function App(){
           onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
         <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")}/>
         <ZhidaoAccountTools desktop={desktop} dark={dark}
-          onDataChanged={()=>{setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:[]}}));void refresh();}}/>
+          onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
       </>}
       <section className="sf-platform-section sf-platform-detail">
         <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
@@ -310,8 +315,10 @@ export default function App(){
     }finally{setBusy("");}
   }
 
-  function invalidatePlatform(platform:Platform){
-    setPlatforms(previous=>({...previous,[platform]:{...previous[platform],courses:[]}}));
+  function invalidatePlatform(platform:Platform, resetStatus = false){
+    setPlatforms(previous=>({...previous,[platform]:resetStatus
+      ?initialPlatforms[platform]
+      :{...previous[platform],courses:[]}}));
     setSelectedCourse(previous=>previous?.platform===platform?null:previous);
     if(platform==="yuketang")setVideos([]);
   }

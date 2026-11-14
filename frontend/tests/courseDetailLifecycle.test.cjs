@@ -29,3 +29,8 @@ test('chapter detail follows verification timestamp and clears failed refresh',a
  assert.doesNotMatch(JSON.stringify(view.toJSON()),/snapshot-[12]/);
  act(()=>view.unmount());
 });
+
+test('clears a selected course when the current session no longer contains it',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../src/App.tsx'),'utf8');
+ assert.match(source,/useEffect\(\(\)=>\{\s*if\(!selectedCourse\)return;\s*if\(!selectedSessionCourse\(courses,selectedCourse\)\)setSelectedCourse\(null\);\s*\},\[courses,selectedCourse\]\);/);
+});

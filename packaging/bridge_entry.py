@@ -72,7 +72,15 @@ def main() -> int:
                     from zhs.__main__ import app  # noqa: F401
                     from studyflow.platforms.zhidao.upstream import zhidao_only  # noqa: F401
                     from studyflow.platforms.zhidao import qr_login_core, verify_entry  # noqa: F401
-                    print("[ZHS_RUNTIME_OK] standalone ZHS 0.1.5 ready")
+                    from studyflow.services.legacy_playback import _zhs_monitor_source
+                    import runpy
+                    monitor_source = _zhs_monitor_source()
+                    if not monitor_source.is_file():
+                        raise ImportError("bundled ZHS monitor is missing")
+                    monitor = runpy.run_path(str(monitor_source), run_name="studyflow_zhs_monitor_check")
+                    if not callable(monitor.get("NumericTelemetry")) or not callable(monitor.get("StdoutObserver")):
+                        raise ImportError("bundled ZHS monitor entrypoints are unavailable")
+                    print("[ZHS_RUNTIME_OK] standalone ZHS 0.1.5 and original progress observer ready")
                     return 0
             except (ImportError, PackageNotFoundError, ValueError, OSError):
                 pass

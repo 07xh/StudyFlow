@@ -1,12 +1,15 @@
 # StudyFlow final integration
 
-Goal: integrate the four pending follow-ups and close verified gaps without modifying original executors.
-Architecture: retain React → Tauri → frozen Python IPC and original vendor sources. Keep settings and updater artifacts within StudyFlow's per-user directory.
+Goal: finish the existing StudyFlow integration without replacing either original executor.
+Architecture: React → Tauri → frozen Python IPC; preserve the original ZHS 0.1.5 and Rain Classroom source/runtime.
 
-- [x] Merge feature audit, compact navigation, course workspace and duplicate-resource cleanup locally; run existing frontend checks.
-- [ ] Reproduce and fix old-install settings writes and stale course selection after logout; retain read compatibility with old settings.
-- [ ] Add frozen-runtime validation for original YKT module imports, original config and every ZHS worker import, plus a clean-settings JSONL probe during Windows packaging.
-- [ ] Connect existing update discovery/download service through bounded IPC to settings UI; store A/B and channel preferences, verify release asset SHA-256, provide downloaded-file access. No release exists yet; show that state accurately.
-- [ ] Run full Python/UI/build verification, review integration, publish PR, wait for Windows packaging and merge validated changes. Record actual platform/Windows account limitations.
+- [x] Merge feature audit, compact floating navigation, platform-owned login, course workspace and duplicate-resource cleanup; run frontend checks.
+- [x] Keep legacy settings migration read-only: read the old ZHS player preference when no StudyFlow copy exists, but write all changes only to the StudyFlow per-user directory.
+- [x] Clear selected course context when either platform session/cache is invalidated; do not leave a stale detail workspace after logout.
+- [x] Verify the frozen ZHS CLI/login/course imports, bundled numeric progress observer, original Rain Classroom module/config imports, and both platforms' settings JSONL handlers without contacting school servers.
+- [x] Connect update discovery/download through bounded IPC; persist A/B and channel preferences, verify the unique Windows x64 Release asset SHA-256, and expose the downloaded update directory. No Release is treated as available until one is actually published.
+- [ ] Finish Windows NSIS build, install/upgrade/launch/uninstall smoke, preserve-user-data check, and artifact upload.
+- [ ] Review and merge the validated PR; publish a Release only after Windows and real-account verification.
+- [ ] Record the remaining real-account acceptance steps: QR login, real course sync, Rain Classroom session validation and original-client coexistence.
 
-Review focus: no credentials or synthetic course data in tests/UI; no original executor changes; no writes to old installation; no stale course controls after clearing identity; no arbitrary download destinations or installer execution from release notes.
+Review focus: no credentials or synthetic course data in UI/tests; original executors unchanged; no writes into the old installation; no stale course controls after logout; no arbitrary download destination or installer execution from release notes.

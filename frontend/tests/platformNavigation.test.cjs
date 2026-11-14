@@ -131,34 +131,12 @@ test("course details render as one expanded workspace with distinct progress sou
 });
 
 
-test("course details render as one expanded workspace with distinct progress sources",()=>{
+test("logout clears the selected course workspace for the affected platform",()=>{
  const app=source("App.tsx");
- const lesson=source("components/ZhidaoCourseDetailPanel.tsx");
- const server=source("components/ZhidaoProgressPanel.tsx");
- const simulation=source("components/LegacyPlaybackPanel.tsx");
- const player=source("components/ZhidaoOfficialPlayerPanel.tsx");
- const log=source("components/ZhidaoActivityPanel.tsx");
- const yuketang=source("components/YuketangTaskArea.tsx");
- const css=source("ui/foundation.css");
- assert.match(app,/renderCourseWorkspace/);
- assert.match(app,/sf-course-total-progress/);
- assert.match(app,/headerTitle=\{activeSelectedCourse\?platformNames/);
- assert.match(app,/activeSelectedCourse/);
- assert.match(app,/expandedByDefault/);
- assert.match(app,/courseId=\{course\.course_id\}.*detailMode/s);
- assert.match(lesson,/zhidao\.course\.detail/);
- assert.match(lesson,/章节进度/);
- assert.doesNotMatch(lesson,/detail\.percent\.toFixed/);
- assert.match(server,/courseId\?:string/);
- assert.match(server,/detailMode/);
- assert.match(simulation,/sf-detail-simulation-only/);
- assert.match(simulation,/courseId\?:string/);
- assert.match(player,/sf-zd-local-observations-expanded/);
- assert.match(player,/detailMode/);
- assert.match(log,/expandedByDefault/);
- assert.match(yuketang,/open=\{detailMode\}/);
- assert.match(simulation,/sf-detail-live/);
- assert.match(css,/sf-ykt-live\.sf-detail-live \.sf-ykt-live-grid/);
- assert.match(css,/sf-course-total-progress/);
- assert.match(css,/sf-zd-detail-list-expanded/);
+ assert.ok(app.includes('setSelectedCourse(previous=>previous?.platform===platform?null:previous);'));
+ assert.ok(app.includes('await request<{cleared:boolean}>({operation:"yuketang.clear"});\n      invalidatePlatform("yuketang",true);'));
+ assert.ok(app.includes('      await refresh();\n      setNotice("已清除学序保存的雨课堂凭据；原版客户端不受影响。");'));
+ assert.match(app,/function invalidatePlatform\(platform:Platform, resetStatus = false\)/);
+ assert.match(app,/resetStatus\s*\?\s*initialPlatforms\[platform\]\s*:\s*\{\.\.\.previous\[platform\],courses:\[\]\}/);
+ assert.ok(app.includes('onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}'));
 });
