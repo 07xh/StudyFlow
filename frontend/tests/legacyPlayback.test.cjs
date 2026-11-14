@@ -76,7 +76,7 @@ test("unknown host errors remain generic and do not leak credentials", () => {
 test("desktop status keeps live ZHS telemetry distinct from verified course progress", async () => {
   const sample = {
     platform:"zhidao", state:"running", exit_code:null, course_id:"c".repeat(64),
-    zhs_progress:{video_segment_percent:48.5, resource_index:2, resource_total:5}
+    zhs_progress:{video_segment_percent:48.5, resource_index:2, resource_total:5}, zhs_stale:false
   };
   const calls = [];
   const legacy = loadWithStub(async (operation, props) => {
@@ -95,6 +95,8 @@ test("the ZHS original segment is displayed only for the selected running course
   assert.match(panel, /非服务器确认进度/);
   assert.match(panel, /结束前最后一次真实采样/);
   assert.match(panel, /未采集到播放进度/);
+  assert.match(panel, /status\.zhs_stale/);
+  assert.match(panel, /本地进度输出已过期/);
 });
 
 
