@@ -52,6 +52,21 @@ export function isDesktop(): boolean {
     Boolean((window as Window & {__TAURI_INTERNALS__?: unknown}).__TAURI_INTERNALS__);
 }
 
+function classifyTauriInvokeError(value: unknown): string {
+  const detail = typeof value === "string" ? value :
+    value instanceof Error ? value.message :
+    value && typeof value === "object" && "message" in value && typeof value.message === "string"
+      ? value.message : "";
+  if (detail.includes("Python learning service is missing")) return "BRIDGE_BINARY_MISSING";
+  if (detail.includes("Could not start Python service")) return "BRIDGE_START_FAILED";
+  if (detail.includes("Python service protocol error")) return "BRIDGE_PROTOCOL_FAILED";
+  if (detail.includes("Python service returned an invalid response")) return "BRIDGE_RESPONSE_INVALID";
+  if (detail.includes("Python service failed")) return "BRIDGE_PROCESS_FAILED";
+  if (detail.includes("Resource directory unavailable")) return "BRIDGE_RESOURCE_DIR_FAILED";
+  if (/bridge_request.*(not found|unknown|missing)/i.test(detail)) return "BRIDGE_COMMAND_UNAVAILABLE";
+  return "BRIDGE_NOT_READY";
+}
+
 /** Real Tauri/sidecar interface only. A browser preview never simulates a local service. */
 export function getStudyFlowTransport(): StudyFlowTransport | null {
   if (!isDesktop()) return null;
@@ -59,8 +74,8 @@ export function getStudyFlowTransport(): StudyFlowTransport | null {
     async request<T>(message: BridgeRequest): Promise<BridgeResponse<T>> {
       try {
         return await invoke<BridgeResponse<T>>("bridge_request", {request: message});
-      } catch {
-        throw new Error("BRIDGE_NOT_READY");
+      } catch (error) {
+        throw new Error(classifyTauriInvokeError(error));
       }
     }
   };
@@ -158,9 +173,16 @@ export async function fetchCoursesFromDesktop(platform: Platform): Promise<Cours
 }
 
 export function friendlyBridgeError(value: unknown): string {
-  const code = value instanceof Error ? value.message : "";
+  const code = value instanceof Error ? value.message : typeof value === "string" ? value : "";
   switch (code) {
     case "BRIDGE_NOT_READY": return "学序 Windows IPC 服务不可用；请检查桌面版和 Python sidecar。";
+    case "BRIDGE_BINARY_MISSING": return "安装包缺少 Python Sidecar（studyflow-bridge.exe）；请安装最新完整 Windows 安装包。";
+    case "BRIDGE_START_FAILED": return "Python Sidecar 启动失败；请检查 Windows 安全软件是否隔离了 studyflow-bridge.exe。";
+    case "BRIDGE_PROTOCOL_FAILED": return "Python Sidecar 已启动，但 JSONL 响应无效；请更新完整安装包。";
+    case "BRIDGE_RESPONSE_INVALID": return "Python Sidecar 返回无效数据，本次读取已停止。";
+    case "BRIDGE_PROCESS_FAILED": return "Python Sidecar 在处理请求时异常退出。";
+    case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
+    case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
     case "PLATFORM_NOT_READY": return "真实平台课程读取失败；请检查账号、网络和原版运行时。";
     case "CREDENTIAL_STORAGE_FAILED": return "Windows 凭据管理器保存失败。";
