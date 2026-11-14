@@ -19,6 +19,9 @@ test("LightC-style floating navigation overlays the workspace and keeps all page
   assert.match(shell,/setNavOpen\(true\)/);
   assert.match(shell,/Escape/);
   assert.match(shell,/aria-expanded=\{navOpen\}/);
+  assert.match(shell,/aria-hidden=\{!navOpen\}/);
+  assert.match(shell,/onFocusCapture/);
+  assert.match(shell,/onBlurCapture/);
   assert.match(shell,/onRefresh/);
   assert.match(css,/--accent:#13d992/);
   assert.match(css,/\.sf-shell \.sf-floating-nav__panel\s*\{[^}]*position:fixed/s);
@@ -26,6 +29,8 @@ test("LightC-style floating navigation overlays the workspace and keeps all page
   assert.match(css,/\.sf-shell \.main\s*\{[^}]*width:100%/s);
   assert.match(css,/backdrop-filter:blur/);
   assert.match(css,/\.sf-shell \.sf-floating-nav__panel \.sf-subnav/);
+  assert.doesNotMatch(css,/\.sf-shell \.sidebar\s*\{/);
+  assert.doesNotMatch(shell,/className="sidebar"/);
   assert.doesNotMatch(shell,/studyflow\.nav\.collapsed|setCollapsed/);
 });
 

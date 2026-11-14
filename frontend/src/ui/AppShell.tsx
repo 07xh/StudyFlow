@@ -87,7 +87,7 @@ export function AppShell({
   function handlePointerLeave(event:ReactPointerEvent<HTMLElement>){
     if(event.pointerType==="touch"||navPinned)return;
     cancelCloseTimer();
-    closeTimerRef.current=window.setTimeout(()=>setNavOpen(false),180);
+    closeTimerRef.current=window.setTimeout(()=>{closeTimerRef.current=null;setNavOpen(false);},180);
   }
   function handleNavBlur(event:ReactFocusEvent<HTMLDivElement>){
     const nextTarget=event.relatedTarget;
@@ -148,7 +148,7 @@ export function AppShell({
             aria-current={page==="platforms"?"page":undefined}
             onClick={()=>{setPlatformExpanded(true);onNavigate("platforms");}}>
             <Layers3 size={18}/><span className="nav-label">学习平台</span>
-            {platformActive&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
+            {page==="platforms"&&<span className="sf-floating-nav__active-dot" aria-hidden="true"/>}
           </button>
           <button type="button" className="sf-nav-expand"
             tabIndex={navOpen?0:-1}
