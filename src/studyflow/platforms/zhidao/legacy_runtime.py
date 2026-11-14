@@ -11,10 +11,12 @@ import subprocess
 import sys
 
 from studyflow.core.models import Course, Platform
+from studyflow.platforms.zhidao.courses import progress_key
 
 def legacy_script() -> Path:
     root = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ZHSDesktop"
-    return root / "payload" / "zhidao_only.py"
+    # Upstream payload/Install.ps1 installs resources directly into ZHSDesktop.
+    return root / "zhidao_only.py"
 
 def _python_executable() -> Path:
     root = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "ZHSDesktop"
@@ -75,6 +77,17 @@ def read_courses() -> list[Course]:
         name = row.get("name") or row.get("courseName")
         if course_id is None or not isinstance(name, str) or not name.strip():
             continue
-        result_courses.append(Course(platform=Platform.ZHIDAO, course_id=str(course_id),
-                                     title=name.strip(), progress_percent=None))
+        course_type = row.get("courseType")
+        if course_type not in ("ai", "shared"):
+            continue
+        # A single courseId can correspond to several AI teaching classes.
+        # Stable pseudonymous identity prevents collision without exposing routes.
+        result_courses.append(Course(
+            platform=Platform.ZHIDAO,
+            course_id=progress_key(row),
+            title=name.strip(),
+            progress_percent=None,
+            course_type=course_type,
+            stale=(row.get("stale") is True),
+        ))
     return result_courses
