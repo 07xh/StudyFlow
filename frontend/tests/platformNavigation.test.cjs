@@ -103,6 +103,7 @@ test("course details render as one expanded workspace with distinct progress sou
  const simulation=source("components/LegacyPlaybackPanel.tsx");
  const player=source("components/ZhidaoOfficialPlayerPanel.tsx");
  const log=source("components/ZhidaoActivityPanel.tsx");
+ const yuketang=source("components/YuketangTaskArea.tsx");
  const css=source("ui/foundation.css");
  assert.match(app,/renderCourseWorkspace/);
  assert.match(app,/sf-course-total-progress/);
@@ -120,6 +121,9 @@ test("course details render as one expanded workspace with distinct progress sou
  assert.match(player,/sf-zd-local-observations-expanded/);
  assert.match(player,/detailMode/);
  assert.match(log,/expandedByDefault/);
+ assert.match(yuketang,/open=\{detailMode\}/);
+ assert.match(simulation,/sf-detail-live/);
+ assert.match(css,/sf-ykt-live\.sf-detail-live \.sf-ykt-live-grid/);
  assert.match(css,/sf-course-total-progress/);
  assert.match(css,/sf-zd-detail-list-expanded/);
 });
