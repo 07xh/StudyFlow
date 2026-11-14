@@ -59,7 +59,7 @@ def probe_login() -> bool:
         # doctor-server also checks course APIs and may exit with 6 after
         # authentication has already succeeded. Keep login state independent
         # from the availability of the course-reading endpoints.
-        return "[SESSION_OK]" in (result.stdout or "")
+        return any(line.startswith("[SESSION_OK]") for line in (result.stdout or "").splitlines())
     except RuntimeError:
         return False
 
