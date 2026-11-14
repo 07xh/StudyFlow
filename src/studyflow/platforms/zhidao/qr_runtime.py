@@ -1,9 +1,7 @@
 """Local QR-login lifecycle for StudyFlow's Zhidao platform.
 
-The authentication worker is the migrated ZHS 0.1.5-compatible core. It runs
-under the existing Zhidao installation's Python environment, keeping the
-original dependencies and cookies; the UI only sees sanitized state and a
-short-lived PNG while the code is awaiting scan.
+The authentication worker runs using StudyFlow's bundled ZHS 0.1.5 runtime.
+Original user credentials remain under ~/.zhs; app status files are isolated.
 """
 from __future__ import annotations
 
@@ -13,10 +11,10 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import sys
 import threading
 import time
 
-from .legacy_runtime import installation_root, python_executable
 from .qr_login_core import STAGES
 
 _LOCK = threading.RLock()
@@ -30,8 +28,13 @@ TERMINAL = {"verified", "rejected", "expired", "cancelled", "failed",
             "environment-error", "unavailable"}
 
 
+def _status_root() -> Path:
+    local = os.environ.get("LOCALAPPDATA")
+    return (Path(local) if local else Path.home() / "AppData" / "Local") / "StudyFlow" / "zhidao"
+
+
 def _status_path(token: str) -> Path:
-    return installation_root() / f"monitor-qr-{token}.json"
+    return _status_root() / f"monitor-qr-{token}.json"
 
 
 def _qr_path() -> Path:
@@ -83,9 +86,8 @@ def start() -> dict:
     with _LOCK:
         if _WORKER is not None and _WORKER.poll() is None:
             return {"stage": "busy"}
-        python = python_executable()
-        worker_script = Path(__file__).with_name("qr_login_core.py")
-        if not python.is_file() or not worker_script.is_file():
+        python = Path(sys.executable)
+        if not python.is_file():
             return {"stage": "environment-error"}
         _cleanup_qr()
         if _qr_path().exists():
@@ -93,10 +95,15 @@ def start() -> dict:
         token = secrets.token_hex(16)
         started = time.time()
         try:
+            _status_root().mkdir(parents=True, exist_ok=True)
+            command = ([str(python), "--zhidao-qr-worker", token]
+                       if getattr(sys, "frozen", False)
+                       else [str(python), "-m", "studyflow.platforms.zhidao.qr_login_core", token])
             flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            environment = os.environ.copy()
+            environment["STUDYFLOW_QR_STATUS_DIR"] = str(_status_root())
             worker = subprocess.Popen(
-                [str(python), str(worker_script), token],
-                cwd=str(Path.home()), stdin=subprocess.DEVNULL,
+                command, cwd=str(Path.home()), env=environment, stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 creationflags=flags,
             )
