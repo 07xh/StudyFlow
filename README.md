@@ -34,14 +34,12 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 
 新程序不会模拟平台已完成的学习进度，不提供伪造学习记录的接口。
 
-## 知到二维码登录核心迁移
+## 最新知到 UI 迁移
 
-来源：`07xh/zhidao-assistant` 的 `payload/ZHS-QRLogin.py`，固定版本 `31831684dd63191676c13e1d9a33df81ed78378b`。原仓库保持不变。
+从 `zhidao-assistant@53c9244` 迁入学序统一 React 界面：课程动态卡片、核验证据标签、深色主题持久化、课程筛选及小窗口布局。保留原版 WPF 扫码入口；原版登录流程没有被覆盖。
 
-- `platforms/zhidao/qr_login_core.py`：保留 ZHS 0.1.5 原版扫码轮询、CAS 认证核验、Cookie 原子保存、扫码后立即删除 PNG 和退出清理。
-- `platforms/zhidao/qr_runtime.py`：仅启动本机已有知到运行时中的 Python，提供 `start/status/cancel`，短期二维码 PNG 只在本次登录、尚未扫码阶段通过 `image_png_base64` 交给本地 UI。不要记录或持久化该字段。
-- `services/bridge.py`：新增 `zhidao.qr.start`、`zhidao.qr.status`、`zhidao.qr.cancel` IPC；失败只返回固定脱敏错误码。
-- `src-tauri/src/lib.rs`：二维码三种请求使用专用常驻 Python bridge，确保跨 UI 调用共享同一登录任务；课程读取等原有请求继续使用现有单次子进程模式。
-- `frontend/src/bridge.ts`：新增二维码状态和命令的类型化接口。React 页面尚未接入扫码按钮和二维码窗口。
+对只读课程缓存继续进行 HMAC 会话绑定验证；原版知到、雨课堂账号和旧仓库全部保留。测试通过不等于真实 Windows 登录与平台学习进度已验证。详见 [知到 UI 迁移记录](docs/ZHIDAO_UI_MIGRATION.md)。
 
-当前仍依赖旧知到安装目录中的 ZHS Python 环境；学序安装器未独立打包这套依赖。CI 只覆盖离线逻辑和构建，Windows 真机扫码认证、刷新、取消和退出清理仍需验收。
+## 知到二维码核心迁移
+
+来自 `07xh/zhidao-assistant@31831684` 的二维码核心通过 Tauri JSONL IPC 接入本机 UI（扫码、确认、CAS 核验及结束清理）。已保留课程卡片/雨课堂/原版 WPF 备用入口；后续独立构建需要打包 ZHS 运行依赖并完成真机认证验证。

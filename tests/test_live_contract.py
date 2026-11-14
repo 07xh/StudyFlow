@@ -15,7 +15,11 @@ def test_real_course_contract_when_adapter_succeeds(monkeypatch):
     monkeypatch.setitem(bridge.ADAPTERS, "zhidao", LiveStub())
     reply = bridge.dispatch({"id":"one","version":1,"operation":"courses.list","platform":"zhidao"})
     assert reply["ok"]
-    assert reply["data"] == [{"platform":"zhidao","course_id":"771","title":"服务器课程","progress_percent":None}]
+    assert reply["data"] == [{
+        "platform": "zhidao", "course_id": "771", "title": "服务器课程",
+        "progress_percent": None, "course_type": None, "stale": False,
+        "progress_evidence": None, "verified_at": None,
+    }]
 
 
 def test_unsupported_version_is_rejected():

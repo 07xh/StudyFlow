@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 
 from studyflow.core.models import Course, Platform
+from studyflow.platforms.zhidao.courses import progress_key
 
 
 def installation_root() -> Path:
@@ -84,6 +85,14 @@ def read_courses() -> list[Course]:
         identifier = row.get("courseId")
         if identifier is None or not isinstance(title, str) or not title.strip():
             continue
-        courses.append(Course(platform=Platform.ZHIDAO, course_id=str(identifier),
-                              title=title.strip(), progress_percent=None))
+        course_type = row.get("courseType")
+        if course_type not in ("ai", "shared"):
+            continue
+        # Stable identity contains type and AI teaching class; raw route tokens
+        # never cross the IPC or appear in frontend logs.
+        courses.append(Course(
+            platform=Platform.ZHIDAO, course_id=progress_key(row),
+            title=title.strip(), progress_percent=None,
+            course_type=course_type, stale=(row.get("stale") is True),
+        ))
     return courses

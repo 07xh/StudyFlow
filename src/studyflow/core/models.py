@@ -14,9 +14,15 @@ class Course:
     course_id: str
     title: str
     progress_percent: float | None = None
+    course_type: str | None = None
+    stale: bool = False
 
     def __post_init__(self) -> None:
         if not self.course_id or not self.title:
             raise ValueError("course_id and title are required")
+        if self.course_type not in (None, "ai", "shared"):
+            raise ValueError("unsupported course_type")
+        if not isinstance(self.stale, bool):
+            raise ValueError("stale must be bool")
         if self.progress_percent is not None and not 0 <= self.progress_percent <= 100:
             raise ValueError("progress_percent must be in [0, 100]")
