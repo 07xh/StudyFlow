@@ -772,3 +772,67 @@
   .sf-shell .sf-platform-actions button{padding:7px 8px;font-size:9px}
   .sf-shell .sf-login-panel-main,.sf-shell .sf-login-panel-aside{padding:11px}
 }
+
+
+/* Platform secondary navigation and compact operational surfaces. */
+.sf-shell .sf-platform-nav{min-width:0}
+.sf-shell .sf-platform-nav-parent{display:flex;align-items:center;min-width:0;gap:3px}
+.sf-shell .sf-platform-nav-parent>.nav{flex:1;min-width:0}
+.sf-shell .sf-nav-expand{
+  width:27px;height:29px;flex:none;display:grid;place-items:center;
+  border:1px solid transparent;border-radius:8px;color:var(--muted);
+  background:transparent;cursor:pointer;
+}
+.sf-shell .sf-nav-expand:hover{color:var(--accent-text);background:var(--soft-accent)}
+.sf-shell .sf-nav-expand svg{transition:transform .16s ease}
+.sf-shell .sf-chevron-closed{transform:rotate(-90deg)}
+.sf-shell .sf-subnav{
+  display:grid;gap:2px;margin:3px 0 7px 24px;
+  padding:4px 0 4px 10px;border-left:1px solid var(--line);
+}
+.sf-shell .sf-subnav .nav{
+  min-height:33px;padding:8px 10px;font-size:12px;border-radius:9px;
+}
+.sf-shell .sf-subnav .nav svg{opacity:.75}
+.sf-shell .sf-platform-detail>.platform-card{
+  width:100%;max-width:100%;border-color:var(--line);
+}
+.sf-shell .sf-platform-detail .sf-platform-login{
+  grid-template-columns:minmax(0,1.45fr) minmax(220px,.8fr);
+}
+.sf-shell .sf-platform-task-section>.legacy-playback-panel{
+  max-width:100%;min-width:0;
+}
+.sf-shell .sf-task-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sf-shell .sf-task-shortcut{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  min-width:0;padding:14px;border:1px solid var(--line);border-radius:14px;
+  background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
+}
+.sf-shell:not(.dark) .sf-task-shortcut{background:#fff}
+.sf-shell .sf-task-shortcut-head{display:flex;align-items:center;gap:10px;min-width:0}
+.sf-shell .sf-task-shortcut-head .platform-logo{
+  width:39px;height:39px;flex:none;font-size:16px;border-radius:10px;
+}
+.sf-shell .sf-task-shortcut-head>div{min-width:0}
+.sf-shell .sf-task-shortcut-head strong{display:block;color:var(--text);font-size:13px}
+.sf-shell .sf-task-shortcut-head small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
+.sf-shell .sf-task-shortcut>.secondary{flex:none;min-height:34px;margin:0}
+.sf-shell .sf-platform-card-head{min-height:45px}
+.sf-shell .sf-platform-nav-parent>.nav.active{box-shadow:inset 3px 0 var(--accent)}
+.sf-shell.sf-collapsed .sf-nav-expand{display:none}
+.sf-shell.sf-collapsed .sf-subnav{margin-left:0;padding:3px 0;border:0}
+.sf-shell.sf-collapsed .sf-subnav .nav{justify-content:center;padding:9px 8px}
+@media(max-width:1020px){
+  .sf-shell .sf-task-shortcuts{grid-template-columns:1fr}
+  .sf-shell .sf-platform-detail .sf-platform-login{grid-template-columns:1fr}
+}
+@media(max-width:720px){
+  .sf-shell .sf-nav-expand{width:23px}
+  .sf-shell .sf-subnav{margin-left:12px;padding-left:5px}
+  .sf-shell .sf-task-shortcut{flex-wrap:wrap}
+}
+@media(max-width:500px){
+  .sf-shell .sf-subnav .nav{padding:8px 6px}
+  .sf-shell .sf-task-shortcut>.secondary{width:100%}
+}
