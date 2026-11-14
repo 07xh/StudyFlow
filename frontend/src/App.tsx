@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from "react";
 import {BookOpen,ChevronRight,GraduationCap,RefreshCw,Search} from "lucide-react";
 import {initialPlatforms} from "./platforms";
+import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,openLegacyZhidao,request} from "./bridge";
 import type {Config,Video} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
@@ -39,6 +40,7 @@ export default function App(){
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   const [notice,setNotice]=useState("");
+  const [qrOpen,setQrOpen]=useState(false);
   const [videos,setVideos]=useState<Video[]>([]);
   const [config,setConfig]=useState<Config>(emptyConfiguration);
   const [query,setQuery]=useState("");
@@ -179,7 +181,7 @@ export default function App(){
     </div>}
   </section>;
 
-  return <AppShell page={page} onNavigate={setPage} dark={dark} onThemeToggle={toggleTheme}
+  return <><AppShell page={page} onNavigate={setPage} dark={dark} onThemeToggle={toggleTheme}
     desktop={desktop} notice={notice} compact={compactCards}>
     {page==="home"&&<>
       <div className="hero">
@@ -207,7 +209,7 @@ export default function App(){
     {page==="courses"&&renderCourses(false)}
     {page==="platforms"&&<>
       {renderPlatforms()}
-      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()}/>
+      <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)} onOpenLegacy={()=>void openZhidao()} onOpenNative={()=>setQrOpen(true)}/>
       {platformRegistry.some(item=>item.capabilities.sessionConfiguration&&item.id==="yuketang")&&
         <section className="settings-card">
           <h3>雨课堂登录会话</h3>
@@ -259,5 +261,8 @@ export default function App(){
       </section>
     </>}
     <footer className="studyflow-footer">知到新版课程 UI 已保留 · 平台凭据相互隔离 · 进度以服务器核验为准</footer>
-  </AppShell>;
+  </AppShell>
+    {qrOpen&&<ZhidaoQrDialog onClose={()=>setQrOpen(false)}
+      onVerified={()=>{setNotice("知到登录已通过服务器核验；正在检测连接。");void refresh();}}/>}
+  </>;
 }

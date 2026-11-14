@@ -38,8 +38,8 @@ const methods: {id: LoginMethod; label: string; icon: typeof ScanLine; message: 
    message: "文件导入和失败回滚仍在原知到仓库中。学序尚未迁入安全文件选择与验证流程。"},
 ];
 
-export function ZhidaoLoginPanel({desktop, busy, onOpenLegacy}: {
-  desktop: boolean; busy: boolean; onOpenLegacy: () => void
+export function ZhidaoLoginPanel({desktop, busy, onOpenLegacy, onOpenNative}: {
+  desktop: boolean; busy: boolean; onOpenLegacy: () => void; onOpenNative: () => void
 }) {
   const [method, setMethod] = useState<LoginMethod>("qr");
   const selected = methods.find(m => m.id === method)!;
@@ -57,8 +57,12 @@ export function ZhidaoLoginPanel({desktop, busy, onOpenLegacy}: {
         <div className="login-v2-description" role="tabpanel">
           <div className="login-v2-illustration"><selected.icon size={23}/></div>
           <h3>{selected.label}</h3><p>{selected.message}</p>
-          {method === "qr" ? <button className="secondary" type="button" disabled={!desktop || busy}
-              onClick={onOpenLegacy}><ScanLine size={16}/>打开原版知到扫码窗口</button>
+          {method === "qr" ? <div className="actions">
+              <button className="secondary" type="button" disabled={!desktop || busy}
+                onClick={onOpenNative}><ScanLine size={16}/>学序内扫码</button>
+              <button className="secondary" type="button" disabled={!desktop || busy}
+                onClick={onOpenLegacy}><ScanLine size={16}/>原版扫码（备用）</button>
+            </div>
             : <button className="secondary" type="button" disabled title="当前尚未迁入对应安全验证通道">
               <LockKeyhole size={16}/>新界面暂未开放
             </button>}

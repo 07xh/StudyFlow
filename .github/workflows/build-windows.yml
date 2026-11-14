@@ -1,17 +1,6 @@
 name: Build Windows EXE
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - 'src-tauri/**'
-      - 'src/**'
-      - 'packaging/**'
-      - 'scripts/build-windows.ps1'
-      - 'package.json'
-      - 'pyproject.toml'
-      - '.github/workflows/build-windows.yml'
 
 jobs:
   windows-package:
