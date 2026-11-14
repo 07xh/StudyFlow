@@ -20,6 +20,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
   const [busy,setBusy]=useState<"sync"|"verify"|null>(null);
   const [message,setMessage]=useState("");
   const [incomplete,setIncomplete]=useState(false);
+  const [fetchedAt,setFetchedAt]=useState<string|null>(null);
   const busyRef=useRef(false);
   const current=courses.find(course=>course.course_id===selected)??null;
   const view=current?presentCourse(current):null;
@@ -39,6 +40,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
         :await request<ZhidaoProgressSnapshot>({operation:"zhidao.progress.verify",course_key:selected});
       onCoursesUpdated(snapshot.courses);
       setIncomplete(snapshot.incomplete);
+      setFetchedAt(snapshot.fetched_at);
       if(!quiet){
         const text=snapshot.incomplete
           ?"进度读取已返回，但部分课程未能完成核验；未确认的数据不会显示为已核验。"
@@ -56,6 +58,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
 
   useEffect(()=>{
     if(!monitor||!connected||!selected)return;
+    void run("verify",true);
     const timer=window.setInterval(()=>{void run("verify",true);},120000);
     return ()=>window.clearInterval(timer);
   },[monitor,connected,selected,run]);
@@ -83,7 +86,8 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       <div className="sf-zd-progress-value">
         <span>{label}</span>
         <strong>{view?.percent===null||view?.percent===undefined?"—":view.percent.toFixed(1)+"%"}</strong>
-        <small>{view?.label??"等待课程同步"} · {timestamp}</small>
+        <small>{view?.label??"等待课程同步"} · 单课核验：{timestamp}</small>
+        <small>最近一次进度同步：{fetchedAt?new Date(fetchedAt).toLocaleString():"尚未同步"}</small>
       </div>
     </div>
     <div className="sf-zd-progress-actions">
