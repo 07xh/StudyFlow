@@ -157,7 +157,7 @@ fn read_observation(root: &Path, token: &str) -> (Option<String>, Option<u64>, O
     }
     let position = data.get("position").and_then(Value::as_u64);
     let duration = data.get("duration").and_then(Value::as_u64);
-    if position.is_none_or(|n| n > 864000) || duration.is_none_or(|n| n > 864000) {
+    if position.map_or(true, |n| n > 864000) || duration.map_or(true, |n| n > 864000) {
         return (None, None, None, None, None);
     }
     let visible = data.get("visible").and_then(Value::as_bool);
@@ -271,9 +271,13 @@ pub async fn zhidao_player_start(
         return Err("COURSE_ROUTE_UNAVAILABLE".into());
     }
 
-    let app_for_prepare = app.clone();
-    let (local, root) = tauri::async_runtime::spawn_blocking(move || prepare_runtime(&app_for_prepare))
-        .await.map_err(|_| "PLAYER_PREPARE_FAILED".to_string())??;
+    let (local, root) = copy_player_assets(&app)?;
+    if !webview_sdk_ready(&root) {
+        let app_for_prepare = app.clone();
+        // First use attempts the pinned SDK download. If it is unavailable,
+        // the unchanged upstream player retains its explicit official-browser fallback.
+        let _ = tauri::async_runtime::spawn_blocking(move || prepare_runtime(&app_for_prepare)).await;
+    }
 
     let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
     if let Some(previous) = guard.as_mut() {
