@@ -28,7 +28,9 @@ const errorLabels:Record<string,string> = {
   UNSUPPORTED_VERSION:"通信协议版本不匹配"
 };
 
-export async function request<T>(message:Omit<BridgeRequest,"id"|"version">):Promise<T> {
+type StripEnvelope<T> = T extends unknown ? Omit<T,"id"|"version"> : never;
+
+export async function request<T>(message:StripEnvelope<BridgeRequest>):Promise<T> {
   if(!isDesktop())throw new Error("当前为浏览器预览，需启动 Windows 桌面版才能连接真实课程");
   const payload={...message,id:crypto.randomUUID(),version:1} as BridgeRequest;
   const result=await invoke<BridgeResponse<T>>("bridge_request",{request:payload});
