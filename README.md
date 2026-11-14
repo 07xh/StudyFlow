@@ -5,26 +5,26 @@
 ## 已有实现
 
 - 自主编写的深色 / 浅色桌面 UI、课程卡片、平台状态、课程同步和章节视频列表。
-- 知到：调用原有 Windows ZHSDesktop 的服务端登录检查与课程同步，读取同会话绑定的缓存。
+- 知到：通过学序内置 ZHS 0.1.5 扫码与只读服务端诊断、课程同步，读取同会话 HMAC 绑定的缓存；原版 WPF 入口仅为可选备用。
 - 雨课堂：读取课堂信息、章节和视频元数据。会话存储在 Windows Credential Manager。
 - Tauri 2 Rust IPC 调用 PyInstaller 打包的 Python sidecar。
 - Windows NSIS 安装包构建脚本，详见 [构建指南](docs/BUILD_WINDOWS.md)。
 
 ## 使用条件
 
-- 知到原版程序需已安装且通过自身扫码登录；**学序不会修改或删除原版程序**。
+- **无需预先安装原版知到助手**：学序安装包自带 ZHS Python 依赖；原版软件若存在仍独立保留，不会被修改或删除。
 - 雨课堂需要本人有效的现有登录会话及课堂 ID；未登录或未连接时明确显示失败。
 - 真实平台登录、课程读取和 Windows 安装包尚未经过用户环境的端到端验收，不能据此宣称全部已可用。
 
 ## 构建
 
-在 Windows 上安装 Python 3.11、Node.js 22、Rust stable、VS C++ Build Tools、WebView2 后：
+在 Windows 上安装 Python 3.13、Node.js 22、Rust stable、VS C++ Build Tools、WebView2 后：
 
 \`\`\`powershell
 powershell -NoProfile -File .\scripts\build-windows.ps1
 \`\`\`
 
-或者在 GitHub Actions 手动运行 **Build Windows EXE (manual)**，成功后下载 NSIS 构建产物。为了节省 Actions 时间，默认不会每次提交自动打包。
+或者通过 GitHub Actions 的 **Build Windows EXE** 工作流下载 NSIS 构建产物；与打包相关的主分支提交也会触发构建。构建完成必须再经用户 Windows 真机登录验收。
 
 ## 上游保留
 
