@@ -34,6 +34,7 @@ export type YuketangLiveProgress = {
   failed: number;
   stopped: number;
   concurrent: boolean | null;
+  worker_slots: Array<{slot:number;video_index:number|null;state:"waiting"|"preparing"|"watching"|"completed"|"skipped"|"failed"|"stopped"|"unknown"}>;
   rich_total: number | null;
   rich_current: number | null;
   rich_processed: number;
