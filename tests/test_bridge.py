@@ -99,3 +99,11 @@ def test_zhidao_course_detail_bridge_returns_sanitized_details(monkeypatch):
     })
     result = dispatch({"id":"d1","version":1,"operation":"zhidao.course.detail","course_key":"a"*64})
     assert result["ok"] and result["data"]["items"][0]["progress_percent"] == 100
+
+
+
+def test_studyflow_consent_bridge_reads_and_persists_acceptance(monkeypatch):
+    monkeypatch.setattr(bridge, "get_consent_status", lambda: {"accepted": False})
+    assert dispatch({"id":"c1","version":1,"operation":"studyflow.consent.status"})["data"]["accepted"] is False
+    monkeypatch.setattr(bridge, "accept_studyflow_consent", lambda: {"accepted": True})
+    assert dispatch({"id":"c2","version":1,"operation":"studyflow.consent.accept"})["data"]["accepted"] is True

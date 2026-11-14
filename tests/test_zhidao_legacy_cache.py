@@ -262,3 +262,12 @@ def test_course_detail_restores_ai_knowledge_points_and_shared_videos(installed_
     assert shared_detail["done"] == 1 and shared_detail["total"] == 2
     assert shared_detail["items"][1]["studied_seconds"] == 120
     assert shared_detail["items"][1]["server_completed"] is False
+
+
+
+def test_first_run_consent_is_persisted_in_studyflow_app_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert legacy_runtime.consent_status() == {"accepted": False}
+    assert legacy_runtime.accept_consent() == {"accepted": True}
+    assert legacy_runtime.consent_status() == {"accepted": True}
+    assert (tmp_path / "StudyFlow" / "privacy-accepted-v1.flag").is_file()

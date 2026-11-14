@@ -46,3 +46,14 @@ test("Zhidao course detail restores knowledge points and shared-video records",(
  assert.match(detail,/server_completed/);
  assert.match(bridge,/ZhidaoCourseDetail/);
 });
+
+
+test("first-run consent blocks the desktop until both legal documents are loaded and accepted",()=>{
+ const gate=source("components/StudyFlowConsentGate.tsx");
+ const app=source("App.tsx");
+ assert.match(gate,/studyflow\.consent\.status/);
+ assert.match(gate,/studyflow\.consent\.accept/);
+ assert.match(gate,/我已阅读并同意/);
+ assert.match(gate,/zhidao\.document\.read/);
+ assert.match(app,/StudyFlowConsentGate desktop=\{desktop\}/);
+});

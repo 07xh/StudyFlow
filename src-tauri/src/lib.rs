@@ -262,6 +262,7 @@ mod ipc_validation_tests {
         assert!(validate(&json!({"id":"j","version":1,"operation":"zhidao.course.detail","course_key":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"})).is_ok());
         assert!(validate(&json!({"id":"k","version":1,"operation":"studyflow.consent.status"})).is_ok());
         assert!(validate(&json!({"id":"l","version":1,"operation":"studyflow.consent.accept"})).is_ok());
+        assert!(validate(&json!({"id":"m","version":1,"operation":"zhidao.diagnose"})).is_ok());
     }
 
     #[test]
