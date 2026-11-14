@@ -351,6 +351,7 @@
   background:#68737b;opacity:.55;cursor:pointer;transition:background .15s,opacity .15s;
 }
 .sf-shell .sf-switch input:checked{background:var(--accent);border-color:var(--accent);opacity:1}
+.sf-shell .sf-switch input:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .sf-shell .sf-switch-thumb{
   position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;
   background:#fff;box-shadow:0 1px 4px #0004;pointer-events:none;transition:transform .15s;
