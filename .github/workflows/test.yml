@@ -64,6 +64,9 @@ jobs:
       - name: Build fully bundled Zhidao + StudyFlow Windows installer
         shell: pwsh
         run: ./scripts/build-windows.ps1
+      - name: Install NSIS package in a clean Windows directory
+        shell: pwsh
+        run: ./scripts/test-windows-install.ps1
       - name: Upload tested NSIS installer
         uses: actions/upload-artifact@v4
         with:
