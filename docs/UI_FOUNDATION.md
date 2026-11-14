@@ -30,24 +30,27 @@
 4. 复用 AppShell / PlatformCard / CourseCard；独有功能另建模块页面。
 5. 完成真实账号端到端验收，最后再标记为可用。
 
-## 第三方源码来源说明
+## 第三方 UI 参考与许可边界
 
-LightC-UI 2.18.3 用户上传源码已找到。本轮只选择性适配通用控件和侧栏的交互设计，
-并移除了原项目特定模块依赖；平台业务和通信契约保持原状。
+- 已读取用户提供的 `LightC-UI-源码-2.18.3.zip`，其根目录许可证为 **LightC Source Available License v1.0**，不是 OSI 开源许可证。
+- 许可证允许个人教育、研究和非商业修改，但限制未经权利人书面许可分发修改版、编译安装包或将其作为独立产品的一部分。
+- StudyFlow 仓库为公开仓库且会构建 Windows 安装程序，因此不得复制、改写或打包该压缩包中的源码、组件、资源或其衍生实现。
+- StudyFlow 的 `AppShell`、`Switch`、`EmptyState`、`ThemeModeSelector` 均由本项目独立实现；只保留高层交互目标，不复用上游代码或素材。
 
 ## 验收
 
 - CI 执行 Python pytest 与前端 TypeScript/Vite build。
-- Windows 打包仍由手动触发的 Windows workflow 负责。
+- PR 和手动验证执行完整 Windows NSIS 构建；主分支推送由独立 Windows workflow 生成安装包。
 - CI 成功不表示已通过真实登录/课程或 Windows 安装验收。
 
-## LightC-UI 2.18.3 选择性组件适配
+## StudyFlow 自有通用控件
 
-从用户提供的 `LightC-UI-源码-2.18.3.zip` 中选取独立控件的交互实现进行适配。
-本次只采用三态主题选择、原生复选框开关逻辑、通用空数据态和侧栏折叠/记忆设计，
-落地在 `ThemeModeSelector`、`Switch`、`EmptyState` 和 `AppShell`。
-移除了原应用的清理模块、i18n、Tailwind、专属 Context 等依赖，保留 StudyFlow 的
-Tauri IPC、平台登录及真实课程读取逻辑。不复制原应用的完整界面或无关业务。
+- `ThemeModeSelector`：三态主题按钮组，使用 `aria-pressed` 表达当前选项。
+- `Switch`：基于原生 checkbox 的可访问开关，保留键盘焦点和禁用语义。
+- `EmptyState`：统一空数据展示，支持标题、说明和操作入口。
+- `AppShell`：悬浮导航、触摸/鼠标/键盘交互、固定状态和平台二级导航。
+
+这些控件使用 StudyFlow 自有 JSX、状态和 CSS 实现，不包含 LightC 源码或资源。不复制原应用的完整界面或无关业务。
 
 ## 并行知到迁移兼容
 保留最新主分支的 `ZhidaoLoginPanel`、服务端核验契约 `presentCourse`、`fetchCoursesFromDesktop` 输入校验以及 `Course` 的 `progress_evidence/stale/verified_at`，避免把未核验进度展示成真实进度。
