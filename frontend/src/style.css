@@ -27,25 +27,9 @@
 .nav:hover{background:#ffffff19;color:#fff}
 .main{min-width:0}
 button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
-.course-v2,
 .course-v2-detail{
   border:1px solid var(--line);background:var(--panel);border-radius:18px
 }
-.course-v2{padding:20px;min-width:0;display:flex;flex-direction:column;min-height:190px}
-.course-v2-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-.course-v2-type,
-.course-v2-evidence{border-radius:9px;padding:6px 10px;font-size:11px}
-.course-v2-type{background:var(--subtle);color:var(--subtle-text)}
-.course-v2-type.yuketang{background:var(--warning-bg);color:var(--warning)}
-.course-v2-evidence{background:var(--subtle);color:var(--muted)}
-.course-v2-evidence.cached{color:var(--warning);background:var(--warning-bg)}
-.course-v2-evidence.verified{color:var(--success);background:var(--success-bg)}
-.course-v2 h3{line-height:1.5;margin:0 0 10px;font-size:17px;overflow-wrap:anywhere}
-.course-v2 p{color:var(--muted);font-size:12px;line-height:1.65;margin:0 0 15px}
-.course-v2-progress{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--subtle-text);margin:0 0 14px}
-.course-v2-track{height:7px;border-radius:8px;overflow:hidden;background:var(--line);flex:1}
-.course-v2-fill{height:100%;border-radius:8px;background:#5d84dc}
-.course-v2-button{margin-top:auto;align-self:flex-start}
 .course-v2-detail{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-top:18px;padding:21px}
 .course-v2-detail h3{margin:8px 0;font-size:17px}
 .course-v2-detail p{color:var(--muted);font-size:12px;line-height:1.6;margin:0}
