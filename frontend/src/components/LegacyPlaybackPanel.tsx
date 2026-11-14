@@ -25,6 +25,9 @@ export function LegacyPlaybackPanel({
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const latestStatusRequest = useRef(0);
+  const taskActionInFlight = useRef(false);
+  const currentPlatform = useRef(platform);
+  currentPlatform.current = platform;
   const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -39,11 +42,11 @@ export function LegacyPlaybackPanel({
   const selectedCourse=courses.find(course=>course.platform==="zhidao"&&course.course_id===selection)??null;
 
   const updateStatus = useCallback(async () => {
-    if (!desktop) return;
+    if (!desktop || taskActionInFlight.current) return;
     const requestId = ++latestStatusRequest.current;
     try {
       const next = await getLegacyStatus(platform);
-      if (requestId !== latestStatusRequest.current) return;
+      if (requestId !== latestStatusRequest.current || taskActionInFlight.current || currentPlatform.current !== platform) return;
       if (platform==="zhidao" && next.state==="running" && next.course_id) {
         setSelection(previous => previous || next.course_id || "");
       }
@@ -54,13 +57,13 @@ export function LegacyPlaybackPanel({
       if (platform === "yuketang" && next.run_id) {
         try {
           const progress = await getYuketangLiveProgress(next.run_id);
-          if (requestId === latestStatusRequest.current) setYktProgress(progress);
+          if (requestId === latestStatusRequest.current && !taskActionInFlight.current && currentPlatform.current === platform) setYktProgress(progress);
         } catch {
-          if (requestId === latestStatusRequest.current) setYktProgress(null);
+          if (requestId === latestStatusRequest.current && !taskActionInFlight.current && currentPlatform.current === platform) setYktProgress(null);
         }
       } else setYktProgress(null);
     } catch {
-      if (requestId !== latestStatusRequest.current) return;
+      if (requestId !== latestStatusRequest.current || taskActionInFlight.current || currentPlatform.current !== platform) return;
       setStatus(null);setYktProgress(null);
     }
   }, [desktop, platform]);
@@ -85,32 +88,48 @@ export function LegacyPlaybackPanel({
 
 
   async function start() {
+    if (taskActionInFlight.current) return;
+    taskActionInFlight.current = true;
     const requestId = ++latestStatusRequest.current;
     setBusy(true); setMessage("");setYktProgress(null);
     try {
       if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined);
-      if (requestId === latestStatusRequest.current) setStatus(next);
-      setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
+      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
+      if (currentPlatform.current === platform) setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
       onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验");
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
-      setMessage(msg);onEvent?.("启动原版任务","warning",msg);
+      if (currentPlatform.current === platform) setMessage(msg);
+      onEvent?.("启动原版任务","warning",msg);
     }
-    finally {setBusy(false);}
+    finally {
+      taskActionInFlight.current = false;
+      setBusy(false);
+      if (currentPlatform.current === platform) void updateStatus();
+    }
   }
 
   async function stop() {
+    if (taskActionInFlight.current) return;
+    taskActionInFlight.current = true;
     const requestId = ++latestStatusRequest.current;
     setBusy(true);setMessage("");
     try {
       const next = await stopLegacy(platform);
-      if (requestId === latestStatusRequest.current) setStatus(next);
-      setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
+      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
+      if (currentPlatform.current === platform) setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
       onEvent?.("停止原版任务","success","已停止学序托管的原版进程");
-    } catch(error) {setMessage(legacyError(error));onEvent?.("停止原版任务","warning",legacyError(error));}
-    finally {setBusy(false);}
+    } catch(error) {
+      if (currentPlatform.current === platform) setMessage(legacyError(error));
+      onEvent?.("停止原版任务","warning",legacyError(error));
+    }
+    finally {
+      taskActionInFlight.current = false;
+      setBusy(false);
+      if (currentPlatform.current === platform) void updateStatus();
+    }
   }
 
   return <section className="legacy-playback-panel">
