@@ -76,7 +76,7 @@ test("each fold remembers its choice and keeps mounted content hidden rather tha
 
 test("course progress uses verified evidence in header and is not repeated in body",()=>{
   const app=read("App.tsx");
-  assert.match(app,/const activeCourseProgress=activeSelectedCourse\?presentCourse\(activeSelectedCourse\)\.percent:null;/);
+  assert.match(app,/const activeCourseProgress=workspaceCourse\?presentCourse\(workspaceCourse\)\.percent:null;/);
   assert.match(app,/courseProgress=\{activeCourseProgress\}/);
   assert.match(app,/const scope="course:"\+course\.platform\+":"\+course\.course_id\+":";/);
   assert.doesNotMatch(app,/sf-course-total-progress/);

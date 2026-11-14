@@ -105,7 +105,7 @@ test("course details use one foldable workspace and show total progress only in 
  assert.match(app,/renderCourseWorkspace/);
  assert.doesNotMatch(app,/sf-course-total-progress/);
  assert.match(app,/<CollapsibleSection id={scope\+"runtime"}/);
- assert.match(app,/headerTitle=\{activeSelectedCourse\?"课程详情":undefined\}/);
+ assert.match(app,/headerTitle=\{workspaceCourse\?"课程详情":undefined\}/);
  assert.match(app,/courseProgress=\{activeCourseProgress\}/);
  assert.match(app,/activeSelectedCourse/);
  assert.match(app,/<ZhidaoActivityPanel embedded events=/);

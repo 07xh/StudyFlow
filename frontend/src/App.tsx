@@ -60,6 +60,16 @@ function readActivity():ActivityEntry[]{
 
 export default function App(){
   const [page,setPage]=useState<Page>("home");
+  const [lastPlatform,setLastPlatform]=useState<Platform|null>(()=>{
+    try{
+      const saved=window.localStorage.getItem("studyflow.last-platform");
+      return saved==="zhidao"||saved==="yuketang"?saved:null;
+    }catch{return null;}
+  });
+  useEffect(()=>{
+    try{if(lastPlatform)window.localStorage.setItem("studyflow.last-platform",lastPlatform);}
+    catch{/* Preserve the current selection for this session. */}
+  },[lastPlatform]);
   const {dark,mode,setMode,toggleTheme}=useAppearance();
   const [compactCards,setCompactCards]=useState(()=>{
     try{return window.localStorage.getItem("studyflow.cards.compact")==="true";}
@@ -217,11 +227,13 @@ export default function App(){
   }
 
   function enterCourses(platform:Platform){
+    setLastPlatform(platform);
     setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
   }
 
-  function goPlatform(platform:Platform){
-    setSelectedCourse(null);
+  function goPlatform(platform:Platform,openLogin=false){
+    setLastPlatform(platform);
+    if(openLogin)setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
@@ -249,7 +261,7 @@ export default function App(){
         definition={definition} state={platforms[definition.id]} desktop={desktop}
         busy={Boolean(busy)} expanded={false}
         onSync={()=>void sync(definition.id)}
-        onToggleLogin={()=>goPlatform(definition.id)}
+        onToggleLogin={()=>goPlatform(definition.id,true)}
         onEnterCourses={()=>enterCourses(definition.id)}>
         {null}
       </PlatformCard>)}
@@ -406,7 +418,7 @@ export default function App(){
                 aria-valuenow={data.percent}><span style={{width:data.percent+"%"}}/></div>}
             </div>
             <button className="secondary sf-recent-detail" type="button"
-              onClick={()=>{setSelectedCourse(course);setCoursePlatform(course.platform);setPage("courses");}}>
+              onClick={()=>{setSelectedCourse(course);setLastPlatform(course.platform);setCoursePlatform(course.platform);setPage("courses");}}>
               课程详情
             </button>
           </article>;
@@ -477,9 +489,11 @@ export default function App(){
   };
 
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
-  const headerPlatform:Platform|null=activeSelectedCourse?.platform??
-    (page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null);
-  const activeCourseProgress=activeSelectedCourse?presentCourse(activeSelectedCourse).percent:null;
+  const workspaceCourse=page==="courses"||page==="records"?activeSelectedCourse:null;
+  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":
+    page==="platform-yuketang"?"yuketang":workspaceCourse?.platform??
+    (page==="courses"&&coursePlatform!=="all"?coursePlatform as Platform:lastPlatform);
+  const activeCourseProgress=workspaceCourse?presentCourse(workspaceCourse).percent:null;
 
   const renderCourses=()=> activeSelectedCourse
     ?renderCourseWorkspace(activeSelectedCourse)
@@ -504,7 +518,7 @@ export default function App(){
       </div>
       {filtered.length>0
         ?<div className="course-grid">{filtered.map(course=>
-          <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
+          <CourseCard course={course} onInspect={course=>{setSelectedCourse(course);setLastPlatform(course.platform);}} key={course.platform+":"+course.course_id}/>)}</div>
         :<EmptyState icon={BookOpen} title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
           description={courses.length>0?"可以更换搜索词或平台筛选。":"在平台卡片中完成登录并同步后，真实课程会显示在这里。"}
           action={courses.length===0?<button className="secondary" type="button" onClick={()=>setPage("platforms")}>前往平台登录</button>:undefined}/>}
@@ -533,7 +547,7 @@ export default function App(){
       <div className="section-head"><h3>已核验学习记录</h3></div>
       {verifiedCourses.length>0
         ?<div className="course-grid">{verifiedCourses.map(course=>
-          <CourseCard course={course} onInspect={setSelectedCourse} key={course.platform+":"+course.course_id}/>)}</div>
+          <CourseCard course={course} onInspect={course=>{setSelectedCourse(course);setLastPlatform(course.platform);}} key={course.platform+":"+course.course_id}/>)}</div>
         :<EmptyState icon={History} title="暂无已核验学习记录"
           description="当前课程接口没有返回可验证的学习进度，不会用本地播放计数代替平台记录。"/>}
     </section>;
@@ -556,13 +570,17 @@ export default function App(){
   </section>;
 
   return <>
-    <AppShell page={page} onNavigate={next=>{setPage(next);setSelectedCourse(null);}}
+    <AppShell page={page} onNavigate={next=>{
+      setPage(next);
+      if(next==="platform-zhidao")setLastPlatform("zhidao");
+      if(next==="platform-yuketang")setLastPlatform("yuketang");
+    }}
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
       compact={compactCards}
-      headerTitle={activeSelectedCourse?"课程详情":undefined}
+      headerTitle={workspaceCourse?"课程详情":undefined}
       currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
-      currentCourseTitle={activeSelectedCourse?.title} courseProgress={activeCourseProgress}>
+      currentCourseTitle={workspaceCourse?.title} courseProgress={activeCourseProgress}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
