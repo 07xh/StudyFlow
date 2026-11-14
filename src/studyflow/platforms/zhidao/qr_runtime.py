@@ -71,7 +71,7 @@ def _fresh_image(started: float) -> str | None:
         if not 100 <= stat.st_size <= MAX_QR_SIZE or stat.st_mtime < started - 2:
             return None
         data = path.read_bytes()
-        if not data.startswith(b"\\x89PNG\\r\\n\\x1a\\n") or len(data) > MAX_QR_SIZE:
+        if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > MAX_QR_SIZE:
             return None
         return base64.b64encode(data).decode("ascii")
     except OSError:
