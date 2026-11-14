@@ -64,3 +64,25 @@ test("unknown host errors remain generic and do not leak credentials", () => {
   const legacy = loadWithStub(async () => {});
   assert.doesNotMatch(legacy.legacyError(new Error("Cookie SECRET=123")), /SECRET/);
 });
+
+test("desktop status keeps live ZHS telemetry distinct from verified course progress", async () => {
+  const sample = {
+    platform:"zhidao", state:"running", exit_code:null, course_id:"c".repeat(64),
+    zhs_progress:{video_segment_percent:48.5, resource_index:2, resource_total:5}
+  };
+  const calls = [];
+  const legacy = loadWithStub(async (operation, props) => {
+    calls.push({operation, props});
+    return sample;
+  });
+  assert.deepEqual(await legacy.getLegacyStatus("zhidao"), sample);
+  assert.deepEqual(calls, [{operation:"legacy_status", props:{platform:"zhidao"}}]);
+});
+
+test("the ZHS original segment is displayed only for the selected running course", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /status\.course_id === selection/);
+  assert.match(panel, /status\?\.state === "running"/);
+  assert.match(panel, /liveZhs\?\.video_segment_percent/);
+  assert.match(panel, /非服务器确认进度/);
+});

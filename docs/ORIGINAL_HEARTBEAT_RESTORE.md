@@ -44,3 +44,12 @@
 - 在 Windows 进行原用户账号和官方平台端到端验收前，不发布“已完整可用”的结论。
 
 独立打包底座来自学序的 `scripts/build-sidecar.ps1`：原有 QR、只读课程入口与 zhs==0.1.5 保留，新增原雨课堂 `main.py` 资源和 `python-dotenv`。Windows 打包构建必须实际验证该入口。
+
+## 学序内接入 ZHS 原版实时模拟片段（只读）
+
+- 本轮将原知到 `payload/ZHS-ConsoleMonitor.py` **原字节内容**保存为 `legacy/zhidao/ZHS-ConsoleMonitor.py`，测试锁定源 Git blob `fbff5bce350245ddf4dfde42ea8a18db944ff307`。
+- 仅在启动已打包的 ZHS 0.1.5 CLI 时附加原版 `StdoutObserver`，观察 `playing [..] 48.5%` 与「处理资源 i/n」。保留原 CLI 参数、算法与发送实现；原环境回退入口仍按旧逻辑运行，但无法保证输出实时片段。
+- 每次 Windows 任务使用独立随机 128 位令牌。监控只写 `%LOCALAPPDATA%/StudyFlow/monitor-zhs-<token>.json`，不存储 Cookie、课程名称、请求内容或控制台全文。
+- Tauri 仅读取大小不超过 2048 字节、令牌相符、时间戳处于前 10 秒至过去 18 秒范围的数值。退出、停止和关闭程序都会清理当前令牌对应文件。
+- 页面把本地模拟片段放在知到任务状态卡中，约 2 秒刷新，只有当前选中课程与正在运行的任务一致才显示。服务器课程进度保持单独视图。
+- 离线测试覆盖源码一致性、解析与资源切换、原 CLI 参数不变、进程退出清理以及前端身份匹配。**真实 Windows sidecar / ZHS 输出编码 / 官方服务器更新仍须实机核验**。
