@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useState} from "react";
+import {useCallback,useEffect,useState,type FormEvent} from "react";
 import {BookOpen,LayoutDashboard,Settings,ShieldCheck,GraduationCap,RefreshCw,ChevronRight,Moon,Sun,PlayCircle} from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import {fetchStatuses,isDesktop,openLegacyZhidao,request} from "./bridge";
@@ -49,7 +49,7 @@ export default function App(){
     finally{setBusy("")}
   };
 
-  const configure=async(e:React.FormEvent<HTMLFormElement>)=>{
+  const configure=async(e:FormEvent<HTMLFormElement>)=>{
     e.preventDefault();setBusy("configure");setNotice("");
     try{
       await request<{saved:boolean}>({operation:"yuketang.configure",configuration:config});
