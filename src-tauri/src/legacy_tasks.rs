@@ -246,7 +246,7 @@ pub fn legacy_start(
         monitor_token,
     });
     Ok(LegacyStatus {
-        platform, state: "running".into(), exit_code: None, run_id,
+        platform: platform.clone(), state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },
         zhs_progress: None,
     })
