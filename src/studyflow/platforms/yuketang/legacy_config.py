@@ -24,6 +24,9 @@ DEFAULTS = {
     "TEST_MODE": "false",
     "TEST_VIDEO_COUNT": "5",
     "AUTO_RICHTEXT": "false",
+    "DEBUG": "false",
+    "RICHTEXT_STAY_SECONDS": "3",
+    "RICHTEXT_SKIP_DELAY": "1",
 }
 FIELDS = {
     "video_speed": "VIDEO_SPEED",
@@ -35,6 +38,9 @@ FIELDS = {
     "test_mode": "TEST_MODE",
     "test_video_count": "TEST_VIDEO_COUNT",
     "auto_richtext": "AUTO_RICHTEXT",
+    "debug": "DEBUG",
+    "richtext_stay_seconds": "RICHTEXT_STAY_SECONDS",
+    "richtext_skip_delay": "RICHTEXT_SKIP_DELAY",
 }
 
 
@@ -109,6 +115,9 @@ def read_settings() -> dict[str, Any]:
         "test_mode": _boolean(raw, "TEST_MODE", False),
         "test_video_count": _number(raw, "TEST_VIDEO_COUNT", 5, 1, 10000, True),
         "auto_richtext": _boolean(raw, "AUTO_RICHTEXT", False),
+        "debug": _boolean(raw, "DEBUG", False),
+        "richtext_stay_seconds": _number(raw, "RICHTEXT_STAY_SECONDS", 3, 0, 3600, True),
+        "richtext_skip_delay": _number(raw, "RICHTEXT_SKIP_DELAY", 1, 0, 3600),
     }
 
 
@@ -120,24 +129,30 @@ def _validated(settings: Any) -> dict[str, str]:
         raise ValueError("INVALID_SETTINGS")
 
     values: dict[str, str] = {}
-    for field in ("video_speed", "heartbeat_interval", "max_concurrent_videos",
-                  "completion_threshold", "test_video_count"):
+    numeric_fields = (
+        "video_speed", "heartbeat_interval", "max_concurrent_videos",
+        "completion_threshold", "test_video_count",
+        "richtext_stay_seconds", "richtext_skip_delay",
+    )
+    limits = {
+        "video_speed": (0.1, 4.0, False),
+        "heartbeat_interval": (1, 120, True),
+        "max_concurrent_videos": (1, 32, True),
+        "completion_threshold": (0, 100, True),
+        "test_video_count": (1, 10000, True),
+        "richtext_stay_seconds": (0, 3600, True),
+        "richtext_skip_delay": (0, 3600, False),
+    }
+    for field in numeric_fields:
         value = settings[field]
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
             raise ValueError("INVALID_SETTINGS")
-        limits = {
-            "video_speed": (0.1, 4.0, False),
-            "heartbeat_interval": (1, 120, True),
-            "max_concurrent_videos": (1, 32, True),
-            "completion_threshold": (0, 100, True),
-            "test_video_count": (1, 10000, True),
-        }
         low, high, integer = limits[field]
         if not low <= float(value) <= high or (integer and not float(value).is_integer()):
             raise ValueError("INVALID_SETTINGS")
         values[FIELDS[field]] = str(int(value) if integer else float(value))
 
-    for field in ("skip_completed", "use_concurrent", "test_mode", "auto_richtext"):
+    for field in ("skip_completed", "use_concurrent", "test_mode", "auto_richtext", "debug"):
         value = settings[field]
         if not isinstance(value, bool):
             raise ValueError("INVALID_SETTINGS")
