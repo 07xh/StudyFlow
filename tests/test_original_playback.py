@@ -109,7 +109,7 @@ def test_zhs_invokes_exact_original_task_without_rewriting_sender(monkeypatch, t
     cmd.write_text("rem fake file, never run", encoding="utf-8")
     monkeypatch.setattr(legacy, "_run_bundled_zhs", lambda *_a: None)
     monkeypatch.setattr(legacy, "installation_root", lambda: tmp_path)
-    monkeypatch.setattr(legacy, "_course_ids_for_current_session", lambda key: ("20", "30"))
+    monkeypatch.setattr(legacy, "_current_course_row", lambda key: {"courseType": "ai", "courseId": "20", "classId": "30"})
     calls = []
 
     def no_process(argv, **kwargs):
@@ -152,3 +152,75 @@ def test_tauri_task_manager_keeps_original_qr_and_supported_platforms():
     assert "legacy_tasks::LegacyTasks::default()" in lib
     assert "taskkill" in tasks and '"--legacy-yuketang"' in tasks
     assert '"--legacy-zhidao"' in tasks
+
+
+def test_zhs_shared_course_uses_existing_upstream_url_without_rewriting_sender(monkeypatch, tmp_path):
+    """A normal Zhidao shared course must not be silently excluded as non-AI."""
+    from urllib.parse import quote
+
+    route = "example+route/=="
+    row = {
+        "courseType": "shared", "courseId": "0",
+        "recruitAndCourseId": route, "name": "offline shared course",
+    }
+    monkeypatch.setattr(legacy, "_current_course_row", lambda key: row)
+    seen = []
+    monkeypatch.setattr(legacy, "_run_bundled_zhs_args",
+                        lambda args, token: seen.append((args, token)) or 0)
+    assert legacy.run_zhidao_original("a" * 64, "b" * 32) == 0
+    assert seen == [([
+        "play", "--url",
+        "https://studyvideoh5.zhihuishu.com/stuStudy?recruitAndCourseId=" + quote(route, safe=""),
+    ], "b" * 32)]
+
+
+def test_shared_zhs_course_with_numeric_id_uses_upstream_original_course_lookup(monkeypatch):
+    row = {"courseType": "shared", "courseId": "123", "recruitAndCourseId": ""}
+    monkeypatch.setattr(legacy, "_current_course_row", lambda key: row)
+    seen = []
+    monkeypatch.setattr(legacy, "_run_bundled_zhs_args",
+                        lambda args, token: seen.append(args) or 0)
+    assert legacy.run_zhidao_original("a" * 64) == 0
+    assert seen == [["play", "-c", "123", "--type", "zhidao"]]
+
+
+def test_shared_course_missing_route_fails_before_launch(monkeypatch):
+    monkeypatch.setattr(legacy, "_current_course_row",
+                        lambda key: {"courseType": "shared", "courseId": "0"})
+    monkeypatch.setattr(legacy, "_run_bundled_zhs_args",
+                        lambda *args: pytest.fail("ZHS must not start without a valid course route"))
+    assert legacy.run_zhidao_original("a" * 64) == 6
+
+
+def test_stale_course_cannot_be_launched_with_previous_cache(monkeypatch, tmp_path):
+    home = tmp_path / "home"
+    data = home / ".zhs"
+    data.mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    cookies, salt = b"test-cookies", b"x" * 32
+    (data / "cookies.json").write_bytes(cookies)
+    (data / "zhidao-cache-salt.bin").write_bytes(salt)
+    course = {"courseType": "shared", "courseId": "10", "stale": True}
+    key = progress_key(course)
+    cache = {
+        "source": "zhidao", "schemaVersion": 4,
+        "sessionFingerprint": hmac.new(salt, cookies, hashlib.sha256).hexdigest(),
+        "courses": [course],
+    }
+    (data / "zhidao-courses.json").write_text(json.dumps(cache), encoding="utf-8")
+    assert legacy.run_zhidao_original(key) == 6
+
+
+def test_zhs_noninteractive_prompt_gets_distinct_exit_code(monkeypatch):
+    import sys
+    from types import ModuleType
+    from importlib import metadata
+
+    package, cli = ModuleType("zhs"), ModuleType("zhs.__main__")
+    def needs_input(**_kwargs):
+        raise EOFError("no stdin")
+    cli.app = needs_input
+    monkeypatch.setitem(sys.modules, "zhs", package)
+    monkeypatch.setitem(sys.modules, "zhs.__main__", cli)
+    monkeypatch.setattr(metadata, "version", lambda name: "0.1.5")
+    assert legacy._run_bundled_zhs("20", "30") == 9
