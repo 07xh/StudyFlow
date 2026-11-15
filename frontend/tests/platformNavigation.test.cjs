@@ -53,7 +53,7 @@ test("original settings and cookie import use the Python bridge instead of local
  assert.match(panel,/yuketang.settings.save/);
  assert.match(panel,/LegacyPlaybackPanel platform="yuketang"/);
  const stored=Array.from(panel.matchAll(/localStorage\.setItem\(([^;]+)\);/g),m=>m[1]);
- assert.deepEqual(stored,['"studyflow.yuketang.settings-open",String(settingsOpen)']);
+ assert.deepEqual(stored,[],"Opening a second-level dialog must not persist an auto-open flag");
  assert.doesNotMatch(legacy,/localStorage/);
  assert.match(login,/zhidao.cookie.import/);
 });

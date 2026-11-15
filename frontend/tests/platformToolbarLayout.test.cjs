@@ -7,7 +7,7 @@ const source=file=>fs.readFileSync(path.join(__dirname,"..","src",file),"utf8");
 test("platform toolbar keeps settings and sync in one ordered row without a duplicate course-list button",()=>{
   const app=source("App.tsx");
   const css=source("style.css");
-  const block=app.slice(app.indexOf('className="sf-platform-toolbar actions"'),app.indexOf('      {platformSettingsOpen===platform\n        ?renderPlatformSettings(platform)'));
+  const block=app.slice(app.indexOf('className="sf-platform-toolbar actions"'),app.indexOf('      {selected?renderCourseWorkspace(selected):renderCourses(platform)}'));
   assert.ok(block.length>0);
   const account=block.indexOf("账号与连接"),settings=block.indexOf("参数设置"),sync=block.indexOf("同步课程列表");
   assert.ok(account>=0&&settings>account&&sync>settings,"account, settings and synchronization remain together");
@@ -24,15 +24,16 @@ test("platform settings open separately without duplicating the main workspace c
   const app=source("App.tsx");
   const ykt=source("components/YuketangTaskArea.tsx");
   assert.match(app,/const renderPlatformSettings=\(platform:Platform\)=>/);
-  assert.match(app,/platformSettingsOpen===platform\s+\?renderPlatformSettings\(platform\)/);
+  assert.match(app,/<SettingsDialog open=\{platformSettingsOpen===platform\}/);
+  assert.match(app,/platformSettingsOpen===platform&&renderPlatformSettings\(platform\)/);
   assert.match(app,/id="platform:zhidao:defaults"/);
   assert.match(app,/id="platform:zhidao:progress"/);
   assert.match(app,/id="platform:zhidao:data"/);
-  assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\} view="both"/);
+  assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\} view="settings"/);
   assert.match(ykt,/view\?:"both"\|"player"\|"settings"/);
   assert.match(ykt,/view!=="settings"&&<LegacyPlaybackPanel/);
   assert.match(ykt,/view!=="player"&&<div className="sf-inline-settings"/);
-  assert.match(ykt,/view==="settings"\|\|settingsOpen/);
+  assert.match(ykt,/view==="settings"\?settingsPanel:<SettingsDialog open=\{settingsOpen\}/);
   assert.match(app,/id="platform:yuketang:tasks" title="平台批量任务与默认参数"/);
   const settingsBlock=app.slice(app.indexOf('const renderPlatformSettings='),app.indexOf('const renderPlatformDetail='));
   const landingBlock=app.slice(app.indexOf('const renderPlatformDetail='),app.indexOf('async function configureFromPanel'));
@@ -40,7 +41,7 @@ test("platform settings open separately without duplicating the main workspace c
   assert.match(settingsBlock,/id="platform:zhidao:tasks"/);
   assert.match(settingsBlock,/id="platform:yuketang:content"/);
   assert.doesNotMatch(landingBlock,/<PlatformCard|<YuketangContentPanel|<RuntimeTaskList|<YuketangTaskArea/);
-  assert.match(landingBlock,/:selected\?renderCourseWorkspace\(selected\):renderCourses\(platform\)/);
+  assert.match(landingBlock,/selected\?renderCourseWorkspace\(selected\):renderCourses\(platform\)/);
 });
 
 test("LightC frame puts global settings beside real window buttons and keeps platform row fixed",()=>{

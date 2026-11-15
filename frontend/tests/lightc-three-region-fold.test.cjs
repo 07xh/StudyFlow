@@ -81,5 +81,5 @@ test("course progress uses verified evidence in header and is not repeated in bo
   assert.match(app,/const scope="course:"\+course\.platform\+":"\+course\.course_id\+":";/);
   assert.doesNotMatch(app,/sf-course-total-progress/);
   assert.match(app,/title="当前课程任务"/);
-  assert.match(app,/title="当前课程操作记录" defaultExpanded=\{false\}/);
+  assert.match(app,/<SettingsDialog open=\{courseLogsOpen\}/);
 });
