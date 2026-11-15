@@ -16,8 +16,11 @@ test("LightC workspace header spans both columns and the slim sidebar begins bel
   const main=shell.indexOf('<main className="main" id="main-content">');
   assert.ok(header>=0&&sidebar>header&&main>sidebar);
   assert.match(shell,/currentPlatform\?\?"全部平台"/);
-  assert.match(shell,/currentCourseTitle\?</);
-  assert.match(shell,/courseProgress==null\?"—"/);
+  assert.match(shell,/currentCourseTitle\?metricLabel/);
+  assert.match(shell,/platformOverview\?\.label/);
+  assert.match(shell,/selectedCourseId/);
+  assert.match(shell,/全部课程/);
+  assert.match(shell,/currentCourseTitle\?courseProgress:platformOverview\?\.percent/);
   assert.match(css,/\.sf-shell \.sf-workspace-header\{[\s\S]*?grid-column:1 \/ -1/);
   assert.match(css,/\.sf-shell \.sf-floating-nav\{[\s\S]*?grid-column:1;[\s\S]*?grid-row:2/);
   assert.match(css,/\.sf-shell \.main\{[\s\S]*?grid-column:2;[\s\S]*?grid-row:2/);
