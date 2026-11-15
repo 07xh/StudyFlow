@@ -112,6 +112,33 @@ def test_repeated_original_progress_output_refreshes_local_observation(monkeypat
     assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 106.0
 
 
+def test_numeric_observer_fails_open_for_original_cli_on_snapshot_io_error(monkeypatch, tmp_path):
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    raw = vendor["NumericTelemetry"]("f" * 32, directory=tmp_path)
+    calls = []
+
+    def blocked_write():
+        calls.append(True)
+        raise OSError("mock filesystem denied")
+
+    monkeypatch.setattr(raw, "publish", blocked_write)
+    wrapped = legacy._RefreshingZhsSink(raw)
+    destination = io.StringIO()
+    tee = vendor["StdoutObserver"](destination, wrapped)
+
+    assert tee.write("\\rplaying [======] 60.0%") > 0
+    assert "60.0%" in destination.getvalue()
+    assert wrapped.disabled is True
+    assert len(calls) == 1
+    assert not raw.path.exists()
+
+    # Further CLI writes must still pass through without repeated file IO.
+    tee.write("\\rplaying [=======] 70.0%")
+    assert "70.0%" in destination.getvalue()
+    assert len(calls) == 1
+    assert raw.last_snapshot is None
+
+
 def test_invalid_monitor_token_does_not_start_legacy_task(monkeypatch):
     monkeypatch.setattr(legacy, "_course_ids_for_current_session",
                         lambda _: (_ for _ in ()).throw(AssertionError("not called")))
