@@ -7,6 +7,8 @@ export type ZhsLocalProgress = {
   video_segment_percent: number | null;
   resource_index: number | null;
   resource_total: number | null;
+  resource_kind?: "video" | "ppt" | "article" | "other" | null;
+  resource_name?: string | null;
 };
 
 export type LegacyTaskStatus = {
@@ -66,6 +68,7 @@ export type ZhsStoredOptions = {
 };
 export type OriginalZhsOptions = ZhsStoredOptions & {
   scope_mode:"all"|"selected";selected_ids:number[];
+  resource_mode?:"all"|"video"|"reading";
 };
 export const originalZhsDefaults:Readonly<ZhsStoredOptions> = Object.freeze({
   speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,
@@ -84,7 +87,9 @@ export function validateZhsOptions(value:OriginalZhsOptions):boolean {
     Array.isArray(ids) && ids.length<=256 &&
     ids.every(id=>Number.isSafeInteger(id)&&id>0&&id<=Number.MAX_SAFE_INTEGER) &&
     new Set(ids).size===ids.length &&
-    (value.scope_mode==="all"?ids.length===0:ids.length>0);
+    (value.scope_mode==="all"?ids.length===0:ids.length>0) &&
+    (value.resource_mode===undefined||value.resource_mode==="all"||
+      value.resource_mode==="video"||value.resource_mode==="reading");
 }
 
 // Names and defaults are the original YKT main.py environment settings.
