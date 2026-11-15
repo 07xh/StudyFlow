@@ -64,8 +64,12 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             else:
                 data = update_manager.download(request.get("current_version"), request.get("release_version"))
             return {"id": request_id, "ok": True, "data": data}
+        except update_manager.updater.UpdateError as exc:
+            return {"id": request_id, "ok": False, "error": exc.code}
         except ValueError:
             return {"id": request_id, "ok": False, "error": "INVALID_UPDATE_SETTINGS"}
+        except OSError:
+            return {"id": request_id, "ok": False, "error": "UPDATE_STORAGE_FAILED"}
         except Exception:
             return {"id": request_id, "ok": False, "error": "UPDATE_FAILED"}
     if operation == "ping":
