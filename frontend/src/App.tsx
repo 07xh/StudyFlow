@@ -1,5 +1,6 @@
 import {cleanContext,courseEvents,executionEvents,storedActivity,type ActivityEntry,type EventContext,type EventResult} from "./activity";
 import {useRuntimeTasks} from "./runtimeTasks";
+import {TaskRecoveryPanel} from "./taskRecovery";
 import {getYuketangLiveProgress} from "./legacyPlayback";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
@@ -18,6 +19,8 @@ import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
 import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangPlayedVideo,verifyYuketangCourse,getYuketangVideoSummary,subscribeYuketangVerification,getYuketangVerificationRevision} from "./components/YuketangCourseDetailPanel";
 import {UpdatePanel} from "./components/UpdatePanel";
+import {ReleaseNotesDialog} from "./ui/ReleaseNotesDialog";
+import {useReleaseChangelog} from "./useReleaseChangelog";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
@@ -120,6 +123,7 @@ export default function App(){
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
   const runtime=useRuntimeTasks(desktop&&consentAccepted);
+  const releaseChangelog=useReleaseChangelog(desktop,consentAccepted);
   const yuketangRun=runtime.tasks.find(task=>task.runner==="yuketang"&&!task.unavailable);
   const yuketangRunId=yuketangRun?.runId??"";
   const yuketangRunState=yuketangRun?.state??"idle";
@@ -863,6 +867,10 @@ export default function App(){
         const course=courses.find(course=>course.platform===headerPlatform&&course.course_id===id&&!course.stale);
         if(course)inspectCourse(course);
       }}>
+      <TaskRecoveryPanel desktop={desktop} consentAccepted={consentAccepted}
+        visible={page==="home"||page==="tasks"} tasks={runtime.tasks} loading={runtime.loading}
+        connected={{zhidao:platforms.zhidao.status==="connected",yuketang:platforms.yuketang.status==="connected"}}
+        courses={courses} onRefresh={runtime.refresh}/>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="tasks"&&renderTasks()}
       {page==="platforms"&&renderPlatforms()}
@@ -884,9 +892,10 @@ export default function App(){
         </section>
         <ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>
       </>}
-      <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice}/>
+      <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
     </AppShell>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
+    <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}

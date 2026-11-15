@@ -220,6 +220,8 @@ export function zhsDiagnosticMessage(status: LegacyTaskStatus): string {
 export function legacyExitMessage(status: LegacyTaskStatus): string {
   if (status.state !== "exited") return "";
   if (status.platform !== "zhidao") {
+    if(status.exit_code===10)return "检测到已有雨课堂原版进程，已拒绝重复运行。";
+    if(status.exit_code===11)return "雨课堂进程互斥锁不可用，已拒绝启动。";
     return status.exit_code === 0 ? "原版任务已结束；请核验平台记录。" :
       `原版任务已退出（代码 ${status.exit_code ?? "未知"}），请检查该平台登录与配置。`;
   }
@@ -230,6 +232,8 @@ export function legacyExitMessage(status: LegacyTaskStatus): string {
     case 5: return "未找到可用的 ZHS 0.1.5 运行时，请重新安装完整学序安装包。";
     case 6: return "所选课程不属于当前登录会话、已失效，或缺少有效课程路由，请重新同步课程。";
     case 9: return "原版 ZHS 要求交互输入，当前无终端模式无法继续；需在应用内处理该交互。";
+    case 10: return "已有同平台的原版进程运行，已拒绝重复启动。";
+    case 11: return "无法获取进程互斥锁，已拒绝启动以避免任务重复。";
     case 12: return "已达到设置的视频数量或任务时长上限；不代表服务器确认课程完成。";
     case 13: return "视频处理遇到错误，已按本次停止策略结束任务；请检查诊断信息。";
     case 14: return "指定的视频或知识点已不在当前真实课程目录中，请重新同步并选择。";
