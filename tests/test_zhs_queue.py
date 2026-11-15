@@ -271,3 +271,65 @@ def test_exited_rows_clear_their_last_local_percentage(tmp_path):
     assert row["state"] == "exited"
     assert row["percent"] is None
     assert row["stale"] is True
+
+def test_shared_catalog_follows_chapters_even_if_video_index_is_out_of_order(monkeypatch):
+    """New chapter videos follow the upstream chapter tree; no false completion."""
+    import sys
+    from types import ModuleType
+    from studyflow.services.zhs_queue import discover_targets
+
+    zhs = ModuleType("zhs")
+    cli = ModuleType("zhs.cli")
+    bootstrap = ModuleType("zhs.cli.bootstrap")
+    shared = ModuleType("zhs.zhidao")
+    course_mod = ModuleType("zhs.zhidao.course")
+    bootstrap.load_config_and_session = lambda **kwargs: (object(), NS(close=lambda: None))
+    videos = {
+        # Deliberately reverse the dictionary to catch accidental index traversal.
+        30: NS(video_id=30, name="第三节", watch_state=0),
+        20: NS(video_id=20, name="第二节", watch_state=0),
+        10: NS(video_id=10, name="第一节", watch_state=0),
+    }
+    ctx = NS(videos=videos, chapters=[
+        NS(name="第一章", video_lessons=[NS(video_small_lessons=[
+            NS(video_id=10), NS(video_id=20)
+        ])]),
+        NS(name="第二章", video_lessons=[NS(video_small_lessons=[NS(video_id=30)])]),
+    ])
+    class Manager:
+        def __init__(self, _session): pass
+        def get_context(self, _route, force=False):
+            assert force is True
+            return ctx
+    course_mod.ZhidaoCourseManager = Manager
+    for name, module in [
+        ("zhs", zhs), ("zhs.cli", cli), ("zhs.cli.bootstrap", bootstrap),
+        ("zhs.zhidao", shared), ("zhs.zhidao.course", course_mod)
+    ]:
+        monkeypatch.setitem(sys.modules, name, module)
+    options = {**zhs_settings.DEFAULTS, "scope_mode":"all", "selected_ids":[], "resource_mode":"video"}
+    result, limited = discover_targets(
+        {"courseType":"shared", "courseId":"100", "recruitAndCourseId":"validroute"}, options
+    )
+    assert not limited
+    assert [(item.resource_id, item.chapter_name) for item in result] == [
+        (10, "第一章"), (20, "第一章"), (30, "第二章")
+    ]
+
+
+def test_chapter_transition_keeps_queue_identity_without_inventing_percent(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    targets = [QueueTarget(10, None, "video", "第一节", "第一章"),
+               QueueTarget(30, None, "video", "第三节", "第二章")]
+    launched = []
+    def launch(target, token):
+        launched.append(target.resource_id)
+        return subprocess.Popen([sys.executable, "-c", "import time;time.sleep(.03)"],
+                                stdin=subprocess.PIPE)
+    assert supervise(targets, 1, "f"*32, tmp_path, launch) == 0
+    data = json.loads((tmp_path/f"zhs-queue-{'f'*32}.json").read_text())
+    assert launched == [10, 30]
+    assert [row["chapter"] for row in data["tasks"]] == ["第一章", "第二章"]
+    assert all(row["state"] == "exited" for row in data["tasks"])
+    assert all(row["percent"] is None for row in data["tasks"])
+
