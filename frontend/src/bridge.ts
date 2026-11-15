@@ -46,7 +46,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
 export type XuexitongSettings = {playback_speed:number;concurrency:number;skip_completed:boolean;verify_after_run:boolean};
-export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean};
+export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean|null};
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
 export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
