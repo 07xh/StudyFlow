@@ -63,6 +63,8 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
   const selectedRef=useRef(selected);
   selectedRef.current=courseId??selected;
   const statusRevision=useRef(0);
+  const statusInFlight=useRef(false);
+  const actionInFlight=useRef(false);
   const active= status.state==="running";
   const ownsStatus=Boolean(selected&&status.courseKey===selected);
   const runningCourse=courses.find(course=>course.course_id===status.courseKey);
@@ -87,11 +89,12 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
   },[desktop]);
 
   const refreshStatus=useCallback(async()=>{
-    if(!desktop)return;
+    if(!desktop||statusInFlight.current||actionInFlight.current)return;
+    statusInFlight.current=true;
     const revision=++statusRevision.current;
     try{
       const next=await invoke<PlayerStatus>("zhidao_player_status");
-      if(revision!==statusRevision.current)return;
+      if(revision!==statusRevision.current||actionInFlight.current)return;
       setStatus(next);
       if(next.event&&next.positionSeconds!==null&&next.courseKey&&next.runId&&next.courseKey===selectedRef.current){
         const key=[next.runId,next.courseKey,next.event,next.positionSeconds,next.visible,next.observedAt].join(":");
@@ -101,7 +104,9 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
         }
       }
     }catch(error){
-      setMessage(playerError(error));
+      if(revision===statusRevision.current&&!actionInFlight.current)setMessage(playerError(error));
+    }finally{
+      statusInFlight.current=false;
     }
   },[desktop]);
 
@@ -113,7 +118,9 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
   },[desktop,refreshStatus]);
 
   async function start(){
-    if(!selected)return;
+    if(!selected||actionInFlight.current)return;
+    actionInFlight.current=true;
+    statusRevision.current++;
     setBusy("start");setMessage("");
     try{
       const next=await invoke<PlayerStatus>("zhidao_player_start",{
@@ -126,11 +133,13 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     }catch(error){
       const result=playerError(error);setMessage(result);
       onEvent?.("启动官方播放器","warning",result,{courseId:selected,runner:"official"});
-    }finally{setBusy(null);}
+    }finally{actionInFlight.current=false;setBusy(null);void refreshStatus();}
   }
 
   async function stop(){
-    if(!ownsStatus||!active||!status.runId)return;
+    if(!ownsStatus||!active||!status.runId||actionInFlight.current)return;
+    actionInFlight.current=true;
+    statusRevision.current++;
     setBusy("stop");setMessage("");
     try{
       const latest=await invoke<PlayerStatus>("zhidao_player_status");
@@ -144,7 +153,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     }catch(error){
       const result=playerError(error);setMessage(result);
       onEvent?.("停止官方播放器","warning",result,{courseId:status.courseKey??undefined,runId:status.runId??undefined,runner:"official"});
-    }finally{setBusy(null);}
+    }finally{actionInFlight.current=false;setBusy(null);void refreshStatus();}
   }
 
   const current=courses.find(course=>course.course_id===selected);
