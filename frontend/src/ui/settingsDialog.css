@@ -24,6 +24,12 @@
 .sf-settings-modal-close:hover,.sf-settings-menu button:hover{background:var(--soft-accent)}
 .sf-settings-modal-close:focus-visible,.sf-settings-menu button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .sf-settings-modal-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:16px 20px 20px}
+.sf-settings-modal-footer{
+  display:flex;justify-content:flex-end;align-items:center;gap:10px;flex:none;
+  padding:12px 20px;border-top:1px solid var(--line);background:var(--panel);
+}
+.sf-settings-modal-footer .actions{margin:0;justify-content:flex-end;flex-wrap:wrap}
+.sf-settings-modal-footer button{min-height:36px}
 .sf-settings-modal-body section{margin-bottom:0}
 .sf-settings-modal-body .sf-platform-settings-view{min-width:0}
 .sf-settings-modal-navigation{flex:none;min-width:0;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
@@ -50,6 +56,7 @@
   .sf-settings-modal{max-height:calc(100dvh - 16px);width:100%}
   .sf-settings-modal-heading{padding:12px 14px}
   .sf-settings-modal-body{padding:12px 14px}
+  .sf-settings-modal-footer{padding:10px 14px}
   .sf-settings-modal-navigation{padding:10px 14px}
   .sf-settings-menu{gap:6px}
   .sf-settings-menu button{font-size:11px;padding:8px}
