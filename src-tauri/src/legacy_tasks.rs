@@ -58,6 +58,22 @@ impl OriginalYktOptions {
     }
 }
 
+// ZHS 0.1.5 supports these CLI flags; heartbeat timing and concurrency are not configurable.
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct ZhsOptions {
+    speed: f64,
+    limit_minutes: u16,
+    learn_optional: bool,
+}
+impl ZhsOptions {
+    fn validate(&self) -> Result<(), String> {
+        if !self.speed.is_finite() || self.speed < 1.0 || self.speed > 2.0
+            || self.limit_minutes > 1440 {
+            return Err("INVALID_SETTINGS".into());
+        }
+        Ok(())
+    }
+}
 #[derive(Default)]
 pub struct LegacyTasks {
     jobs: Mutex<HashMap<String, LegacyJob>>,
@@ -223,7 +239,8 @@ fn valid_course_key(key: &str) -> bool {
 #[tauri::command]
 pub fn legacy_start(
     app: AppHandle, state: State<'_, LegacyTasks>,
-    platform: String, course_id: Option<String>, options: Option<OriginalYktOptions>
+    platform: String, course_id: Option<String>, options: Option<OriginalYktOptions>,
+    zhs_options: Option<ZhsOptions>
 ) -> Result<LegacyStatus, String> {
     if platform != "zhidao" && platform != "yuketang" {
         return Err("UNKNOWN_PLATFORM".into());
@@ -234,10 +251,14 @@ pub fn legacy_start(
     if platform == "yuketang" && course_id.is_some() {
         return Err("INVALID_REQUEST".into());
     }
-    if platform == "zhidao" && options.is_some() {
+    if (platform == "zhidao" && options.is_some())
+        || (platform == "yuketang" && zhs_options.is_some()) {
         return Err("INVALID_REQUEST".into());
     }
     if let Some(settings) = &options {
+        settings.validate()?;
+    }
+    if let Some(settings) = &zhs_options {
         settings.validate()?;
     }
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
@@ -261,6 +282,9 @@ pub fn legacy_start(
         command.arg("--legacy-zhidao")
             .arg(course_id.as_deref().unwrap_or(""))
             .arg(monitor_token.as_deref().unwrap_or(""));
+        if let Some(settings) = &zhs_options {
+            command.arg(serde_json::to_string(settings).map_err(|_| "INVALID_SETTINGS")?);
+        }
     } else {
         command.arg("--legacy-yuketang");
         if let Some(ref id) = run_id { command.env("STUDYFLOW_YKT_RUN_ID", id); }
