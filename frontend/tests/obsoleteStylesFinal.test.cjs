@@ -27,7 +27,7 @@ test("obsolete styles do not reappear in the unified platform UI", () => {
 test("shared controls and server-evidence styles stay available", () => {
   const style = readCss("style.css");
   const foundation = readCss("ui/foundation.css");
-  assert.match(style, /\\.sf-ykt-single-recheck\\b/);
+  assert.match(style, /\.sf-ykt-single-recheck\b/);
   for (const live of [
     "sf-provider-blue",
     "sf-verified-track",
@@ -36,5 +36,5 @@ test("shared controls and server-evidence styles stay available", () => {
   ]) {
     assert.match(foundation, new RegExp("\\." + live + "(?![\\w-])"), live);
   }
-  assert.match(foundation, /:is\\(\\.main,\\.sf-settings-modal-body\\)/);
+  assert.match(foundation, /:is\(\.main,\.sf-settings-modal-body\)/);
 });
