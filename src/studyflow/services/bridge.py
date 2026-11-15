@@ -27,6 +27,8 @@ from studyflow.platforms.zhidao.legacy_runtime import (
 
 # Best-effort cleanup when the persistent JSONL process reaches normal EOF.
 atexit.register(qr_runtime.cancel)
+from studyflow.platforms.xuexitong.adapter import XuexitongAdapter
+from studyflow.platforms.xuexitong import credentials as xuexitong_credentials
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
@@ -34,7 +36,8 @@ from studyflow.services import update_manager
 from studyflow.platforms.yuketang.legacy_config import read_settings as get_original_ykt_settings, save_settings as save_original_ykt_settings
 
 MAX_LINE = 600000
-ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
+ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter(),
+            "xuexitong": XuexitongAdapter()}
 
 
 def _course_payload(course):
@@ -123,6 +126,31 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
+    if operation == "xuexitong.session.configure":
+        try:
+            xuexitong_credentials.save(request.get("cookie"))
+            return {"id": request_id, "ok": True, "data": {"saved": True}}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_XUEXITONG_COOKIE"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "XUEXITONG_CREDENTIAL_STORAGE_FAILED"}
+    if operation == "xuexitong.session.clear":
+        try:
+            xuexitong_credentials.clear()
+            return {"id": request_id, "ok": True, "data": {"cleared": True}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "XUEXITONG_CREDENTIAL_STORAGE_FAILED"}
+    if operation == "xuexitong.chapters.list":
+        course_key = request.get("course_id")
+        if not isinstance(course_key, str) or len(course_key) > 96:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        try:
+            return {"id": request_id, "ok": True,
+                    "data": ADAPTERS["xuexitong"].list_chapters(course_key)}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
     if operation in ("zhidao.progress.sync", "zhidao.progress.verify"):
         try:
             if operation == "zhidao.progress.sync":
