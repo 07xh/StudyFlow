@@ -205,7 +205,7 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
         </p>
       </div>
       <button type="button" className="secondary" disabled={!desktop||loading}
-        onClick={()=>setRevision(value=>value+1)}>刷新章节</button>
+        onClick={()=>{setExpanded(null);setTasks([]);setTaskError("");taskCache.current.clear();setRevision(value=>value+1);}}>刷新章节</button>
     </div>
     <div className="sf-xxt-filters" role="group" aria-label="章节筛选">
       <label className="sf-xxt-search"><span>搜索章节</span>
