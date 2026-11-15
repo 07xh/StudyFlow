@@ -151,6 +151,17 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
           <label><span>单次任务时间限制（分钟；0 沿用原版）</span>
             <input type="number" min={0} max={1440} step={1} value={options.limit_minutes}
               disabled={!desktop||busy} onChange={e=>update("limit_minutes",Number(e.target.value))}/></label>
+          <label><span>当前课程执行完成阈值</span>
+            <select value={options.completion_threshold===null?"auto":"custom"}
+              disabled={!desktop||busy}
+              onChange={e=>update("completion_threshold",e.target.value==="auto"?null:100)}>
+              <option value="auto">自动（沿用原版课程类型规则）</option>
+              <option value="custom">手动设置（仅当前课程）</option>
+            </select></label>
+          {options.completion_threshold!==null&&<label><span>执行目标（1–100%）</span>
+            <input type="number" min={1} max={100} step={1} value={options.completion_threshold}
+              disabled={!desktop||busy}
+              onChange={e=>update("completion_threshold",Number(e.target.value))}/></label>}
         </div>
         <p className="sf-ykt-advanced-note">并发仅作用于本门课的视频，每个视频独立显示进度并可单独停止。文章和 PPT 顺序处理；课程完成情况以服务器核验为准。</p>
         <div className="legacy-flags">
@@ -163,7 +174,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
           <label><input type="checkbox" checked={options.stop_on_error} disabled={!desktop||busy}
             onChange={e=>update("stop_on_error",e.currentTarget.checked)}/>视频处理异常时停止任务</label>
         </div>
-        <p className="sf-ykt-advanced-note">“跳过已完成”由 ZHS 0.1.5 原版自动执行，已标记为固定开启；目前不能通过关闭 UI 开关强制重看。共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
+        <p className="sf-ykt-advanced-note">本课程默认继承 ZHS 原版对不同课程类型的执行阈值。自定义百分比只控制本地执行目标，不代表平台已经确认完成；平台仍返回未完成时，界面不会标为完成。阈值随课程独立保存。“跳过已完成”由 ZHS 0.1.5 原版自动执行；共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
         <div className="legacy-option-grid">
           <label><span>本次选择的资源类型</span>
             <select value={resourceMode} disabled={!desktop||!courseId||busy}

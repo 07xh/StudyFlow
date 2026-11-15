@@ -22,6 +22,28 @@ def test_concurrency_settings_migrate_existing_preferences(tmp_path, monkeypatch
             zhs_settings.validate_settings({**zhs_settings.DEFAULTS, "concurrency": bad})
 
 
+@pytest.mark.parametrize("stored,want_concurrency,want_threshold", [
+    ({},1,None), ({"completion_threshold":85},1,85), ({"concurrency":3},3,None),
+    ({"concurrency":2,"completion_threshold":90},2,90),
+])
+def test_both_feature_settings_migrate_without_losing_course_preferences(tmp_path,monkeypatch,stored,want_concurrency,want_threshold):
+    monkeypatch.setenv("LOCALAPPDATA",str(tmp_path))
+    path = tmp_path / "StudyFlow/zhidao/zhs-task-settings.json"
+    path.parent.mkdir(parents=True)
+    base = {k:v for k,v in zhs_settings.DEFAULTS.items() if k not in ("concurrency","completion_threshold")}
+    path.write_text(json.dumps({**base,**stored}))
+    value = zhs_settings.read_settings()
+    assert value["concurrency"] == want_concurrency
+    assert value["completion_threshold"] == want_threshold
+
+
+def test_pre_threshold_run_settings_keep_automatic_target():
+    old = {k:v for k,v in zhs_settings.DEFAULTS.items() if k != "completion_threshold"}
+    value = zhs_settings.validate_run_settings({**old,"scope_mode":"all","selected_ids":[]})
+    assert value["completion_threshold"] is None
+    assert value["concurrency"] == 2
+
+
 def test_catalog_deduplicates_exact_resources_and_respects_global_video_limit():
     from studyflow.services.zhs_queue import resource_targets, limit_targets
     def resource(uid, kind=(1, 3), done=False, optional=False):
@@ -195,10 +217,11 @@ def test_shared_child_failure_is_not_swallowed_by_original_course_loop(monkeypat
     from studyflow.services import legacy_playback
     monkeypatch.setattr(legacy_playback,"_current_course_row",lambda _: {"courseType":"shared"})
     monkeypatch.setattr(zhs_queue.subprocess,"Popen",lambda command,**kwargs: captured.append(command) or Child())
-    opts = {**zhs_settings.DEFAULTS,"scope_mode":"all","selected_ids":[],"resource_mode":"video"}
+    opts = {**zhs_settings.DEFAULTS,"scope_mode":"all","selected_ids":[],"resource_mode":"video", "completion_threshold":85}
     assert zhs_queue.run_queue("a"*64,"b"*32,opts) == 0
     child_options = json.loads(captured[0][-2])
     assert child_options["stop_on_error"] is True
+    assert child_options["completion_threshold"] == 85
 
 
 @pytest.mark.parametrize("fatal_class", ["CaptchaRequired", "TimeLimitExceeded"])
