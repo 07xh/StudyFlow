@@ -35,3 +35,24 @@ test("platform settings open separately without duplicating the main workspace c
   assert.match(ykt,/view==="settings"\|\|settingsOpen/);
   assert.match(app,/id="platform:yuketang:tasks" title="平台批量任务"/);
 });
+
+test("LightC frame puts global settings beside real window buttons and keeps platform row fixed",()=>{
+  const shell=source("ui/AppShell.tsx");
+  const css=source("ui/foundation.css");
+  const windowConfig=JSON.parse(fs.readFileSync(path.join(__dirname,"..","..","src-tauri","tauri.conf.json"),"utf8"));
+  const capabilities=JSON.parse(fs.readFileSync(path.join(__dirname,"..","..","src-tauri","capabilities","default.json"),"utf8"));
+  assert.equal(windowConfig.app.windows[0].decorations,false,"Custom titlebar cannot coexist with native titlebar");
+  for(const permission of ["core:window:allow-close","core:window:allow-minimize","core:window:allow-toggle-maximize","core:window:allow-start-dragging"])
+    assert.ok(capabilities.permissions.includes(permission));
+  assert.match(shell,/data-tauri-drag-region/);
+  assert.match(shell,/sf-window-titlebar-actions/);
+  assert.equal((shell.match(/sf-settings-button/g)||[]).length,1,"Global settings must not repeat in second row");
+  assert.match(shell,/getCurrentWindow\(\)\.minimize\(\)/);
+  assert.match(shell,/getCurrentWindow\(\)\.toggleMaximize\(\)/);
+  assert.match(shell,/getCurrentWindow\(\)\.close\(\)/);
+  assert.match(shell,/sf-workspace-empty-progress/);
+  assert.match(css,/grid-template-rows:34px auto minmax\(0,1fr\)/);
+  assert.match(css,/\.sf-shell \.sf-workspace-header\{[\s\S]*?grid-column:1\/-1;grid-row:2/);
+  assert.match(css,/\.sf-shell \.main\{[\s\S]*?grid-column:2;grid-row:3/);
+  assert.match(css,/overflow-y:auto;overscroll-behavior:contain/);
+});
