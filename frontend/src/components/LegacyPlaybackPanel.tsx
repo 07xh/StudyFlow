@@ -83,7 +83,10 @@ export function LegacyPlaybackPanel({
   const zhsKind=liveZhs?.resource_kind;
   const zhsKindLabel=zhsKind==="video"?"视频":zhsKind==="ppt"?"PPT":
     zhsKind==="article"?"文章":zhsKind==="other"?"其他资源":"类型待识别";
-  const zhsSegment=liveZhs?.resource_kind==="video"?liveZhs.video_segment_percent:null;
+  // Previous local snapshots have no resourceKind. The upstream 'playing'
+  // frame is still video-only; retain its bounded percent during upgrades.
+  const zhsSegment=!liveZhs?.resource_kind||liveZhs.resource_kind==="video"
+    ?liveZhs?.video_segment_percent:null;
   const selectedCourse=courses.find(course=>course.platform==="zhidao"&&course.course_id===selection)??null;
   const startHintId=useId();
   // Keep the existing launch gates; expose the first blocking condition instead of an unexplained disabled button.
