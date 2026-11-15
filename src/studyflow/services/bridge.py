@@ -211,6 +211,23 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "INVALID_DOCUMENT"}
         except Exception:
             return {"id": request_id, "ok": False, "error": "DOCUMENT_UNAVAILABLE"}
+    if operation == "yuketang.course.detail":
+        course_id = request.get("course_id")
+        offset, limit = request.get("offset", 0), request.get("limit", 8)
+        if (not isinstance(course_id, str) or not course_id.isascii()
+                or not course_id.isdecimal() or not 1 <= len(course_id) <= 24
+                or type(offset) is not int or not 0 <= offset <= 5000
+                or type(limit) is not int or not 1 <= limit <= 12):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        try:
+            data = ADAPTERS["yuketang"].course_progress(course_id, offset=offset, limit=limit)
+            return {"id": request_id, "ok": True, "data": data}
+        except LookupError:
+            return {"id": request_id, "ok": False, "error": "COURSE_NOT_FOUND"}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
     if operation == "videos.list":
         if request.get("platform") != "yuketang":
             return {"id": request_id, "ok": False, "error": "UNKNOWN_PLATFORM"}
