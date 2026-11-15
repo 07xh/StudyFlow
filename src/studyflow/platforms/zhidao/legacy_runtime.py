@@ -49,7 +49,12 @@ def probe_login() -> bool:
         # Use the authentication-only command. The full doctor-server
         # path also queries course APIs and must not delay or redefine login state.
         result = _run_readonly("session-check", 65)
-        return any(line.startswith("[SESSION_OK]") for line in (result.stdout or "").splitlines())
+        # A success-looking line in a failed subprocess is not proof that
+        # authentication was established. Require both the dedicated sentinel
+        # and a successful session-check exit code.
+        return result.returncode == 0 and any(
+            line.startswith("[SESSION_OK]") for line in (result.stdout or "").splitlines()
+        )
     except RuntimeError:
         return False
 
