@@ -76,7 +76,11 @@ def run_yuketang_original() -> int:
     # Upstream main.py configures its own task settings and app logger.
     # Do not import it in the GUI/JSONL process: it redirects stdout/stderr.
     try:
-        runpy.run_path(str(original), run_name="__main__")
+        from studyflow.services.yuketang_worker_observer import attribute_worker_progress
+        # Only annotate output from the original Worker's actual call stack.
+        # This never modifies legacy/yuketang/main.py or network payloads.
+        with attribute_worker_progress():
+            runpy.run_path(str(original), run_name="__main__")
         return 0
     except SystemExit as exc:
         if isinstance(exc.code, int):
