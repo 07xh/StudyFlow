@@ -1860,3 +1860,20 @@
 .sf-shell .sf-header-course-picker select{width:100%;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:7px 10px;font:inherit;font-size:13px}
 .sf-shell .sf-content-scope input{height:36px;border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:7px 10px;color:var(--text);font:inherit}
 .sf-shell .sf-fold-body>.legacy-playback-panel{border:0;background:transparent;box-shadow:none;padding:8px 2px;margin:0}
+
+
+/* Rain Classroom: compact, per-video provenance, never a guessed heartbeat rate. */
+.sf-shell .sf-ykt-video-name{font-size:12px;color:var(--text);line-height:1.5;overflow-wrap:anywhere;min-width:0}
+.sf-shell .sf-ykt-video-evidence{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:5px;min-width:0}
+.sf-shell .sf-ykt-video-evidence>div{display:grid;align-content:start;gap:4px;min-width:0}
+.sf-shell .sf-ykt-video-evidence small{font-size:10px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
+.sf-shell .sf-ykt-video-evidence strong{font-size:15px;font-variant-numeric:tabular-nums;line-height:1.3}
+.sf-shell .sf-ykt-video-evidence .sf-ykt-live-track{margin:0;min-width:0}
+.sf-shell .sf-ykt-video-details{margin-top:10px;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.sf-shell .sf-ykt-video-details>summary{font-size:12px;font-weight:600;cursor:pointer;color:var(--text)}
+.sf-shell .sf-ykt-video-list{display:grid;gap:7px;max-height:445px;overflow-y:auto;overscroll-behavior:contain;margin-top:12px;padding-right:3px}
+.sf-shell .sf-ykt-video-row{display:grid;gap:6px;min-width:0;padding:11px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.02)}
+.sf-shell .sf-ykt-video-row .sf-ykt-worker-heading{align-items:baseline;min-width:0}
+.sf-shell .sf-ykt-video-row .sf-ykt-worker-heading strong{font-size:12px;min-width:0;overflow-wrap:anywhere}
+.sf-shell .sf-ykt-video-details>.sf-ykt-live-note{display:block;margin-top:8px}
+@media(max-width:600px){.sf-shell .sf-ykt-video-evidence{grid-template-columns:1fr;gap:9px}}
