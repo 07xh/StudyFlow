@@ -36,6 +36,9 @@ def _prepare_jsonl_stdout():
 def main() -> int:
     if len(sys.argv) > 1:
         mode = sys.argv[1]
+        if mode == "--zhs-video-worker":
+            from studyflow.services.zhs_queue import video_worker
+            return video_worker(sys.argv[2:])
         if mode == "--yuketang-env-check" and len(sys.argv) == 2:
             from studyflow.services.runtime_check import check_yuketang
             result = check_yuketang()

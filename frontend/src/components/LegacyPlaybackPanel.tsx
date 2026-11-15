@@ -1,4 +1,5 @@
 import {RunParameters} from "./RunParameters";
+import {ZhsQueuePanel} from "./ZhsQueuePanel";
 import {rememberTaskRecovery,discardTaskRecovery} from "../taskRecovery";
 import type {YuketangScope,YuketangSessionMarker} from "../bridge";
 import {ZhsTaskSettingsPanel} from "./ZhsTaskSettingsPanel";
@@ -332,7 +333,8 @@ export function LegacyPlaybackPanel({
     {startUnavailableReason&&<p id={startHintId} className="sf-task-context sf-start-unavailable-reason" role="status">
       暂不能启动：{startUnavailableReason}
     </p>}
-    {platform==="zhidao"&&<div className={"sf-live-progress-summary sf-has-zhs"+(detailMode?" sf-detail-simulation-only":"")} aria-label="当前内容与播放位置">
+    {platform==="zhidao"&&ownsStatus&&status?.zhs_queue&&<ZhsQueuePanel status={status} unavailable={statusReadFailed} onRefresh={updateStatus}/>}
+    {platform==="zhidao"&&(!ownsStatus||!status?.zhs_queue)&&<div className={"sf-live-progress-summary sf-has-zhs"+(detailMode?" sf-detail-simulation-only":"")} aria-label="当前内容与播放位置">
       <div className="sf-live-state sf-zhs-now-playing">
         <div className="sf-zhs-now-heading">
           <span>正在观看 / 处理</span>

@@ -1,5 +1,6 @@
 mod run_identity;
 mod legacy_tasks;
+mod zhs_queue;
 mod zhidao_player;
 
 use std::fs::{self, OpenOptions};
@@ -439,7 +440,8 @@ pub fn run() {
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
             zhidao_player::zhidao_player_clear_web_profile,
-            legacy_tasks::legacy_start, legacy_tasks::legacy_status, legacy_tasks::legacy_stop
+            legacy_tasks::legacy_start, legacy_tasks::legacy_status, legacy_tasks::legacy_stop,
+            legacy_tasks::zhs_queue_stop_video
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {

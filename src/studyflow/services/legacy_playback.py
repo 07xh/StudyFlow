@@ -358,7 +358,8 @@ def _observe_zhs_cli_stages():
 
 
 def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None,
-                          options: dict | None = None, is_ai: bool = False) -> int | None:
+                          options: dict | None = None, is_ai: bool = False,
+                          target_resource=None) -> int | None:
     """Run upstream ZHS 0.1.5 CLI unchanged; None means no bundled runtime."""
     from importlib.metadata import PackageNotFoundError, version
     try:
@@ -393,9 +394,11 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                 sys.stderr = original_stderr
         # Per-run scope only controls the original traversal; not heartbeat sender.
         with _observe_zhs_cli_stages() as stage:
+            scope_extra = {"target_resource": target_resource} if target_resource is not None else {}
             with scoped_upstream_play(
                 options, is_ai,
                 on_resource=sink.mark_resource if sink is not None else None,
+                **scope_extra,
             ):
                 result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
@@ -440,7 +443,8 @@ def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = 
     )
 
 
-def run_zhidao_original(course_key: str, monitor_token: str | None = None, zhs_options: dict | None = None) -> int:
+def run_zhidao_original(course_key: str, monitor_token: str | None = None, zhs_options: dict | None = None,
+                        target_resource=None) -> int:
     if monitor_token is not None and MONITOR_TOKEN.fullmatch(monitor_token) is None:
         return 2
     try:
@@ -470,7 +474,9 @@ def run_zhidao_original(course_key: str, monitor_token: str | None = None, zhs_o
         if is_ai and options["learn_optional"]:
             arguments.append("--learn-optional")
     # Old AI wrapper is retained for callers without custom options.
-    if options is None and is_ai:
+    if target_resource is not None:
+        bundled = _run_bundled_zhs_args(arguments, monitor_token, options, is_ai, target_resource)
+    elif options is None and is_ai:
         bundled = _run_bundled_zhs(course_id, class_id, monitor_token)
     elif options is None:
         # Old callers keep the two-argument upstream compatibility wrapper.
@@ -563,6 +569,11 @@ def main(argv: list[str] | None = None) -> int:
             options = None
         token = args[2] if len(args) >= 3 else None
         try:
+            if options is not None and options["concurrency"] > 1 and options["resource_mode"] != "reading":
+                if not token or MONITOR_TOKEN.fullmatch(token) is None:
+                    return 2
+                from studyflow.services.zhs_queue import run_queue
+                return _run_exclusive("zhidao", lambda: run_queue(args[1], token, options))
             return _run_exclusive("zhidao", lambda: run_zhidao_original(args[1], token, options))
         except Exception:
             # A failure outside upstream CLI must still be visible as a safe

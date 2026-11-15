@@ -132,6 +132,13 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         <span className="legacy-run-state">{saved?"本机参数已加载":"未读取参数"}</span></div>
       <div className="legacy-options">
         <div className="legacy-option-grid">
+          <label><span>同课程视频并发数</span>
+            <select value={options.concurrency??1} disabled={!desktop||busy}
+              onChange={e=>update("concurrency",Number(e.target.value))}>
+              <option value={1}>1 · 单路顺序执行</option>
+              <option value={2}>2 · 双路并发（默认）</option>
+              <option value={3}>3 · 三路并发</option>
+            </select></label>
           <label><span>请求倍速（1–2×）</span>
             <input type="number" min={1} max={2} step={0.25} value={options.speed}
               disabled={!desktop||busy} onChange={e=>update("speed",Number(e.target.value))}/></label>
@@ -145,6 +152,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
             <input type="number" min={0} max={1440} step={1} value={options.limit_minutes}
               disabled={!desktop||busy} onChange={e=>update("limit_minutes",Number(e.target.value))}/></label>
         </div>
+        <p className="sf-ykt-advanced-note">并发仅作用于本门课的视频，每个视频独立显示进度并可单独停止。文章和 PPT 顺序处理；课程完成情况以服务器核验为准。</p>
         <div className="legacy-flags">
           <label title="ZHS 0.1.5 原版自动跳过已完成内容，暂不支持在学序中关闭此行为。">
             <input type="checkbox" checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/>

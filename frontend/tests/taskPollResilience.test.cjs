@@ -21,10 +21,10 @@ test('rc.6 ZHS exit diagnostics do not appear as live after an IPC failure',()=>
 });
 
 test('Windows legacy task operations run in Tauri blocking pool',()=>{
-  for(const operation of ['legacy_start','legacy_status','legacy_stop']){
+  for(const operation of ['legacy_start','legacy_status','legacy_stop','zhs_queue_stop_video']){
     assert.match(rust,new RegExp('pub async fn '+operation+'\\('));
   }
-  assert.equal((rust.match(/tauri::async_runtime::spawn_blocking/g)||[]).length,3);
+  assert.equal((rust.match(/tauri::async_runtime::spawn_blocking/g)||[]).length,4);
   assert.match(rust,/verify_expected_run\(expected_run_id\.as_deref\(\), job\.run_id\.as_deref\(\)\)/);
   assert.match(rust,/diagnostic_code:/);
 });

@@ -11,11 +11,14 @@ import tempfile
 DEFAULTS = {
     "speed": 1.5, "speed_cap": 2.0, "limit_minutes": 0,
     "learn_optional": False, "max_videos": 0, "stop_on_error": False,
+    "concurrency": 2,
 }
 MAX_SELECTED = 256
 
 
 def validate_run_settings(value: object) -> dict:
+    if isinstance(value, dict) and "concurrency" not in value:
+        value = {**value, "concurrency": 1}
     required = set(DEFAULTS) | {"scope_mode", "selected_ids"}
     if not isinstance(value, dict) or set(value) not in (required, required | {"resource_mode"}):
         raise ValueError("INVALID_ZHS_SETTINGS")
@@ -47,12 +50,13 @@ def validate_settings(value: object) -> dict:
     if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 <= minutes <= 1440:
         raise ValueError("INVALID_ZHS_SETTINGS")
     if (type(cap) not in (float, int) or not math.isfinite(cap) or not 1.0 <= cap <= 2.0
+            or type(value["concurrency"]) is not int or not 1 <= value["concurrency"] <= 3
             or type(maximum) is not int or not 0 <= maximum <= 1000
             or type(stop) is not bool or not isinstance(optional, bool)):
         raise ValueError("INVALID_ZHS_SETTINGS")
     return {"speed": float(speed), "speed_cap": float(cap),
             "limit_minutes": minutes, "learn_optional": optional,
-            "max_videos": maximum, "stop_on_error": stop}
+            "max_videos": maximum, "stop_on_error": stop, "concurrency": value["concurrency"]}
 
 
 def _path(course_key: str | None = None) -> Path:
@@ -75,7 +79,9 @@ def read_settings(course_key: str | None = None) -> dict:
         raw = json.loads(path.read_text(encoding="utf-8"))
         # Migrate PR #64's three-property local draft without deleting preferences.
         if isinstance(raw, dict) and set(raw) == {"speed", "limit_minutes", "learn_optional"}:
-            raw = {**DEFAULTS, **raw}
+            raw = {**DEFAULTS, **raw, "concurrency": 1}
+        if isinstance(raw, dict) and set(raw) == set(DEFAULTS) - {"concurrency"}:
+            raw = {**raw, "concurrency": 1}
         return validate_settings(raw)
     except FileNotFoundError:
         return read_settings() if course_key is not None else dict(DEFAULTS)

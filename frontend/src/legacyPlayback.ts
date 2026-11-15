@@ -22,6 +22,14 @@ export type LegacyTaskStatus = {
   zhs_last_resource?: Omit<ZhsLocalProgress,"video_segment_percent"> | null;
   zhs_stale: boolean;
   diagnostic_code?: string | null; // validated against fixed native enum, never raw CLI output
+  zhs_queue?:ZhsQueueSnapshot|null;
+};
+
+export type ZhsQueueSnapshot={
+  concurrency:number;state:string;stale:boolean;
+  tasks:Array<{task_id:string;name:string|null;kind:"video"|"ppt"|"article"|"other";
+    state:"queued"|"running"|"exited"|"failed"|"stopped"|"unknown";
+    percent:number|null;stale:boolean;exit_code:number|null}>;
 };
 
 export type YuketangLiveProgress = {
@@ -66,7 +74,7 @@ export async function getYuketangLiveProgress(runId: string): Promise<YuketangLi
 // ZHS 0.1.5 play flags; original heartbeat timing remains inside ZHS.
 export type ZhsStoredOptions = {
   speed:number;speed_cap:number;limit_minutes:number;learn_optional:boolean;
-  max_videos:number;stop_on_error:boolean;
+  max_videos:number;stop_on_error:boolean;concurrency?:number;
 };
 export type OriginalZhsOptions = ZhsStoredOptions & {
   scope_mode:"all"|"selected";selected_ids:number[];
@@ -74,13 +82,14 @@ export type OriginalZhsOptions = ZhsStoredOptions & {
 };
 export const originalZhsDefaults:Readonly<ZhsStoredOptions> = Object.freeze({
   speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,
-  max_videos:0,stop_on_error:false
+  max_videos:0,stop_on_error:false,concurrency:2
 });
 export function validateZhsStoredOptions(value:ZhsStoredOptions):boolean {
   return !!value && Number.isFinite(value.speed) && value.speed>=1 && value.speed<=2 &&
     Number.isFinite(value.speed_cap) && value.speed_cap>=1 && value.speed_cap<=2 &&
     Number.isInteger(value.limit_minutes) && value.limit_minutes>=0 && value.limit_minutes<=1440 &&
     Number.isInteger(value.max_videos) && value.max_videos>=0 && value.max_videos<=1000 &&
+    (value.concurrency===undefined||(Number.isInteger(value.concurrency)&&value.concurrency>=1&&value.concurrency<=3)) &&
     typeof value.learn_optional==="boolean" && typeof value.stop_on_error==="boolean";
 }
 export function validateZhsOptions(value:OriginalZhsOptions):boolean {
@@ -180,11 +189,17 @@ export async function stopLegacy(platform: Platform, expectedRunId:string): Prom
   return invoke<LegacyTaskStatus>("legacy_stop", {platform,expectedRunId});
 }
 
+export async function stopZhsVideo(expectedRunId:string,taskId:string):Promise<void>{
+  ensureDesktop();
+  if(!expectedRunId||!/^[a-f0-9]{32}$/.test(taskId))throw new Error("TASK_RUN_CHANGED");
+  return invoke<void>("zhs_queue_stop_video",{expectedRunId,taskId});
+}
+
 export function legacyError(err: unknown): string {
   const code = typeof err === "string" ? err : err instanceof Error ? err.message : "";
   switch (code) {
     case "INVALID_COURSE": return "请先同步课程并选择有效的知到课程。";
-    case "INVALID_SETTINGS": return "雨课堂原版参数超出支持范围。";
+    case "INVALID_SETTINGS": return "任务参数超出当前支持范围。";
     case "TASK_RUN_CHANGED": return "运行任务已变化，请刷新状态后再操作。";
     case "TASK_ALREADY_RUNNING": return "该平台原版任务已在运行，请先停止后再启动。";
     case "LEGACY_NOT_INSTALLED": return "缺少学序本机执行器或原版知到运行环境。";
