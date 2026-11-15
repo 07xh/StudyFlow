@@ -39,3 +39,21 @@ def test_scope_save_rejects_missing_session_invalid_ids_and_credential_replaceme
     request['scope'] = {'classroom_id': '33', 'university_id': '44', 'session_id': 'replacement'}
     assert dispatch(request)['error'] == 'INVALID_REQUEST'
     assert writes == []
+
+
+def test_invalid_classroom_config_reports_input_error_not_windows_storage_failure(monkeypatch):
+    request = {"id": "scope-invalid", "version": 1, "operation": "yuketang.configure",
+               "configuration": {"session_id": "sample", "csrf_token": "sample",
+                                 "classroom_id": "", "university_id": ""}}
+    # Validate at the credentials layer before touching Windows Credential Manager.
+    result = dispatch(request)
+    assert not result["ok"]
+    assert result["error"] == "INVALID_YUKETANG_CONFIGURATION"
+    assert "sample" not in str(result)
+
+    def storage_unavailable(_):
+        raise OSError("private Windows storage diagnostic")
+    monkeypatch.setattr(credentials, "save", storage_unavailable)
+    result = dispatch(request)
+    assert result["error"] == "CREDENTIAL_STORAGE_FAILED"
+    assert "private Windows" not in str(result)
