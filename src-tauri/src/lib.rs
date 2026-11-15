@@ -368,7 +368,7 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
     if let Ok(mut guard) = qr_worker.lock() {
         // Drop sends QR cancellation and reaps its child, when present.
         guard.take();
-    }
+    };
 }
 
 #[tauri::command]
