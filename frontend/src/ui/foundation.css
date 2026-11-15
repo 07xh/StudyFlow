@@ -2169,3 +2169,143 @@
     grid-template-columns:minmax(0,1fr);
   }
 }
+
+
+/* Unified course-record workspace V2: one visual language for Zhidao and Rain Classroom.
+   Preserve platform-specific evidence labels; only layout and interaction are shared. */
+.sf-shell .sf-fold-body > section.sf-unified-records.course-v2-detail{
+  display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;
+  gap:13px;width:100%;max-width:100%;min-width:0;padding:17px 18px;
+}
+.sf-shell .sf-unified-records > *{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.sf-shell .sf-unified-records .sf-zd-detail-heading{
+  display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px;
+}
+.sf-shell .sf-unified-records .sf-zd-detail-heading > div{flex:1 1 280px;min-width:0}
+.sf-shell .sf-unified-records .sf-zd-detail-heading > button{min-height:36px;margin:0;white-space:nowrap}
+.sf-shell .sf-unified-records .sf-zd-detail-summary.sf-record-summary{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0;
+}
+.sf-shell .sf-unified-records .sf-record-summary > div{
+  display:flex;flex-direction:column;justify-content:center;align-items:flex-start;
+  gap:7px;min-width:0;min-height:80px;padding:12px 14px;
+}
+.sf-shell .sf-unified-records .sf-record-summary span{
+  color:var(--muted);font-size:11px;line-height:1.4;white-space:normal;
+}
+.sf-shell .sf-unified-records .sf-record-summary strong{
+  color:var(--text);font-size:clamp(15px,1.5vw,19px);line-height:1.3;
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+}
+.sf-shell .sf-record-toolbar{
+  display:grid;gap:9px;min-width:0;margin:0;padding:0;
+}
+.sf-shell .sf-record-toolbar-main{
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;
+}
+.sf-shell .sf-record-status-tabs{
+  flex:1 1 315px;max-width:max-content;min-width:0;
+}
+.sf-shell .sf-record-status-tabs button{
+  min-width:0;white-space:nowrap;
+}
+.sf-shell .sf-record-toolbar-actions{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:7px;min-width:0;
+}
+.sf-shell .sf-record-chapter-select{display:flex;min-width:125px;max-width:185px}
+.sf-shell .sf-record-chapter-select select{
+  width:100%;height:34px;min-width:0;
+  padding:5px 24px 5px 10px;border:1px solid var(--line);border-radius:9px;
+  background:var(--panel);color:var(--text);font-size:11px;cursor:pointer;
+}
+.sf-shell .sf-record-search-toggle{
+  position:relative;width:34px;min-width:34px;min-height:34px;padding:7px;
+}
+.sf-shell .sf-record-search-toggle.active{
+  border-color:var(--accent);background:var(--soft-accent);color:var(--accent-text);
+}
+.sf-shell .sf-record-search-dot{
+  position:absolute;right:4px;top:4px;width:5px;height:5px;border-radius:50%;
+  background:var(--accent);
+}
+.sf-shell .sf-record-search-field{
+  display:flex;align-items:center;gap:8px;min-width:0;
+  padding:7px 9px;border:1px solid var(--line);border-radius:11px;background:var(--panel);
+}
+.sf-shell .sf-record-search-field label{color:var(--muted);font-size:11px;white-space:nowrap}
+.sf-shell .sf-record-search-field input{
+  flex:1;min-width:0;width:100%;padding:6px;
+  border:0;outline:0;background:transparent;color:var(--text);font-size:12px;
+}
+.sf-shell .sf-record-search-field:focus-within{border-color:var(--accent)}
+.sf-shell .sf-record-search-field .secondary{padding:6px;min-height:28px}
+.sf-shell .sf-record-filter-result{color:var(--muted);font-size:10px;line-height:1.45}
+.sf-shell .sf-record-chapters{
+  display:grid;grid-template-columns:minmax(0,1fr);gap:10px;
+  width:100%;min-width:0;margin:0;padding:0;border:0;
+}
+.sf-shell .sf-record-chapters > p{color:var(--muted);font-size:12px}
+.sf-shell .sf-unified-records .sf-record-chapter{
+  width:100%;max-width:100%;min-width:0;
+  margin:0;padding:7px 0 0;border-top:1px solid var(--line);
+  background:transparent;
+}
+.sf-shell .sf-unified-records .sf-record-chapter-rows{
+  display:grid;grid-template-columns:minmax(0,1fr);
+  gap:8px;margin:7px 0 0;max-height:none;overflow:visible;
+}
+.sf-shell .sf-unified-records .sf-record-item{
+  min-width:0;padding:12px 14px;border:1px solid var(--line);
+  border-radius:11px;background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-unified-records .sf-record-item .sf-zd-detail-item-head{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;justify-content:space-between;
+}
+.sf-shell .sf-unified-records .sf-record-item .sf-zd-detail-item-head strong{
+  flex:1 1 180px;font-size:12px;line-height:1.5;min-width:0;overflow-wrap:anywhere;
+}
+.sf-shell .sf-unified-records .sf-record-item small{
+  font-size:10px;line-height:1.6;color:var(--muted);
+}
+.sf-shell .sf-unified-records .sf-record-status{
+  display:inline-flex;align-items:center;max-width:100%;min-height:22px;
+  padding:3px 7px;border:1px solid var(--line);border-radius:8px;
+  color:var(--muted);font-size:10px;font-weight:650;font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-unified-records .sf-record-status.is-completed{
+  color:var(--accent-text);background:var(--soft-accent);border-color:rgba(19,217,146,.22);
+}
+.sf-shell .sf-unified-records .sf-record-status.is-unverified{
+  color:var(--muted);background:rgba(127,127,127,.06);
+}
+.sf-shell .sf-unified-records .sf-zd-detail-track{
+  height:5px;overflow:hidden;margin-top:8px;border-radius:99px;background:var(--line);
+}
+.sf-shell .sf-unified-records .sf-zd-detail-track span{
+  display:block;height:100%;border-radius:inherit;background:var(--accent);
+}
+.sf-shell .sf-unified-records .sf-technical-note{margin:0}
+.sf-shell .sf-visually-hidden{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+@media(max-width:900px){
+  .sf-shell .sf-record-toolbar-main{align-items:flex-start}
+  .sf-shell .sf-record-status-tabs{flex:1 1 100%;max-width:100%}
+  .sf-shell .sf-record-toolbar-actions{justify-content:flex-start}
+}
+@media(max-width:760px){
+  .sf-shell .sf-fold-body > section.sf-unified-records.course-v2-detail{padding:14px}
+  .sf-shell .sf-unified-records .sf-zd-detail-summary.sf-record-summary{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+@media(max-width:480px){
+  .sf-shell .sf-unified-records .sf-zd-detail-summary.sf-record-summary{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .sf-shell .sf-record-chapter-select{max-width:none;flex:1 1 125px}
+  .sf-shell .sf-record-search-field{flex-wrap:wrap}
+  .sf-shell .sf-record-search-field label{flex-basis:100%}
+  .sf-shell .sf-record-toolbar-actions{width:100%}
+}
