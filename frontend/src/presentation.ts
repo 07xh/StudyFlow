@@ -97,8 +97,14 @@ export function platformProgressOverview(
     percent=metrics.reduce((sum,metric)=>sum+(metric.percent??0),0)/totalCount;
   }
   const label=rain?"平台视频完成概览":"平台课程进度概览";
+  const videoSummary=rain?current.map(course=>yuketang[course.course_id]).filter(
+    (summary):summary is YuketangVideoSummary=>summary!==undefined):[];
+  const totalVideos=videoSummary.reduce((count,summary)=>count+summary.total,0);
+  const verifiedVideos=videoSummary.reduce((count,summary)=>count+summary.verified,0);
+  const completedVideos=videoSummary.reduce((count,summary)=>count+summary.completed,0);
   const detail=totalCount===0?"暂无已同步课程":
     percent!==null?`已核验 ${verifiedCount}/${totalCount} 门 · ${rain?"按服务器已核验视频汇总":"课程进度均值"}，非官方总进度`:
+    rain&&totalVideos>0?`服务器已核验 ${verifiedVideos}/${totalVideos} 节视频 · 已确认完成 ${completedVideos} 节 · ${scanning?"核验中":"总体进度待核验"}`:
     `已核验 ${verifiedCount}/${totalCount} 门 · ${scanning?"正在读取服务器学习进度":"总体进度待核验"}`;
   return {percent,label,detail,verifiedCount,totalCount};
 }
