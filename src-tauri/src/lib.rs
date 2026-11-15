@@ -237,6 +237,11 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
+        "yuketang.course.detail" if request.get("course_id").and_then(|x| x.as_str())
+            .is_some_and(|id| !id.is_empty() && id.len() <= 24 && id.bytes().all(|c| c.is_ascii_digit()))
+            && request.get("offset").and_then(|x| x.as_u64()).is_some_and(|n| n <= 5000)
+            && request.get("limit").and_then(|x| x.as_u64()).is_some_and(|n| (1..=12).contains(&n)) => Ok(()),
+
         "yuketang.progress" if request.get("run_id").and_then(|x| x.as_str())
             .is_some_and(|id| {
                 let mut parts = id.split('-');
