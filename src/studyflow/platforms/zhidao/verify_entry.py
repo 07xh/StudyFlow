@@ -14,7 +14,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     from .legacy_runtime import _session_course_cache
-    from .upstream import zhidao_only
+    from .courses import progress_key
     key = args[0]
     # Apply exactly the same current-login, completeness and cache-schema
     # checks as the UI bridge. A direct --zhidao-verify-one invocation must not
@@ -26,7 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     matches = [
         row for row in rows
         if row.get("courseType") in ("ai", "shared")
-        and zhidao_only.progress_key(row) == key
+        and progress_key(row) == key
         and row.get("stale") is not True
     ]
     if len(matches) != 1:
@@ -34,6 +34,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     selected = matches[0]
     course_id = str(selected.get("courseId") or "")
     class_id = str(selected.get("classId") or "")
+    # Import heavy ZHS-only dependencies after all local identity gates pass.
+    from .upstream import zhidao_only
     return zhidao_only.verify_one(str(selected["courseType"]), course_id, class_id)
 
 
