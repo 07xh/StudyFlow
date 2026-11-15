@@ -6,6 +6,7 @@ from enum import Enum
 class Platform(str, Enum):
     ZHIDAO = "zhidao"
     YUKETANG = "yuketang"
+    XUEXITONG = "xuexitong"
 
 
 @dataclass(frozen=True)
