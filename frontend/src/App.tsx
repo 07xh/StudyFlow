@@ -9,6 +9,7 @@ import {
   History,ListChecks,RefreshCw,Search,SlidersHorizontal
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
+import {invalidateCourseSync,newCourseSyncCheckpoint,shouldStartCourseSync} from "./courseAutoSync";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
@@ -42,6 +43,8 @@ import {ConfirmDialog} from "./ui/ConfirmDialog";
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const ACTIVITY_KEY="studyflow.activity.v1";
 const PLATFORM_LOGIN_EXPANDED_KEY="studyflow.platform-login.expanded.v1";
+type CourseSyncPhase="idle"|"syncing"|"synced"|"failed";
+type CourseSyncFeedback={phase:CourseSyncPhase;error:string};
 function readPlatformLoginExpanded():Record<Platform,boolean>{
   try{
     const saved=JSON.parse(window.localStorage.getItem(PLATFORM_LOGIN_EXPANDED_KEY)||"{}");
@@ -69,6 +72,13 @@ export default function App(){
   },[compactCards]);
 
   const [platforms,setPlatforms]=useState<Record<Platform,PlatformState>>(initialPlatforms);
+  const platformsRef=useRef(platforms);
+  platformsRef.current=platforms;
+  const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint()});
+  const [syncFeedback,setSyncFeedback]=useState<Record<Platform,CourseSyncFeedback>>({
+    zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""}
+  });
+  const [statusCheckRevision,setStatusCheckRevision]=useState(0);
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   const [notice,setNotice]=useState("");
@@ -149,6 +159,21 @@ export default function App(){
     setBusy("status");setNotice("");
     try{
       const statuses=await fetchStatuses();
+      // A signed-out platform must invalidate older asynchronous course responses.
+      for(const status of statuses){
+        if(platformInfo(status.platform)&&status.status!=="connected"){
+          invalidateCourseSync(syncCheckpoints.current[status.platform]);
+        }
+      }
+      setSyncFeedback(previous=>{
+        const next={...previous};
+        for(const status of statuses){
+          if(platformInfo(status.platform)&&status.status!=="connected"){
+            next[status.platform]={phase:"idle",error:""};
+          }
+        }
+        return next;
+      });
       setPlatforms(previous=>{
         const next={...previous};
         for(const status of statuses){
@@ -157,6 +182,7 @@ export default function App(){
         }
         return next;
       });
+      setStatusCheckRevision(previous=>previous+1);
       recordEvent("系统","检测平台连接","success","已读取平台真实登录状态");
     }catch(error){
       const message=friendlyBridgeError(error);
@@ -189,21 +215,61 @@ export default function App(){
     }));
   }
 
-  async function sync(platform:Platform){
+  const sync=useCallback(async(platform:Platform,manual=false)=>{
+    if(!desktop||!consentAccepted||!platformInfo(platform))return;
+    if(platformsRef.current[platform].status!=="connected")return;
+    const checkpoint=syncCheckpoints.current[platform];
+    if(!shouldStartCourseSync(checkpoint,Date.now(),manual))return;
     const name=platformNames[platform]??platform;
-    if(!platformInfo(platform))return;
-    setBusy(platform);setNotice("");
+    const epoch=checkpoint.epoch;
+    checkpoint.inFlight=true;
+    checkpoint.lastAttempt=Date.now();
+    setSyncFeedback(previous=>({...previous,[platform]:{phase:"syncing",error:""}}));
+    if(manual){setBusy(platform);setNotice("");}
     try{
       const list=await fetchCoursesFromDesktop(platform);
+      if(checkpoint.epoch!==epoch||platformsRef.current[platform].status!=="connected")return;
+      checkpoint.lastSuccess=Date.now();
       setPlatforms(previous=>({...previous,[platform]:{...previous[platform],courses:list}}));
-      setNotice(name+"已同步 "+list.length+" 门真实课程");
-      recordEvent(name,"同步课程","success","读取到 "+list.length+" 门真实课程");
+      setSyncFeedback(previous=>({...previous,[platform]:{phase:"synced",error:""}}));
+      if(manual)setNotice(name+"已同步 "+list.length+" 门真实课程");
+      recordEvent(name,manual?"同步课程":"自动同步课程","success","读取到 "+list.length+" 门真实课程");
     }catch(error){
+      if(checkpoint.epoch!==epoch)return;
       const message=friendlyBridgeError(error);
-      setNotice(message);recordEvent(name,"同步课程","warning",message);
-    }finally{setBusy("");}
-  }
+      setSyncFeedback(previous=>({...previous,[platform]:{phase:"failed",error:message}}));
+      if(manual)setNotice(message);
+      recordEvent(name,manual?"同步课程":"自动同步课程","warning",message);
+    }finally{
+      if(checkpoint.epoch===epoch){
+        checkpoint.inFlight=false;
+        if(manual)setBusy(previous=>previous===platform?"":previous);
+      }
+    }
+  },[desktop,consentAccepted,recordEvent]);
 
+  // Startup/status recheck: load both connected platforms. Entering or focusing
+  // a platform only refreshes stale data; the gate prevents duplicate requests.
+  const lastObservedStatusCheck=useRef(0);
+  useEffect(()=>{
+    if(!desktop||!consentAccepted)return;
+    const newStatusCheck=statusCheckRevision!==lastObservedStatusCheck.current;
+    lastObservedStatusCheck.current=statusCheckRevision;
+    for(const platform of ["zhidao","yuketang"] as const){
+      if(platforms[platform].status!=="connected")continue;
+      if(newStatusCheck||page==="platform-"+platform)void sync(platform);
+    }
+  },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,statusCheckRevision,sync]);
+
+  useEffect(()=>{
+    if(!desktop||!consentAccepted||typeof window.addEventListener!=="function")return;
+    const onFocus=()=>{
+      const platform=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null;
+      if(platform&&platformsRef.current[platform].status==="connected")void sync(platform);
+    };
+    window.addEventListener("focus",onFocus);
+    return ()=>window.removeEventListener("focus",onFocus);
+  },[desktop,consentAccepted,page,sync]);
 
   async function clear(){
     setBusy("clear");setNotice("");
@@ -284,8 +350,8 @@ export default function App(){
     <div className="platform-grid sf-platform-grid">
       {platformRegistry.map(definition=><PlatformCard key={definition.id}
         definition={definition} state={platforms[definition.id]} desktop={desktop}
-        busy={Boolean(busy)} expanded={false}
-        onSync={()=>void sync(definition.id)}
+        busy={Boolean(busy)||syncFeedback[definition.id].phase==="syncing"} expanded={false}
+        onSync={()=>void sync(definition.id,true)}
         onToggleLogin={()=>goPlatform(definition.id,true)}
         onEnterCourses={()=>enterCourses(definition.id)}>
         {null}
@@ -308,8 +374,8 @@ export default function App(){
       <p>平台配置与维护集中管理，保存后按各项设置的生效规则执行。</p>
     </div>
     <PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
-      desktop={desktop} busy={Boolean(busy)} variant="account"
-      expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform)}
+      desktop={desktop} busy={Boolean(busy)||syncFeedback[platform].phase==="syncing"} variant="account"
+      expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform,true)}
       onEnterCourses={()=>enterCourses(platform)}
       onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
       {renderPlatformLogin(platform)}
@@ -378,8 +444,8 @@ export default function App(){
             </button>
           </>}
         <button type="button" className="secondary"
-          disabled={!desktop||Boolean(busy)||platforms[platform].status!=="connected"}
-          onClick={()=>void sync(platform)}>同步课程列表</button>
+          disabled={!desktop||Boolean(busy)||syncFeedback[platform].phase==="syncing"||platforms[platform].status!=="connected"}
+          onClick={()=>void sync(platform,true)}>{syncFeedback[platform].phase==="syncing"?"课程同步中…":"刷新课程"}</button>
       </div>
       {platformSettingsOpen===platform
         ?renderPlatformSettings(platform)
@@ -401,7 +467,7 @@ export default function App(){
       recordEvent("雨课堂","保存登录会话","success","凭据已写入 Windows 凭据管理器");
       setScopeDirty(false);
       await refresh();
-      setNotice("雨课堂会话已保存，请确认连接状态后同步课程。");
+      setNotice("雨课堂会话已保存；连接验证通过后会自动同步真实课程。");
     }catch(error){
       const message=friendlyBridgeError(error);
       setNotice(message);recordEvent("雨课堂","保存登录会话","warning",message);
@@ -419,12 +485,14 @@ export default function App(){
       setConfig(previous=>({...previous,classroom_id:saved.classroom_id,university_id:saved.university_id,sign:""}));
       setHasYuketangSession(saved.has_session);setHasYuketangSign(saved.has_sign);setSignDirty(false);setScopeDirty(false);
       recordEvent("雨课堂","保存课堂范围","success","已保存课堂范围并保留登录凭据");
-      await refresh();setNotice("课堂范围已保存，请同步当前课堂或读取章节视频。");
+      await refresh();setNotice("课堂范围已保存，将自动同步当前课程；也可读取章节视频。");
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy("");}
   }
 
   function invalidatePlatform(platform:Platform, resetStatus = false){
+    invalidateCourseSync(syncCheckpoints.current[platform]);
+    setSyncFeedback(previous=>({...previous,[platform]:{phase:"idle",error:""}}));
     setPlatforms(previous=>({...previous,[platform]:resetStatus
       ?initialPlatforms[platform]
       :{...previous[platform],courses:[]}}));
@@ -459,7 +527,7 @@ export default function App(){
     </div>
     {courses.length===0
       ?<EmptyState icon={BookOpen} title="暂无已同步课程"
-          description="先在对应平台卡片中完成登录，再同步真实课程。"
+          description="先完成平台登录，连接验证通过后会自动同步真实课程。"
           action={<button className="secondary" type="button" onClick={()=>setPage("platforms")}>管理平台登录</button>}/>
       :<div className="sf-recent-list">
         {courses.slice(0,4).map(course=>{
@@ -557,7 +625,13 @@ export default function App(){
       course.title.toLocaleLowerCase().includes(search)||
       course.course_id.toLocaleLowerCase().includes(search));
     return <section className="sf-platform-courses" aria-label={platformNames[platform]+"课程列表"}>
-      <div className="section-head"><h3>课程列表</h3></div>
+      <div className="section-head"><h3>课程列表</h3>
+        <span className="sf-muted" role="status" aria-live="polite">
+          {syncFeedback[platform].phase==="syncing"?"正在自动读取真实课程…":
+           syncFeedback[platform].phase==="failed"?"课程同步失败，可点击刷新重试":
+           syncFeedback[platform].phase==="synced"?"已同步真实课程":""}
+        </span>
+      </div>
       <div className="sf-search-toolbar">
         <label className="sf-search"><Search size={16}/><input type="search"
           placeholder="搜索当前平台课程名称或 ID" value={query} onChange={event=>setQuery(event.target.value)}
@@ -571,8 +645,11 @@ export default function App(){
           description={platformCourses.length>0
             ?"可以更换搜索词。当前只显示"+platformNames[platform]+"课程。"
             :platforms[platform].status==="connected"
-              ?"请点击上方「同步课程列表」读取当前平台真实课程。"
-              :"请点击上方「账号与连接」登录当前平台，再同步真实课程。"}
+              ?syncFeedback[platform].phase==="syncing"?"正在自动读取课程，请稍候。"
+              :syncFeedback[platform].phase==="failed"
+                ?"读取失败："+syncFeedback[platform].error+"；请点击「刷新课程」重试。"
+                :"已自动尝试读取当前平台课程；如课程尚未出现，可点击「刷新课程」重试。"
+              :"请点击上方「账号与连接」登录当前平台，登录通过后会自动同步真实课程。"}
           action={platforms[platform].status!=="connected"
             ?<button className="secondary" type="button"
               onClick={()=>{
