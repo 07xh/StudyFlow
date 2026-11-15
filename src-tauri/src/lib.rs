@@ -210,7 +210,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
-        | "yuketang.session.marker" | "xuexitong.session.clear" => Ok(()),
+        | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -246,13 +246,22 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
             .is_some_and(|value| !value.is_empty() && value.len() <= 8192
                 && !value.contains('\r') && !value.contains('\n')) => Ok(()),
-        "xuexitong.chapters.list" if request.get("course_id").and_then(|v| v.as_str())
+        "xuexitong.chapters.list" | "xuexitong.chapter.tasks" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|value| {
                 let parts: Vec<&str> = value.split(':').collect();
                 parts.len() == 3 && parts.iter().all(|part|
                     !part.is_empty() && part.len() <= 24
                     && part.bytes().all(|c| c.is_ascii_digit()))
-            }) => Ok(()),
+            }) && (operation == "xuexitong.chapters.list"
+                || request.get("chapter_id").and_then(|v| v.as_str()).is_some_and(|id|
+                    !id.is_empty() && id.len() <= 24
+                    && id.bytes().all(|c| c.is_ascii_digit()))) => Ok(()),
+        "xuexitong.settings.save" if request.get("settings").and_then(|v| v.as_object())
+            .is_some_and(|value| value.len() == 4
+                && value.get("playback_speed").and_then(|v| v.as_f64()).is_some_and(|n| (0.25..=2.0).contains(&n))
+                && value.get("concurrency").and_then(|v| v.as_u64()).is_some_and(|n| (1..=4).contains(&n))
+                && value.get("skip_completed").and_then(|v| v.as_bool()).is_some()
+                && value.get("verify_after_run").and_then(|v| v.as_bool()).is_some()) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
         "yuketang.course.detail" if request.get("course_id").and_then(|x| x.as_str())
             .is_some_and(|id| !id.is_empty() && id.len() <= 24 && id.bytes().all(|c| c.is_ascii_digit()))
