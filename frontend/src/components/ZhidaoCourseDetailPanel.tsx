@@ -131,7 +131,7 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
       <div><span>{completeLabel}</span><strong>{currentDetail.done} / {currentDetail.total}</strong></div>
       <div><span>数据来源</span><strong>{evidence}</strong></div>
     </div>}
-    {items.length>0&&<CourseRecordToolbar
+    {items.length>0&&<CourseRecordToolbar key={course.course_id}
       filters={options} activeFilter={statusFilter} onFilter={value=>setStatusFilter(value as StatusFilter)}
       search={search} onSearch={setSearch}
       chapters={chapters} chapter={chapterFilter} onChapter={setChapterFilter}
