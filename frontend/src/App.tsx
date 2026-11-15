@@ -384,10 +384,11 @@ export default function App(){
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
           onClick={()=>setPlatformSettingsSection(section)}>{label}</button>)}
     </nav>
-    <div className="sf-platform-settings-heading">
-      <h3>{platformNames[platform]} · {platformSettingsSection==="account"?"账号与连接":platformSettingsSection==="parameters"?"播放参数":"高级管理"}</h3>
-      <p>这些设置在二级页面中完成，不会替换当前课程的播放和进度视图。</p>
-    </div>
+    <p className="sf-settings-context">{platformSettingsSection==="account"
+      ?"管理平台账号、登录状态与数据连接。"
+      :platformSettingsSection==="parameters"
+      ?"配置平台默认播放参数；课程独立选项仍在课程播放区调整。"
+      :"服务器进度核验、数据维护及诊断操作。按需展开下方分组。"}</p>
     {platformSettingsSection==="account"&&<PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
       desktop={desktop} busy={Boolean(busy)||syncFeedback[platform].phase==="syncing"} variant="account"
       expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform,true)}
@@ -432,7 +433,6 @@ export default function App(){
         打开学习任务
       </button>
     </div>}
-    <button className="text-button" type="button" onClick={()=>{setPlatformSettingsOpen(null);setPage("logs");}}>打开完整日志与诊断记录</button>
   </section>;
 
   // Platform configuration is a second-level overlay; the live course stays mounted.
@@ -455,7 +455,13 @@ export default function App(){
       </div>}
       {selected?renderCourseWorkspace(selected):renderCourses(platform)}
       <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
-        title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}>
+        title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}
+        footer={<>
+          <button type="button" className="secondary sf-settings-footer-secondary"
+            onClick={()=>{setPlatformSettingsOpen(null);setPage("logs");}}>日志与诊断</button>
+          <button type="button" className="primary"
+            onClick={()=>setPlatformSettingsOpen(null)}>关闭</button>
+        </>}>
         {platformSettingsOpen===platform&&renderPlatformSettings(platform)}
       </SettingsDialog>
     </div>;
