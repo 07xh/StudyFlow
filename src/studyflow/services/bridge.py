@@ -38,12 +38,16 @@ ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter()}
 
 
 def _course_payload(course):
-    return {
+    payload = {
         "platform": course.platform.value, "course_id": course.course_id, "title": course.title,
         "progress_percent": course.progress_percent, "course_type": course.course_type,
         "stale": course.stale, "progress_evidence": course.progress_evidence,
-        "verified_at": course.verified_at, "session_marker": course.session_marker,
+        "verified_at": course.verified_at,
     }
+    # Optional marker is exposed only when provided by a verified account adapter.
+    if course.session_marker is not None:
+        payload["session_marker"] = course.session_marker
+    return payload
 
 
 def dispatch(request: dict[str, Any]) -> dict[str, Any]:
