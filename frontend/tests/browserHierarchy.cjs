@@ -17,8 +17,14 @@ const server=http.createServer((req,res)=>{
    await context.addInitScript(()=>localStorage.setItem('studyflow.appearance.v2','light'));
    const page=await context.newPage();page.on('pageerror',error=>failures.push(error.message));
    await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
+   const titlebar=await page.locator('.sf-window-titlebar').boundingBox();
    const header=await page.locator('.sf-workspace-header').boundingBox(),rail=await page.locator('aside.sf-floating-nav').boundingBox();
+   assert.ok(titlebar&&header&&rail,'Custom titlebar, fixed status strip and navigation must render');
+   assert.ok(header.y>=titlebar.y+titlebar.height-1,'Platform status strip must begin below window controls');
    assert.ok(rail.y>=header.y+header.height-1,'Navigation must begin below full-width header');
+   assert.equal(await page.getByRole('button',{name:'设置',exact:true}).count(),1,'Global settings must appear once in the titlebar');
+   assert.equal(await page.getByRole('button',{name:'关闭窗口'}).count(),1,'Custom window controls must render');
+   assert.equal(await page.getByRole('button',{name:'关闭窗口'}).isDisabled(),true,'Window buttons cannot invoke native commands in browser preview');
    assert.equal(await page.getByRole('progressbar').count(),0,'Empty account cannot have percentage progress');
    await page.getByRole('button',{name:'雨课堂',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-login').count(),0,'Account form starts collapsed until requested');
@@ -36,6 +42,11 @@ const server=http.createServer((req,res)=>{
    await page.getByRole('button',{name:'返回平台',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),0);
 
+   const beforeScroll=await page.locator('.sf-workspace-header').boundingBox();
+   await page.locator('main').evaluate(element=>{element.scrollTop=element.scrollHeight;});
+   const afterScroll=await page.locator('.sf-workspace-header').boundingBox();
+   assert.ok(Math.abs(beforeScroll.y-afterScroll.y)<1,'Platform status strip cannot scroll away with content');
+   await page.locator('main').evaluate(element=>{element.scrollTop=0;});
    assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),1,'Scope saving belongs beside scope inputs');
    await page.mouse.move(0,0);
    await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
