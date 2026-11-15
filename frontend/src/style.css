@@ -160,3 +160,6 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 .sf-shell .sf-zd-filter-count{
   white-space:nowrap;color:var(--muted);font-size:11px;padding:10px 2px;
 }
+
+/* Compact per-lesson recovery action; no full-course re-scan. */
+.sf-ykt-single-recheck { display: inline-flex; align-items: center; gap: 6px; width: fit-content; align-self: flex-start; padding: 5px 9px; margin: 6px 0; font-size: 12px; }
