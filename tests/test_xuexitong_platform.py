@@ -55,6 +55,32 @@ def test_cookie_validation_does_not_expose_values():
         credentials.parse_cookie_header("_uid=123\r\nx: bad")
 
 
+def test_windows_logout_does_not_revive_environment_cookie(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    saved = {(credentials.SERVICE, credentials.ACCOUNT): "_uid=123; fid=42"}
+
+    def get_password(service, account):
+        return saved.get((service, account))
+
+    def delete_password(service, account):
+        saved.pop((service, account), None)
+
+    fake_keyring = SimpleNamespace(
+        get_password=get_password,
+        delete_password=delete_password,
+        errors=SimpleNamespace(PasswordDeleteError=KeyError),
+    )
+    monkeypatch.setitem(sys.modules, "keyring", fake_keyring)
+    monkeypatch.setattr(credentials, "os", SimpleNamespace(
+        name="nt", environ={"STUDYFLOW_XUEXITONG_COOKIE": "_uid=999; fid=99"},
+    ))
+    assert credentials.load() == {"_uid": "123", "fid": "42"}
+    credentials.clear()
+    assert credentials.load() is None, "logging out must not re-import stale env credentials"
+
+
 def test_course_reading_uses_real_html_and_not_placeholder(monkeypatch):
     page = (
         '<div class="course" id="course1" info="some" roleid="1">'
