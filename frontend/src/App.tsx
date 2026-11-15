@@ -413,7 +413,7 @@ export default function App(){
 
       </>}
     </>:<>
-      {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings" dark={dark}
+      {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings"
         desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
         events={activity} onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>}
       {platformSettingsSection==="advanced"&&<>
@@ -608,7 +608,7 @@ export default function App(){
             雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
             需要切换课堂范围或默认播放参数时，请使用右上方「平台设置」。
           </p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" dark={dark} detailMode
+          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
             desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
             events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
