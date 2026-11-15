@@ -137,6 +137,8 @@ def parse_original_log(text: str) -> dict:
                 detail["state"] = "preparing"
                 if named:
                     name = re.sub(r"[\x00-\x1f\x7f]", "", named.group(2)).strip()
+                    # Even fallback worker lines must never expose raw video IDs.
+                    name = re.sub(r"\s*\(ID:\s*[^)]{0,60}\)\s*$", "", name).strip()
                     detail["name"] = name[:120] if name else None
         if match and worker_slots:
             video_index = int(match.group(1))
