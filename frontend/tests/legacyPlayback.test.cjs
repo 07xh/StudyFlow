@@ -243,3 +243,12 @@ test("upstream ZHS CLI stage codes map to safe user-facing diagnostics",()=>{
   assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_SESSION_PREFLIGHT_FAILED"}),/会话预检/);
   assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_COURSE_URL_FAILED"}),/课程链接处理/);
 });
+
+test("ZHS cookie restore and server session errors have actionable, privacy-safe messages",()=>{
+  const legacy=loadWithStub(async()=>{});
+  const sample={platform:"zhidao",state:"exited",exit_code:1};
+  assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_COOKIE_RESTORE_FAILED"}),/凭证|Cookie/);
+  assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_SESSION_EXPIRED"}),/已过期|重新扫码/);
+  assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_SESSION_UNAVAILABLE"}),/暂时无法|网络/);
+  assert.equal(legacy.zhsDiagnosticMessage({...sample,exit_code:0,diagnostic_code:"ZHS_SESSION_EXPIRED"}),"");
+});
