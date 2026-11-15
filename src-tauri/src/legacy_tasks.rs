@@ -486,7 +486,7 @@ fn legacy_start_blocking(
     Ok(LegacyStatus {
         platform: platform.clone(), state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },
-        zhs_progress: None, zhs_stale: false, diagnostic_code: None,
+        zhs_progress: None, zhs_last_resource: None, zhs_stale: false, diagnostic_code: None,
     })
 }
 
@@ -506,7 +506,7 @@ fn legacy_status_blocking(state: &LegacyTasks, platform: String) -> Result<Legac
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     match guard.get_mut(&platform) {
         Some(task) => status_of(&platform, task),
-        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_stale: false, diagnostic_code: None}),
+        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_last_resource: None, zhs_stale: false, diagnostic_code: None}),
     }
 }
 
