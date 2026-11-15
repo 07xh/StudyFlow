@@ -15,6 +15,7 @@ import re
 import runpy
 import subprocess
 import sys
+import threading
 import time
 
 from studyflow.platforms.zhidao.courses import progress_key
@@ -163,27 +164,38 @@ class _RefreshingZhsSink:
     def __init__(self, sink):
         self.sink = sink
         self.last_publish = time.monotonic()
+        self.disabled = False
+        # stdout and stderr may be written from different ZHS worker threads.
+        # Serialize local observer state; never touch the upstream sender.
+        self._lock = threading.Lock()
 
     def receive(self, chunk: str) -> None:
-        previous = self.sink.last_snapshot
-        now = time.monotonic()
-        refresh_due = previous is not None and now - self.last_publish >= 5.0
-        if refresh_due:
-            self.sink.last_snapshot = None
-        try:
-            self.sink.receive(chunk)
-        except Exception:
-            # The observer is optional. Never corrupt its deduplication state
-            # when an observation or an atomic snapshot write fails.
-            self.sink.last_snapshot = previous
-            raise
-        current = self.sink.last_snapshot
-        if current is None:
-            # No valid numeric output: unrelated CLI chatter must not reset
-            # refresh cadence or revive a last-known percentage.
-            self.sink.last_snapshot = previous
-        elif refresh_due or current != previous:
-            self.last_publish = now
+        with self._lock:
+            # Monitoring is strictly optional. Once its filesystem fails, disable
+            # telemetry for this run rather than retrying failed writes on every
+            # CLI output chunk. Do not change the original executor's result.
+            if self.disabled:
+                return
+            previous = self.sink.last_snapshot
+            now = time.monotonic()
+            refresh_due = previous is not None and now - self.last_publish >= 5.0
+            if refresh_due:
+                self.sink.last_snapshot = None
+            try:
+                self.sink.receive(chunk)
+            except Exception:
+                # Original StdoutObserver already isolates observer errors; keep
+                # this wrapper best-effort too and stop repeated expensive retries.
+                self.sink.last_snapshot = previous
+                self.disabled = True
+                return
+            current = self.sink.last_snapshot
+            if current is None:
+                # No valid numeric output: unrelated CLI chatter must not reset
+                # refresh cadence or revive a last-known percentage.
+                self.sink.last_snapshot = previous
+            elif refresh_due or current != previous:
+                self.last_publish = now
 
 
 def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None) -> int | None:

@@ -13,21 +13,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     if len(args) != 1 or not COURSE_KEY.fullmatch(args[0]):
         return 2
 
-    from .upstream import zhidao_only
+    from .legacy_runtime import _session_course_cache
+    from .courses import progress_key
     key = args[0]
-    rows = zhidao_only.read_cache(zhidao_only.COURSES).get("courses", [])
-    if not isinstance(rows, list):
-        return 2
+    # Apply exactly the same current-login, completeness and cache-schema
+    # checks as the UI bridge. A direct --zhidao-verify-one invocation must not
+    # silently trust stale or partial course lists from another session.
+    try:
+        rows, _ = _session_course_cache()
+    except (OSError, RuntimeError, ValueError):
+        return 4
     matches = [
         row for row in rows
-        if isinstance(row, dict) and row.get("courseType") in ("ai", "shared")
-        and zhidao_only.progress_key(row) == key
+        if row.get("courseType") in ("ai", "shared")
+        and progress_key(row) == key
+        and row.get("stale") is not True
     ]
     if len(matches) != 1:
         return 2
     selected = matches[0]
     course_id = str(selected.get("courseId") or "")
     class_id = str(selected.get("classId") or "")
+    # Import heavy ZHS-only dependencies after all local identity gates pass.
+    from .upstream import zhidao_only
     return zhidao_only.verify_one(str(selected["courseType"]), course_id, class_id)
 
 
