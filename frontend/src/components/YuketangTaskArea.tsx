@@ -72,8 +72,15 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
       (Number.isInteger(thresholdOverride)&&thresholdOverride>=1&&thresholdOverride<=100)))return;
     setBusy("save");setMessage("");
     try{
+      // A user may change classrooms while this settings dialog is open.
+      // Never persist a per-classroom threshold under a stale classroom ID.
+      const current=await request<YuketangScope>({operation:"yuketang.scope.get"});
+      if(scope && (!current.has_session||current.classroom_id!==scope.classroom_id||
+        current.university_id!==scope.university_id))
+        throw new Error("YUKETANG_SCOPE_CHANGED");
+      if(thresholdOverride!==null&&!scope)throw new Error("YUKETANG_SCOPE_UNAVAILABLE");
       const saved=await request<OriginalYktOptions>({
-        operation:"yuketang.settings.save",settings:options
+        operation:"yuketang.settings.save",settings:{...options,completion_threshold:100}
       });
       if(!validateOriginalOptions(saved))throw new Error("INVALID_YUKETANG_SETTINGS");
       if(scope)saveYuketangCourseThreshold(scope.classroom_id,scope.university_id,thresholdOverride);
@@ -121,7 +128,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
               disabled={!desktop||busy!==null||!scope}
               onChange={e=>setThresholdOverride(Number(e.target.value))}/></label>}
         </div>
-        <p className="sf-ykt-advanced-note">不同课堂可能要求不同进度。自动模式采用保守的 100% 本地执行目标；知道本课堂规则时可自定义。该数值只控制本地执行与跳过，不能替代平台实际完成状态；最终以服务器只读核验标志为准。{!scope?"请先连接课堂。":""}</p>
+        <p className="sf-ykt-advanced-note">{scope?"当前课堂："+scope.classroom_id+"。":""}不同课堂可能要求不同进度。自动模式采用保守的 100% 本地执行目标；知道本课堂规则时可自定义。该数值只控制本地执行与跳过，不能替代平台实际完成状态；最终以服务器只读核验标志为准。{!scope?"请先连接课堂。":""}</p>
         <div className="legacy-flags">
           {([
             ["skip_completed","跳过已完成"],
@@ -163,10 +170,10 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
         </p>}
         <div className="actions">
           <button className="secondary" type="button" disabled={!desktop||busy!==null}
-            onClick={()=>void load()}><RefreshCw size={15}/>{busy==="load"?"读取中…":"重新读取"}</button>
+            onClick={()=>{void load();void loadScope();}}><RefreshCw size={15}/>{busy==="load"?"读取中…":"重新读取"}</button>
           <button className="primary" type="button" disabled={!desktop||!loaded||busy!==null||!validateOriginalOptions(options)||!(thresholdOverride===null||
               (Number.isInteger(thresholdOverride)&&thresholdOverride>=1&&thresholdOverride<=100))}
-            onClick={()=>void save()}><Save size={15}/>{busy==="save"?"保存中…":"保存默认参数"}</button>
+            onClick={()=>void save()}><Save size={15}/>{busy==="save"?"保存中…":"保存参数与课堂阈值"}</button>
         </div>
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
