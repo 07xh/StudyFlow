@@ -31,7 +31,11 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
     try{
       const saved=await request<OriginalYktOptions>({operation:"yuketang.settings.get"});
       if(!validateOriginalOptions(saved))throw new Error("INVALID_YUKETANG_SETTINGS");
-      setOptions(saved);setLoaded(true);
+      // Old installs may retain the upstream 90% local finish threshold.
+      // The runner now requires 100%; reflect that effective setting in the UI.
+      setOptions({...saved,completion_threshold:100});setLoaded(true);
+      if(saved.completion_threshold!==100)
+        setMessage("检测到旧版本地完成阈值 "+saved.completion_threshold+"%；已将本次执行阈值设为 100%，下次启动任务或保存参数时同步写入本机配置。");
     }catch(error){
       setLoaded(false);setMessage(friendlyBridgeError(error));
     }finally{setBusy(null);}
@@ -80,15 +84,16 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
             ["video_speed","视频倍速",0.1,4,0.1],
             ["heartbeat_interval","心跳间隔（秒）",1,120,1],
             ["max_concurrent_videos","并发数量",1,32,1],
-            ["completion_threshold","本地阈值（%）",0,100,1],
+            ["completion_threshold","执行完成阈值（固定100%）",100,100,1],
             ["test_video_count","测试视频数量",1,10000,1],
           ] as const).map(([id,label,min,max,step])=><label key={id}>
             <span>{label}</span>
             <input type="number" min={min} max={max} step={step}
-              value={options[id]} disabled={!desktop||busy!==null}
+              value={options[id]} disabled={!desktop||busy!==null||id==="completion_threshold"}
               onChange={event=>update(id,Number(event.target.value))}/>
           </label>)}
         </div>
+        <p className="sf-ykt-advanced-note">学序执行时固定使用 100% 服务器观看率作为原版任务的结束阈值，防止旧版 90% 阈值提前跳过视频。最终是否属于平台已完成，仍以单节只读核验返回的完成标志为准。</p>
         <div className="legacy-flags">
           {([
             ["skip_completed","跳过已完成"],
