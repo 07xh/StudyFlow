@@ -26,7 +26,7 @@ test('ZHS sample and stop controls remain scoped when viewing another course',as
   await act(async()=>{view=create(React.createElement(env.Panel,{...props,courseId:'B',courses:[course,{...course,course_id:'B',title:'Course B'}]}));});
   assert.doesNotMatch(words(view.root),/48.5%/);
   assert.match(words(view.root),/其他课程任务运行中/);
-  assert.equal(view.root.findAllByType('button').find(n=>words(n)===' 停止').props.disabled,true);
+  assert.equal(view.root.findAllByType('button').find(n=>words(n).includes('停止 ZHS 任务')).props.disabled,true);
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
 test('terminal ZHS verification runs once per run and records the actual course and run',async()=>{
@@ -67,7 +67,7 @@ test('a poll issued before starting cannot overwrite the new run, while the even
  try{
   await act(async()=>{view=create(React.createElement(env.Panel,{...props,onEvent:(...args)=>events.push(args)}));});
   act(()=>env.tick());
-  act(()=>view.root.findAllByType('button').find(n=>words(n).includes('启动原版任务')).props.onClick());
+  act(()=>view.root.findAllByType('button').find(n=>words(n).includes('开始 ZHS 任务')).props.onClick());
   await act(async()=>{oldPoll.resolve({...running,state:'exited',run_id:'old-run',exit_code:0});});
   assert.doesNotMatch(words(view.root),/原版进程已退出/);
   await act(async()=>{launch.resolve(running);});
