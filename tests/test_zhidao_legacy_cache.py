@@ -177,7 +177,7 @@ def test_resolve_course_returns_only_current_session_official_route(session_cach
 
 def test_player_settings_roundtrip_and_reject_invalid_values(session_cache):
     defaults = legacy_runtime.get_player_settings()
-    assert defaults["speed"] == "1.5" and defaults["mode"] == "official"
+    assert defaults["speed"] == "1.5" and defaults["mode"] == "zhs-original"
     saved = legacy_runtime.save_player_settings({
         "speed": "2", "allowMinimize": False, "autoStart": False,
         "autoNext": True, "mode": "official",
