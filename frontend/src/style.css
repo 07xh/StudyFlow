@@ -36,21 +36,8 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 .course-v2-detail{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-top:18px;padding:21px}
 .course-v2-detail h3{margin:8px 0;font-size:17px}
 .course-v2-detail p{color:var(--muted);font-size:12px;line-height:1.6;margin:0}
-.login-v2{margin-top:25px}
-.login-v2-body{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(245px,1fr);gap:16px}
-.login-v2-main,.login-v2-guide{padding:21px;min-width:0}
-.login-v2-tabs{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:15px;border-bottom:1px solid var(--line)}
-.login-v2-tab{display:flex;align-items:center;justify-content:center;gap:7px;flex:1 1 auto;border-radius:11px;padding:10px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12px;cursor:pointer}
-.login-v2-tab.selected{color:var(--subtle-text);background:var(--subtle);border-color:#658bdb}
-.login-v2-description{padding:23px 2px 7px}
-.login-v2-illustration{display:grid;place-items:center;width:45px;height:45px;border-radius:13px;background:var(--subtle);color:var(--subtle-text);margin-bottom:14px}
-.login-v2-description h3,.login-v2-guide h3{margin:0 0 9px}
-.login-v2-description p,.login-v2-guide p{line-height:1.72;color:var(--muted);font-size:12px;margin:0 0 16px}
-.login-v2-guide h3{display:flex;align-items:center;gap:8px}
-.login-v2-guide ol{padding-left:22px;color:var(--text);font-size:12px;line-height:2;margin-bottom:14px}
 
 @media(max-width:1100px){
-  .login-v2-body{grid-template-columns:1fr}
   .course-grid{grid-template-columns:repeat(auto-fit,minmax(245px,1fr))}
 }
 @media(max-width:900px){
@@ -60,7 +47,6 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
   .main{padding:22px 14px}
   .course-grid{grid-template-columns:1fr}
   .course-v2-detail{flex-wrap:wrap}
-  .login-v2-main,.login-v2-guide{padding:16px}
 }
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
@@ -138,28 +124,6 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
   margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.5;
 }
 
-
-/* Compact controls for large real server chapter records (read-only UI filters). */
-.sf-shell .sf-zd-detail-filters{
-  display:flex;align-items:end;flex-wrap:wrap;gap:10px;
-  padding:12px 0 6px;min-width:0;
-}
-.sf-shell .sf-zd-detail-filters label{
-  display:grid;gap:5px;min-width:155px;flex:1 1 180px;
-  color:var(--muted);font-size:11px;
-}
-.sf-shell .sf-zd-detail-filters input,
-.sf-shell .sf-zd-detail-filters select{
-  width:100%;min-width:0;padding:9px 11px;border:1px solid var(--line);
-  border-radius:10px;background:var(--panel);color:var(--text);font-size:12px;
-}
-.sf-shell .sf-zd-detail-filters input:focus-visible,
-.sf-shell .sf-zd-detail-filters select:focus-visible{
-  outline:2px solid var(--accent,#638ce2);outline-offset:2px;
-}
-.sf-shell .sf-zd-filter-count{
-  white-space:nowrap;color:var(--muted);font-size:11px;padding:10px 2px;
-}
 
 /* Compact per-lesson recovery action; no full-course re-scan. */
 .sf-ykt-single-recheck { display: inline-flex; align-items: center; gap: 6px; width: fit-content; align-self: flex-start; padding: 5px 9px; margin: 6px 0; font-size: 12px; }
