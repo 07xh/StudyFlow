@@ -395,8 +395,7 @@ def test_duplicate_prior_evidence_blocks_verification_before_server_request(sess
     ("fresh", 0), ("stale", 2), ("incomplete", 4), ("rotated", 4),
 ])
 def test_direct_verifier_entry_rejects_stale_and_other_session_courses(session_cache, monkeypatch, condition, expected):
-    from studyflow.platforms.zhidao import verify_entry
-    from studyflow.platforms.zhidao.upstream import zhidao_only
+    from studyflow.platforms.zhidao import verify_entry, upstream
 
     directory, fp = session_cache
     course = {"courseType": "ai", "courseId": "11", "classId": "21",
@@ -407,8 +406,10 @@ def test_direct_verifier_entry_rejects_stale_and_other_session_courses(session_c
         "incomplete": condition == "incomplete", "courses": [course],
     }), encoding="utf-8")
     calls = []
-    monkeypatch.setattr(zhidao_only, "verify_one",
-                        lambda *args: (calls.append(args) or 0))
+    # Linux offline CI intentionally does not install the external zhs package.
+    # Gate-test only the dispatcher, not the upstream read-only transport.
+    fake_upstream = SimpleNamespace(verify_one=lambda *args: (calls.append(args) or 0))
+    monkeypatch.setattr(upstream, "zhidao_only", fake_upstream, raising=False)
     result = verify_entry.main([legacy_runtime.progress_key(course)])
     assert result == expected
     if condition == "fresh":
