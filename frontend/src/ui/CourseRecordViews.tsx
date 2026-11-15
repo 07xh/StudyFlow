@@ -1,4 +1,4 @@
-import {useId,useState} from "react";
+import {useEffect,useId,useRef,useState} from "react";
 import type {ReactNode} from "react";
 import {ChevronDown,ChevronRight,Search,X} from "lucide-react";
 
@@ -24,6 +24,17 @@ export function CourseRecordToolbar({
 }:RecordToolbarProps){
   const [searchOpen,setSearchOpen]=useState(false);
   const inputId=useId();
+  const inputRef=useRef<HTMLInputElement>(null);
+  useEffect(()=>{if(searchOpen)inputRef.current?.focus();},[searchOpen]);
+  // Closing a compact search must not leave an invisible filter applied.
+  const closeSearch=()=>{
+    onSearch("");
+    setSearchOpen(false);
+  };
+  const toggleSearch=()=>{
+    if(searchOpen)closeSearch();
+    else setSearchOpen(true);
+  };
   return <div className="sf-record-toolbar" aria-label="章节学习记录筛选">
     <div className="sf-record-toolbar-main">
       <div className="sf-ykt-progress-filters sf-record-status-tabs" role="group" aria-label="筛选学习状态">
@@ -44,7 +55,7 @@ export function CourseRecordToolbar({
         </label>
         <button type="button" className={"secondary sf-record-search-toggle"+(searchOpen||search?" active":"")}
           aria-label={searchOpen?"收起搜索":"搜索学习记录"}
-          aria-expanded={searchOpen} onClick={()=>setSearchOpen(previous=>!previous)}>
+          aria-expanded={searchOpen} onClick={toggleSearch}>
           <Search size={15}/>{search&&!searchOpen&&<span className="sf-record-search-dot" aria-hidden="true"/>}
         </button>
         <div className="sf-ykt-expand-actions">
@@ -55,8 +66,9 @@ export function CourseRecordToolbar({
     </div>
     {searchOpen&&<div className="sf-record-search-field">
       <label htmlFor={inputId}>搜索章节与学习内容</label>
-      <input id={inputId} type="search" autoComplete="off" placeholder="输入章节、知识点或视频名称"
-        value={search} onChange={event=>onSearch(event.target.value)}/>
+      <input ref={inputRef} id={inputId} type="search" autoComplete="off" placeholder="输入章节、知识点或视频名称"
+        value={search} onChange={event=>onSearch(event.target.value)}
+        onKeyDown={event=>{if(event.key==="Escape"){event.stopPropagation();closeSearch();}}}/>
       {search&&<button className="secondary" type="button" aria-label="清除搜索"
         onClick={()=>onSearch("")}><X size={15}/></button>}
     </div>}
