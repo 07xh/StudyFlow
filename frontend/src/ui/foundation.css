@@ -1821,6 +1821,10 @@
 .sf-shell .sf-connection-confirmed{color:var(--accent-text)!important}
 .sf-shell .sf-connection-pending{color:var(--muted)!important}
 .sf-shell .sf-mode{background:transparent;border:0;font-size:10px;color:var(--muted)}
+.sf-shell .sf-zhidao-direct-task{min-width:0}
+.sf-shell .sf-zhidao-direct-task>.legacy-playback-panel{width:100%;margin:0}
+.sf-shell .sf-zhs-course-selector{padding-top:0;border-top:0;margin:0 0 5px}
+.sf-shell .sf-zhs-course-selector select{width:100%;max-width:460px}
 .sf-shell .sf-platform-toolbar{justify-content:flex-end;margin:0}
 .sf-shell .sf-muted{color:var(--muted);font-size:12px;line-height:1.6}
 .sf-shell .sf-task-context{padding:10px 12px;border-left:3px solid var(--accent);background:var(--soft-accent);font-size:12px;line-height:1.6}
