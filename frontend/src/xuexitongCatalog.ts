@@ -13,7 +13,7 @@ export type XuexitongChapter = {
 export type ChapterFilter = "all" | "pending" | "completed" | "locked";
 export type TaskFilter = "all" | "video" | "audio" | "document" |
   "workid" | "read" | "live" | "other";
-export type CompletionFilter = "all" | "pending" | "completed";
+export type CompletionFilter = "all" | "pending" | "completed" | "unknown";
 
 function includesSearch(value:string, query:string):boolean {
   return value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
@@ -46,6 +46,7 @@ export function filterXuexitongTasks(
     (includesSearch(task.title,query)||includesSearch(task.id,query)) &&
     (kind==="all" || (kind==="other"?!known.has(task.type):task.type===kind)) &&
     (completion==="all" ||
-      (completion==="completed"&&task.completed) ||
-      (completion==="pending"&&!task.completed)));
+      (completion==="completed"&&task.completed===true) ||
+      (completion==="pending"&&task.completed===false) ||
+      (completion==="unknown"&&task.completed===null)));
 }
