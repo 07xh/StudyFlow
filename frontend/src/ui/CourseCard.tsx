@@ -1,12 +1,13 @@
 import {BookOpen,ChevronRight} from "lucide-react";
 import type {Course} from "../types";
-import {presentCourse} from "../presentation";
+import {presentCourse,courseMetric} from "../presentation";
 import {platformInfo} from "./registry";
 
 /** Progress is never displayed without server_verified evidence and timestamp. */
 export function CourseCard({course,onInspect}:{course:Course;onInspect:(item:Course)=>void}){
   const definition=platformInfo(course.platform);
   const progress=presentCourse(course);
+  const metric=courseMetric(course);
   return <article className="course-card sf-course-card">
     <div className="sf-course-head">
       <div className={"sf-course-icon sf-provider-"+(definition?.color??"neutral")}><BookOpen size={19}/></div>
@@ -17,11 +18,11 @@ export function CourseCard({course,onInspect}:{course:Course;onInspect:(item:Cou
     <div className="sf-course-evidence">{progress.label} · {progress.detail}</div>
     <div className="sf-progress-area">
       <div className="sf-progress-label">
-        <span>{course.course_type==="ai"?"满进度知识点占比":course.course_type==="shared"?"已完成视频占比":"学习进度"}</span>
+        <span>{metric.label}</span>
         <span>{progress.percent===null?"未核验":progress.percent.toFixed(1)+"%"}</span>
       </div>
       {progress.percent!==null
-        ?<div className="sf-progress" role="progressbar" aria-label={course.course_type==="ai"?"服务器已核验满进度知识点占比":"服务器已核验已完成视频占比"}
+        ?<div className="sf-progress" role="progressbar" aria-label={"服务器已核验 · "+metric.label}
           aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}>
           <div style={{width:progress.percent+"%"}}/>
         </div>
