@@ -95,6 +95,10 @@ def test_same_session_progress_cache_is_exposed_as_server_verified(session_cache
     assert [x.progress_percent for x in result] == [40.0, 75.0]
     assert all(x.progress_evidence == "server_verified" for x in result)
     assert all(x.verified_at == "2026-11-14T10:00:00+00:00" for x in result)
+    # The UI receives one opaque per-session merge marker, not raw login material.
+    expected_marker = hashlib.sha256(("studyflow-ui-progress:" + fingerprint).encode()).hexdigest()
+    assert {x.session_marker for x in result} == {expected_marker}
+    assert expected_marker != fingerprint
 
 
 def test_progress_cache_from_another_session_is_not_exposed(session_cache, monkeypatch):

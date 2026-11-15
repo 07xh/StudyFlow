@@ -13,6 +13,8 @@ export interface Course {
   stale?: boolean;
   progress_evidence?: ProgressEvidence;
   verified_at?: string | null;
+  session_marker?: string | null;
+  progress_metric?: "official_ai_schedule" | "knowledge_point_full" | "completed_videos" | null;
 }
 export interface PlatformState {
   platform: Platform;

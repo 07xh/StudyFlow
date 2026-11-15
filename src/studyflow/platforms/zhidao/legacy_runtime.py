@@ -137,6 +137,22 @@ def _progress_percent(row: dict) -> float | None:
     return round(100.0 * done / total, 1)
 
 
+def _official_ai_progress(row: dict | None) -> tuple[float, str, datetime] | None:
+    """Only a numeric schedule from an authenticated list fetch is official.
+
+    The row's separate timestamp prevents re-labeling an older cached value as
+    a just-verified server response.
+    """
+    if not isinstance(row, dict) or row.get("stale") is True or row.get("courseType") != "ai":
+        return None
+    value = row.get("officialProgressPercent")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 100:
+        return None
+    timestamp = row.get("officialVerifiedAt")
+    instant = _verified_instant(timestamp)
+    return (round(float(value), 1), timestamp, instant) if instant is not None else None
+
+
 def _courses_from_current_cache(
     rows: list[dict] | None = None, fingerprint: str | None = None
 ) -> list[Course]:
@@ -163,6 +179,8 @@ def _courses_from_current_cache(
         by_key.pop(key, None)
 
     courses: list[Course] = []
+    # Namespaced opaque marker prevents joining asynchronous results across logins.
+    session_marker = hashlib.sha256(("studyflow-ui-progress:" + fingerprint).encode("utf-8")).hexdigest()
     for row in rows:
         title = row.get("name") or row.get("courseName")
         identifier = row.get("courseId")
@@ -174,13 +192,22 @@ def _courses_from_current_cache(
         evidence = by_key.get(progress_key(row))
         percent = _progress_percent(evidence) if evidence else None
         verified_at = evidence.get("lastVerifiedAt") if evidence and percent is not None else None
+        metric = ("knowledge_point_full" if course_type == "ai" else "completed_videos") if percent is not None else None
         stale = row.get("stale") is True
+        if course_type == "ai" and not stale:
+            confirmed = [_official_ai_progress(candidate) for candidate in (row, evidence)]
+            confirmed = [candidate for candidate in confirmed if candidate is not None]
+            if confirmed:
+                percent, verified_at, _ = max(confirmed, key=lambda candidate: candidate[2])
+                metric = "official_ai_schedule"
         courses.append(Course(
             platform=Platform.ZHIDAO, course_id=progress_key(row),
             title=title.strip(), progress_percent=percent,
             course_type=course_type, stale=stale,
             progress_evidence="server_verified" if verified_at and not stale else None,
             verified_at=verified_at if not stale else None,
+            session_marker=session_marker,
+            progress_metric=metric if verified_at and not stale else None,
         ))
     return courses
 

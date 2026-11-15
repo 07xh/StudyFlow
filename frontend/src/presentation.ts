@@ -18,7 +18,9 @@ export function presentCourse(course: Course): CoursePresentation {
   if (course.progress_evidence === "server_verified" && typeof value === "number" &&
       Number.isFinite(value) && value >= 0 && value <= 100 && Boolean(course.verified_at)) {
     const detail = course.course_type === "ai"
-      ? "满进度知识点占比，不代表课程总进度或掌握度"
+      ? course.progress_metric === "official_ai_schedule"
+        ? "知到课程列表返回的学习进度（schedule）；掌握度另行统计"
+        : "满进度知识点占比，不代表官方课程总进度或掌握度"
       : course.course_type === "shared"
         ? "已完成视频占比，不代表观看时长"
         : "平台返回的上次核验记录";
@@ -39,5 +41,5 @@ export function selectedSessionCourse(courses: Course[], selected: Course | null
 /** Describe the actual server-derived measure, not a fictional official total. */
 export function courseMetric(course:Course){
  const evidence=presentCourse(course);
- return {...evidence,label:course.course_type==='ai'?'满进度知识点占比':course.course_type==='shared'?'已完成视频占比':'平台记录进度',evidenceLabel:evidence.label,verifiedAt:course.verified_at??null};
+ return {...evidence,label:course.course_type==='ai'?(course.progress_metric==='official_ai_schedule'?'知到课程进度':'满进度知识点占比'):course.course_type==='shared'?'已完成视频占比':'平台记录进度',evidenceLabel:evidence.label,verifiedAt:course.verified_at??null};
 }

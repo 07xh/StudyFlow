@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import {invalidateCourseSync,newCourseSyncCheckpoint,shouldStartCourseSync} from "./courseAutoSync";
+import {mergeZhidaoEvidence} from "./progressMerge";
+import {useZhidaoAutoVerify} from "./zhidaoAutoVerify";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
@@ -84,6 +86,11 @@ export default function App(){
   const [statusCheckRevision,setStatusCheckRevision]=useState(0);
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
+  // One monitored course across the entire app, with explicit per-course off/on choices.
+  // No session credentials or polling preferences are persisted on disk.
+  const [autoVerify,setAutoVerify]=useState<{
+    courseId:string;enabled:boolean;preferences:Record<string,boolean>;
+  }>({courseId:"",enabled:false,preferences:{}});
   const [notice,setNotice]=useState("");
   const [scopeDirty,setScopeDirty]=useState(false);
   const [hasYuketangSession,setHasYuketangSession]=useState(false);
@@ -143,6 +150,25 @@ export default function App(){
       return next;
     });
   },[]);
+
+  const autoVerifyError=useZhidaoAutoVerify({
+    desktop:desktop&&consentAccepted,
+    connected:platforms.zhidao.status==="connected"&&platforms.zhidao.courses.some(
+      item=>item.course_id===autoVerify.courseId&&!item.stale),
+    enabled:autoVerify.enabled,
+    courseId:autoVerify.courseId,
+    onSnapshot:snapshot=>setPlatforms(previous=>({
+      ...previous,zhidao:{...previous.zhidao,
+        courses:mergeZhidaoEvidence(previous.zhidao.courses,snapshot.courses)}
+    }))
+  });
+
+  function configureAutoVerify(courseId:string,enabled:boolean){
+    if(!courseId)return;
+    setAutoVerify(previous=>({
+      courseId,enabled,preferences:{...previous.preferences,[courseId]:enabled}
+    }));
+  }
 
   const courses=useMemo(()=>Object.values(platforms).flatMap(item=>item.courses),[platforms]);
   useEffect(()=>{
@@ -214,8 +240,8 @@ export default function App(){
     setPlatforms(previous=>({
       ...previous,zhidao:{
         ...previous.zhidao,
-        courses:previous.zhidao.courses.map(item=>
-          item.platform==="zhidao"&&item.course_id===course.course_id?course:item)
+        courses:mergeZhidaoEvidence(previous.zhidao.courses,previous.zhidao.courses.map(item=>
+          item.platform==="zhidao"&&item.course_id===course.course_id?course:item))
       }
     }));
   }
@@ -235,7 +261,8 @@ export default function App(){
       const list=await fetchCoursesFromDesktop(platform);
       if(checkpoint.epoch!==epoch||platformsRef.current[platform].status!=="connected")return;
       checkpoint.lastSuccess=Date.now();
-      setPlatforms(previous=>({...previous,[platform]:{...previous[platform],courses:list}}));
+      setPlatforms(previous=>({...previous,[platform]:{...previous[platform],
+        courses:platform==="zhidao"?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
       setSyncFeedback(previous=>({...previous,[platform]:{phase:"synced",error:""}}));
       if(manual)setNotice(name+"已同步 "+list.length+" 门真实课程");
       recordEvent(name,manual?"同步课程":"自动同步课程","success","读取到 "+list.length+" 门真实课程");
@@ -332,6 +359,12 @@ export default function App(){
     if(field==="sign")setSignDirty(true);
   }
   function inspectCourse(course:Course){
+    if(course.platform==="zhidao"){
+      setAutoVerify(previous=>previous.courseId===course.course_id?previous:{
+        ...previous,courseId:course.course_id,
+        enabled:previous.preferences[course.course_id]??true
+      });
+    }
     setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
   function courseMode(course:Course):"official"|"zhs-original"{
@@ -404,7 +437,9 @@ export default function App(){
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
       <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
-      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+      autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
+      onAutoVerifyChange={configureAutoVerify}
+      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:mergeZhidaoEvidence(previous.zhidao.courses,list)}}))}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
       </CollapsibleSection>
       <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
@@ -568,7 +603,9 @@ export default function App(){
   </section>;
 
   const renderCourseWorkspace=(course:Course)=>{
-    const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{...previous[course.platform],courses:list}}));
+    const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{
+      ...previous[course.platform],courses:course.platform==="zhidao"
+        ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
     return <section className="sf-course-workspace" aria-label="课程播放工作台">
@@ -620,6 +657,8 @@ export default function App(){
         </CollapsibleSection>
         <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
+            autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
+            onAutoVerifyChange={configureAutoVerify}
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
       </>:<>

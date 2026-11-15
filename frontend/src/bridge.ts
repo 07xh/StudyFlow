@@ -186,6 +186,8 @@ export async function fetchCourses(transport: StudyFlowTransport, platform: Plat
       stale: row.stale === true,
       progress_evidence: row.progress_evidence === "server_verified" ? "server_verified" : null,
       verified_at: typeof row.verified_at === "string" && row.verified_at.length <= 64 ? row.verified_at : null,
+      session_marker: typeof row.session_marker === "string" && /^[a-f0-9]{64}$/.test(row.session_marker) ? row.session_marker : null,
+      progress_metric: row.progress_metric === "official_ai_schedule" || row.progress_metric === "knowledge_point_full" || row.progress_metric === "completed_videos" ? row.progress_metric : null,
     });
   }
   return result;
