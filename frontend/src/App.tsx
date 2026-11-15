@@ -243,7 +243,10 @@ export default function App(){
 
   function goPlatform(platform:Platform,openLogin=false){
     enterCourses(platform);
-    if(openLogin)setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+    if(openLogin){
+      setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+      setPlatformSettingsOpen(platform);
+    }
   }
 
   function updateConfiguration(field:keyof Config,value:string){
@@ -304,6 +307,13 @@ export default function App(){
       <h3>{platformNames[platform]} · 参数设置</h3>
       <p>平台配置与维护集中管理，保存后按各项设置的生效规则执行。</p>
     </div>
+    <PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
+      desktop={desktop} busy={Boolean(busy)} variant="account"
+      expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform)}
+      onEnterCourses={()=>enterCourses(platform)}
+      onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
+      {renderPlatformLogin(platform)}
+    </PlatformCard>
     {platform==="zhidao"?<>
       <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
       {renderZhidaoModeSwitch()}
@@ -318,49 +328,62 @@ export default function App(){
       <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
       <ZhidaoAccountTools desktop={desktop} dark={dark} view="data" onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
       </CollapsibleSection>
-    </>:<YuketangTaskArea view="settings" courses={platforms.yuketang.courses}
-      desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
-      events={activity} onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>}
+      <CollapsibleSection id="platform:zhidao:tasks" title="平台运行概览" defaultExpanded={false}>
+        <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses}
+          events={activity} platform="zhidao" desktop={desktop} compact
+          onRefresh={runtime.refresh} onInspect={inspectCourse}/>
+        <button className="text-button" type="button"
+          onClick={()=>setPage("tasks")}>管理全部运行任务</button>
+      </CollapsibleSection>
+    </>:<>
+      <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容" defaultExpanded={false}>
+        <YuketangContentPanel config={config} videos={videos} desktop={desktop}
+          busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"}
+          dirty={scopeDirty} hasSession={hasYuketangSession} hasSign={hasYuketangSign}
+          onChange={updateConfiguration} onSave={()=>void saveYuketangScope()}
+          onShowVideos={()=>void showVideos()}/>
+      </CollapsibleSection>
+      <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务与默认参数" defaultExpanded={false}>
+        <p className={scopeDirty?"sf-task-context":"sf-muted"}>
+          原版批量任务作用于已保存的雨课堂课堂范围，而非当前选择的单门课程。
+          {scopeDirty&&" 新编辑的课堂范围尚未保存。"}
+        </p>
+        <YuketangTaskArea courses={platforms.yuketang.courses} view="both"
+          desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
+          events={activity}
+          onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
+      </CollapsibleSection>
+    </>}
   </section>;
 
+  // Each platform owns a full course landing, a selected-course workspace, and a separate settings view.
   const renderPlatformDetail=(platform:Platform)=>{
-    const definition=platformInfo(platform);
-    if(!definition)return null;
+    if(!platformInfo(platform))return null;
+    const selected=activeSelectedCourse?.platform===platform?activeSelectedCourse:null;
     return <div className="sf-platform-workspace">
       <div className="sf-platform-toolbar actions" role="group" aria-label="平台操作">
-        <button type="button" className={"secondary sf-platform-settings-action"+(platformSettingsOpen===platform?" is-active":"")}
-          aria-pressed={platformSettingsOpen===platform}
-          onClick={()=>setPlatformSettingsOpen(previous=>previous===platform?null:platform)}>
-          <SlidersHorizontal size={15}/>{platformSettingsOpen===platform?"返回平台":"参数设置"}
-        </button>
-        <button type="button" className="secondary" disabled={!desktop||!!busy||platforms[platform].status!=="connected"}
+        {platformSettingsOpen===platform
+          ?<button type="button" className="secondary sf-platform-settings-action is-active"
+            onClick={()=>setPlatformSettingsOpen(null)}>
+            <ArrowLeft size={15}/>{selected?"返回课程详情":"返回课程列表"}
+          </button>
+          :<>
+            <button type="button" className="secondary" onClick={()=>{
+              setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+              setPlatformSettingsOpen(platform);
+            }}>账号与连接</button>
+            <button type="button" className="secondary sf-platform-settings-action"
+              onClick={()=>setPlatformSettingsOpen(platform)}>
+              <SlidersHorizontal size={15}/>参数设置
+            </button>
+          </>}
+        <button type="button" className="secondary"
+          disabled={!desktop||Boolean(busy)||platforms[platform].status!=="connected"}
           onClick={()=>void sync(platform)}>同步课程列表</button>
       </div>
-      {platformSettingsOpen===platform?renderPlatformSettings(platform):<>
-      {activeSelectedCourse?.platform===platform?renderCourseWorkspace(activeSelectedCourse):<>
-      {renderCourses(platform)}
-      <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop} busy={Boolean(busy)} variant="account"
-        expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform)} onEnterCourses={()=>enterCourses(platform)}
-        onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
-        {renderPlatformLogin(platform)}
-      </PlatformCard>
-      {platform==="zhidao"?<>
-        <CollapsibleSection id="platform:zhidao:tasks" title="平台运行概览">
-          <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} platform="zhidao" desktop={desktop} compact onRefresh={runtime.refresh} onInspect={inspectCourse}/>
-          <button className="text-button" onClick={()=>setPage("tasks")}>管理全部运行任务</button>
-        </CollapsibleSection>
-      </>:<>
-        <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容">
-          <YuketangContentPanel config={config} videos={videos} desktop={desktop} busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"} dirty={scopeDirty} hasSession={hasYuketangSession} hasSign={hasYuketangSign} onChange={updateConfiguration} onSave={()=>void saveYuketangScope()} onShowVideos={()=>void showVideos()}/>
-        </CollapsibleSection>
-        <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务">
-          <p className={scopeDirty?"sf-task-context":"sf-muted"}>启动和停止作用于雨课堂已保存的课堂范围，不限定为当前浏览的单门课程。{scopeDirty&&" 新编辑的课堂范围尚未保存。"}</p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
-            onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
-        </CollapsibleSection>
-      </>}
-      </>}
-      </>}
+      {platformSettingsOpen===platform
+        ?renderPlatformSettings(platform)
+        :selected?renderCourseWorkspace(selected):renderCourses(platform)}
     </div>;
   };
 
@@ -494,10 +517,24 @@ export default function App(){
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
-      </>:<section className="sf-course-chapter-note">
-        <h3>课程内容与任务范围</h3><p>当前接口尚未提供可归属于这门课程的章节进度。雨课堂原版执行器按平台已配置范围批量运行。</p>
-        <button className="secondary" onClick={()=>goPlatform("yuketang")}>管理雨课堂课堂范围与批量任务</button>
-      </section>}
+      </>:<>
+        <CollapsibleSection id={scope+"runtime"} title="雨课堂任务与播放参数">
+          <p className="sf-task-context">
+            当前选中课程为「{course.title}」。雨课堂原版执行器仍按平台已保存的课堂范围运行，
+            不会仅因选中这门课程就限制任务范围；本区展示的是平台级运行状态与参数。
+          </p>
+          <YuketangTaskArea courses={platforms.yuketang.courses} view="both" detailMode
+            desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
+            events={activity}
+            onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
+          <button className="text-button" type="button" onClick={()=>setPlatformSettingsOpen("yuketang")}>
+            管理课堂范围与平台默认参数
+          </button>
+        </CollapsibleSection>
+        <CollapsibleSection id={scope+"chapters"} title="章节与课程内容" defaultExpanded={false}>
+          <p className="sf-muted">当前接口尚未提供能够归属到此课程的章节进度，请以真实课堂范围和平台返回数据为准。</p>
+        </CollapsibleSection>
+      </>}
       <CollapsibleSection id={scope+"logs"} title="当前课程操作记录" defaultExpanded={false}>
         <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>
         <button className="text-button" onClick={()=>setPage("logs")}>查看平台与历史未归属记录</button>
@@ -535,11 +572,14 @@ export default function App(){
             ?"可以更换搜索词。当前只显示"+platformNames[platform]+"课程。"
             :platforms[platform].status==="connected"
               ?"请点击上方「同步课程列表」读取当前平台真实课程。"
-              :"请在下方「账号与连接」登录当前平台，再同步真实课程。"}
+              :"请点击上方「账号与连接」登录当前平台，再同步真实课程。"}
           action={platforms[platform].status!=="connected"
             ?<button className="secondary" type="button"
-              onClick={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:true}))}>
-                展开账号登录
+              onClick={()=>{
+                setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+                setPlatformSettingsOpen(platform);
+              }}>
+                前往账号登录
               </button>:undefined}/>}
     </section>;
   };
