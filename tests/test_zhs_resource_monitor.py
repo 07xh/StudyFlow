@@ -131,3 +131,59 @@ def test_only_scheduled_ai_resources_are_marked_active(monkeypatch):
             Manager()._process_resource(1,2,3,resource)
     assert len(calls) == 3  # Original method retains its own completion/optional rules.
     assert shown == [("video", "课程视频")]
+
+
+def test_shared_video_title_from_server_context_does_not_change_original_call(monkeypatch):
+    module = ModuleType("zhs.zhidao.video")
+    errors = ModuleType("zhs.exceptions")
+    class CaptchaRequired(Exception): pass
+    class TimeLimitExceeded(Exception): pass
+    errors.CaptchaRequired = CaptchaRequired
+    errors.TimeLimitExceeded = TimeLimitExceeded
+    calls = []
+    class Player:
+        def play_course(self, rac_id, ctx):
+            return self.play_video(rac_id, 123, ctx)
+        def play_video(self, rac_id, video_id, ctx):
+            calls.append((rac_id, video_id, ctx))
+            return "kept"
+    module.ZhidaoVideoPlayer = Player
+    monkeypatch.setitem(sys.modules, "zhs.zhidao.video", module)
+    monkeypatch.setitem(sys.modules, "zhs.exceptions", errors)
+    original = Player.play_video
+    context = SimpleNamespace(
+        videos={123: SimpleNamespace(video_id=123, name="第一章 电路", watch_state=0)}
+    )
+    opts = {"scope_mode": "all", "selected_ids": [], "max_videos": 0,
+            "stop_on_error": False, "resource_mode": "video"}
+    observed = []
+    with scoped_upstream_play(opts, False, on_resource=lambda kind,title: observed.append((kind,title))):
+        assert Player().play_video("course", 123, context) == "kept"
+    assert observed == [("video", "第一章 电路")]
+    assert calls == [("course", 123, context)]
+    assert Player.play_video is original
+
+
+def test_failed_resource_observer_cannot_interrupt_original_shared_play(monkeypatch):
+    module = ModuleType("zhs.zhidao.video")
+    errors = ModuleType("zhs.exceptions")
+    class CaptchaRequired(Exception): pass
+    class TimeLimitExceeded(Exception): pass
+    errors.CaptchaRequired = CaptchaRequired
+    errors.TimeLimitExceeded = TimeLimitExceeded
+    class Player:
+        def play_course(self, rac_id, ctx):
+            return None
+        def play_video(self, rac_id, video_id, ctx):
+            return 42
+    module.ZhidaoVideoPlayer = Player
+    monkeypatch.setitem(sys.modules, "zhs.zhidao.video", module)
+    monkeypatch.setitem(sys.modules, "zhs.exceptions", errors)
+    opts = {"scope_mode": "all", "selected_ids": [], "max_videos": 0,
+            "stop_on_error": False, "resource_mode": "all"}
+    def broken_observer(*_):
+        raise OSError("test monitor unavailable")
+    with scoped_upstream_play(opts, False, on_resource=broken_observer):
+        assert Player().play_video("course", 1, SimpleNamespace(
+            videos={1: SimpleNamespace(name="title", watch_state=0)}
+        )) == 42
