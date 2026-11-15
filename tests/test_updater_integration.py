@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 import pytest
@@ -102,3 +103,35 @@ def test_invalid_release_metadata_has_safe_code():
         with pytest.raises(updater.UpdateError) as error:
             updater.release_info("0.1.0", channel="beta")
     assert error.value.code == "UPDATE_RELEASE_INVALID"
+
+
+
+@pytest.mark.parametrize("status,headers,expected", [
+    (403, {}, "UPDATE_NETWORK_FAILED"),
+    (403, {"X-RateLimit-Remaining": "0"}, "UPDATE_RATE_LIMITED"),
+    (403, {"Retry-After": "60"}, "UPDATE_RATE_LIMITED"),
+    (429, {}, "UPDATE_RATE_LIMITED"),
+    (503, {}, "UPDATE_NETWORK_FAILED"),
+])
+def test_release_http_error_does_not_mislabel_all_403s_as_rate_limit(status, headers, expected):
+    failure = HTTPError(updater.API, status, "test", headers, None)
+    with patch.object(updater, "urlopen", side_effect=failure):
+        with pytest.raises(updater.UpdateError) as caught:
+            updater.release_info("0.1.1-rc.13", channel="beta")
+    assert caught.value.code == expected
+
+
+@pytest.mark.parametrize("headers,expected", [
+    ({}, "UPDATE_DOWNLOAD_FAILED"),
+    ({"X-RateLimit-Remaining": "0"}, "UPDATE_RATE_LIMITED"),
+])
+def test_download_403_has_specific_error(headers, expected, tmp_path):
+    failure = HTTPError("https://github.com/07xh/StudyFlow/releases/download/v0.2.0/app.exe",
+                        403, "test", headers, None)
+    with patch.object(updater, "urlopen", side_effect=failure):
+        with pytest.raises(updater.UpdateError) as caught:
+            updater.verified_download(
+                "https://github.com/07xh/StudyFlow/releases/download/v0.2.0/app.exe",
+                "a" * 64, tmp_path / "untrusted.exe")
+    assert caught.value.code == expected
+    assert not list(tmp_path.iterdir())

@@ -7,7 +7,7 @@ import {friendlyUpdateError,request,type AvailableUpdate,type UpdateSettings} fr
 export function UpdatePanel({desktop,visible,onDownloaded}:{
   desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;
 }){
-  const [settings,setSettings]=useState<UpdateSettings>({channel:"stable",mode:"download"});
+  const [settings,setSettings]=useState<UpdateSettings>({channel:"beta",mode:"download"});
   const [current,setCurrent]=useState("");
   const [release,setRelease]=useState<AvailableUpdate|null>(null);
   const [busy,setBusy]=useState(false);
@@ -26,10 +26,15 @@ export function UpdatePanel({desktop,visible,onDownloaded}:{
   }
 
   async function check(version:string,preference:UpdateSettings){
-    setDownloaded("");setRelease(null);setMessage("正在检查更新…");
+    setRelease(null);setMessage("正在检查更新…");
     const result=await request<{release:AvailableUpdate|null}>({operation:"updates.check",current_version:version});
     setRelease(result.release);
-    if(!result.release){setMessage("暂无更新的已发布版本。");return;}
+    if(!result.release){
+      setMessage(preference.channel==="stable"
+        ?"稳定版通道当前没有检测到更新。RC 预发布版本请切换到 Beta 通道；本机版本请以顶部版本号为准。"
+        :"没有检测到比本机版本更新的 Beta 发布版；若已下载安装包，仍需手动安装。");
+      return;
+    }
     setMessage(result.release.downloadable?"发现新版本。":"新版本尚未提供可校验的 Windows x64 安装包。");
     if(preference.mode==="download"&&result.release.downloadable){
       setMessage("正在下载并校验更新…");
@@ -92,6 +97,8 @@ export function UpdatePanel({desktop,visible,onDownloaded}:{
         <FolderOpen size={15}/>打开更新目录</button>}
     </div>
     {message&&<p role="status">{message}</p>}
+    <p className="muted">当前运行版本：{current||"读取中"}。自动更新只负责下载与 SHA-256 校验，不会自动安装。安装完成并重新启动后，版本号才会变化。</p>
+    <p><a href="https://github.com/07xh/StudyFlow/releases" target="_blank" rel="noopener noreferrer">查看 GitHub 官方发布页</a></p>
     {release&&<div><strong>{release.version}</strong><p style={{whiteSpace:"pre-wrap"}}>{release.notes}</p></div>}
     {downloaded&&<p>{downloaded} · 关闭学序后运行安装包</p>}
   </section>;

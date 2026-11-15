@@ -12,7 +12,8 @@ from urllib.parse import urlparse
 
 from . import updater
 
-DEFAULTS = {"channel": "stable", "mode": "download"}
+# RC-only release line: new installations follow beta; persisted user preferences win.
+DEFAULTS = {"channel": "beta", "mode": "download"}
 
 
 def home() -> Path:

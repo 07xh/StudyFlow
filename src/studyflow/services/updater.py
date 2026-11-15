@@ -19,6 +19,15 @@ class UpdateError(ValueError):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
+def _http_rate_limited(error: HTTPError) -> bool:
+    """Only call a 403 a rate limit when GitHub confirms it in headers."""
+    headers = error.headers or {}
+    return error.code == 429 or (
+        error.code == 403
+        and (headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After")))
+    )
+
+
 VERSION_PATTERN = re.compile(r"^v?(\d+(?:\.\d+){1,3})(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
 
@@ -55,7 +64,7 @@ def release_info(current_version: str, channel: str = "stable", timeout: int = 1
     except HTTPError as exc:
         if exc.code == 404:
             return None
-        code = "UPDATE_RATE_LIMITED" if exc.code in (403, 429) else "UPDATE_NETWORK_FAILED"
+        code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_NETWORK_FAILED"
         raise UpdateError(code, "GitHub release lookup failed") from exc
     except (URLError, TimeoutError, OSError) as exc:
         raise UpdateError("UPDATE_NETWORK_FAILED", "GitHub release lookup failed") from exc
@@ -109,7 +118,7 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
         os.replace(temp, destination)
         return destination
     except HTTPError as exc:
-        code = "UPDATE_RATE_LIMITED" if exc.code in (403, 429) else "UPDATE_DOWNLOAD_FAILED"
+        code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_DOWNLOAD_FAILED"
         raise UpdateError(code, "GitHub release download failed") from exc
     except (URLError, TimeoutError) as exc:
         raise UpdateError("UPDATE_DOWNLOAD_FAILED", "GitHub release download failed") from exc

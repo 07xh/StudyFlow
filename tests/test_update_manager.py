@@ -21,7 +21,7 @@ def test_stable_replaces_same_version_beta_and_beta_numbers_sort_numerically():
 def test_update_preferences_and_verified_download_use_only_app_directory(monkeypatch, tmp_path):
     from studyflow.services import update_manager as manager
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
-    assert manager.preferences() == {'channel': 'stable', 'mode': 'download'}
+    assert manager.preferences() == {'channel': 'beta', 'mode': 'download'}
     manager.save_preferences({'channel': 'beta', 'mode': 'notify'})
     assert manager.preferences() == {'channel': 'beta', 'mode': 'notify'}
     with pytest.raises(ValueError):
