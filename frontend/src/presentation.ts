@@ -34,6 +34,8 @@ export function presentCourse(course: Course, summary?:YuketangVideoSummary): Co
         detail:`已核验 ${summary.verified}/${summary.total} 节 · 已确认完成 ${summary.completed} 节；未核验不计为未完成`,
         percent:null};
     }
+    if(summary.scanning)return {status:"unverified",label:"核验中",
+      detail:"正在读取真实课程视频与服务器进度",percent:null};
     if(summary.complete)return {status:"unverified",label:"暂无可核验视频",
       detail:"服务器未返回视频学习项",percent:null};
   }
@@ -85,6 +87,7 @@ export function platformProgressOverview(
   const totalCount=current.length;
   const rain=current.length>0&&current.every(course=>course.platform==="yuketang");
   const complete=totalCount>0&&verifiedCount===totalCount;
+  const scanning=current.some(course=>course.platform==="yuketang"&&yuketang[course.course_id]?.scanning);
   let percent:number|null=null;
   if(complete&&rain){
     const summaries=current.map(course=>yuketang[course.course_id]);
@@ -96,6 +99,6 @@ export function platformProgressOverview(
   const label=rain?"平台视频完成概览":"平台课程进度概览";
   const detail=totalCount===0?"暂无已同步课程":
     percent!==null?`已核验 ${verifiedCount}/${totalCount} 门 · ${rain?"按服务器已核验视频汇总":"课程进度均值"}，非官方总进度`:
-    `已核验 ${verifiedCount}/${totalCount} 门 · 总体进度待核验`;
+    `已核验 ${verifiedCount}/${totalCount} 门 · ${scanning?"正在读取服务器学习进度":"总体进度待核验"}`;
   return {percent,label,detail,verifiedCount,totalCount};
 }
