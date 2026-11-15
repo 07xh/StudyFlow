@@ -1,4 +1,4 @@
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import type {Course} from "../types";
 import {friendlyBridgeError,request,type XuexitongSettings,type XuexitongTaskItem} from "../bridge";
 import {
@@ -144,6 +144,13 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
   const [taskSearch,setTaskSearch]=useState("");
   const [taskFilter,setTaskFilter]=useState<TaskFilter>("all");
   const [taskCompletion,setTaskCompletion]=useState<CompletionFilter>("all");
+  const taskCache=useRef(new Map<string,{items:XuexitongTaskItem[];readAt:number}>());
+  useEffect(()=>{
+    taskCache.current.clear();
+    setChapterSearch("");
+    setChapterFilter("all");
+  },[course.course_id]);
+
   const overview=chapterOverview(chapters);
   const visibleChapters=filterXuexitongChapters(chapters,chapterSearch,chapterFilter);
   const visibleTasks=filterXuexitongTasks(tasks,taskSearch,taskFilter,taskCompletion);
@@ -153,6 +160,7 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
     let live=true;
     setLoading(true);setMessage("");
     setChapters([]);
+    taskCache.current.clear();
     setExpanded(null);setTasks([]);setTaskError("");
     void request<Chapter[]>({operation:"xuexitong.chapters.list",course_id:course.course_id})
       .then(list=>{
@@ -168,12 +176,20 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
   useEffect(()=>{
     if(!desktop||expanded===null)return;
     let live=true;
-    setTasks([]);setTaskError("");setTaskLoading(true);
+    const key=course.course_id+":"+expanded;
+    const cached=taskCache.current.get(key);
+    setTaskError("");
+    if(cached&&Date.now()-cached.readAt<120000){
+      setTasks(cached.items);setTaskLoading(false);
+      return;
+    }
+    setTasks([]);setTaskLoading(true);
     void request<XuexitongTaskItem[]>({
       operation:"xuexitong.chapter.tasks",course_id:course.course_id,chapter_id:expanded
     }).then(items=>{
       if(!live)return;
       if(!Array.isArray(items))throw Error("INVALID_IPC_RESPONSE");
+      taskCache.current.set(key,{items,readAt:Date.now()});
       setTasks(items);
     }).catch(error=>{if(live)setTaskError(friendlyBridgeError(error));})
       .finally(()=>{if(live)setTaskLoading(false);});
