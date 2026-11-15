@@ -6,11 +6,19 @@ const ts=require('typescript');
 const React=require('react');
 const {create,act}=require('react-test-renderer');
 
+function sharedViews(){
+ const source=fs.readFileSync(path.join(__dirname,'../src/ui/CourseRecordViews.tsx'),'utf8');
+ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText;
+ const mod={exports:{}};
+ new Function('module','exports','require',code)(mod,mod.exports,require);
+ return mod.exports;
+}
+
 function component(request){
  const source=fs.readFileSync(path.join(__dirname,'../src/components/ZhidaoCourseDetailPanel.tsx'),'utf8');
  const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText;
  const mod={exports:{}};
- new Function('module','exports','require',code)(mod,mod.exports,name=>name==='../bridge'?{request,friendlyBridgeError:()=> 'failed'}:require(name));
+ new Function('module','exports','require',code)(mod,mod.exports,name=>name==='../bridge'?{request,friendlyBridgeError:()=> 'failed'}:name==='../ui/CourseRecordViews'?sharedViews():require(name));
  return mod.exports.ZhidaoCourseDetailPanel;
 }
 const course={platform:'zhidao',course_id:'a'.repeat(64),title:'course',course_type:'ai',verified_at:'2026-11-14T12:00:00Z'};
