@@ -1,44 +1,157 @@
-/* Portal restores sf-shell variables and LightC-style platform visual treatment. */
+/* A single dialog language for platform settings, course options and diagnostics. */
 .app.sf-shell.sf-settings-overlay{
   position:fixed;inset:0;z-index:10100;width:100%;height:100dvh;min-height:0;
-  display:flex;align-items:center;justify-content:center;padding:18px;
-  overflow:auto;background:rgba(8,14,19,.68)!important;backdrop-filter:blur(9px);
+  display:flex;align-items:center;justify-content:center;
+  padding:clamp(12px,3vw,28px);overflow:auto;
+  background:rgba(8,14,19,.64)!important;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
 }
-.app.sf-shell.sf-settings-overlay:not(.dark){background:rgba(20,32,27,.45)!important}
+.app.sf-shell.sf-settings-overlay:not(.dark){background:rgba(18,35,29,.44)!important}
 .sf-settings-modal{
-  display:flex;flex-direction:column;width:min(800px,100%);max-height:min(88dvh,850px);
-  min-height:0;overflow:hidden;flex:0 1 auto;border:1px solid var(--line);border-radius:17px;
-  color:var(--text);background:var(--bg);box-shadow:0 24px 72px rgba(0,0,0,.38);
+  display:flex;flex-direction:column;flex:0 1 auto;min-width:0;min-height:0;
+  width:min(780px,100%);max-height:min(86dvh,820px);overflow:hidden;
+  border:1px solid var(--line);border-radius:18px;color:var(--text);
+  background:var(--panel);box-shadow:0 24px 72px rgba(0,0,0,.3);
   animation:sf-dialog-rise .2s ease-out both;
 }
 .sf-settings-modal-heading{
-  display:flex;align-items:center;justify-content:space-between;gap:14px;
-  padding:16px 20px;border-bottom:1px solid var(--line);flex:0 0 auto;background:var(--panel);
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex:0 0 auto;
+  min-height:65px;padding:15px 22px;border-bottom:1px solid var(--line);
+  background:var(--panel);
 }
-.sf-settings-modal-kicker{font-size:10px;color:var(--muted);letter-spacing:.06em}
-.sf-settings-modal-heading h2{margin:3px 0 0;font-size:16px;font-weight:700;line-height:1.3}
+.sf-settings-modal-title{min-width:0}
+.sf-settings-modal-heading h2{
+  margin:0;font-size:17px;font-weight:720;line-height:1.35;
+  overflow-wrap:anywhere;letter-spacing:-.15px;
+}
 .sf-settings-modal-close{
-  display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;
-  border:1px solid var(--line);border-radius:9px;color:var(--text);background:var(--panel-raised);cursor:pointer;
+  display:grid;place-items:center;flex:none;width:34px;height:34px;padding:0;
+  border:1px solid var(--line);border-radius:10px;
+  color:var(--muted);background:var(--panel-raised);cursor:pointer;
 }
-.sf-settings-modal-close:hover,.sf-settings-menu button:hover{background:var(--soft-accent)}
-.sf-settings-modal-close:focus-visible,.sf-settings-menu button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.sf-settings-modal-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px 20px}
+.sf-settings-modal-close:hover{color:var(--text);background:var(--soft-accent)}
+.sf-settings-modal-close:focus-visible,
+.sf-settings-menu button:focus-visible,
+.sf-settings-modal-footer button:focus-visible,
+.sf-settings-modal-body :is(input,select,button):focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+.sf-settings-modal-body{
+  min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  padding:20px 22px 22px;scrollbar-gutter:stable;
+}
+.sf-settings-modal-footer{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;
+  gap:9px;flex-wrap:wrap;min-height:64px;padding:12px 22px;
+  border-top:1px solid var(--line);background:var(--panel-raised);
+}
+.sf-settings-modal-footer .actions{justify-content:flex-end}
+.sf-settings-modal-footer :is(button.primary,button.secondary){
+  min-height:36px;margin:0;padding:8px 13px;font-size:12px;
+}
+.sf-settings-modal-footer .sf-settings-footer-secondary{margin-right:auto}
 .sf-settings-modal-body section{margin-bottom:0}
-.sf-settings-modal-body .sf-platform-settings-view{min-width:0}
-.sf-settings-menu{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:16px}
-.sf-settings-menu button{border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:12px;color:var(--text);background:var(--panel);cursor:pointer}
-.sf-settings-menu button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-text);background:var(--soft-accent)}
-.sf-settings-modal-body .sf-platform-settings-heading{margin:0 0 15px}
-.sf-settings-modal-body .sf-platform-settings-view>.sf-fold{margin:8px 0}
-.sf-settings-modal-body .sf-inline-settings,.sf-settings-modal-body .legacy-playback-panel{margin:0}
-.sf-course-detail-topline>.sf-course-logs-action{margin-left:auto}
+.sf-settings-modal-body .sf-platform-settings-view{min-width:0;display:flex;flex-direction:column;gap:15px}
+.sf-settings-menu{
+  display:flex;align-items:center;gap:4px;flex-wrap:wrap;align-self:flex-start;
+  padding:4px;margin:0;border:1px solid var(--line);border-radius:12px;
+  background:var(--panel-raised);
+}
+.sf-settings-menu button{
+  min-height:34px;border:1px solid transparent;border-radius:9px;
+  padding:8px 13px;font-size:12px;font-weight:600;line-height:1.25;
+  color:var(--muted);background:transparent;cursor:pointer;
+}
+.sf-settings-menu button:hover{color:var(--text);background:var(--soft-accent)}
+.sf-settings-menu button[aria-pressed="true"]{
+  border-color:var(--line);color:var(--accent-text);
+  background:var(--panel);box-shadow:0 1px 3px rgba(0,0,0,.07);
+}
+.sf-settings-context{
+  margin:0;color:var(--muted);font-size:12px;line-height:1.65;
+}
+.sf-settings-modal-body .sf-platform-settings-view>.sf-fold,
+.sf-settings-modal-body .sf-platform-settings-view>.platform-card{
+  min-width:0;margin:0;border:1px solid var(--line);border-radius:13px;
+  overflow:hidden;background:var(--panel-raised);box-shadow:none;
+}
+.sf-settings-modal-body .sf-fold-toggle{min-height:48px;padding:12px 15px}
+.sf-settings-modal-body .sf-fold-toggle strong{font-size:13px}
+.sf-settings-modal-body .sf-fold-body{padding:0 14px 15px;gap:12px}
+.sf-settings-modal-body .sf-platform-settings-view .legacy-playback-panel,
+.sf-settings-modal-body .sf-platform-settings-view .settings-card{
+  min-width:0;margin:0;padding:8px 0 0;border:0;
+  border-radius:0;box-shadow:none;background:transparent;
+}
+.sf-settings-modal-body .sf-platform-settings-view .section-head{margin-bottom:12px}
+.sf-settings-modal-body .sf-platform-settings-view .section-head h3{font-size:13px}
+.sf-settings-modal-body .sf-inline-settings{margin:0}
+.sf-settings-modal-body .sf-platform-settings-view .actions{gap:8px}
+.sf-settings-modal-body .sf-platform-settings-view .actions button{font-size:12px}
+.sf-settings-modal-body .sf-zd-progress-auto{gap:14px}
+.sf-settings-modal-body .sf-ykt-advanced-note,
+.sf-settings-modal-body .sf-zd-progress-note{font-size:12px;line-height:1.65}
+.sf-settings-modal-body .sf-course-logs-action{margin-left:auto}
+
+/* The ZHS dialog uses the shared dialog chrome, not another card inside it. */
+.sf-zhs-settings{display:grid;gap:18px;min-width:0}
+.sf-zhs-settings__intro{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+}
+.sf-zhs-settings__intro p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+.sf-zhs-settings__intro .legacy-run-state{font-size:11px;flex:none}
+.sf-zhs-settings__group{
+  display:grid;gap:12px;min-width:0;padding:0 0 18px;
+  border-bottom:1px solid var(--line);
+}
+.sf-zhs-settings__group:last-of-type{border-bottom:0;padding-bottom:0}
+.sf-zhs-settings__group h3{margin:0;color:var(--text);font-size:14px;font-weight:700}
+.sf-zhs-settings__group .legacy-option-grid{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;
+}
+.sf-zhs-settings__group .legacy-option-grid label{
+  display:flex;flex-direction:column;align-items:stretch;gap:7px;min-width:0;
+}
+.sf-zhs-settings__group .legacy-option-grid label span{
+  min-height:0;margin:0;color:var(--muted);font-size:12px;line-height:1.4;
+}
+.sf-zhs-settings__group :is(input[type="number"],select){
+  display:block;width:100%;min-width:0;height:38px;
+  padding:8px 11px;border:1px solid var(--line);border-radius:10px;
+  color:var(--text);background:var(--panel-raised);font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+.sf-zhs-settings__group :is(input[type="number"],select):disabled{opacity:.55}
+.sf-zhs-settings__group .legacy-flags{
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px 20px;padding:0;
+}
+.sf-zhs-settings__group .legacy-flags label{
+  display:inline-flex;align-items:center;gap:8px;min-height:28px;
+  color:var(--text);font-size:12px;line-height:1.45;cursor:pointer;
+}
+.sf-zhs-settings__group .legacy-flags input{accent-color:var(--accent)}
+.sf-zhs-settings__note{
+  margin:0;color:var(--muted);font-size:12px;line-height:1.65;
+}
+.sf-zhs-settings .sf-ykt-advanced-options{
+  margin:0;padding:9px 0 0;border-top:1px solid var(--line);
+}
+.sf-zhs-settings .sf-ykt-advanced-options>summary{
+  color:var(--text);font-size:12px;line-height:1.5;
+}
+.sf-zhs-settings .sf-ykt-advanced-options .legacy-flags{padding:10px 0}
+.sf-zhs-settings .legacy-options{padding:0;border:0}
+.sf-zhs-settings .sf-validation-error,
+.sf-zhs-settings .legacy-state-note{margin:0;font-size:12px;line-height:1.6}
+.sf-zhs-settings .sf-validation-error{color:var(--warning)}
 @media(max-width:650px){
   .app.sf-shell.sf-settings-overlay{padding:8px}
-  .sf-settings-modal{max-height:calc(100dvh - 16px);width:100%}
-  .sf-settings-modal-heading{padding:12px 14px}
-  .sf-settings-modal-body{padding:12px 14px}
-  .sf-settings-menu{gap:6px}
-  .sf-settings-menu button{font-size:11px;padding:8px}
+  .sf-settings-modal{width:100%;max-height:calc(100dvh - 16px);border-radius:15px}
+  .sf-settings-modal-heading{padding:12px 15px;min-height:57px}
+  .sf-settings-modal-body{padding:15px;scrollbar-gutter:auto}
+  .sf-settings-modal-footer{padding:11px 15px}
+  .sf-settings-menu{width:100%}
+  .sf-settings-menu button{flex:1 1 auto;padding:8px;font-size:11px}
+  .sf-zhs-settings__group .legacy-option-grid{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.sf-settings-modal{animation:none!important}}
