@@ -24,13 +24,17 @@ class QueueTarget:
     knowledge_id: int | None
     kind: str
     name: str | None
+    chapter_key: str | None = None
+    chapter_name: str | None = None
 
     @property
     def task_id(self) -> str:
         return hashlib.sha256(f"{self.knowledge_id}:{self.resource_id}".encode()).hexdigest()[:32]
 
 
-def resource_targets(knowledge_id: int, resources, options: dict) -> list[QueueTarget]:
+def resource_targets(knowledge_id: int, resources, options: dict, *,
+                     chapter_key: str | None = None,
+                     chapter_name: str | None = None) -> list[QueueTarget]:
     result, seen = [], set()
     for resource in resources:
         detail = resource.resources_detail
@@ -45,7 +49,8 @@ def resource_targets(knowledge_id: int, resources, options: dict) -> list[QueueT
         if type(uid) is not int or uid <= 0 or uid > 2**63 - 1:
             raise ScopeInvalid()
         if uid not in seen:
-            result.append(QueueTarget(uid, knowledge_id, kind, safe_resource_title(detail.resources_name)))
+            result.append(QueueTarget(uid, knowledge_id, kind, safe_resource_title(detail.resources_name),
+                                      chapter_key, chapter_name))
             seen.add(uid)
     return result
 
@@ -76,13 +81,21 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             manager = AiCourseManager(session)
             cid, cls = int(course["courseId"]), int(course["classId"])
             info = manager.get_knowledge_points(cid, cls)
-            points = {p.knowledge_id: p for theme in info.cake_theme_list for p in theme.knowledge_list}
+            # A cake theme is the chapter boundary. Keep the server's theme and
+            # knowledge-point order, then process resources in their original order.
+            points = {
+                point.knowledge_id: (point, theme_index, safe_resource_title(theme.theme_name))
+                for theme_index, theme in enumerate(info.cake_theme_list, 1)
+                for point in theme.knowledge_list
+            }
             if not selected.issubset(points):
                 raise ScopeInvalid()
-            for kid, point in points.items():
+            for kid, (point, theme_index, chapter_name) in points.items():
                 if (selected and kid not in selected) or point.study_progress >= 101:
                     continue
-                targets.extend(resource_targets(kid, manager.list_knowledge_resources(cid, cls, kid), options))
+                targets.extend(resource_targets(
+                    kid, manager.list_knowledge_resources(cid, cls, kid), options,
+                    chapter_key=f"ai-{theme_index}", chapter_name=chapter_name))
         else:
             from zhs.zhidao.course import ZhidaoCourseManager
             manager = ZhidaoCourseManager(session)
@@ -95,10 +108,23 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             ctx = manager.get_context(route, force=True)
             if not selected.issubset(ctx.videos) or options.get("resource_mode") == "reading":
                 raise ScopeInvalid()
+            # Use actual chapter membership from the live ZHS catalog, not
+            # numeric video titles (e.g. "1.8") or stale frontend percentages.
+            chapters = {
+                item.video_id: (f"shared-{index}", safe_resource_title(chapter.name))
+                for index, chapter in enumerate(ctx.chapters, 1)
+                for lesson in chapter.video_lessons
+                for item in lesson.video_small_lessons
+            }
             for video in ctx.videos.values():
                 if (selected and video.video_id not in selected) or video.watch_state == 1:
                     continue
-                targets.append(QueueTarget(video.video_id, None, "video", safe_resource_title(video.name)))
+                # Missing membership uses a single fallback chapter: never
+                # silently run two unclassified resources out of order.
+                chapter_key, chapter_name = chapters.get(video.video_id, ("shared-unmapped", None))
+                targets.append(QueueTarget(
+                    video.video_id, None, "video", safe_resource_title(video.name),
+                    chapter_key, chapter_name))
     finally:
         session.close()
     # A duplicate model must never schedule a video twice.
@@ -173,9 +199,10 @@ def fatal_diagnostic(directory: Path, token: str) -> str | None:
 
 def supervise(targets: list[QueueTarget], concurrency: int, token: str, directory: Path,
               launch, *, stop_on_error: bool = False, limit_seconds: float = 0) -> int:
-    """Bounded process pool with an exclusive barrier around nonvideo resources."""
+    """Bounded chapter lanes: sequential within each chapter, parallel across chapters."""
     directory.mkdir(parents=True, exist_ok=True)
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
+             "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
              "state": "queued", "percent": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
     deadline = time.monotonic() + limit_seconds if limit_seconds else None
@@ -234,26 +261,35 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
                 break
             if fatal or (exit_code and stop_on_error):
                 break
+            # Claim only the earliest queued resource per chapter. A video,
+            # article or PPT blocks its own chapter but never a different one.
+            # For legacy/unclassified QueueTargets, use a unique lane key.
+            def lane_key(index):
+                return targets[index].chapter_key or targets[index].task_id
+
+            busy_lanes = {lane_key(index) for index in running}
+            claimed_lanes = set()
             for index, target in enumerate(targets):
-                if rows[index]["state"] != "queued":
-                    continue
                 if len(running) >= concurrency:
                     break
-                if target.kind != "video" and running:
-                    break
-                if any(targets[i].kind != "video" for i in running):
-                    break
+                if rows[index]["state"] != "queued":
+                    continue
+                lane = lane_key(index)
+                if lane in claimed_lanes:
+                    continue
+                claimed_lanes.add(lane)
+                if lane in busy_lanes:
+                    continue
                 child_token = uuid.uuid4().hex
                 try:
                     running[index] = (launch(target, child_token), child_token)
                     rows[index]["state"] = "running"
+                    busy_lanes.add(lane)
                 except OSError:
                     rows[index].update(state="failed", exit_code=1)
                     exit_code = 13
                     if stop_on_error:
                         break
-                if target.kind != "video":
-                    break
             if exit_code and stop_on_error:
                 break
             publish("running")
