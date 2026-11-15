@@ -571,7 +571,6 @@ export default function App(){
         打开学习任务
       </button>
     </div>}
-    <button className="text-button" type="button" onClick={()=>{setPlatformSettingsOpen(null);setPage("logs");}}>打开完整日志与诊断记录</button>
   </section>;
 
   // Platform configuration is a second-level overlay; the live course stays mounted.
@@ -595,7 +594,13 @@ export default function App(){
       {selected?renderCourseWorkspace(selected):renderCourses(platform)}
       <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
         navigation={renderSettingsNavigation()} contentKey={platformSettingsSection}
-        title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}>
+        title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}
+        footer={<div className="actions">
+          <button className="secondary" type="button"
+            onClick={()=>{setPlatformSettingsOpen(null);setPage("logs");}}>日志与诊断</button>
+          <button className="secondary" type="button"
+            onClick={()=>setPlatformSettingsOpen(null)}>关闭</button>
+        </div>}>
         {platformSettingsOpen===platform&&renderPlatformSettings(platform)}
       </SettingsDialog>
     </div>;

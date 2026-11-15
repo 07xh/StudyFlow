@@ -172,7 +172,17 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         onClick={()=>void load()}><RefreshCw size={14}/>重试读取</button>
     </div>}
     <SettingsDialog open={opened} dark={dark} title="当前课程 · ZHS 参数"
-      onClose={()=>setOpened(false)}>
+      onClose={()=>setOpened(false)}
+      footer={<div className="actions">
+        <button className="secondary" type="button" disabled={!desktop||busy}
+          onClick={()=>void load()}><RefreshCw size={15}/>重新读取</button>
+        {loadState==="failed"&&<button className="secondary" type="button"
+          disabled={!desktop||busy||!courseId} onClick={()=>void restoreDefaults()}>
+          恢复本课程默认参数（覆盖）
+        </button>}
+        <button className="primary" type="button" disabled={!desktop||busy||!valid||!dirty}
+          onClick={()=>void save()}><Save size={15}/>保存参数</button>
+      </div>}>
       <section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head"><div><h3>ZHS 0.1.5 任务参数</h3></div>
         <span className="legacy-run-state">{loadState==="ready"?"本机参数已加载":
@@ -272,16 +282,6 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         {!valid&&<p className="sf-validation-error" role="alert">参数不在 ZHS 0.1.5 支持范围内。</p>}
         {scopeMode==="selected"&&!ready&&<p className="sf-validation-error">指定范围须至少选择一项真实、当前可核验的项目。</p>}
         {dirty&&<p className="sf-validation-error">有未保存的参数，保存后再启动任务。</p>}
-        <div className="actions">
-          <button className="secondary" type="button" disabled={!desktop||busy}
-            onClick={()=>void load()}><RefreshCw size={15}/>重新读取</button>
-          {loadState==="failed"&&<button className="secondary" type="button"
-            disabled={!desktop||busy||!courseId} onClick={()=>void restoreDefaults()}>
-            恢复本课程默认参数（覆盖）
-          </button>}
-          <button className="primary" type="button" disabled={!desktop||busy||!valid||!dirty}
-            onClick={()=>void save()}><Save size={15}/>保存参数</button>
-        </div>
         <details className="sf-ykt-advanced-options"><summary>心跳与进度说明</summary>
           <p className="sf-ykt-advanced-note">原版 ZHS 负责心跳实现；学序仅限制运行范围和次数。
           本地运行、任务退出、服务器已核验进度分别呈现，达到数量限制不代表课程完成。</p>
