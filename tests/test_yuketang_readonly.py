@@ -105,7 +105,7 @@ def test_yuketang_progress_is_verified_readonly_and_scoped():
     session = ServerProgressSession()
     reader = YuketangReadOnly({"sessionid":"own"},session=session,csrf_token="csrf",university_id="42")
     result = reader.read_video_progress("123", "12")
-    assert result == {"progress_percent":50.0,"last_point_seconds":60.0,"duration_seconds":120.0}
+    assert result == {"progress_percent":50.0,"server_completed":False,"last_point_seconds":60.0,"duration_seconds":120.0}
     assert len(session.calls) == 2
     assert all(call[1].get("data") is None for call in session.calls)
     assert session.calls[1][1]["params"] == {
@@ -149,6 +149,7 @@ def test_yuketang_per_video_adapter_paginates_and_never_reuses_other_classroom(m
             if video_id == "4":
                 raise ValueError("server rate absent")
             return {"progress_percent":100.0 if video_id=="3" else 25.0,
+                    "server_completed":video_id=="3",
                     "last_point_seconds":5.0,"duration_seconds":20.0}
     monkeypatch.setattr(adapter, "make_reader",lambda config:FakeReader())
     result = adapter.YuketangAdapter().course_progress("123",offset=0,limit=5)
@@ -161,3 +162,9 @@ def test_yuketang_per_video_adapter_paginates_and_never_reuses_other_classroom(m
         adapter.YuketangAdapter().course_progress("999",offset=0,limit=5)
     with pytest.raises(ValueError):
         adapter.YuketangAdapter().course_progress("123",offset=0,limit=100)
+
+def test_rounding_cannot_falsely_complete_server_video():
+    session = ServerProgressSession(rate=0.999999)
+    result = YuketangReadOnly({"sessionid":"own"},session=session).read_video_progress("123","12")
+    assert result["progress_percent"] == 99.9
+    assert result["server_completed"] is False
