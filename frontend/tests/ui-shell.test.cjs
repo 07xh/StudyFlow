@@ -153,7 +153,7 @@ test("platform controls keep independent settings and per-platform login expansi
   assert.match(official,/update\('allowMinimize',value\)/);
   assert.match(official,/update\('autoStart',value\)/);
   assert.match(official,/update\('autoNext',value\)/);
-  assert.match(progress,/onChange=\{setMonitor\}/);
+  assert.match(progress,/onChange=\{checked=>onAutoVerifyChange\(selected,checked\)\}/);
   assert.match(yuketang,/update\(id,event\.currentTarget\.checked\)/);
 });
 
