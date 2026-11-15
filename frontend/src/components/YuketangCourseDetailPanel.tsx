@@ -101,6 +101,9 @@ export function verifyYuketangCourse(
   if(!options.manual&&entry.attempted)return Promise.resolve();
   entry.attempted=true;
   const revision=++entry.revision;
+  // Older targeted replies from before a manual scan must not unlock new work.
+  entry.targetRequests.clear();
+  entry.targetAttempts.clear();
   const keepComplete=entry.snapshot.checkedAt!==null&&entry.snapshot.nextOffset===null;
   const resume=options.resume===true&&entry.pending!==null;
   const partial:PartialScan=resume
@@ -209,7 +212,7 @@ export async function verifyYuketangPlayedVideo(
     // Playback observations cannot establish server completion; keep evidence.
     return false;
   }finally{
-    entry.targetRequests.delete(video.id);
+    if(revision===entry.revision)entry.targetRequests.delete(video.id);
   }
 }
 
