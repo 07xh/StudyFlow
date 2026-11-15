@@ -146,12 +146,16 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               disabled={!desktop||busy} onChange={e=>update("limit_minutes",Number(e.target.value))}/></label>
         </div>
         <div className="legacy-flags">
+          <label title="ZHS 0.1.5 原版自动跳过已完成内容，暂不支持在学序中关闭此行为。">
+            <input type="checkbox" checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/>
+            跳过已完成 <small className="sf-muted">（原版自动启用）</small>
+          </label>
           {courseType==="ai"&&<label><input type="checkbox" checked={options.learn_optional} disabled={!desktop||busy}
             onChange={e=>update("learn_optional",e.currentTarget.checked)}/>AI 课程包含选学资源</label>}
           <label><input type="checkbox" checked={options.stop_on_error} disabled={!desktop||busy}
             onChange={e=>update("stop_on_error",e.currentTarget.checked)}/>视频处理异常时停止任务</label>
         </div>
-        <p className="sf-ykt-advanced-note">原版会跳过已完成视频；不提供无效的“强制重看”开关。共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
+        <p className="sf-ykt-advanced-note">“跳过已完成”由 ZHS 0.1.5 原版自动执行，已标记为固定开启；目前不能通过关闭 UI 开关强制重看。共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
         <div className="legacy-option-grid">
           <label><span>本次选择的资源类型</span>
             <select value={resourceMode} disabled={!desktop||!courseId||busy}
