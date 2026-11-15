@@ -105,7 +105,7 @@ class YuketangAdapter:
                 percent = progress["progress_percent"]
                 if type(percent) not in (int, float) or not 0 <= percent <= 100:
                     return result
-                result.update(progress_percent=percent, server_completed=percent >= 100,
+                result.update(progress_percent=percent, server_completed=progress["server_completed"],
                               last_point_seconds=progress["last_point_seconds"],
                               duration_seconds=progress["duration_seconds"],
                               verified_at=datetime.now(timezone.utc).isoformat())
