@@ -36,7 +36,16 @@ export function readTaskRecovery():TaskRecoveryRecord[]{
     if(!raw||raw.length>30000)return [];
     const data:unknown=JSON.parse(raw);
     if(!Array.isArray(data)||data.length>2)return [];
-    const valid=data.filter(isRecord) as TaskRecoveryRecord[];
+    // Records persisted before per-course thresholds did not carry this field.
+    // Restore the original automatic behavior rather than dropping a valid run.
+    const migrated=data.map(item=>{
+      if(!item||typeof item!=="object")return item;
+      const previous=item as Partial<TaskRecoveryRecord>;
+      if(previous.platform!=="zhidao"||!previous.zhsOptions||
+         previous.zhsOptions.completion_threshold!==undefined)return item;
+      return {...previous,zhsOptions:{...previous.zhsOptions,completion_threshold:null}};
+    });
+    const valid=migrated.filter(isRecord) as TaskRecoveryRecord[];
     return valid.filter((item,index)=>valid.findIndex(r=>r.platform===item.platform)===index);
   }catch{return [];}
 }
