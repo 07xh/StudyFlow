@@ -8,7 +8,7 @@ on:
       - 'src-tauri/**'
       - 'package.json'
       - 'pyproject.toml'
-      - 'docs/RELEASE_CANDIDATE_0.1.1_RC23.md'
+      - 'docs/RELEASE_CANDIDATE_0.1.1_RC24.md'
       - 'src/**'
       - 'packaging/**'
       - 'scripts/build-windows.ps1'
@@ -66,7 +66,7 @@ jobs:
         run: npm --prefix frontend test
 
   publish-candidate:
-    name: Publish verified 0.1.1-rc.23 pre-release
+    name: Publish verified 0.1.1-rc.24 pre-release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [windows-package, frontend-checks]
     runs-on: ubuntu-latest
@@ -85,7 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           version=$(python -c 'import json; print(json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))["version"])')
-          if [ "$version" != "0.1.1-rc.23" ]; then
+          if [ "$version" != "0.1.1-rc.24" ]; then
             echo "This one-time candidate publisher does not apply to version $version."
             exit 0
           fi
@@ -95,7 +95,7 @@ jobs:
             echo "Release aborted: this run does not match the latest main commit."
             exit 1
           fi
-          if gh release view v0.1.1-rc.23 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view v0.1.1-rc.24 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Candidate already published; not replacing binaries."
             exit 0
           fi
@@ -105,9 +105,9 @@ jobs:
             echo "Expected one tested NSIS installer."
             exit 1
           fi
-          gh release create v0.1.1-rc.23 "${installers[0]}" \
+          gh release create v0.1.1-rc.24 "${installers[0]}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "学序 StudyFlow 0.1.1-rc.23" \
+            --title "学序 StudyFlow 0.1.1-rc.24" \
             --prerelease --latest=false \
-            --notes-file docs/RELEASE_CANDIDATE_0.1.1_RC23.md
+            --notes-file docs/RELEASE_CANDIDATE_0.1.1_RC24.md
