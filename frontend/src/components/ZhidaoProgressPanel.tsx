@@ -20,11 +20,17 @@ type Props={
 
 export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,onEvent,courseId,courseTitle,detailMode=false}:Props){
   const [selected,setSelected]=useState(courseId??"");
-  const [monitor,setMonitor]=useState(false);
+  const [monitor,setMonitor]=useState(detailMode);
   const [busy,setBusy]=useState<"sync"|"verify"|null>(null);
   const [message,setMessage]=useState("");
   const [incomplete,setIncomplete]=useState(false);
   const [fetchedAt,setFetchedAt]=useState<string|null>(null);
+  const [lastError,setLastError]=useState("");
+  const mountedRef=useRef(false);
+  const selectedRef=useRef(selected);
+  selectedRef.current=selected;
+  const lastAutomaticCheck=useRef({course:"",at:0});
+  useEffect(()=>{mountedRef.current=true;return ()=>{mountedRef.current=false;};},[]);
   const busyRef=useRef(false);
   const onCoursesUpdatedRef=useRef(onCoursesUpdated);
   const onEventRef=useRef(onEvent);
@@ -44,13 +50,16 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
 
   const run=useCallback(async(kind:"sync"|"verify",quiet=false)=>{
     if(!desktop||!connected||busyRef.current||(kind==="verify"&&!selected))return;
+    const checkedCourse=selected;
     busyRef.current=true;setBusy(kind);
     if(!quiet)setMessage("");
     try{
       const snapshot=kind==="sync"
         ?await request<ZhidaoProgressSnapshot>({operation:"zhidao.progress.sync"})
         :await request<ZhidaoProgressSnapshot>({operation:"zhidao.progress.verify",course_key:selected});
+      if(!mountedRef.current||(kind==="verify"&&checkedCourse!==selectedRef.current))return;
       onCoursesUpdatedRef.current(snapshot.courses);
+      setLastError("");
       setIncomplete(snapshot.incomplete);
       setFetchedAt(snapshot.fetched_at);
       if(!quiet){
@@ -62,18 +71,31 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       }
     }catch(error){
       const text=friendlyBridgeError(error);
-      if(!quiet){setMessage(text);onEvent?.(kind==="sync"?"同步学习进度":"核验单课进度","warning",text,{courseId:kind==="verify"?selected:undefined});}
+      if(mountedRef.current&&(kind!=="verify"||checkedCourse===selectedRef.current)){
+        setLastError(text);
+        if(!quiet){setMessage(text);onEventRef.current?.(kind==="sync"?"同步学习进度":"核验单课进度","warning",text,{courseId:kind==="verify"?checkedCourse:undefined});}
+      }
     }finally{
-      busyRef.current=false;setBusy(null);
+      busyRef.current=false;
+      if(mountedRef.current)setBusy(null);
     }
   },[desktop,connected,selected]);
 
   useEffect(()=>{
-    if(!monitor||!connected||!selected)return;
-    void run("verify",true);
-    const timer=window.setInterval(()=>{void run("verify",true);},120000);
-    return ()=>window.clearInterval(timer);
-  },[monitor,connected,selected,run]);
+    if(!desktop||!monitor||!connected||!selected)return;
+    const check=()=>{
+      if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;
+      if(busyRef.current)return;
+      const now=Date.now();
+      if(lastAutomaticCheck.current.course===selected&&now-lastAutomaticCheck.current.at<60000)return;
+      lastAutomaticCheck.current={course:selected,at:now};
+      void run("verify",true);
+    };
+    check();
+    const timer=window.setInterval(check,120000);
+    window.addEventListener?.("focus",check);
+    return ()=>{window.clearInterval(timer);window.removeEventListener?.("focus",check);};
+  },[desktop,monitor,connected,selected,run]);
 
   const label=current?.course_type==="ai"?"满进度知识点占比":current?.course_type==="shared"?"已完成视频占比":"服务器核验比例";
   const timestamp=current?.verified_at
@@ -101,9 +123,9 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
         <span>{detailMode?"服务器核验状态":label}</span>
         <strong>{detailMode?(view?.status==="verified"?"已核验":view?.status==="cached"?"历史缓存":"待核验"):
           view?.percent===null||view?.percent===undefined?"—":view.percent.toFixed(1)+"%"}</strong>
-        <small>{detailMode?(view?.label??"等待课程同步")+" · "+timestamp:
-          (view?.label??"等待课程同步")+" · 单课核验："+timestamp}</small>
-        <small>最近一次进度同步：{fetchedAt?new Date(fetchedAt).toLocaleString():"尚未同步"}</small>
+        <small>{view?.label??"等待课程同步"} · {view?.detail??"暂无可确认进度"}</small>
+        <small>当前课程服务器核验：{timestamp}</small>
+        {!detailMode&&<small>全部课程同步时间：{fetchedAt?new Date(fetchedAt).toLocaleString():"尚未同步"}</small>}
       </div>
     </div>
     <div className="sf-zd-progress-actions">
@@ -117,10 +139,11 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       </button>}
     </div>
     {<div className="sf-zd-progress-auto">
-      <div><strong>定时只读核验</strong><small>开启后每 2 分钟核验当前选中课程；默认关闭。</small></div>
+      <div><strong>自动只读核验</strong><small>进入课程详情默认开启；每 2 分钟或返回窗口时检查，至少间隔 1 分钟。</small></div>
       <Switch checked={monitor} onChange={setMonitor} aria-label="开启每两分钟知到单课只读核验"/>
     </div>}
-    {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
+    {lastError&&<p className="sf-zd-progress-message" role="alert">服务器进度暂未更新：{lastError}；已保留上次有效核验记录。</p>}
+    {message&&!lastError&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     <details className="sf-technical-note"><summary>核验说明</summary><p className="sf-zd-progress-note">
       {incomplete?"本次同步存在未完成项。":"只读取平台已有记录，不提交学习进度。"}
       智慧课程比例统计已达满进度的知识点；共享课比例统计已完成视频数量，均不代表官方课程总进度或观看时长。
