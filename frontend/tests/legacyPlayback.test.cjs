@@ -216,3 +216,13 @@ test("status polling is single-flight and failed status reads remain visible", (
   assert.match(panel, /verificationRetry/);
   assert.match(panel, /重试服务器核验/);
 });
+
+test("IPC rejection is not misreported as a missing Python service",()=>{
+  const bridge=fs.readFileSync(path.join(__dirname,"..","src","bridge.ts"),"utf8");
+  const rust=fs.readFileSync(path.join(__dirname,"..","..","src-tauri","src","lib.rs"),"utf8");
+  assert.match(bridge,/detail\.includes\("Operation not permitted"\)/);
+  assert.match(bridge,/case "BRIDGE_COMMAND_REJECTED"/);
+  assert.match(rust,/"zhidao\.zhs\.settings\.get"/);
+  assert.match(rust,/"zhidao\.zhs\.settings\.save"/);
+  assert.match(rust,/fn zhs_task_settings_ipc_accepts_global_or_valid_course_scopes/);
+});

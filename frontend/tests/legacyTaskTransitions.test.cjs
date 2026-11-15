@@ -94,3 +94,38 @@ test('failed terminal verification can retry without replaying or resending hear
   assert.ok(calls.every(input=>input.operation==='zhidao.progress.verify'&&input.course_key==='A'));
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
+
+
+test('disabled ZHS launch gives a visible reason for an unsupported course type',async()=>{
+ const env=setup({getLegacyStatus:async()=>({...running,state:'idle',run_id:null,zhs_progress:null})});let view;
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,{...props,courses:[{...course,course_type:null}]}));});
+  const start=view.root.findAllByType('button').find(n=>words(n).includes('启动原版任务'));
+  assert.equal(start.props.disabled,true);
+  assert.match(start.props.title,/缺少原版执行器支持的课程类型/);
+  assert.match(words(view.root),/暂不能启动：当前课程缺少原版执行器支持的课程类型/);
+  assert.ok(start.props['aria-describedby']);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
+
+test('disabled ZHS launch explains platform reconnection without treating server evidence as a login',async()=>{
+ const env=setup({getLegacyStatus:async()=>({...running,state:'idle',run_id:null,zhs_progress:null})});let view;
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,{...props,connected:false}));});
+  const start=view.root.findAllByType('button').find(n=>words(n).includes('启动原版任务'));
+  assert.equal(start.props.disabled,true);
+  assert.match(start.props.title,/平台尚未确认连接/);
+  assert.match(words(view.root),/暂不能启动：当前学习平台尚未确认连接/);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
+
+test('ready idle ZHS task does not show an invented blocking reason',async()=>{
+ const env=setup({getLegacyStatus:async()=>({...running,state:'idle',run_id:null,zhs_progress:null})});let view;
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,props));});
+  const start=view.root.findAllByType('button').find(n=>words(n).includes('启动原版任务'));
+  assert.equal(start.props.disabled,false);
+  assert.equal(start.props.title,undefined);
+  assert.doesNotMatch(words(view.root),/暂不能启动：/);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});

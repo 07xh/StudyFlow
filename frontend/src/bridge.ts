@@ -75,6 +75,7 @@ function classifyTauriInvokeError(value: unknown): string {
   if (detail.includes("Python service failed")) return "BRIDGE_PROCESS_FAILED";
   if (detail.includes("Resource directory unavailable")) return "BRIDGE_RESOURCE_DIR_FAILED";
   if (/bridge_request.*(not found|unknown|missing)/i.test(detail)) return "BRIDGE_COMMAND_UNAVAILABLE";
+  if (detail.includes("Operation not permitted")) return "BRIDGE_COMMAND_REJECTED";
   return "BRIDGE_NOT_READY";
 }
 
@@ -194,6 +195,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_PROCESS_FAILED": return "Python Sidecar 在处理请求时异常退出。";
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
+    case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
     case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
     case "PLATFORM_NOT_READY": return "真实平台课程读取失败；请检查账号、网络和原版运行时。";
     case "CREDENTIAL_STORAGE_FAILED": return "Windows 凭据管理器保存失败。";

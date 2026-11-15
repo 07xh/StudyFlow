@@ -47,6 +47,14 @@ try {
         if (-not $zhidao.ok -or $zhidao.data.speed -notin @('1','1.25','1.5','2')) {
             throw 'Installed Zhidao settings adapter failed'
         }
+        # Pair the native Rust allowlist test with the installed Python handler.
+        # A course-scoped read must work without altering user settings.
+        $zhsKey = 'a' * 64
+        $zhsSettings = Invoke-InstalledJsonlProbe ('{"id":"installed-zhs","version":1,"operation":"zhidao.zhs.settings.get","course_key":"' + $zhsKey + '"}')
+        if (-not $zhsSettings.ok -or $zhsSettings.id -cne 'installed-zhs' -or
+            $zhsSettings.data.speed -lt 1 -or $zhsSettings.data.speed -gt 2) {
+            throw 'Installed ZHS course settings IPC adapter failed'
+        }
         $yuketang = Invoke-InstalledJsonlProbe '{"id":"installed-yuketang","version":1,"operation":"yuketang.settings.get"}'
         $expectedFields = @(
             'video_speed','heartbeat_interval','max_concurrent_videos','completion_threshold',
