@@ -56,15 +56,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify matching bundled app version
-        shell: bash
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          version = json.loads(Path("src-tauri/tauri.conf.json").read_text(encoding="utf-8"))["version"]
-          assert version == "0.1.1-rc.1", f"Unsupported automatic candidate release: {version}"
-          PY
       - uses: actions/download-artifact@v4
         with:
           name: StudyFlow-Windows-NSIS
@@ -75,6 +66,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          version=$(python -c 'import json; print(json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))["version"])')
+          if [ "$version" != "0.1.1-rc.1" ]; then
+            echo "This one-time candidate publisher does not apply to version $version."
+            exit 0
+          fi
           if gh release view v0.1.1-rc.1 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Candidate already published; not replacing binaries."
             exit 0
