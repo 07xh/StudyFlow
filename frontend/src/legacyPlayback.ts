@@ -163,7 +163,11 @@ export async function startLegacy(
   return invoke<LegacyTaskStatus>("legacy_start", {
     platform,
     courseId: platform === "zhidao" ? courseId : null,
-    options: platform === "yuketang" ? options ?? null : null,
+    // Preserve the original options shape but never let the old 90% default
+    // prematurely end or skip an unfinished video in StudyFlow.
+    options: platform === "yuketang"
+      ? {...(options ?? originalYktDefaults), completion_threshold:100}
+      : null,
     zhsOptions: platform === "zhidao" ? zhsOptions ?? null : null,
   });
 }

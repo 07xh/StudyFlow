@@ -413,6 +413,13 @@ fn legacy_start_blocking(
         if let Some(settings) = &options {
             settings.apply(&mut command);
         }
+        // The preserved Rain Classroom executor otherwise treats a configurable
+        // local 90% threshold as task success/skip even if the platform still
+        // considers the video unfinished. Require full server rate for execution
+        // decisions; the separate read-only verifier can recognize an explicit
+        // platform completion flag below 100%.
+        // Also applies when IPC options are absent or an old .env stores 90.
+        command.env("COMPLETION_THRESHOLD", "100");
     }
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)]
