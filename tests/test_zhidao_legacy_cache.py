@@ -372,24 +372,38 @@ def test_verification_compares_instants_not_offset_formatted_strings(session_cac
     assert target.progress_evidence == "server_verified"
 
 
-def test_duplicate_prior_evidence_blocks_verification_before_server_request(session_cache, monkeypatch):
+@pytest.mark.parametrize("repaired", [True, False])
+def test_ambiguous_prior_evidence_can_recover_only_with_unique_fresh_record(session_cache, monkeypatch, repaired):
     directory, fp = session_cache
     course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
     (directory / "zhidao-courses.json").write_text(json.dumps({
         "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
         "incomplete": False, "courses": [course],
     }), encoding="utf-8")
+    old = "2026-11-13T10:00:00+00:00"
+    new = "2026-11-14T10:00:00+00:00"
     record = {**course, "knowledgePointCount": 1, "fullProgressPoints": 1,
-              "lastVerifiedAt": "2026-11-14T10:00:00+00:00"}
-    (directory / "zhidao-progress.json").write_text(json.dumps({
-        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
-        "incomplete": False, "courses": [record, dict(record)],
-    }), encoding="utf-8")
-    monkeypatch.setattr(legacy_runtime.subprocess, "run",
-                        lambda *a, **kw: pytest.fail("ambiguous evidence must not launch verifier"))
-    with pytest.raises(RuntimeError, match="ambiguous history"):
-        legacy_runtime.verify_course(legacy_runtime.progress_key(course))
+              "lastVerifiedAt": old}
+    path = directory / "zhidao-progress.json"
+    state = {"source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
+             "incomplete": False, "courses": [record, dict(record)]}
+    path.write_text(json.dumps(state), encoding="utf-8")
 
+    def fake_run(*args, **kwargs):
+        if repaired:
+            state["courses"] = [{**record, "lastVerifiedAt": new}]
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
+    key = legacy_runtime.progress_key(course)
+    if repaired:
+        result = legacy_runtime.verify_course(key)
+        chosen = next(row for row in result["courses"] if row.course_id == key)
+        assert chosen.verified_at == new and chosen.progress_evidence == "server_verified"
+    else:
+        with pytest.raises(RuntimeError, match="no fresh evidence"):
+            legacy_runtime.verify_course(key)
 
 @pytest.mark.parametrize("condition,expected", [
     ("fresh", 0), ("stale", 2), ("incomplete", 4), ("rotated", 4),
