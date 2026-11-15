@@ -193,3 +193,20 @@ def test_new_batch_resets_old_video_rows():
     )
     assert p["video_tasks"][0]["name"] == "新视频"
     assert p["video_tasks"][0]["server_percent"] is None
+
+
+def test_long_video_batch_retains_last_rows_without_eviction_of_active_worker():
+    from studyflow.services.yuketang_progress import MAX_VIDEO_ROWS
+    parts = ["开始并发观看视频... (最大并发数: 3)"]
+    # Worker-1 stays active while the other queue positions finish.
+    parts.append("[Worker-1] 开始处理视频: 正在执行 (ID: 1)")
+    parts.append("[Worker-1] 🎬 开始观看视频: 正在执行")
+    for index in range(2, MAX_VIDEO_ROWS + 12):
+        parts.append(f"[Worker-{index}] 开始处理视频: 已完成 {index} (ID: {index})")
+        parts.append(f"[Worker-{index}] ✅ 视频观看完成: 已完成 {index}")
+    rows = parse_original_log("\n".join(parts))["video_tasks"]
+    indexes = {row["video_index"] for row in rows}
+    assert len(rows) == MAX_VIDEO_ROWS
+    assert 1 in indexes   # Still-running worker retains its identity
+    assert MAX_VIDEO_ROWS + 11 in indexes  # Most recent worker retained
+    assert 2 not in indexes  # Old completed worker evicted
