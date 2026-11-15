@@ -478,6 +478,25 @@ mod ipc_validation_tests {
     }
 
     #[test]
+    fn yuketang_course_detail_validates_course_and_bounded_progress_pages() {
+        let valid = json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+            "course_id":"123","offset":0,"limit":8});
+        assert!(validate(&valid).is_ok());
+        for bad in [
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"../123","offset":0,"limit":8}),
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"123","offset":5001,"limit":8}),
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"123","offset":0,"limit":13}),
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"123","offset":0,"limit":true})
+        ] {
+            assert!(validate(&bad).is_err());
+        }
+    }
+
+    #[test]
     fn allows_zhidao_readonly_progress_operations() {
         assert!(validate(&json!({"id":"a","version":1,"operation":"zhidao.progress.sync"})).is_ok());
         assert!(validate(&json!({"id":"b","version":1,"operation":"zhidao.progress.verify","course_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})).is_ok());
