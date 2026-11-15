@@ -65,7 +65,7 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
 
   // Never render a previous course's records even for one React render.
   const currentDetail=detail?.course_key===course.course_id?detail:null;
-  const kind=currentDetail?.course_type??course.course_type;
+  const kind:ZhidaoCourseDetail["course_type"]=currentDetail?.course_type??(course.course_type==="ai"?"ai":"shared");
   const items=currentDetail?.items??[];
   const label=kind==="ai"?"知识点":"视频";
   const chapters=useMemo(()=>[...new Set(items.map(chapterOf).filter(Boolean))], [items]);
