@@ -48,6 +48,8 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const panelId=useId();
 
+  // One user action verifies the whole course. Keep requests within the existing
+  // server-side limit and run them sequentially to avoid an unbounded burst.
   const load=useCallback(async(offset:number,reset:boolean)=>{
     const current=++revision.current;
     if(reset){setVideos([]);setTotal(0);setNextOffset(null);}
@@ -62,18 +64,40 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
       setState("blocked");setMessage("雨课堂会话未确认，请检查登录状态。");return;
     }
     setState("loading");
+    let cursor=offset;
+    let expectedTotal:number|null=null;
+    let loadedInThisRun=0;
     try{
-      const result=await request<YuketangCourseProgress>({
-        operation:"yuketang.course.detail",course_id:course.course_id,
-        offset,limit:PAGE_SIZE
-      });
-      if(current!==revision.current)return;
-      if(!validPage(result,course.course_id,offset))throw new Error("INVALID_IPC_RESPONSE");
-      setVideos(previous=>reset?result.items:[...previous,...result.items]);
-      setTotal(result.total);setNextOffset(result.next_offset);setState("ready");
+      while(true){
+        const result=await request<YuketangCourseProgress>({
+          operation:"yuketang.course.detail",course_id:course.course_id,
+          offset:cursor,limit:PAGE_SIZE
+        });
+        if(current!==revision.current)return;
+        if(!validPage(result,course.course_id,cursor)||
+          (expectedTotal!==null&&result.total!==expectedTotal)||
+          (result.next_offset!==null&&result.items.length===0))
+          throw new Error("INVALID_IPC_RESPONSE");
+        expectedTotal=result.total;
+        // Only append validated server evidence; a failed later page must not
+        // erase successfully checked earlier pages or imply completion.
+        setVideos(previous=>reset&&cursor===offset?result.items:[...previous,...result.items]);
+        loadedInThisRun+=result.items.length;
+        setTotal(result.total);
+        setNextOffset(result.next_offset);
+        if(result.next_offset===null){
+          setState("ready");
+          return;
+        }
+        cursor=result.next_offset;
+      }
     }catch(error){
       if(current!==revision.current)return;
-      setState("error");setMessage(friendlyBridgeError(error));
+      setState("error");
+      const reason=friendlyBridgeError(error);
+      setMessage(loadedInThisRun>0
+        ?"部分视频已读取并保留真实服务器记录；后续批次失败："+reason+"。可从中断位置继续核验。"
+        :reason);
     }
   },[course.course_id,desktop,connected,scopeDirty]);
 
@@ -120,12 +144,12 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
       <div>
         <span className="eyebrow">当前课堂 / 服务器只读记录</span>
         <h3>章节进度</h3>
-        <p>仅展示已读取视频的服务器记录，未核验内容不推断完成状态。</p>
+        <p>自动逐批读取全部视频的真实服务器进度；未核验内容不推断完成状态。</p>
       </div>
       <button type="button" className="secondary"
         disabled={!desktop||!connected||scopeDirty||state==="loading"}
         onClick={()=>void load(0,true)}>
-        <RefreshCw size={14}/>{state==="loading"?"核验中…":"刷新进度"}
+        <RefreshCw size={14}/>{state==="loading"?"核验全课中…":"重新核验全课"}
       </button>
     </div>
     {videos.length>0&&<div className="sf-zd-detail-summary sf-ykt-progress-summary">
@@ -133,7 +157,12 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
       <div><span>服务器已核验</span><strong>{verified.length} / {videos.length}</strong></div>
       <div><span>已确认完成</span><strong>{completed} 节</strong></div>
     </div>}
-    {state==="loading"&&<p role="status">正在从当前课堂逐节读取服务器进度…</p>}
+    {state==="loading"&&<p className="sf-ykt-scan-state" role="status" aria-live="polite">
+      正在自动核验全课：已读取 {videos.length} / {total||"…"} 节视频，按批次连续读取，无需手动翻页。
+    </p>}
+    {state==="ready"&&videos.length>0&&<p className="sf-ykt-scan-state" role="status">
+      本次已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}
+    </p>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     {videos.length>0&&<div className="sf-ykt-progress-toolbar">
       <div className="sf-ykt-progress-filters" role="group" aria-label="筛选已读取视频的进度">
@@ -197,17 +226,16 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
             </div>;
           })}
     </div>}
-    {nextOffset!==null&&<div className="actions sf-ykt-page-actions">
+    {nextOffset!==null&&state==="error"&&<div className="actions sf-ykt-page-actions">
       <button type="button" className="secondary"
         disabled={state==="loading"||!connected||scopeDirty}
         onClick={()=>void load(nextOffset,false)}>
-        {state==="loading"?"核验中…":
-          "继续核验后续视频（剩余 "+Math.max(0,total-videos.length)+" 节）"}
+        {"继续核验剩余视频（剩余 "+Math.max(0,total-videos.length)+" 节）"}
       </button>
     </div>}
     <details className="sf-technical-note">
       <summary>进度口径</summary>
-      <p className="sf-muted">一次最多核验 {PAGE_SIZE} 节视频，统计仅涵盖已读取记录。
+      <p className="sf-muted">单批最多核验 {PAGE_SIZE} 节视频，程序会自动核验完整课堂；中途失败可继续。统计仅涵盖已经收到的真实记录。
         未核验不等于 0%，本地播放位置和任务日志不等于服务器学习进度。</p>
     </details>
   </section>;
