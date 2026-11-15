@@ -13,7 +13,7 @@ import {PageSurface} from "./PageSurface";
 import "./foundation.css";
 
 export type Page="home"|"tasks"|"platforms"|"platform-zhidao"|
-  "platform-yuketang"|"records"|"logs"|"settings";
+  "platform-yuketang"|"platform-xuexitong"|"records"|"logs"|"settings";
 const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"home",label:"首页",icon:LayoutDashboard},
   {id:"tasks",label:"学习任务",icon:ListChecks},
@@ -23,11 +23,12 @@ const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
 ];
 const platformNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"platform-zhidao",label:"知到",icon:BookOpen},
-  {id:"platform-yuketang",label:"雨课堂",icon:BookOpen}
+  {id:"platform-yuketang",label:"雨课堂",icon:BookOpen},
+  {id:"platform-xuexitong",label:"学习通",icon:BookOpen}
 ];
 const titles:Record<Page,string>={
   home:"学习总览",tasks:"学习任务",platforms:"学习平台",
-  "platform-zhidao":"知到","platform-yuketang":"雨课堂",
+  "platform-zhidao":"知到","platform-yuketang":"雨课堂","platform-xuexitong":"学习通",
   records:"学习记录",logs:"日志中心",settings:"设置"
 };
 
@@ -56,7 +57,7 @@ export function AppShell({
     try{window.localStorage.setItem("studyflow.nav.platform-expanded",String(platformExpanded));}
     catch{/* The current navigation state remains available for this session. */}
   },[platformExpanded]);
-  const platformActive=page==="platforms"||page==="platform-zhidao"||page==="platform-yuketang";
+  const platformActive=page==="platforms"||page==="platform-zhidao"||page==="platform-yuketang"||page==="platform-xuexitong";
   const renderItem=(item:{id:Page;label:string;icon:LucideIcon},nested=false)=>
     <button key={item.id} type="button" title={item.label} aria-label={item.label}
       aria-current={page===item.id?"page":undefined}
