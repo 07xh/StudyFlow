@@ -14,6 +14,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"; course_id?: string}
+  | {id: string; version: 1; operation: "yuketang.course.detail"; course_id: string; offset: number; limit: number}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
   | {id: string; version: 1; operation: "yuketang.scope.get"}
   | {id: string; version: 1; operation: "yuketang.scope.save"; scope: {classroom_id:string;university_id:string;sign?:string}}
@@ -41,6 +42,16 @@ export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boo
 export type ZhidaoPlayerTarget = {course_key:string;course_type:"ai"|"shared";course_id:string;class_id:string;recruit_and_course_id:string;title:string};
 export type ZhidaoDiagnostic = {code:number;state:string;lines:string[]};
 export type ZhidaoDocument = {id:string;title:string;content:string};
+export type YuketangVideoProgress = {
+  id:string;name:string;chapter:string;
+  progress_percent:number|null;server_completed:boolean|null;
+  last_point_seconds:number|null;duration_seconds:number|null;
+  verified_at:string|null;
+};
+export type YuketangCourseProgress = {
+  course_id:string;offset:number;total:number;next_offset:number|null;
+  items:YuketangVideoProgress[];
+};
 export type ZhidaoCourseDetail = {course_key:string;title:string;course_type:"ai"|"shared";verified:boolean;stale:boolean;verified_at:string|null;done:number;total:number;percent:number|null;items:Array<{name:string;theme?:string;knowledge_id?:number|null;video_id?:number|null;chapter_id?:number|null;chapter_name?:string;progress_percent?:number;fully_progressed?:boolean;duration_seconds?:number;studied_seconds?:number;server_completed?:boolean}>};
 
 export type BridgeResponse<T> =
