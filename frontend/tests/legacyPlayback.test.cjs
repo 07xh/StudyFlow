@@ -92,7 +92,7 @@ test("the ZHS original segment is displayed only for the selected running course
   const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
   assert.match(panel, /status\?\.course_id === selection/);
   assert.match(panel, /status\?\.state === "running"/);
-  assert.match(panel, /liveZhs\?\.video_segment_percent/);
+  assert.match(panel, /const zhsSegment=liveZhs\?\.resource_kind==="video"\?liveZhs.video_segment_percent:null/);
   assert.match(panel, /非服务器确认进度/);
   assert.match(panel, /结束前最后一次真实采样/);
   assert.match(panel, /未采集到播放进度/);
