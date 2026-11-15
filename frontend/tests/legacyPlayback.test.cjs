@@ -252,3 +252,21 @@ test("ZHS cookie restore and server session errors have actionable, privacy-safe
   assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_SESSION_UNAVAILABLE"}),/暂时无法|网络/);
   assert.equal(legacy.zhsDiagnosticMessage({...sample,exit_code:0,diagnostic_code:"ZHS_SESSION_EXPIRED"}),"");
 });
+
+test("ZHS resource selection is local, type-checked and per course",()=>{
+  const legacy=loadWithStub(async()=>{});
+  const valid={...legacy.originalZhsDefaults,scope_mode:"all",selected_ids:[]};
+  assert.equal(legacy.validateZhsOptions({...valid,resource_mode:"video"}),true);
+  assert.equal(legacy.validateZhsOptions({...valid,resource_mode:"reading"}),true);
+  assert.equal(legacy.validateZhsOptions({...valid,resource_mode:"videos"}),false);
+  const settings=fs.readFileSync(path.join(__dirname,"..","src","components","ZhsTaskSettingsPanel.tsx"),"utf8");
+  assert.match(settings,/本次选择的资源类型/);
+  assert.match(settings,/只选择视频/);
+  assert.match(settings,/文章 \/ PPT/);
+  assert.match(settings,/resource_mode:resourceMode/);
+  const panel=fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel,/resource_name/);
+  assert.match(panel,/resource_kind/);
+  assert.match(panel,/当前视频片段位置/);
+  assert.doesNotMatch(panel,/当前本地模拟片段进度/);
+});

@@ -21,7 +21,7 @@ class ScopeInvalid(BaseException):
 
 
 @contextmanager
-def scoped_upstream_play(options: dict | None, is_ai: bool):
+def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
     if options is None:
         yield
         return
@@ -29,6 +29,10 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
     scoped = options["scope_mode"] == "selected"
     maximum = options["max_videos"]
     stop_on_error = options["stop_on_error"]
+    resource_mode = options.get("resource_mode", "all")
+
+    if not is_ai and resource_mode == "reading":
+        raise ScopeInvalid()
 
     if is_ai:
         from zhs.ai.course import AiCourseManager
@@ -36,7 +40,32 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
 
         original_targets = AiCourseManager._iter_targets
         original_video = AiVideoPlayer.play_video
+        original_resource = getattr(AiCourseManager, "_process_resource", None)
         count = 0
+
+        def resource_kind(item):
+            detail = getattr(item, "resources_detail", None)
+            key = (getattr(detail, "resources_type", None),
+                   getattr(detail, "resources_distribute_type", None))
+            if key in ((1, 3), (2, 2)):
+                return "video"
+            if key == (1, 4):
+                return "ppt"
+            if key == (2, 1):
+                return "article"
+            return "other"
+
+        def process_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs):
+            kind = resource_kind(item)
+            if resource_mode == "video" and kind != "video":
+                return None
+            if resource_mode == "reading" and kind not in ("ppt", "article"):
+                return None
+            if on_resource is not None:
+                detail = getattr(item, "resources_detail", None)
+                on_resource(kind, getattr(detail, "resources_name", None))
+            return original_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs)
+
 
         def targets(manager, course_info):
             candidates = list(original_targets(manager, course_info))
@@ -66,11 +95,15 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
 
         AiCourseManager._iter_targets = targets
         AiVideoPlayer.play_video = video
+        if callable(original_resource):
+            AiCourseManager._process_resource = process_resource
         try:
             yield
         finally:
             AiCourseManager._iter_targets = original_targets
             AiVideoPlayer.play_video = original_video
+            if callable(original_resource):
+                AiCourseManager._process_resource = original_resource
     else:
         from zhs.zhidao.video import ZhidaoVideoPlayer
         from zhs.exceptions import CaptchaRequired, TimeLimitExceeded
