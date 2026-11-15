@@ -16,10 +16,14 @@ MAX_SELECTED = 256
 
 
 def validate_run_settings(value: object) -> dict:
-    if not isinstance(value, dict) or set(value) != set(DEFAULTS) | {"scope_mode", "selected_ids"}:
+    required = set(DEFAULTS) | {"scope_mode", "selected_ids"}
+    if not isinstance(value, dict) or set(value) not in (required, required | {"resource_mode"}):
         raise ValueError("INVALID_ZHS_SETTINGS")
     base = validate_settings({key: value[key] for key in DEFAULTS})
     mode, identifiers = value["scope_mode"], value["selected_ids"]
+    resource_mode = value.get("resource_mode", "all")
+    if resource_mode not in ("all", "video", "reading"):
+        raise ValueError("INVALID_ZHS_SETTINGS")
     if mode not in ("all", "selected") or not isinstance(identifiers, list):
         raise ValueError("INVALID_ZHS_SETTINGS")
     if (len(identifiers) > MAX_SELECTED
@@ -28,7 +32,8 @@ def validate_run_settings(value: object) -> dict:
             or (mode == "all" and identifiers)
             or (mode == "selected" and not identifiers)):
         raise ValueError("INVALID_ZHS_SETTINGS")
-    return {**base, "scope_mode": mode, "selected_ids": identifiers}
+    return {**base, "scope_mode": mode, "selected_ids": identifiers,
+            "resource_mode": resource_mode}
 
 
 def validate_settings(value: object) -> dict:

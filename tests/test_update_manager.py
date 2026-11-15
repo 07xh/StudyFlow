@@ -84,3 +84,44 @@ def test_missing_installer_is_not_misreported_as_invalid_preferences(monkeypatch
     result = bridge.dispatch({"id": "u", "version": 1, "operation": "updates.download",
                               "current_version": "0.1.0", "release_version": "v0.2.0"})
     assert result["error"] == "UPDATE_ASSET_UNAVAILABLE"
+
+
+def test_changelog_only_returns_published_installed_and_skipped_versions(monkeypatch):
+    import io
+    import json
+    releases = [
+        {"tag_name": "v0.1.1-rc.12", "name": "Future", "body": "future"},
+        {"tag_name": "v0.1.1-rc.11", "name": "Current", "body": "Current changes", "published_at": "2026-11-15T00:00:00Z"},
+        {"tag_name": "v0.1.1-rc.10", "name": "Previous", "body": "Previous changes"},
+        {"tag_name": "v0.1.1-rc.9", "name": "Old", "body": "Old changes"},
+        {"tag_name": "v0.1.1-rc.8", "draft": True, "body": "Hidden"},
+    ]
+    class Response(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            self.close()
+    monkeypatch.setattr(updater, "urlopen", lambda *a, **k: Response(json.dumps(releases).encode()))
+    current = updater.release_notes("0.1.1-rc.11")
+    assert [row["version"] for row in current] == ["v0.1.1-rc.11"]
+    skipped = updater.release_notes("0.1.1-rc.11", previous_version="0.1.1-rc.9")
+    assert [row["version"] for row in skipped] == ["v0.1.1-rc.11", "v0.1.1-rc.10"]
+    history = updater.release_notes("0.1.1-rc.11", history=True)
+    assert [row["version"] for row in history] == ["v0.1.1-rc.11", "v0.1.1-rc.10", "v0.1.1-rc.9"]
+
+
+def test_changelog_ipc_checks_input_and_preserves_safe_errors(monkeypatch):
+    from studyflow.services import bridge, update_manager
+    monkeypatch.setattr(update_manager, "changelog", lambda *a: {"entries": [{"version": "v0.2.0"}]})
+    req = {"id": "notes", "version": 1, "operation": "updates.changelog",
+           "current_version": "0.2.0", "history": False}
+    assert bridge.dispatch(req)["data"]["entries"][0]["version"] == "v0.2.0"
+    # Validation is applied before the network request in the actual updater.
+    monkeypatch.setattr(update_manager, "changelog", lambda *a: updater.release_notes("bad"))
+    assert bridge.dispatch(req)["error"] == "INVALID_UPDATE_SETTINGS"
+    def blocked(*args):
+        raise updater.UpdateError("UPDATE_NETWORK_FAILED", "Private URL")
+    monkeypatch.setattr(update_manager, "changelog", blocked)
+    result = bridge.dispatch(req)
+    assert result["error"] == "UPDATE_NETWORK_FAILED"
+    assert "Private" not in str(result)

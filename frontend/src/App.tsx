@@ -19,6 +19,8 @@ import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
 import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangPlayedVideo} from "./components/YuketangCourseDetailPanel";
 import {UpdatePanel} from "./components/UpdatePanel";
+import {ReleaseNotesDialog} from "./ui/ReleaseNotesDialog";
+import {useReleaseChangelog} from "./useReleaseChangelog";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
@@ -119,6 +121,7 @@ export default function App(){
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
   const runtime=useRuntimeTasks(desktop&&consentAccepted);
+  const releaseChangelog=useReleaseChangelog(desktop,consentAccepted);
   const yuketangRun=runtime.tasks.find(task=>task.runner==="yuketang"&&!task.unavailable);
   const yuketangRunId=yuketangRun?.runId??"";
   const yuketangRunState=yuketangRun?.state??"idle";
@@ -857,9 +860,10 @@ export default function App(){
         </section>
         <ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>
       </>}
-      <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice}/>
+      <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
     </AppShell>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
+    <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}

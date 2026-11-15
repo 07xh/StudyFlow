@@ -4,8 +4,9 @@ import {X} from "lucide-react";
 import "./settingsDialog.css";
 
 /** LightC-style second-level page; does not navigate away from the current workspace. */
-export function SettingsDialog({open,dark,title,onClose,children}:{
+export function SettingsDialog({open,dark,title,onClose,children,kicker="设置 / 二级页面",compact=false}:{
   open:boolean;dark:boolean;title:string;onClose:()=>void;children:ReactNode;
+  kicker?:string;compact?:boolean;
 }){
   const titleId=useId();
   const panel=useRef<HTMLElement>(null),closeButton=useRef<HTMLButtonElement>(null);
@@ -40,10 +41,10 @@ export function SettingsDialog({open,dark,title,onClose,children}:{
   return createPortal(
     <div className={"app sf-shell sf-settings-overlay"+(dark?" dark":"")}
       data-theme={dark?"dark":"light"} onMouseDown={handleBackdrop}>
-      <section className="sf-settings-modal" ref={panel} role="dialog" aria-modal="true"
+      <section className={"sf-settings-modal"+(compact?" sf-settings-modal--compact":"")} ref={panel} role="dialog" aria-modal="true"
         aria-labelledby={titleId} onKeyDown={handleKeys}>
         <header className="sf-settings-modal-heading">
-          <div><span className="sf-settings-modal-kicker">设置 / 二级页面</span><h2 id={titleId}>{title}</h2></div>
+          <div><span className="sf-settings-modal-kicker">{kicker}</span><h2 id={titleId}>{title}</h2></div>
           <button ref={closeButton} type="button" className="sf-settings-modal-close"
             aria-label="关闭设置面板" onClick={onClose}><X size={18}/></button>
         </header>

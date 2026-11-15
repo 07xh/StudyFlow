@@ -25,6 +25,7 @@ from studyflow.platforms.zhidao.legacy_runtime import installation_root
 from studyflow.platforms.zhidao.zhs_settings import (
     validate_run_settings as validate_zhs_settings,
 )
+from studyflow.services.zhs_resource_monitor import create_resource_monitor
 from studyflow.platforms.zhidao.zhs_scope import (
     scoped_upstream_play, ScopeLimitReached, ScopeFailed, ScopeInvalid,
 )
@@ -180,6 +181,18 @@ class _RefreshingZhsSink:
         # stdout and stderr may be written from different ZHS worker threads.
         # Serialize local observer state; never touch the upstream sender.
         self._lock = threading.Lock()
+
+    def mark_resource(self, kind: str, name: object) -> None:
+        # Same lock as stdout/stderr observations: a resource switch and a
+        # numeric console update cannot publish mismatched snapshots.
+        with self._lock:
+            if self.disabled or not hasattr(self.sink, "mark_resource"):
+                return
+            try:
+                self.sink.mark_resource(kind, name)
+                self.last_publish = time.monotonic()
+            except Exception:
+                self.disabled = True
 
     def receive(self, chunk: str) -> None:
         with self._lock:
@@ -365,7 +378,9 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                     observer = runpy.run_path(str(original), run_name="studyflow_vendor_zhs_monitor")
                     root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
                     sink = _RefreshingZhsSink(
-                        observer["NumericTelemetry"](monitor_token, directory=root / "StudyFlow")
+                        create_resource_monitor(
+                            observer["NumericTelemetry"], monitor_token, directory=root / "StudyFlow"
+                        )
                     )
                     # Rich-based CLIs may emit progress to stderr, not stdout.
                     # Each observer forwards output unchanged and stores numbers only.
@@ -377,7 +392,10 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                 sys.stderr = original_stderr
         # Per-run scope only controls the original traversal; not heartbeat sender.
         with _observe_zhs_cli_stages() as stage:
-            with scoped_upstream_play(options, is_ai):
+            with scoped_upstream_play(
+                options, is_ai,
+                on_resource=sink.mark_resource if sink is not None else None,
+            ):
                 result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
         code = result if isinstance(result, int) else 0

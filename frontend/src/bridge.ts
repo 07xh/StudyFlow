@@ -10,6 +10,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "updates.settings.save"; settings: UpdateSettings}
   | {id: string; version: 1; operation: "updates.check"; current_version: string}
   | {id: string; version: 1; operation: "updates.download"; current_version: string; release_version: string}
+  | {id: string; version: 1; operation: "updates.changelog"; current_version: string; previous_version?: string; history: boolean}
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
@@ -38,6 +39,7 @@ export type BridgeRequest =
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
 export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
+export type ReleaseChangelogEntry = {version:string;title:string;notes:string;published_at:string};
 export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
 export type ZhidaoPlayerTarget = {course_key:string;course_type:"ai"|"shared";course_id:string;class_id:string;recruit_and_course_id:string;title:string};
 export type ZhidaoDiagnostic = {code:number;state:string;lines:string[]};

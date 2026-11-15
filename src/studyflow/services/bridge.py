@@ -59,7 +59,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("version") != 1:
         return {"id": request_id, "ok": False, "error": "UNSUPPORTED_VERSION"}
     operation = request.get("operation")
-    if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download"):
+    if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download", "updates.changelog"):
         try:
             if operation == "updates.settings.get":
                 data = update_manager.preferences()
@@ -67,6 +67,10 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
                 data = update_manager.save_preferences(request.get("settings"))
             elif operation == "updates.check":
                 data = update_manager.check(request.get("current_version"))
+            elif operation == "updates.changelog":
+                data = update_manager.changelog(request.get("current_version"),
+                                                request.get("previous_version"),
+                                                request.get("history"))
             else:
                 data = update_manager.download(request.get("current_version"), request.get("release_version"))
             return {"id": request_id, "ok": True, "data": data}

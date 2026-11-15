@@ -86,6 +86,10 @@ def check(current: str) -> dict:
     } if release else None}
 
 
+def changelog(current: str, previous: str | None = None, history: bool = False) -> dict:
+    return {"entries": updater.release_notes(current, previous_version=previous, history=history)}
+
+
 def download(current: str, version: str) -> dict:
     if not isinstance(version, str) or len(version) > 80 or not updater.VERSION_PATTERN.fullmatch(version):
         raise ValueError("INVALID_UPDATE_SETTINGS")
