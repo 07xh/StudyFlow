@@ -2309,3 +2309,40 @@
   .sf-shell .sf-record-search-field label{flex-basis:100%}
   .sf-shell .sf-record-toolbar-actions{width:100%}
 }
+
+/* Evidence-backed platform overview and selected-course switcher, shared by both platforms. */
+.sf-shell .sf-workspace-progress-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(160px,240px);
+  gap:clamp(10px,2vw,22px);
+  align-items:center;
+  min-width:0;
+}
+.sf-shell .sf-workspace-progress-summary{min-width:0}
+.sf-shell .sf-workspace-progress-layout .sf-header-course-picker{
+  min-width:0;
+  align-self:center;
+}
+.sf-shell .sf-workspace-progress-layout .sf-workspace-progress-track{margin-top:7px}
+.sf-shell .sf-workspace-progress-layout .sf-header-evidence{
+  display:flex;
+  flex-wrap:wrap;
+  gap:3px 12px;
+  min-width:0;
+  margin-top:6px;
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.35;
+}
+.sf-shell .sf-workspace-progress-layout .sf-header-evidence time{
+  font-size:10px;
+  color:var(--muted);
+}
+@media(max-width:900px){
+  .sf-shell .sf-workspace-progress-layout{grid-template-columns:minmax(0,1fr) minmax(120px,175px);gap:9px}
+}
+@media(max-width:720px){
+  .sf-shell .sf-workspace-progress-layout{grid-template-columns:minmax(0,1fr);gap:5px}
+  .sf-shell .sf-workspace-progress-layout .sf-header-course-picker{font-size:10px}
+  .sf-shell .sf-workspace-progress-layout .sf-header-course-picker select{padding:5px 8px;font-size:11px}
+}
