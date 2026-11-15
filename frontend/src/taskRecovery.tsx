@@ -114,7 +114,7 @@ export function TaskRecoveryPanel({desktop,consentAccepted,visible,tasks,loading
       }else{
         const scope=await request<YuketangScope>({operation:"yuketang.scope.get"});
         if(scope.classroom_id!==record.classroomId||scope.university_id!==record.universityId||
-          !scope.has_session||!scope.has_sign)
+          !scope.has_session)
           throw Error("当前课堂范围与上次不同，不能恢复原任务。");
         const identity=await request<YuketangSessionMarker>({operation:"yuketang.session.marker"});
         if(!identity.marker||identity.marker!==record.sessionMarker)

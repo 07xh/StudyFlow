@@ -23,7 +23,8 @@ test('recovery refuses current running jobs and verifies platform state',()=>{
   assert.match(recovery,/identity.marker!==record.sessionMarker/);
   assert.match(recovery,/operation:"yuketang\.course\.detail"/);
   assert.match(recovery,/operation:"courses\.list",platform:"yuketang"/);
-  assert.match(recovery,/!scope\.has_session\|\|!scope\.has_sign/);
+  assert.match(recovery,/!scope\.has_session/);
+  assert.doesNotMatch(recovery,/!scope\.has_session\|\|!scope\.has_sign/);
 });
 test('both executors persist after launch and explicit stops discard correct run ID',()=>{
   assert.match(panel,/rememberTaskRecovery\(\{version:1,platform:"zhidao"/);
