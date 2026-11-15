@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct QueueTask {
     pub task_id: String,
     pub name: Option<String>,
+    pub chapter: Option<String>,
     pub kind: String,
     pub state: String,
     pub percent: Option<f64>,
@@ -66,6 +67,24 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
                 Some(text.to_owned())
             }
         };
+        // Chapter labels come from the verified course tree, never from
+        // arbitrary console output. Treat old snapshots without this field
+        // as chapter-unknown, not as invalid runs.
+        let chapter = match row.get("chapter") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let label = raw.as_str()?;
+                if label.is_empty() || label.chars().count() > 90
+                    || label.chars().any(char::is_control)
+                    || label.contains('@') || label.contains('=')
+                    || ["http:", "https:", "cookie", "token", "authorization",
+                        "password", "secret", "apikey", "api_key"]
+                        .iter().any(|marker| label.to_lowercase().contains(marker)) {
+                    return None;
+                }
+                Some(label.to_owned())
+            }
+        };
         let row_stale = stale || row.get("stale")?.as_bool()?;
         let raw_percent = row.get("percent")?;
         let percent = if raw_percent.is_null() { None } else {
@@ -76,8 +95,8 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
             Some(row.get("exit_code")?.as_i64()?)
         };
-        tasks.push(QueueTask {task_id: id.into(), name, kind: kind.into(), state: row_state.into(),
-            percent, stale: row_stale, exit_code});
+        tasks.push(QueueTask {task_id: id.into(), name, chapter, kind: kind.into(),
+            state: row_state.into(), percent, stale: row_stale, exit_code});
     }
     Some(QueueSnapshot {concurrency, state: state.into(), stale, tasks})
 }
@@ -132,6 +151,17 @@ mod tests {
         let old = parse(data.as_bytes(), &"a".repeat(32), 120.0).unwrap();
         assert!(old.stale);
         assert!(old.tasks[0].percent.is_none());
+    }
+    #[test]
+    fn chapter_label_is_optional_and_cannot_leak_private_text() {
+        let mut data = sample();
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0)
+            .unwrap().tasks[0].chapter.is_none());
+        data["tasks"][0]["chapter"] = json!("第 2 章");
+        assert_eq!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0)
+            .unwrap().tasks[0].chapter.as_deref(), Some("第 2 章"));
+        data["tasks"][0]["chapter"] = json!("cookie=private");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
     }
     #[test]
     fn malformed_duplicate_and_private_rows_are_rejected() {
