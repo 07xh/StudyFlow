@@ -20,6 +20,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const playing=queue.tasks.filter(t=>t.state==="running");
   const waiting=queue.tasks.filter(t=>t.state==="queued");
   const ended=queue.tasks.filter(t=>t.state!=="queued"&&t.state!=="running");
+  const chapterNames=[...new Set(playing.map(t=>t.chapter).filter((name):name is string=>Boolean(name)))];
+  const nextChapter=waiting.find(t=>t.chapter)?.chapter;
   async function stop(id:string){
     const run=status.run_id;
     if(!run||!active||requested.has(id))return;
@@ -46,23 +48,36 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
           disabled={!active||pendingStop} onClick={()=>void stop(task.task_id)}><Square size={13}/>停止此项</button>}
       </div>
       <strong className="sf-ykt-video-name" title={task.name??undefined}>{task.name??"未命名资源"}</strong>
+      {task.chapter&&<small className="sf-muted">章节：{task.chapter}</small>}
       <div className="sf-zhs-now-progress-row"><small>本地片段位置</small>
         <strong>{percent!=null?percent.toFixed(1)+"%":"—"}</strong></div>
-      {percent!=null&&<div className="sf-verified-track sf-zhs-progress-track" role="progressbar"
-        aria-label={(task.name??"此视频")+"本地片段位置"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-        <span style={{width:percent+"%"}}/>
+      {task.state==="running"&&<div className={"sf-verified-track sf-zhs-progress-track"+
+          (percent==null?" is-indeterminate":"")} role="progressbar"
+        aria-label={(task.name??"此视频")+"本地片段位置"} aria-valuemin={0} aria-valuemax={100}
+        aria-valuenow={percent??undefined} aria-valuetext={percent==null?
+          "切换或加载中，尚无有效视频进度采样":percent.toFixed(1)+"%"}>
+        <span style={{width:percent!=null?percent+"%":"0%"}}/>
       </div>}
       <small className="sf-muted">{task.state==="exited"?"进程已退出，学习记录待平台核验":
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
-        stale||task.stale?"暂无新采样":
-        percent==null?(task.state==="queued"?"等待空闲位置":"等待进度采样"):"本地观测 · 非服务器完成进度"}</small>
+        stale||task.stale?"等待新的进度采样，旧百分比不会沿用":
+        percent==null?(task.state==="queued"?"等待空闲位置":"资源切换或加载中 · 等待新进度"):"本地观测 · 非服务器完成进度"}</small>
     </article>;
   }
   return <section className="sf-ykt-live sf-zhs-queue" aria-label="知到同课视频任务">
     <div className="sf-ykt-live-title"><strong>同课视频 · {queue.concurrency} 路</strong>
       <small>{stale?"采样待同步":playing.length+" 项运行 · "+waiting.length+" 项排队"}</small></div>
+    {chapterNames.length>0&&<p className="sf-task-context" role="status">
+      当前执行章节：{chapterNames.join("、")}{playing.every(t=>t.percent==null)?" · 等待新视频进度":""}
+    </p>}
     <div className="sf-ykt-worker-grid">{playing.map(row)}</div>
-    {!playing.length&&status.state==="running"&&<p className="sf-muted">正在分配资源</p>}
+    {!playing.length&&status.state==="running"&&<div className="sf-task-context" role="status">
+      <span>{waiting.length?("正在分配下一项"+(nextChapter?" · "+nextChapter:"")+"，等待新资源启动"):
+        "正在核对本轮任务的最终状态"}</span>
+      <div className="sf-verified-track sf-zhs-progress-track is-indeterminate" role="progressbar"
+        aria-label="任务切换或状态核对中" aria-valuemin={0} aria-valuemax={100}
+        aria-valuetext="等待新任务的实际播放进度"><span style={{width:"0%"}}/></div>
+    </div>}
     {waiting.length>0&&<details className="sf-ykt-video-details"><summary>等待队列 · {waiting.length} 项</summary>
       <div className="sf-ykt-worker-grid">{waiting.slice(0,100).map(row)}</div>
       {waiting.length>100&&<small>显示前 100 项，任务将自动补位。</small>}</details>}
