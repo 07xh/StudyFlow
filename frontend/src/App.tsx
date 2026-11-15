@@ -39,6 +39,7 @@ import {ThemeModeSelector} from "./ui/ThemeModeSelector";
 import {Switch} from "./ui/Switch";
 import {EmptyState} from "./ui/EmptyState";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
+import {SettingsDialog} from "./ui/SettingsDialog";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const ACTIVITY_KEY="studyflow.activity.v1";
@@ -96,6 +97,7 @@ export default function App(){
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
+  const [courseLogsOpen,setCourseLogsOpen]=useState(false);
   const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
   useEffect(()=>{
     try{window.localStorage.setItem(PLATFORM_LOGIN_EXPANDED_KEY,JSON.stringify(platformLoginExpanded));}
@@ -300,6 +302,7 @@ export default function App(){
   }
 
   function enterCourses(platform:Platform){
+    setCourseLogsOpen(false);
     setPlatformSettingsOpen(null);
     setSelectedCourse(null);
     setQuery("");
@@ -321,7 +324,7 @@ export default function App(){
     if(field==="sign")setSignDirty(true);
   }
   function inspectCourse(course:Course){
-    setPlatformSettingsOpen(null);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
+    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
   function courseMode(course:Course):"official"|"zhs-original"{
     const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
@@ -421,34 +424,29 @@ export default function App(){
     </>}
   </section>;
 
-  // Each platform owns a full course landing, a selected-course workspace, and a separate settings view.
+  // Platform configuration is a second-level overlay; the live course stays mounted.
   const renderPlatformDetail=(platform:Platform)=>{
     if(!platformInfo(platform))return null;
     const selected=activeSelectedCourse?.platform===platform?activeSelectedCourse:null;
     return <div className="sf-platform-workspace">
       <div className="sf-platform-toolbar actions" role="group" aria-label="平台操作">
-        {platformSettingsOpen===platform
-          ?<button type="button" className="secondary sf-platform-settings-action is-active"
-            onClick={()=>setPlatformSettingsOpen(null)}>
-            <ArrowLeft size={15}/>{selected?"返回课程详情":"返回课程列表"}
-          </button>
-          :<>
-            <button type="button" className="secondary" onClick={()=>{
-              setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
-              setPlatformSettingsOpen(platform);
-            }}>账号与连接</button>
-            <button type="button" className="secondary sf-platform-settings-action"
-              onClick={()=>setPlatformSettingsOpen(platform)}>
-              <SlidersHorizontal size={15}/>参数设置
-            </button>
-          </>}
+        <button type="button" className="secondary" onClick={()=>{
+          setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+          setPlatformSettingsOpen(platform);
+        }}>账号与连接</button>
+        <button type="button" className="secondary sf-platform-settings-action"
+          onClick={()=>setPlatformSettingsOpen(platform)}>
+          <SlidersHorizontal size={15}/>参数设置
+        </button>
         <button type="button" className="secondary"
           disabled={!desktop||Boolean(busy)||syncFeedback[platform].phase==="syncing"||platforms[platform].status!=="connected"}
           onClick={()=>void sync(platform,true)}>{syncFeedback[platform].phase==="syncing"?"课程同步中…":"同步课程列表"}</button>
       </div>
-      {platformSettingsOpen===platform
-        ?renderPlatformSettings(platform)
-        :selected?renderCourseWorkspace(selected):renderCourses(platform)}
+      {selected?renderCourseWorkspace(selected):renderCourses(platform)}
+      <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
+        title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}>
+        {platformSettingsOpen===platform&&renderPlatformSettings(platform)}
+      </SettingsDialog>
     </div>;
   };
 
@@ -565,7 +563,8 @@ export default function App(){
     return <section className="sf-course-workspace">
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
-        <button className="secondary" onClick={()=>setPage("tasks")}>查看运行任务</button>
+        <button className="secondary sf-course-logs-action" type="button" onClick={()=>setCourseLogsOpen(true)}>日志与诊断</button>
+        <button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>查看运行任务</button>
       </div>
       {course.platform==="zhidao"?<>
         {renderZhidaoModeSwitch(course)}
@@ -575,7 +574,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
-            <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
+            <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </CollapsibleSection>
@@ -585,27 +584,28 @@ export default function App(){
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
       </>:<>
-        <CollapsibleSection id={scope+"runtime"} title="雨课堂任务与播放参数">
+        <CollapsibleSection id={scope+"runtime"} title="雨课堂任务与运行进度">
           <p className="sf-task-context">
             当前选中课程为「{course.title}」。雨课堂原版执行器仍按平台已保存的课堂范围运行，
             不会仅因选中这门课程就限制任务范围；本区展示的是平台级运行状态与参数。
           </p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} view="both" detailMode
+          <YuketangTaskArea courses={platforms.yuketang.courses} view="both" dark={dark} detailMode
             desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
             events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
-          <button className="text-button" type="button" onClick={()=>setPlatformSettingsOpen("yuketang")}>
-            管理课堂范围与平台默认参数
-          </button>
+
         </CollapsibleSection>
         <CollapsibleSection id={scope+"chapters"} title="章节与课程内容" defaultExpanded={false}>
           <p className="sf-muted">当前接口尚未提供能够归属到此课程的章节进度，请以真实课堂范围和平台返回数据为准。</p>
         </CollapsibleSection>
       </>}
-      <CollapsibleSection id={scope+"logs"} title="当前课程操作记录" defaultExpanded={false}>
+      <SettingsDialog open={courseLogsOpen} dark={dark} title={course.title+" · 日志与诊断"}
+        onClose={()=>setCourseLogsOpen(false)}>
         <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>
-        <button className="text-button" onClick={()=>setPage("logs")}>查看平台与历史未归属记录</button>
-      </CollapsibleSection>
+        <button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("logs");}}>
+          查看平台与历史未归属记录
+        </button>
+      </SettingsDialog>
     </section>;
   };
 
