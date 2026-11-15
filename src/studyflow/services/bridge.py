@@ -59,9 +59,11 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("version") != 1:
         return {"id": request_id, "ok": False, "error": "UNSUPPORTED_VERSION"}
     operation = request.get("operation")
-    if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download", "updates.changelog"):
+    if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download", "updates.changelog", "updates.latest"):
         try:
-            if operation == "updates.settings.get":
+            if operation == "updates.latest":
+                data = update_manager.latest()
+            elif operation == "updates.settings.get":
                 data = update_manager.preferences()
             elif operation == "updates.settings.save":
                 data = update_manager.save_preferences(request.get("settings"))
