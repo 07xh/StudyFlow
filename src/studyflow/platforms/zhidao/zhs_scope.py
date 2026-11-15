@@ -69,7 +69,11 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
                 getattr(detail, "resources_sync_type", 1) == 1 or optional_enabled is True
             )
             if active and on_resource is not None:
-                on_resource(kind, getattr(detail, "resources_name", None))
+                try:
+                    on_resource(kind, getattr(detail, "resources_name", None))
+                except Exception:
+                    # UI-only callbacks must not change original ZHS flow.
+                    pass
             return original_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs)
 
 
@@ -158,6 +162,18 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
             return result
 
         def video(player, *args, **kwargs):
+            # In shared courses the upstream video model already has the real
+            # title. Observe it without querying additional endpoints.
+            if on_resource is not None:
+                video_id = args[1] if len(args) > 1 else kwargs.get("video_id")
+                ctx = args[2] if len(args) > 2 else kwargs.get("ctx")
+                try:
+                    resource = getattr(ctx, "videos", {}).get(video_id)
+                    if resource is not None and getattr(resource, "watch_state", None) != 1:
+                        on_resource("video", getattr(resource, "name", None))
+                except Exception:
+                    # Local display instrumentation never interrupts playback.
+                    pass
             try:
                 return original_video(player, *args, **kwargs)
             except (CaptchaRequired, TimeLimitExceeded):
