@@ -9,7 +9,7 @@ export function yuketangScopeIssues(config:Pick<Config,"classroom_id"|"universit
   return fields.flatMap(({value,label})=>{
     const trimmed=value.trim();
     if(!trimmed)return ["未填写"+label];
-    if(!/^\d{1,24}$/.test(trimmed))return [label+"应为 1–24 位数字"];
+    if(!/^\d{1,24}$/.test(trimmed))return [label+" 应为 1–24 位数字"];
     return [];
   });
 }
