@@ -118,6 +118,14 @@ pub struct ZhsProgress {
     resource_name: Option<String>,
 }
 
+/// The last *identified* resource may remain visible when telemetry is stale.
+#[derive(Clone, Serialize)]
+pub struct ZhsResourceContext {
+    resource_index: Option<u64>,
+    resource_total: Option<u64>,
+    resource_kind: Option<String>,
+    resource_name: Option<String>,
+}
 #[derive(Serialize)]
 pub struct LegacyStatus {
     platform: String,
@@ -126,6 +134,7 @@ pub struct LegacyStatus {
     run_id: Option<String>,
     course_id: Option<String>,
     zhs_progress: Option<ZhsProgress>,
+    zhs_last_resource: Option<ZhsResourceContext>,
     zhs_stale: bool, // Last sample expired while the process is still running.
     diagnostic_code: Option<String>, // bounded local failure category, not progress
 }
@@ -282,6 +291,16 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
     let running = task.state == "running";
     let zhs_stale = platform == "zhidao" && running
         && fresh_zhs_progress.is_none() && task.last_zhs_progress.is_some();
+    // Expose stale resource identity separately, never the old numeric
+    // percentage. The UI labels it as last recognized, not now playing.
+    let zhs_last_resource = if zhs_stale {
+        task.last_zhs_progress.as_ref().map(|last| ZhsResourceContext {
+            resource_index: last.resource_index,
+            resource_total: last.resource_total,
+            resource_kind: last.resource_kind.clone(),
+            resource_name: last.resource_name.clone(),
+        })
+    } else { None };
     let zhs_progress = if platform != "zhidao" {
         None
     } else if running {
@@ -298,6 +317,7 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         run_id: task.run_id.clone(),
         course_id: task.course_id.clone(),
         zhs_progress,
+        zhs_last_resource,
         zhs_stale,
         diagnostic_code: if task.state == "exited" { task.last_diagnostic_code.clone() } else { None },
     })
@@ -551,6 +571,9 @@ mod tests {
         let running = status_of("zhidao", &mut task).unwrap();
         assert!(running.zhs_progress.is_none());
         assert!(running.zhs_stale);
+        let last = running.zhs_last_resource.expect("stale resource context");
+        assert_eq!(last.resource_name.as_deref(), Some("示例视频"));
+        assert_eq!(last.resource_kind.as_deref(), Some("video"));
         task.state = "exited".into();
         let exited = status_of("zhidao", &mut task).unwrap();
         assert_eq!(exited.zhs_progress.unwrap().video_segment_percent, Some(32.0));

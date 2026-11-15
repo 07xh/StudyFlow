@@ -98,6 +98,13 @@ test("the ZHS original segment is displayed only for the selected running course
   assert.match(panel, /未采集到播放进度/);
   assert.match(panel, /status\.zhs_stale/);
   assert.match(panel, /本地进度输出已过期/);
+  assert.match(panel, /sf-zhs-now-title/);
+  assert.match(panel, /sf-zhs-progress-track/);
+  assert.match(panel, /is-indeterminate/);
+  assert.match(panel, /aria-valuenow=\{zhsSegment\?\?undefined\}/);
+  assert.match(panel, /zhs_last_resource/);
+  assert.match(panel, /<details className="sf-zhs-diagnostics">/);
+  assert.doesNotMatch(panel, /原版尚未提供当前资源名称/);
 });
 
 
