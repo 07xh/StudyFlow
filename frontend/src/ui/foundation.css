@@ -546,6 +546,20 @@
 }
 .sf-shell:not(.dark) .sf-ykt-form input{background:#fff}
 .sf-shell .sf-ykt-form input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+/* Required identifiers belong to the advanced tab; keep the correction action visible. */
+.sf-shell .sf-ykt-form .sf-ykt-scope-prerequisite{
+  grid-column:1/-1;display:grid;justify-items:start;gap:5px;
+  padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  background:var(--soft-accent);color:var(--text);
+}
+.sf-shell .sf-ykt-form .sf-ykt-scope-prerequisite.is-invalid{border-color:var(--accent)}
+.sf-shell .sf-ykt-form .sf-ykt-scope-prerequisite strong{font-size:12px}
+.sf-shell .sf-ykt-form .sf-ykt-scope-prerequisite p{
+  margin:0;font-size:11px;line-height:1.5;color:var(--muted)
+}
+.sf-shell .sf-ykt-form .sf-ykt-scope-prerequisite button{
+  min-height:32px;margin:2px 0 0;padding:6px 10px;font-size:11px
+}
 .sf-shell .sf-ykt-form .sf-login-actions{grid-column:1/-1;margin-top:3px}
 .sf-shell .sf-ykt-videos{grid-column:1/-1;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
 .sf-shell .sf-ykt-videos-title{
