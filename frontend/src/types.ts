@@ -13,6 +13,7 @@ export interface Course {
   stale?: boolean;
   progress_evidence?: ProgressEvidence;
   verified_at?: string | null;
+  session_marker?: string | null;
 }
 export interface PlatformState {
   platform: Platform;
