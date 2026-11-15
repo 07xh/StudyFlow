@@ -1,5 +1,6 @@
 import {cleanContext,courseEvents,executionEvents,storedActivity,type ActivityEntry,type EventContext,type EventResult} from "./activity";
 import {useRuntimeTasks} from "./runtimeTasks";
+import {getYuketangLiveProgress} from "./legacyPlayback";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
@@ -15,7 +16,7 @@ import {useZhidaoAutoVerify} from "./zhidaoAutoVerify";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
-import {YuketangCourseDetailPanel} from "./components/YuketangCourseDetailPanel";
+import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangPlayedVideo} from "./components/YuketangCourseDetailPanel";
 import {UpdatePanel} from "./components/UpdatePanel";
 import {ReleaseNotesDialog} from "./ui/ReleaseNotesDialog";
 import {useReleaseChangelog} from "./useReleaseChangelog";
@@ -120,6 +121,59 @@ export default function App(){
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
   const runtime=useRuntimeTasks(desktop&&consentAccepted);
   const releaseChangelog=useReleaseChangelog(desktop,consentAccepted);
+  const yuketangRun=runtime.tasks.find(task=>task.runner==="yuketang"&&!task.unavailable);
+  const yuketangRunId=yuketangRun?.runId??"";
+  const yuketangRunState=yuketangRun?.state??"idle";
+  const yuketangCourseId=platforms.yuketang.courses.find(course=>!course.stale)?.course_id??"";
+  const playbackObservations=useRef({
+    runId:"",seen:new Map<string,{at:number;signature:string}>()
+  });
+
+  // Playback is observed at app scope, so navigating away does not break sync.
+  // Real progress is verified through the bounded single-video server read.
+  // Never count the legacy executor's local percentage as a confirmed result.
+  useEffect(()=>{
+    if(!desktop||!consentAccepted||platforms.yuketang.status!=="connected"||
+       scopeDirty||!yuketangRunId||!yuketangCourseId||
+       !["running","exited","stopped"].includes(yuketangRunState))return;
+    if(playbackObservations.current.runId!==yuketangRunId){
+      playbackObservations.current={runId:yuketangRunId,seen:new Map()};
+    }
+    const observed=playbackObservations.current.seen;
+    let live=true;
+    let inFlight=false;
+    const check=async()=>{
+      if(!live||inFlight)return;
+      inFlight=true;
+      try{
+        const snapshot=await getYuketangLiveProgress(yuketangRunId);
+        if(!live||!snapshot.available||!Array.isArray(snapshot.video_tasks))return;
+        const now=Date.now();
+        for(const video of snapshot.video_tasks){
+          if(!video||!video.name||!Number.isInteger(video.video_index)||
+             !["watching","completed"].includes(video.state))continue;
+          const key=video.video_index+":"+video.name;
+          const signature=[video.state,video.server_source,video.server_percent].join(":");
+          const last=observed.get(key);
+          // Query while watching at most once in 30 seconds, with one extra
+          // final confirmation when a video finishes.
+          const final=video.state==="completed"&&last?.signature!==signature;
+          if(!final&&last&&now-last.at<30_000)continue;
+          observed.set(key,{at:now,signature});
+          void verifyYuketangPlayedVideo(yuketangCourseId,video.name,{
+            desktop:true,connected:true,scopeDirty:false
+          },final);
+        }
+      }catch{
+        // No progress update is displayed without a successful server query.
+      }finally{inFlight=false;}
+    };
+    void check();
+    const timer=yuketangRunState==="running"
+      ?window.setInterval(()=>void check(),10_000):null;
+    return ()=>{live=false;if(timer!==null)window.clearInterval(timer);};
+  },[desktop,consentAccepted,platforms.yuketang.status,scopeDirty,
+     yuketangCourseId,yuketangRunId,yuketangRunState]);
   useEffect(()=>{
     if(!desktop)return;
     let live=true;
@@ -197,6 +251,7 @@ export default function App(){
       for(const status of statuses){
         if(platformInfo(status.platform)&&status.status!=="connected"){
           invalidateCourseSync(syncCheckpoints.current[status.platform]);
+          if(status.platform==="yuketang")resetYuketangVerification();
         }
       }
       setSyncFeedback(previous=>{
@@ -356,6 +411,7 @@ export default function App(){
   }
 
   function updateConfiguration(field:keyof Config,value:string){
+    resetYuketangVerification();
     configurationRevision.current++;
     setConfig(previous=>({...previous,[field]:value}));
     if(field==="classroom_id"||field==="university_id"||field==="sign"){setVideos([]);setScopeDirty(true);}
@@ -538,6 +594,7 @@ export default function App(){
 
   function invalidatePlatform(platform:Platform, resetStatus = false){
     invalidateCourseSync(syncCheckpoints.current[platform]);
+    if(platform==="yuketang")resetYuketangVerification();
     setSyncFeedback(previous=>({...previous,[platform]:{phase:"idle",error:""}}));
     setPlatforms(previous=>({...previous,[platform]:resetStatus
       ?initialPlatforms[platform]
