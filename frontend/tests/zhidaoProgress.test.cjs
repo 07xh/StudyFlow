@@ -36,7 +36,8 @@ test("chapter record filters only the current course's verified server rows",()=
  assert.match(detail,/chapterOf\(item\)===chapterFilter/);
  assert.match(detail,/type="search"/);
  assert.match(detail,/没有符合当前筛选条件的学习记录/);
- assert.match(detail,/id:"unverified",label:"未核验"/);\n assert.match(detail,/aria-pressed=\\{statusFilter===option.id\\}/);
+ assert.match(detail,/id:"unverified",label:"未核验"/);
+ assert.ok(detail.includes("aria-pressed={statusFilter===option.id}"));
  assert.match(detail,/server_completed===false/);
  assert.match(detail,/fully_progressed===true/);
 });
