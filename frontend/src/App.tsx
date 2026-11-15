@@ -444,7 +444,7 @@ export default function App(){
     setPlatformSettingsOpen(null);
     setSelectedCourse(null);
     setQuery("");
-    setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
+    setPage(platform==="zhidao"?"platform-zhidao":platform==="xuexitong"?"platform-xuexitong":"platform-yuketang");
   }
 
   function goPlatform(platform:Platform,openLogin=false){
