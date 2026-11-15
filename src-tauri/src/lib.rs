@@ -220,6 +220,15 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             if request.get("course_key").and_then(|x| x.as_str())
                 .is_some_and(|key| key.len() == 64
                     && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
+        // ZHS task options are per-course or global. Validate the optional
+        // course key at the native IPC boundary just like the Python adapter.
+        "zhidao.zhs.settings.get" if request.get("course_key").map_or(true, |key| key.as_str()
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))) => Ok(()),
+        "zhidao.zhs.settings.save" if request.get("settings").is_some_and(|value| value.is_object())
+            && request.get("course_key").map_or(true, |key| key.as_str()
+                .is_some_and(|key| key.len() == 64
+                    && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))) => Ok(()),
         "zhidao.player.settings.save" if request.get("settings").map_or(false, |x| x.is_object()) => Ok(()),
         "zhidao.course.detail" if request.get("course_key").and_then(|x| x.as_str())
             .is_some_and(|key| key.len() == 64
@@ -478,6 +487,25 @@ mod ipc_validation_tests {
         assert!(validate(&json!({"id":"k","version":1,"operation":"studyflow.consent.status"})).is_ok());
         assert!(validate(&json!({"id":"l","version":1,"operation":"studyflow.consent.accept"})).is_ok());
         assert!(validate(&json!({"id":"m","version":1,"operation":"zhidao.diagnose"})).is_ok());
+    }
+
+    #[test]
+    fn zhs_task_settings_ipc_accepts_global_or_valid_course_scopes() {
+        let key = "a".repeat(64);
+        for operation in ["zhidao.zhs.settings.get", "zhidao.zhs.settings.save"] {
+            let mut request = json!({"id":"zhs","version":1,"operation":operation});
+            if operation.ends_with(".save") { request["settings"] = json!({"speed":1.5}); }
+            assert!(validate(&request).is_ok(), "global ZHS settings denied: {operation}");
+            request["course_key"] = json!(key);
+            assert!(validate(&request).is_ok(), "course ZHS settings denied: {operation}");
+            for invalid in ["../invalid", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"] {
+                request["course_key"] = json!(invalid);
+                assert!(validate(&request).is_err(), "invalid scope accepted: {operation}");
+            }
+        }
+        assert!(validate(&json!({"id":"zhs","version":1,
+            "operation":"zhidao.zhs.settings.save","course_key":key
+        })).is_err(), "settings payload is required");
     }
 
     #[test]
