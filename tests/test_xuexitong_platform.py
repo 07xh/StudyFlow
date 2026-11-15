@@ -162,3 +162,80 @@ def test_bridge_settings_roundtrip(tmp_path, monkeypatch):
         "id": "x4", "version": 1,
         "operation": "xuexitong.settings.get",
     })["data"]["concurrency"] == 3
+
+
+def _course_card(course_id: int, clazz_id: int, cpi: int, title: str) -> str:
+    return (
+        '<div class="course">'
+        f'<input class="courseId" value="{course_id}"/>'
+        f'<input class="clazzId" value="{clazz_id}"/>'
+        f'<span class="course-name" title="{title}"></span>'
+        f'<a href="/course?cpi={cpi}">课程</a>'
+        '</div>'
+    )
+
+
+def test_course_sync_includes_real_folder_courses_and_deduplicates(monkeypatch):
+    root = (
+        _course_card(11, 21, 31, "公共英语")
+        + '<ul class="file-list"><li fileid="10"></li>'
+        + '<li fileid="20"></li><li fileid="10"></li></ul>'
+    )
+    pages = {
+        "10": _course_card(11, 21, 31, "公共英语")
+              + _course_card(12, 22, 32, "工程制图"),
+        "20": _course_card(13, 23, 33, "高等数学"),
+    }
+
+    class FolderSession:
+        def __init__(self):
+            self.visited = []
+            self.closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.closed = True
+
+        def post(self, url, *, data, timeout, allow_redirects):
+            assert url == adapter.COURSES_URL
+            assert timeout == (5, 12)
+            assert allow_redirects is False
+            assert data["query"] == ""
+            folder = str(data["courseFolderId"])
+            self.visited.append(folder)
+            return Response(pages[folder])
+
+    fake = FolderSession()
+    client = adapter.XuexitongAdapter()
+    monkeypatch.setattr(client, "_course_html", lambda: root)
+    monkeypatch.setattr(adapter, "_session", lambda: fake)
+    courses = client.list_courses()
+    assert [item.title for item in courses] == ["公共英语", "工程制图", "高等数学"]
+    assert [item.course_id for item in courses] == ["11:21:31", "12:22:32", "13:23:33"]
+    assert all(item.progress_percent is None for item in courses)
+    assert fake.visited == ["10", "20"]
+    assert fake.closed
+
+
+def test_folder_sync_error_must_not_claim_complete_course_listing(monkeypatch):
+    root = _course_card(11, 21, 31, "公共英语") + '<ul class="file-list"><li fileid="10"></li></ul>'
+
+    class FailingSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def post(self, url, *, data, timeout, allow_redirects):
+            result = Response("拒绝访问")
+            result.status_code = 403
+            return result
+
+    client = adapter.XuexitongAdapter()
+    monkeypatch.setattr(client, "_course_html", lambda: root)
+    monkeypatch.setattr(adapter, "_session", FailingSession)
+    with pytest.raises(RuntimeError, match="XUEXITONG_RESPONSE_UNAVAILABLE"):
+        client.list_courses()
