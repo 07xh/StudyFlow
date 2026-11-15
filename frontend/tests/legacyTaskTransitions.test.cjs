@@ -67,7 +67,9 @@ test('a poll issued before starting cannot overwrite the new run, while the even
  try{
   await act(async()=>{view=create(React.createElement(env.Panel,{...props,onEvent:(...args)=>events.push(args)}));});
   act(()=>env.tick());
-  act(()=>view.root.findAllByType('button').find(n=>words(n).includes('开始 ZHS 任务')).props.onClick());
+  const startButton=view.root.findAllByType('button').find(n=>words(n).includes('开始 ZHS 任务'));
+  assert.equal(startButton.props.disabled,false,'selected course with loaded ZHS settings must allow start');
+  act(()=>startButton.props.onClick());
   await act(async()=>{oldPoll.resolve({...running,state:'exited',run_id:'old-run',exit_code:0});});
   assert.doesNotMatch(words(view.root),/原版进程已退出/);
   await act(async()=>{launch.resolve(running);});
