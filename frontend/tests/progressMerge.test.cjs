@@ -12,7 +12,8 @@ const {mergeZhidaoEvidence}=moduleRef.exports;
 
 const make=(time,percent,extra={})=>({
  platform:"zhidao",course_id:"same-course",title:"AI course",course_type:"ai",
- progress_percent:percent,progress_evidence:"server_verified",verified_at:time,...extra
+ progress_percent:percent,progress_evidence:"server_verified",verified_at:time,
+ session_marker:"a".repeat(64),...extra
 });
 
 test("older asynchronous course-list read cannot replace newer verified progress",()=>{
