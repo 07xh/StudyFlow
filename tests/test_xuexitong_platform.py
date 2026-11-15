@@ -105,6 +105,18 @@ def test_chapter_tasks_are_scoped_and_hide_credentials(monkeypatch):
     assert fake.closed
 
 
+def test_missing_completion_flag_remains_unknown(monkeypatch):
+    payload = {"attachments": [
+        {"type": "read", "jobid": "21", "property": {"name": "阅读材料"}},
+        {"type": "video", "jobid": "22", "isPassed": False,
+         "property": {"name": "未完成视频"}},
+    ]}
+    fake = Session(CHAPTER_HTML, "mArg=" + json.dumps(payload, ensure_ascii=False) + ";")
+    monkeypatch.setattr(adapter, "_session", lambda: fake)
+    result = adapter.XuexitongAdapter().list_chapter_tasks("9:8:7", "42")
+    assert [item["completed"] for item in result] == [None, False]
+
+
 def test_rejects_chapter_not_in_course(monkeypatch):
     fake = Session(CHAPTER_HTML, "")
     monkeypatch.setattr(adapter, "_session", lambda: fake)
