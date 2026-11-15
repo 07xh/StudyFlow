@@ -136,3 +136,22 @@ def test_main_keeps_diagnostics_off_jsonl_stdout(monkeypatch, capsys):
     assert captured.out == ""
     assert "diagnostic that must not enter JSONL" in captured.err
 
+
+
+def test_yuketang_chapter_request_is_course_scoped_and_legacy_compatible(monkeypatch):
+    seen = []
+    def list_videos(course_id=None):
+        seen.append(course_id)
+        if course_id == "99":
+            raise LookupError("wrong class")
+        return [{"id":"12","name":"视频","chapter":"第一章"}]
+    monkeypatch.setattr(bridge.ADAPTERS["yuketang"], "list_videos", list_videos)
+    def call(**extra):
+        return dispatch({"id":"yc1","version":1,"operation":"videos.list",
+                         "platform":"yuketang",**extra})
+    assert call(course_id="123")["data"][0]["chapter"] == "第一章"
+    assert call()["ok"]
+    assert seen == ["123", None]
+    assert call(course_id="99")["error"] == "COURSE_NOT_FOUND"
+    assert call(course_id="../invalid")["error"] == "INVALID_REQUEST"
+    assert seen == ["123", None, "99"]

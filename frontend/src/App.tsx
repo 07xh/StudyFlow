@@ -13,6 +13,7 @@ import {invalidateCourseSync,newCourseSyncCheckpoint,shouldStartCourseSync} from
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
+import {YuketangCourseDetailPanel} from "./components/YuketangCourseDetailPanel";
 import {UpdatePanel} from "./components/UpdatePanel";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
@@ -599,7 +600,8 @@ export default function App(){
           </button>
         </CollapsibleSection>
         <CollapsibleSection id={scope+"chapters"} title="章节与课程内容" defaultExpanded={false}>
-          <p className="sf-muted">当前接口尚未提供能够归属到此课程的章节进度，请以真实课堂范围和平台返回数据为准。</p>
+          <YuketangCourseDetailPanel course={course} desktop={desktop}
+            connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
         </CollapsibleSection>
       </>}
       <CollapsibleSection id={scope+"logs"} title="当前课程操作记录" defaultExpanded={false}>
