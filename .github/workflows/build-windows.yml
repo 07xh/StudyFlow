@@ -101,4 +101,4 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "学序 StudyFlow 0.1.1-rc.12" \
             --prerelease --latest=false \
-            --notes-file docs/RELEASE_CANDIDATE_0.1.1_RC11.md
+            --notes-file docs/RELEASE_CANDIDATE_0.1.1_RC12.md
