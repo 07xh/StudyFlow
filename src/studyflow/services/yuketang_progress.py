@@ -107,7 +107,12 @@ def parse_original_log(text: str) -> dict:
             return None
         if index not in tasks:
             if len(tasks) >= MAX_VIDEO_ROWS:
-                return None
+                # Keep the most recently queued videos while retaining any
+                # genuinely active worker, even when the original log is long.
+                candidates = sorted(i for i in tasks if i not in active_workers)
+                if not candidates or (index < candidates[0] and index not in active_workers):
+                    return None
+                tasks.pop(candidates[0])
             tasks[index] = {
                 "video_index": index, "name": None, "state": "preparing",
                 "simulation_percent": None, "simulation_position": None,
