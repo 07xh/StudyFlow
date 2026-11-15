@@ -28,6 +28,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const [options,setOptions]=useState<ZhsStoredOptions>({...originalZhsDefaults});
   const [saved,setSaved]=useState<ZhsStoredOptions|null>(null);
   const [loadedFor,setLoadedFor]=useState("");
+  const [loadState,setLoadState]=useState<"loading"|"ready"|"failed">("loading");
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [opened,setOpened]=useState(false);
@@ -58,13 +59,20 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const load=useCallback(async()=>{
     if(!desktop)return;
     const current=++revision.current;
-    setBusy(true);setMessage("");setLoadedFor("");
+    // Never keep the prior course's values visible or ready during a new read.
+    setBusy(true);setMessage("");setLoadedFor("");setSaved(null);
+    setOptions({...originalZhsDefaults});setLoadState("loading");
     try{
       const value=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.get",course_key:courseId||undefined});
       if(!validateZhsStoredOptions(value))throw new Error("INVALID_ZHS_SETTINGS");
-      if(current===revision.current){setOptions(value);setSaved(value);setLoadedFor(courseId);}
+      if(current===revision.current){
+        setOptions(value);setSaved(value);setLoadedFor(courseId);setLoadState("ready");
+      }
     }catch(error){
-      if(current===revision.current){setSaved(null);setLoadedFor("");setMessage(friendlyBridgeError(error));}
+      if(current===revision.current){
+        setSaved(null);setLoadedFor("");setLoadState("failed");
+        setMessage(friendlyBridgeError(error));
+      }
     }finally{if(current===revision.current)setBusy(false);}
   },[desktop,courseId]);
   useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
@@ -113,6 +121,28 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
     }catch(error){setMessage(friendlyBridgeError(error));onEvent?.("保存 ZHS 参数","warning","保存失败");}
     finally{setBusy(false);}
   }
+  async function restoreDefaults(){
+    if(!desktop||busy||loadState!=="failed"||!courseId)return;
+    if(!window.confirm("本课程参数读取失败。要用默认值覆盖本课程原有参数吗？不会删除知到登录信息。"))return;
+    const current=++revision.current;
+    setBusy(true);setMessage("");
+    try{
+      const defaults={...originalZhsDefaults};
+      const result=await request<ZhsStoredOptions>({
+        operation:"zhidao.zhs.settings.save",course_key:courseId,settings:defaults
+      });
+      if(!validateZhsStoredOptions(result))throw new Error("INVALID_ZHS_SETTINGS");
+      if(current===revision.current){
+        setOptions(result);setSaved(result);setLoadedFor(courseId);
+        setLoadState("ready");setMessage("本课程参数已恢复为默认值，知到登录信息未更改。");
+        onEvent?.("恢复 ZHS 参数","success","本课程本机参数已重新保存");
+      }
+    }catch(error){
+      if(current===revision.current){
+        setLoadState("failed");setMessage(friendlyBridgeError(error));
+      }
+    }finally{if(current===revision.current)setBusy(false);}
+  }
   const groups=useMemo(()=>{
     const map=new Map<string,Item[]>();
     for(const item of items)map.set(item.group,[...(map.get(item.group)||[]),item]);
@@ -125,11 +155,18 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
       <SlidersHorizontal size={16}/><strong>ZHS 原版 · 观看控制</strong>
       <span className="sf-muted">点击设置</span>
     </button>
+    {loadState==="loading"&&<p className="sf-task-context" role="status">正在读取当前课程的本机参数…</p>}
+    {loadState==="failed"&&<div className="sf-task-context" role="alert">
+      <span>本课程参数读取失败。可重试；如本机设置损坏，可在下方手动恢复默认值，登录信息不会被清除。</span>
+      <button className="secondary" type="button" disabled={busy||!desktop}
+        onClick={()=>void load()}><RefreshCw size={14}/>重试读取</button>
+    </div>}
     <SettingsDialog open={opened} dark={dark} title="当前课程 · ZHS 参数"
       onClose={()=>setOpened(false)}>
       <section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head"><div><h3>ZHS 0.1.5 任务参数</h3></div>
-        <span className="legacy-run-state">{saved?"本机参数已加载":"未读取参数"}</span></div>
+        <span className="legacy-run-state">{loadState==="ready"?"本机参数已加载":
+          loadState==="loading"?"读取中":"读取失败"}</span></div>
       <div className="legacy-options">
         <div className="legacy-option-grid">
           <label><span>同课程视频并发数</span>
@@ -228,6 +265,10 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         <div className="actions">
           <button className="secondary" type="button" disabled={!desktop||busy}
             onClick={()=>void load()}><RefreshCw size={15}/>重新读取</button>
+          {loadState==="failed"&&<button className="secondary" type="button"
+            disabled={!desktop||busy||!courseId} onClick={()=>void restoreDefaults()}>
+            恢复本课程默认参数（覆盖）
+          </button>}
           <button className="primary" type="button" disabled={!desktop||busy||!valid||!dirty}
             onClick={()=>void save()}><Save size={15}/>保存参数</button>
         </div>
