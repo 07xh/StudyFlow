@@ -119,12 +119,21 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
       <span className="sf-muted">点击设置</span>
     </button>
     <SettingsDialog open={opened} dark={dark} title="当前课程 · ZHS 参数"
-      onClose={()=>setOpened(false)}>
-      <section className="legacy-playback-panel sf-yuketang-settings-panel">
-      <div className="section-head"><div><h3>ZHS 0.1.5 任务参数</h3></div>
-        <span className="legacy-run-state">{saved?"本机参数已加载":"未读取参数"}</span></div>
-      <div className="legacy-options">
-        <div className="legacy-option-grid">
+      onClose={()=>setOpened(false)}
+      footer={<div className="actions">
+        <button className="secondary" type="button" disabled={!desktop||busy}
+          onClick={()=>void load()}><RefreshCw size={15}/>重新读取</button>
+        <button className="primary" type="button" disabled={!desktop||busy||!valid||!dirty}
+          onClick={()=>void save()}><Save size={15}/>保存参数</button>
+      </div>}>
+      <div className="sf-zhs-settings">
+        <div className="sf-zhs-settings__intro">
+          <p>原版 ZHS 0.1.5 · 参数仅作用于当前课程</p>
+          <span className="legacy-run-state">{saved?"本机参数已加载":"未读取参数"}</span>
+        </div>
+        <section className="sf-zhs-settings__group">
+          <h3>播放与任务限制</h3>
+          <div className="legacy-option-grid">
           <label><span>请求倍速（1–2×）</span>
             <input type="number" min={1} max={2} step={0.25} value={options.speed}
               disabled={!desktop||busy} onChange={e=>update("speed",Number(e.target.value))}/></label>
@@ -144,8 +153,11 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
           <label><input type="checkbox" checked={options.stop_on_error} disabled={!desktop||busy}
             onChange={e=>update("stop_on_error",e.currentTarget.checked)}/>视频处理异常时停止任务</label>
         </div>
-        <p className="sf-ykt-advanced-note">原版会跳过已完成视频；不提供无效的“强制重看”开关。共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
-        <div className="legacy-option-grid">
+        <p className="sf-zhs-settings__note">原版会跳过已完成视频；不提供无效的“强制重看”开关。共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
+        </section>
+        <section className="sf-zhs-settings__group">
+          <h3>执行范围</h3>
+          <div className="legacy-option-grid">
           <label><span>本次执行范围</span>
             <select value={scopeMode} disabled={!desktop||!courseId}
               onChange={e=>persistScope(e.target.value as ScopeMode,selectedIds)}>
@@ -183,22 +195,16 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               {groups.length===0&&<p>当前记录没有可识别的原始项目 ID，无法启动指定范围任务。</p>}
             </div>}
         </div>}
+        </section>
         {!valid&&<p className="sf-validation-error" role="alert">参数不在 ZHS 0.1.5 支持范围内。</p>}
         {scopeMode==="selected"&&!ready&&<p className="sf-validation-error">指定范围须至少选择一项真实、当前可核验的项目。</p>}
         {dirty&&<p className="sf-validation-error">有未保存的参数，保存后再启动任务。</p>}
-        <div className="actions">
-          <button className="secondary" type="button" disabled={!desktop||busy}
-            onClick={()=>void load()}><RefreshCw size={15}/>重新读取</button>
-          <button className="primary" type="button" disabled={!desktop||busy||!valid||!dirty}
-            onClick={()=>void save()}><Save size={15}/>保存参数</button>
-        </div>
         <details className="sf-ykt-advanced-options"><summary>心跳与进度说明</summary>
           <p className="sf-ykt-advanced-note">原版 ZHS 负责心跳实现；学序仅限制运行范围和次数。
           本地运行、任务退出、服务器已核验进度分别呈现，达到数量限制不代表课程完成。</p>
         </details>
-      </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
-      </section>
+      </div>
     </SettingsDialog>
   </div>;
 }
