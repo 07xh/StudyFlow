@@ -72,7 +72,8 @@ export function LegacyPlaybackPanel({
   };
 
   const updateStatus = useCallback(async () => {
-    if (!desktop || taskActionInFlight.current || statusPollInFlight.current === platform) return;
+    if (!desktop || taskActionInFlight.current) return;
+    if (statusPollInFlight.current === platform) return;
     statusPollInFlight.current = platform;
     const requestId = ++latestStatusRequest.current;
     try {
