@@ -159,3 +159,43 @@ def test_history_sorts_versions_even_when_github_returns_unsorted_releases(monke
     assert [entry["version"] for entry in history] == [
         "v0.1.1-rc.18", "v0.1.1-rc.17", "v0.1.1-rc.10", "v0.1.1-rc.9"
     ]
+
+
+def test_latest_release_navigation_uses_highest_semver_with_verified_installer(monkeypatch):
+    import io
+    import json
+    from studyflow.services import update_manager as manager, bridge
+    digest = "a" * 64
+    releases = [
+        {"tag_name": "v0.1.1-rc.9", "assets": []},
+        {"tag_name": "v0.1.1-rc.26", "draft": True, "assets": []},
+        {"tag_name": "v0.1.1-rc.24", "assets": []},
+        {"tag_name": "v0.1.1-rc.25", "assets": [{
+            "name": "StudyFlow_0.1.1-rc.25_x64-setup.exe",
+            "browser_download_url": "https://github.com/07xh/StudyFlow/releases/download/v0.1.1-rc.25/setup.exe",
+            "digest": "sha256:" + digest,
+        }]},
+        {"tag_name": "v0.1.1-rc.23", "assets": []},
+    ]
+    urls = []
+    def response(req, timeout):
+        urls.append(req.full_url)
+        return io.BytesIO(json.dumps(releases).encode())
+    monkeypatch.setattr(updater, "urlopen", response)
+    assert manager.latest() == {"version": "v0.1.1-rc.25"}
+    assert "?per_page=100" in urls[0]
+    assert bridge.dispatch({"id": "latest", "version": 1, "operation": "updates.latest"}) == {
+        "id": "latest", "ok": True, "data": {"version": "v0.1.1-rc.25"}
+    }
+
+
+def test_latest_release_refuses_draft_uninstallable_or_unavailable_versions(monkeypatch):
+    from studyflow.services import update_manager as manager
+    monkeypatch.setattr(updater, "release_info", lambda *a, **kw: None)
+    assert manager.latest() == {"version": None}
+    monkeypatch.setattr(updater, "release_info", lambda *a, **kw: {
+        "version": "v0.1.1-rc.27", "assets": []})
+    assert manager.latest() == {"version": None}
+    monkeypatch.setattr(updater, "release_info", lambda *a, **kw: {
+        "version": "https://attacker.invalid", "assets": []})
+    assert manager.latest() == {"version": None}
