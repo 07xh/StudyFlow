@@ -131,7 +131,7 @@ export default function App(){
   const yuketangRunState=yuketangRun?.state??"idle";
   const yuketangCourseId=platforms.yuketang.courses.find(course=>!course.stale)?.course_id??"";
   const playbackObservations=useRef({
-    runId:"",seen:new Map<string,{at:number;signature:string}>()
+    runId:"",seen:new Map<string,{at:number;signature:string;finalChecks:number}>()
   });
 
   // Playback is observed at app scope, so navigating away does not break sync.
@@ -156,15 +156,19 @@ export default function App(){
         const now=Date.now();
         for(const video of snapshot.video_tasks){
           if(!video||!video.name||!Number.isInteger(video.video_index)||
-             !["watching","completed"].includes(video.state))continue;
+             !["watching","completed","skipped"].includes(video.state))continue;
           const key=video.video_index+":"+video.name;
           const signature=[video.state,video.server_source,video.server_percent].join(":");
           const last=observed.get(key);
-          // Query while watching at most once in 30 seconds, with one extra
-          // final confirmation when a video finishes.
-          const final=video.state==="completed"&&last?.signature!==signature;
+          // After a completed/skipped worker, allow up to three bounded server
+          // checks. The server may publish the final rate after the worker exits.
+          // This is one-video read-only verification, never another full scan.
+          const terminal=video.state==="completed"||video.state==="skipped";
+          if(terminal&&(last?.finalChecks??0)>=3)continue;
+          const final=terminal&&last?.signature!==signature;
           if(!final&&last&&now-last.at<30_000)continue;
-          observed.set(key,{at:now,signature});
+          observed.set(key,{at:now,signature,
+            finalChecks:terminal?(last?.finalChecks??0)+1:0});
           void verifyYuketangPlayedVideo(yuketangCourseId,video.name,{
             desktop:true,connected:true,scopeDirty:false
           },final);
@@ -174,9 +178,16 @@ export default function App(){
       }finally{inFlight=false;}
     };
     void check();
-    const timer=yuketangRunState==="running"
-      ?window.setInterval(()=>void check(),10_000):null;
-    return ()=>{live=false;if(timer!==null)window.clearInterval(timer);};
+    // Keep the single-video observer briefly after a task exits so delayed
+    // server confirmation is not stranded at the first post-playback result.
+    const timer=window.setInterval(()=>void check(),10_000);
+    const expiry=yuketangRunState==="running"?null
+      :window.setTimeout(()=>window.clearInterval(timer),65_000);
+    return ()=>{
+      live=false;
+      window.clearInterval(timer);
+      if(expiry!==null)window.clearTimeout(expiry);
+    };
   },[desktop,consentAccepted,platforms.yuketang.status,scopeDirty,
      yuketangCourseId,yuketangRunId,yuketangRunState]);
   useEffect(()=>{

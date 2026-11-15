@@ -79,13 +79,15 @@ class ServerProgressResponse:
 
 
 class ServerProgressSession:
-    def __init__(self, rate=0.5, progress_status=200, leaf_classroom="123", confirmed=True):
+    def __init__(self, rate=0.5, progress_status=200, leaf_classroom="123", confirmed=True, last_point=60, completed=None):
         self.cookies = {}
         self.calls = []
         self.rate = rate
         self.progress_status = progress_status
         self.leaf_classroom = leaf_classroom
         self.confirmed = confirmed
+        self.last_point = last_point
+        self.completed = completed
 
     def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
@@ -95,9 +97,12 @@ class ServerProgressSession:
                 "classroom_id": self.leaf_classroom, "duration": 120,
             }})
         assert url.endswith("/video-log/get_video_watch_progress/")
+        record = {"rate": self.rate, "last_point": self.last_point}
+        if self.completed is not None:
+            record["completed"] = self.completed
         return ServerProgressResponse({
             "code": 0 if self.confirmed else 403,
-            "data": {"12": {"rate": self.rate, "last_point": 60}},
+            "data": {"12": record},
         }, status=self.progress_status)
 
 
@@ -113,6 +118,7 @@ def test_yuketang_progress_is_verified_readonly_and_scoped():
         "video_type":"video","vtype":"rate","video_id":"12","snapshot":1,
     }
     assert session.calls[1][1]["allow_redirects"] is False
+    assert session.calls[1][1]["headers"]["Cache-Control"] == "no-cache, no-store"
 
 
 def test_yuketang_progress_unknown_must_not_be_fabricated():
@@ -168,3 +174,42 @@ def test_rounding_cannot_falsely_complete_server_video():
     result = YuketangReadOnly({"sessionid":"own"},session=session).read_video_progress("123","12")
     assert result["progress_percent"] == 99.9
     assert result["server_completed"] is False
+
+
+def test_at_video_end_98_point_one_percent_remains_server_pending():
+    session = ServerProgressSession(rate=0.981, last_point=120)
+    progress = YuketangReadOnly({"sessionid": "own"}, session=session).read_video_progress("123", "12")
+    assert progress["progress_percent"] == 98.1
+    assert progress["server_completed"] is False
+    assert progress["last_point_seconds"] == progress["duration_seconds"] == 120.0
+
+
+def test_explicit_server_completed_flag_wins_over_98_point_one_rate():
+    session = ServerProgressSession(rate=0.981, last_point=120, completed=1)
+    result = YuketangReadOnly({"sessionid": "own"}, session=session).read_video_progress("123", "12")
+    assert result["progress_percent"] == 98.1
+    assert result["server_completed"] is True
+    assert result["last_point_seconds"] == result["duration_seconds"] == 120.0
+
+
+def test_explicit_server_not_completed_wins_over_full_watch_rate():
+    session = ServerProgressSession(rate=1.0, completed=0)
+    result = YuketangReadOnly({"sessionid": "own"}, session=session).read_video_progress("123", "12")
+    assert result["progress_percent"] == 100.0
+    assert result["server_completed"] is False
+
+
+def test_server_completed_flag_must_be_explicit_boolean_or_0_or_1():
+    for flagged in (True, "1", 1):
+        result = YuketangReadOnly({"sessionid":"own"}, session=ServerProgressSession(
+            rate=0.981, completed=flagged)).read_video_progress("123", "12")
+        assert result["server_completed"] is True
+    for flagged in (False, "0", 0):
+        result = YuketangReadOnly({"sessionid":"own"}, session=ServerProgressSession(
+            rate=0.981, completed=flagged)).read_video_progress("123", "12")
+        assert result["server_completed"] is False
+    # A malformed or absent flag never fabricates completion at a sub-100% rate.
+    for flagged in (None, "maybe", 2):
+        result = YuketangReadOnly({"sessionid":"own"}, session=ServerProgressSession(
+            rate=0.981, completed=flagged)).read_video_progress("123", "12")
+        assert result["server_completed"] is False
