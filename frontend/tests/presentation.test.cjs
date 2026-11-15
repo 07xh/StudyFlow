@@ -91,3 +91,12 @@ test("unknown backend errors render only a generic local message", async () => {
   await assert.rejects(fetchCourses(bad, "zhidao"), /PLATFORM_NOT_READY/);
   assert.doesNotMatch(friendlyBridgeError(new Error("Cookie=SECRET_TOKEN")), /SECRET_TOKEN/);
 });
+
+
+test("updater explains fixed backend codes without leaking raw errors", () => {
+  const {friendlyUpdateError} = loadTypescript("src/bridge.ts");
+  assert.match(friendlyUpdateError(new Error("UPDATE_NETWORK_FAILED")), /GitHub/);
+  assert.match(friendlyUpdateError(new Error("UPDATE_CHECKSUM_FAILED")), /SHA-256/);
+  assert.match(friendlyUpdateError(new Error("UPDATE_STORAGE_FAILED")), /磁盘/);
+  assert.doesNotMatch(friendlyUpdateError(new Error("Cookie=SECRET_TOKEN")), /SECRET_TOKEN/);
+});

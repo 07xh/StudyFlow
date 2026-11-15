@@ -101,6 +101,8 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
   if (!result.ok) {
     const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
+                             "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
+                             "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
                              "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
@@ -182,6 +184,28 @@ export async function fetchCoursesFromDesktop(platform: Platform): Promise<Cours
   const transport = getStudyFlowTransport();
   if (!transport) throw new Error("BRIDGE_NOT_READY");
   return fetchCourses(transport, platform);
+}
+
+/** Only allow fixed update error codes; never show raw network/IPC errors. */
+export function friendlyUpdateError(value: unknown): string {
+  const code = value instanceof Error ? value.message : typeof value === "string" ? value : "";
+  switch (code) {
+    case "UPDATE_NETWORK_FAILED": return "无法连接 GitHub 更新接口，请检查网络或代理后重试。";
+    case "UPDATE_RATE_LIMITED": return "GitHub 接口暂时限制访问，可稍后检查或从官方发布页下载。";
+    case "UPDATE_RELEASE_INVALID": return "GitHub 发布元数据格式异常，未开始下载。";
+    case "UPDATE_ASSET_UNAVAILABLE": return "此版本未提供带 SHA-256 校验信息的 Windows x64 安装包。";
+    case "UPDATE_DOWNLOAD_FAILED": return "安装包下载失败或连接中断，请检查 GitHub Release 文件访问情况后重试。";
+    case "UPDATE_CHECKSUM_FAILED": return "安装包 SHA-256 校验失败，未保存不可信安装包，请从官方发布页重新下载。";
+    case "UPDATE_STORAGE_FAILED": return "无法写入学序更新目录，请检查磁盘空间和文件夹权限。";
+    case "UPDATE_REDIRECT_REJECTED": return "下载地址跳转到未认可的网站，已中止以保护安装包安全。";
+    case "BRIDGE_BINARY_MISSING":
+    case "BRIDGE_START_FAILED":
+    case "BRIDGE_PROTOCOL_FAILED":
+    case "BRIDGE_PROCESS_FAILED":
+    case "BRIDGE_NOT_READY":
+    case "BRIDGE_RESPONSE_INVALID": return friendlyBridgeError(value);
+    default: return "更新操作失败，原因暂未识别。可从学序 GitHub 官方发布页手动下载安装。";
+  }
 }
 
 export function friendlyBridgeError(value: unknown): string {
