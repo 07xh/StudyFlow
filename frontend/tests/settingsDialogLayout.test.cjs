@@ -29,3 +29,27 @@ test("course activity and diagnostics open separately from running controls",()=
   assert.match(app,/title=\{course.title\+" · 日志与诊断"\}/);
   assert.doesNotMatch(app,/id=\{scope\+"logs"\}/);
 });
+
+test("all settings dialogs use a shared header, scrollable content and independent action footer",()=>{
+  const dialog=source("ui/SettingsDialog.tsx");
+  const css=source("ui/settingsDialog.css");
+  assert.match(dialog,/footer\?:ReactNode/);
+  assert.match(dialog,/className="sf-settings-modal-footer"/);
+  assert.doesNotMatch(dialog,/设置 \/ 二级页面/);
+  assert.match(css,/\.sf-settings-modal-body\{[\s\S]*?overflow-y:auto/);
+  assert.match(css,/\.sf-settings-modal-footer\{[\s\S]*?flex:0 0 auto/);
+  assert.match(css,/@media\(max-width:650px\)/);
+});
+test("ZHS and platform settings avoid duplicate card chrome and preserve action wiring",()=>{
+  const app=source("App.tsx");
+  const zhs=source("components/ZhsTaskSettingsPanel.tsx");
+  const css=source("ui/settingsDialog.css");
+  assert.match(app,/className="sf-settings-context"/);
+  assert.doesNotMatch(app,/className="sf-platform-settings-heading"/);
+  assert.match(app,/sf-settings-footer-secondary/);
+  assert.match(zhs,/className="sf-zhs-settings"/);
+  assert.doesNotMatch(zhs,/className="legacy-playback-panel sf-yuketang-settings-panel"/);
+  assert.match(zhs,/footer=\{<div className="actions">/);
+  assert.match(zhs,/onClick=\{\(\)=>void save\(\)\}/);
+  assert.match(css,/\.sf-zhs-settings__group \.legacy-option-grid/);
+});
