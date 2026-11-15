@@ -61,6 +61,7 @@ test("running desktop checks real releases and displays their body directly",()=
   assert.match(lifecycle,/operation:"updates.check",current_version:currentVersion/);
   assert.match(lifecycle,/CHECK_INTERVAL_MS=20\*60\*1000/);
   assert.match(lifecycle,/window.addEventListener\("focus",checkPublishedRelease\)/);
+  assert.match(lifecycle,/Date.now\(\)-lastCheckAt.current<5\*60\*1000/);
   assert.match(lifecycle,/shouldPromptForRelease\(currentVersion,release.version,readDismissedRelease\(\)\)/);
   assert.match(lifecycle,/notes:release.notes/);
   assert.match(lifecycle,/markReleaseDismissed\(dialog.version\)/);
