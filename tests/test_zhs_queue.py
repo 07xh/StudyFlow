@@ -120,9 +120,10 @@ def test_stop_one_worker_refills_without_stopping_others(tmp_path):
     assert all(child.poll() is not None for child in children)
 
 
-def test_nonvideo_barrier_and_stop_on_error_cleanup(tmp_path):
+def test_same_chapter_order_and_stop_on_error_cleanup(tmp_path):
     from studyflow.services.zhs_queue import QueueTarget, supervise
-    targets = [QueueTarget(i, 10, kind, None) for i, kind in ((1,"video"),(2,"ppt"),(3,"video"))]
+    targets = [QueueTarget(i, 10, kind, None, "ai-1", "第一章")
+               for i, kind in ((1,"video"),(2,"ppt"),(3,"video"))]
     children = []
     def launch(target, token):
         assert all(child.poll() is not None for child in children)
@@ -133,6 +134,102 @@ def test_nonvideo_barrier_and_stop_on_error_cleanup(tmp_path):
     assert supervise(targets, 2, "c" * 32, tmp_path, launch, stop_on_error=True) == 13
     assert len(children) == 2
     assert all(child.poll() is not None for child in children)
+
+
+
+def test_distinct_chapters_overlap_but_video_ppt_article_keep_chapter_order(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    # A chapter's PPT stays behind its first video, but doesn't block the
+    # independent second chapter's video, or its subsequent article.
+    targets = [
+        QueueTarget(1, 11, "video", "1.1", "ai-1", "第一章"),
+        QueueTarget(2, 11, "ppt", "1.2", "ai-1", "第一章"),
+        QueueTarget(3, 21, "video", "2.1", "ai-2", "第二章"),
+        QueueTarget(4, 21, "article", "2.2", "ai-2", "第二章"),
+    ]
+    observed, processes = [], []
+    def launch(target, token):
+        active = [group for child, group in processes if child.poll() is None]
+        assert target.chapter_key not in active, "chapter resource order was broken"
+        observed.append((target.resource_id, frozenset(active)))
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(.30)"],
+            stdin=subprocess.PIPE)
+        processes.append((child, target.chapter_key))
+        return child
+
+    assert supervise(targets, 2, "8" * 32, tmp_path, launch) == 0
+    ids = [item_id for item_id, _ in observed]
+    assert ids.index(1) < ids.index(2)
+    assert ids.index(3) < ids.index(4)
+    assert any(active and (item_id in (1, 3)) for item_id, active in observed), (
+        "two distinct chapter lanes never overlapped")
+    assert len(processes) == 4
+    snapshot = json.loads((tmp_path / f"zhs-queue-{'8'*32}.json").read_text())
+    assert [row["chapter_key"] for row in snapshot["tasks"]] == [
+        "ai-1", "ai-1", "ai-2", "ai-2"]
+    assert all(row["state"] == "exited" for row in snapshot["tasks"])
+
+
+def test_one_chapter_uses_one_lane_even_if_concurrency_is_three(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    targets = [QueueTarget(i, 10, kind, None, "ai-1", "第一章")
+               for i, kind in ((1, "video"), (2, "article"), (3, "ppt"))]
+    children = []
+    def launch(target, token):
+        assert all(child.poll() is not None for child in children)
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time;time.sleep(.08)"],
+            stdin=subprocess.PIPE)
+        children.append(child)
+        return child
+    assert supervise(targets, 3, "9" * 32, tmp_path, launch) == 0
+    assert len(children) == 3
+
+
+def test_catalog_chapter_metadata_is_server_backed(monkeypatch):
+    from types import ModuleType
+    from studyflow.services.zhs_queue import discover_targets
+    bootstrap = ModuleType("zhs.cli.bootstrap")
+    ai_course = ModuleType("zhs.ai.course")
+    shared_course = ModuleType("zhs.zhidao.course")
+    session = NS(close=lambda: None)
+    bootstrap.load_config_and_session = lambda **kwargs: (None, session)
+    monkeypatch.setitem(sys.modules, "zhs.cli.bootstrap", bootstrap)
+    monkeypatch.setitem(sys.modules, "zhs.ai.course", ai_course)
+    monkeypatch.setitem(sys.modules, "zhs.zhidao.course", shared_course)
+    def resource(uid):
+        return NS(study_status=0, resources_detail=NS(
+            resources_uid=uid, resources_type=1, resources_distribute_type=3,
+            resources_name=f"视频 {uid}", resources_sync_type=1))
+    class AI:
+        def __init__(self, session): pass
+        def get_knowledge_points(self, cid, cls):
+            return NS(cake_theme_list=[
+                NS(theme_name="第一章", knowledge_list=[NS(knowledge_id=11, study_progress=0)]),
+                NS(theme_name="第二章", knowledge_list=[NS(knowledge_id=21, study_progress=0)]),
+            ])
+        def list_knowledge_resources(self, cid, cls, kid):
+            return [resource(kid)]
+    ai_course.AiCourseManager = AI
+    options = {**zhs_settings.DEFAULTS, "scope_mode":"all","selected_ids":[],"resource_mode":"all"}
+    ai_targets, _ = discover_targets({"courseType":"ai","courseId":1,"classId":2}, options)
+    assert [(t.chapter_key, t.chapter_name) for t in ai_targets] == [
+        ("ai-1", "第一章"), ("ai-2", "第二章")]
+    class Shared:
+        def __init__(self, session): pass
+        def get_context(self, route, force):
+            a, b = NS(video_id=31, name="第三章 3.1", watch_state=0), NS(
+                video_id=41, name="第四章 4.1", watch_state=0)
+            return NS(videos={31:a, 41:b}, chapters=[
+                NS(name="第三章", video_lessons=[NS(video_small_lessons=[a])]),
+                NS(name="第四章", video_lessons=[NS(video_small_lessons=[b])]),
+            ])
+    shared_course.ZhidaoCourseManager = Shared
+    shared_targets, _ = discover_targets(
+        {"courseType":"shared","recruitAndCourseId":"route"}, options)
+    assert [(t.chapter_key, t.chapter_name) for t in shared_targets] == [
+        ("shared-1", "第三章"), ("shared-2", "第四章")]
 
 
 def test_launch_exception_cleans_up_started_process(tmp_path):

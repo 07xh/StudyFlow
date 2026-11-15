@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 pub struct QueueTask {
     pub task_id: String,
     pub name: Option<String>,
+    pub chapter_key: Option<String>,
+    pub chapter_name: Option<String>,
     pub kind: String,
     pub state: String,
     pub percent: Option<f64>,
@@ -66,6 +68,30 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
                 Some(text.to_owned())
             }
         };
+        // Older rc.23 snapshots have no chapter fields. Accept those for a
+        // seamless upgrade but reject malformed or unsafe new metadata.
+        let chapter_key = match row.get("chapter_key") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let text = raw.as_str()?;
+                if text.is_empty() || text.len() > 48 ||
+                    !text.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+                    return None;
+                }
+                Some(text.to_owned())
+            }
+        };
+        let chapter_name = match row.get("chapter_name") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let text = raw.as_str()?;
+                if text.is_empty() || text.chars().count() > 90 ||
+                    text.chars().any(char::is_control) || text.contains('@') || text.contains('=') ||
+                    ["http:", "https:", "cookie", "token", "authorization", "password", "secret", "apikey", "api_key"]
+                        .iter().any(|marker| text.to_lowercase().contains(marker)) { return None; }
+                Some(text.to_owned())
+            }
+        };
         let row_stale = stale || row.get("stale")?.as_bool()?;
         let raw_percent = row.get("percent")?;
         let percent = if raw_percent.is_null() { None } else {
@@ -76,7 +102,8 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
             Some(row.get("exit_code")?.as_i64()?)
         };
-        tasks.push(QueueTask {task_id: id.into(), name, kind: kind.into(), state: row_state.into(),
+        tasks.push(QueueTask {task_id: id.into(), name, chapter_key, chapter_name,
+            kind: kind.into(), state: row_state.into(),
             percent, stale: row_stale, exit_code});
     }
     Some(QueueSnapshot {concurrency, state: state.into(), stale, tasks})
@@ -132,6 +159,21 @@ mod tests {
         let old = parse(data.as_bytes(), &"a".repeat(32), 120.0).unwrap();
         assert!(old.stale);
         assert!(old.tasks[0].percent.is_none());
+    }
+    #[test]
+    fn chapter_metadata_is_optional_for_old_snapshots_but_validated_when_present() {
+        let mut data = sample();
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
+        data["tasks"][0]["chapter_key"] = json!("ai-2");
+        data["tasks"][0]["chapter_name"] = json!("第二章");
+        let snapshot = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
+        assert_eq!(snapshot.tasks[0].chapter_key.as_deref(), Some("ai-2"));
+        assert_eq!(snapshot.tasks[0].chapter_name.as_deref(), Some("第二章"));
+        data["tasks"][0]["chapter_name"] = json!("cookie=secret");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+        data["tasks"][0]["chapter_name"] = json!("第二章");
+        data["tasks"][0]["chapter_key"] = json!("../bad");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
     }
     #[test]
     fn malformed_duplicate_and_private_rows_are_rejected() {

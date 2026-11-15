@@ -1774,6 +1774,11 @@
   .sf-shell .sf-fold-toggle svg,.sf-shell .sf-workspace-progress-track>span{transition:none}
 }
 
+.sf-shell .sf-zhs-chapter-lane{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;min-width:0}
+.sf-shell .sf-zhs-chapter-heading{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.sf-shell .sf-zhs-chapter-heading strong{font-size:12px;color:var(--text)}
+.sf-shell .sf-zhs-chapter-heading small{font-size:10px;color:var(--muted)}
+.sf-shell .sf-zhs-chapter-lane .sf-ykt-worker-grid{margin-top:8px}
 .sf-shell .sf-ykt-worker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px}
 .sf-shell .sf-ykt-worker{display:grid;gap:6px;min-width:0;padding:12px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.025)}
 .sf-shell .sf-ykt-worker-heading{display:flex;justify-content:space-between;gap:10px}

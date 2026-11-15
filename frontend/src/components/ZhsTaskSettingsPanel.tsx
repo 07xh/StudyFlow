@@ -179,7 +179,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
           loadState==="loading"?"读取中":"读取失败"}</span></div>
       <div className="legacy-options">
         <div className="legacy-option-grid">
-          <label><span>同课程视频并发数</span>
+          <label><span>同课程章节并行数</span>
             <select value={options.concurrency??1} disabled={!desktop||busy}
               onChange={e=>update("concurrency",Number(e.target.value))}>
               <option value={1}>1 · 单路顺序执行</option>
@@ -210,7 +210,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               disabled={!desktop||busy}
               onChange={e=>update("completion_threshold",Number(e.target.value))}/></label>}
         </div>
-        <p className="sf-ykt-advanced-note">并发仅作用于本门课的视频，每个视频独立显示进度并可单独停止。文章和 PPT 顺序处理；课程完成情况以服务器核验为准。</p>
+        <p className="sf-ykt-advanced-note">不同章节最多同时运行 1–3 路，每个章节内部严格按原版视频、文章和 PPT 顺序执行。若本次只有一个可执行章节，则实际只运行一项；逐资源可独立停止，课程完成情况仍以服务器核验为准。</p>
         <div className="legacy-flags">
           <label title="ZHS 0.1.5 原版自动跳过已完成内容，暂不支持在学序中关闭此行为。">
             <input type="checkbox" checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/>
