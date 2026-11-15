@@ -394,7 +394,7 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
         with _observe_zhs_cli_stages() as stage:
             with scoped_upstream_play(
                 options, is_ai,
-                on_resource=sink.mark_resource if sink is not None and is_ai else None,
+                on_resource=sink.mark_resource if sink is not None else None,
             ):
                 result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
