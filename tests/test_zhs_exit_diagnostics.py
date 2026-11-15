@@ -66,3 +66,42 @@ def test_invalid_monitor_token_never_creates_a_file(monkeypatch, tmp_path):
     legacy._write_zhs_diagnostic("../escape", "NETWORK_ERROR")
     legacy._write_zhs_diagnostic("f" * 32, "COOKIE=SECRET")
     assert not (tmp_path / "StudyFlow").exists()
+
+
+def test_zhs_session_preflight_failure_gets_distinct_exit_stage(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    _fake_cli(monkeypatch, None)
+    upstream = sys.modules["zhs.__main__"]
+    def load_config(*args, **kwargs):
+        return None
+    def cli(*, args, standalone_mode):
+        assert upstream._load_config_and_session(False, False, None) is None
+        raise SystemExit(1)
+    upstream.app = cli
+    upstream._load_config_and_session = load_config
+    token = "1" * 32
+    assert legacy._run_bundled_zhs_args(["play", "-c", "20:30", "--type", "ai"], token) == 1
+    data = json.loads((tmp_path / "StudyFlow" / f"zhs-diagnostic-{token}.json").read_text())
+    assert data["code"] == "ZHS_SESSION_PREFLIGHT_FAILED"
+    assert upstream._load_config_and_session is load_config
+
+
+def test_zhs_course_url_failure_gets_distinct_exit_stage_without_raw_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    _fake_cli(monkeypatch, None)
+    upstream = sys.modules["zhs.__main__"]
+    def dispatcher(*args, **kwargs):
+        raise ValueError("Cookie SECRET=never-persist-this")
+    def cli(*, args, standalone_mode):
+        try:
+            upstream._dispatch_play_url(None, None, "opaque URL")
+        except ValueError:
+            raise SystemExit(1)
+    upstream.app = cli
+    upstream._dispatch_play_url = dispatcher
+    token = "2" * 32
+    assert legacy._run_bundled_zhs_args(["play", "--url", "opaque URL"], token) == 1
+    data = json.loads((tmp_path / "StudyFlow" / f"zhs-diagnostic-{token}.json").read_text())
+    assert data["code"] == "ZHS_COURSE_URL_FAILED"
+    assert "SECRET" not in json.dumps(data)
+    assert upstream._dispatch_play_url is dispatcher

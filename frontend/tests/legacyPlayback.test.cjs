@@ -236,3 +236,10 @@ test("ZHS exit diagnostics show only allowlisted error categories", () => {
   assert.equal(legacy.zhsDiagnosticMessage({...sample,exit_code:0}),"");
   assert.equal(legacy.zhsDiagnosticMessage({...sample,platform:"yuketang"}),"");
 });
+
+test("upstream ZHS CLI stage codes map to safe user-facing diagnostics",()=>{
+  const legacy=loadWithStub(async()=>{});
+  const sample={platform:"zhidao",state:"exited",exit_code:1};
+  assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_SESSION_PREFLIGHT_FAILED"}),/会话预检/);
+  assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"ZHS_COURSE_URL_FAILED"}),/课程链接处理/);
+});
