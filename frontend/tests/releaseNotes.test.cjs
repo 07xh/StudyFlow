@@ -78,3 +78,13 @@ test("installed upgrade changelog has bundled candidate fallback and retry",()=>
   assert.match(dialog,/安装包内置的候选版更新说明/);
   assert.match(dialog,/重新获取/);
 });
+
+test("offline notes are actual bundled RC markdown, not fabricated",()=>{
+  const {bundledReleaseNotes}=load("packagedReleaseNotes.ts");
+  const installed=bundledReleaseNotes("0.1.1-rc.18");
+  assert.equal(installed.length,1);
+  assert.equal(installed[0].version,"v0.1.1-rc.18");
+  assert.match(installed[0].notes,/雨课堂课程进度与平台总览/);
+  const skipped=bundledReleaseNotes("0.1.1-rc.18","0.1.1-rc.16");
+  assert.deepEqual(skipped.map(row=>row.version),["v0.1.1-rc.18","v0.1.1-rc.17"]);
+});
