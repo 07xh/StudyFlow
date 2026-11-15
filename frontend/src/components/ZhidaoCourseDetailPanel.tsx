@@ -8,7 +8,7 @@ type Props={course:Course;desktop:boolean};
 type StatusFilter="all"|"incomplete"|"completed"|"unverified";
 type Lesson=ZhidaoCourseDetail["items"][number];
 
-function lessonStatus(item:Lesson,kind:ZhidaoCourseDetail["course_type"]){
+function lessonStatus(item:Lesson,kind:ZhidaoCourseDetail["course_type"]):Exclude<StatusFilter,"all">{
   if(kind==="ai"){
     if(item.fully_progressed===true)return "completed";
     if(typeof item.progress_percent!=="number"||!Number.isFinite(item.progress_percent))return "unverified";
