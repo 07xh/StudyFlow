@@ -62,14 +62,14 @@ export function ZhsTaskSettingsPanel({desktop,onReady,onEvent}:{
           <label><span>观看倍速（1–2×）</span>
             <input type="number" min={1} max={2} step={0.25} value={options.speed}
               disabled={!desktop||busy} onChange={e=>update("speed",Number(e.target.value))}/></label>
-          <label><span>单次观看时间限制（分钟；0 不限制）</span>
+          <label><span>单次观看时间限制（分钟；0 沿用原版设置）</span>
             <input type="number" min={0} max={1440} step={1} value={options.limit_minutes}
               disabled={!desktop||busy} onChange={e=>update("limit_minutes",Number(e.target.value))}/></label>
         </div>
         <div className="legacy-flags"><label>
           <input type="checkbox" checked={options.learn_optional} disabled={!desktop||busy}
             onChange={e=>update("learn_optional",e.currentTarget.checked)}/>
-          AI 课程包含选学资源
+          AI 课程额外启用选学资源
         </label></div>
         <details className="sf-ykt-advanced-options"><summary>心跳与进度说明</summary>
           <p className="sf-ykt-advanced-note">ZHS 0.1.5 未提供公开的心跳间隔和并发参数；保持原版发送机制。
