@@ -1,6 +1,6 @@
 import {RunParameters} from "./RunParameters";
 import {ZhsTaskSettingsPanel} from "./ZhsTaskSettingsPanel";
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useId, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {ActivityEntry,TaskRecorder} from "../activity";
 import type {Course, Platform} from "../types";
@@ -79,6 +79,20 @@ export function LegacyPlaybackPanel({
   const liveZhs = platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
   const selectedCourse=courses.find(course=>course.platform==="zhidao"&&course.course_id===selection)??null;
+  const startHintId=useId();
+  // Keep the existing launch gates; expose the first blocking condition instead of an unexplained disabled button.
+  const startUnavailableReason=!desktop?"仅 Windows 桌面版支持运行任务。":
+    !connected?"当前学习平台尚未确认连接；请先在平台页面检查登录状态。":
+    busy?"任务操作正在进行，请等待当前操作结束。":
+    status?.state==="running"?(ownsStatus?"当前任务已在运行，可以查询状态或停止任务。":"已有另一门课程的原版任务在运行，请在学习任务中管理。"):
+    platform==="zhidao"?
+      !selection?"尚未选择知到课程；请先从已同步课程列表进入课程详情。":
+      !selectedCourse?"当前课程未在已同步课程列表中；请重新同步课程。":
+      selectedCourse.stale?"当前课程数据已过期；请重新同步课程。":
+      !playableCourses.some(course=>course.course_id===selection)?"当前课程缺少原版执行器支持的课程类型；请同步课程后确认课程类型，或使用官方播放器。":
+      !zhsOptions?"ZHS 本机参数尚未就绪；请展开下方「ZHS 原版 · 观看控制」，查看参数状态并重新读取或保存。":null:
+      !settingsReady?"雨课堂默认参数尚未读取；请进入平台参数设置检查。":
+      !validateOriginalOptions(options)?"雨课堂参数不在支持范围内；请进入平台参数设置修正。":null;
   const workerCount=platform==="yuketang"
     ?(yktProgress?.concurrent===false?1:
       yktProgress?.worker_slots?.length||(options.use_concurrent?options.max_concurrent_videos:1))
@@ -262,16 +276,18 @@ export function LegacyPlaybackPanel({
     </div>
     {!ownsStatus&&status?.state==="running"&&<p className="sf-task-context">另一门课程的 ZHS 任务正在运行。{onOpenTasks&&<button className="text-button" onClick={onOpenTasks}>查看运行任务</button>}</p>}
     <div className="actions legacy-actions">
-      <button className="primary" type="button" disabled={!desktop||!connected||busy||
-        status?.state==="running"||
-        (platform==="zhidao" && (!zhsOptions || !playableCourses.some(c=>c.course_id===selection)))||
-        (platform==="yuketang" && (!settingsReady || !validateOriginalOptions(options)))}
+      <button className="primary" type="button" disabled={startUnavailableReason!==null}
+        aria-describedby={startUnavailableReason?startHintId:undefined}
+        title={startUnavailableReason??undefined}
         onClick={()=>void start()}><Play size={16}/> {platform==="yuketang"?"启动平台批量任务":"启动原版任务"}</button>
       <button className="secondary" type="button" disabled={!desktop||busy||!ownsStatus||!status?.run_id||status?.state!=="running"}
         onClick={()=>void stop()}><Square size={16}/> 停止</button>
       <button className="secondary" type="button" disabled={!desktop||busy}
         onClick={()=>void updateStatus()}><RefreshCw size={16}/> 查询运行状态</button>
     </div>
+    {startUnavailableReason&&<p id={startHintId} className="sf-task-context sf-start-unavailable-reason" role="status">
+      暂不能启动：{startUnavailableReason}
+    </p>}
     {platform==="zhidao"&&<div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
