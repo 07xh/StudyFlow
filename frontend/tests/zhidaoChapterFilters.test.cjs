@@ -30,6 +30,7 @@ const detail=(course_key=key,course_type="ai",items=aiItems)=>({
   verified_at:"2026-11-15T12:00:00Z",done:1,total:items.length,percent:25,items
 });
 const content=view=>JSON.stringify(view.toJSON());
+const shown=view=>view.root.findByProps({className:"sf-zd-filter-count"}).props.children.join("");
 const pills=view=>view.root.findAllByType("button").filter(b=>b.props["aria-pressed"]!==undefined&&
   b.props.className!=="sf-zd-search-trigger"&&
   !String(b.props.className).includes("sf-zd-search-trigger"));
@@ -46,7 +47,8 @@ test("Zhidao reuses Rain Classroom visible four-state chips with actual lesson c
   assert.deepEqual(pills(view).map(b=>b.props.children[2]?.props?.children??b.props.children[1].props.children),
     [4,2,1,1]);
   assert.equal(pick(view,"全部").props["aria-pressed"],true);
-  assert.match(content(view),/已完成知识点/);
+  assert.ok(view.root.findAllByType("span").some(x=>
+    Array.isArray(x.props.children)&&x.props.children.join("")==="已完成知识点"));
   assert.match(content(view),/服务端记录/);
   assert.equal(view.root.findAllByType("input").length,0,"search should be collapsed by default");
   act(()=>view.unmount());
@@ -65,7 +67,7 @@ test("status selection, chapter selection and grouped expand/collapse compose wi
   assert.doesNotMatch(content(view),/知识点甲/);
   const select=view.root.findByProps({"aria-label":"选择章节或主题"});
   await act(async()=>{select.props.onChange({target:{value:"第二章"}});});
-  assert.match(content(view),/显示 1 \/ 4 条/);
+  assert.equal(shown(view),"显示 1 / 4 条");
   assert.equal(chapterButtons(view).length,1);
   assert.match(content(view),/知识点丁/);
   const collapse=view.root.findAllByType("button").find(x=>x.props.children==="收起全部");
@@ -87,18 +89,18 @@ test("magnifier is the compact search entry; close and Escape both clear invisib
   await act(async()=>{open().props.onClick();});
   let input=view.root.findByProps({"aria-label":"搜索知识点、视频或章节"});
   await act(async()=>{input.props.onChange({target:{value:"不存在的词"}});});
-  assert.match(content(view),/显示 0 \/ 4 条/);
+  assert.equal(shown(view),"显示 0 / 4 条");
   assert.match(content(view),/没有符合当前筛选条件/);
   await act(async()=>{view.root.findByProps({"aria-label":"关闭搜索并清除条件"}).props.onClick();});
   assert.equal(view.root.findAllByType("input").length,0);
-  assert.match(content(view),/显示 4 \/ 4 条/);
+  assert.equal(shown(view),"显示 4 / 4 条");
   await act(async()=>{open().props.onClick();});
   input=view.root.findByProps({"aria-label":"搜索知识点、视频或章节"});
   await act(async()=>{input.props.onChange({target:{value:"知识点乙"}});});
-  assert.match(content(view),/显示 1 \/ 4 条/);
+  assert.equal(shown(view),"显示 1 / 4 条");
   await act(async()=>{input.props.onKeyDown({key:"Escape"});});
   assert.equal(view.root.findAllByType("input").length,0);
-  assert.match(content(view),/显示 4 \/ 4 条/);
+  assert.equal(shown(view),"显示 4 / 4 条");
   act(()=>view.unmount());
 });
 
@@ -136,7 +138,7 @@ test("shared-course completion, incomplete and unverified are distinct server st
   ]));
   let view;
   await act(async()=>{view=create(React.createElement(Panel,{course:{...baseCourse,course_type:"shared"},desktop:true}));});
-  assert.deepEqual(pills(view).map(x=>x.props.children[1].props.children),[3,1,1,1]);
+  assert.deepEqual(pills(view).map(x=>x.props.children[2].props.children),[3,1,1,1]);
   await act(async()=>{pick(view,"未核验").props.onClick();});
   assert.match(content(view),/视频未核验/);
   assert.doesNotMatch(content(view),/视频未完成/);
