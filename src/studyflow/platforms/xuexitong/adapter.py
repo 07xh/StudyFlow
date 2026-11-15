@@ -80,7 +80,7 @@ def _embedded_marg(text: str) -> dict[str, Any] | None:
     The source page can contain quoted closing braces and escaped quotes.
     A shallow regular expression would silently discard those task cards.
     """
-    match = re.search(r"\\bmArg\\s*=\\s*\\{", text)
+    match = re.search(r"\bmArg\s*=\s*\{", text)
     if not match:
         return None
     start = match.end() - 1
@@ -92,7 +92,7 @@ def _embedded_marg(text: str) -> dict[str, Any] | None:
         if quote_char:
             if escaped:
                 escaped = False
-            elif char == "\\\\":
+            elif char == "\\":
                 escaped = True
             elif char == quote_char:
                 quote_char = ""
