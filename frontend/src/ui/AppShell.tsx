@@ -11,11 +11,10 @@ import {NoticeBanner} from "./NoticeBanner";
 import {PageSurface} from "./PageSurface";
 import "./foundation.css";
 
-export type Page="home"|"courses"|"tasks"|"platforms"|"platform-zhidao"|
+export type Page="home"|"tasks"|"platforms"|"platform-zhidao"|
   "platform-yuketang"|"records"|"logs"|"settings";
 const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"home",label:"首页",icon:LayoutDashboard},
-  {id:"courses",label:"课程中心",icon:BookOpen},
   {id:"tasks",label:"学习任务",icon:ListChecks},
   {id:"platforms",label:"学习平台",icon:Layers3},
   {id:"records",label:"学习记录",icon:History},
@@ -26,7 +25,7 @@ const platformNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"platform-yuketang",label:"雨课堂",icon:BookOpen}
 ];
 const titles:Record<Page,string>={
-  home:"学习总览",courses:"课程中心",tasks:"学习任务",platforms:"学习平台",
+  home:"学习总览",tasks:"学习任务",platforms:"学习平台",
   "platform-zhidao":"知到","platform-yuketang":"雨课堂",
   records:"学习记录",logs:"日志中心",settings:"设置"
 };
