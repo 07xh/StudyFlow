@@ -148,7 +148,7 @@ try {
         # desktop lifecycle regression from the release gate.
         Get-CimInstance Win32_Process |
             Where-Object { $_.Name -in @('studyflow.exe','studyflow-bridge.exe') } |
-            Select-Object ProcessId,ParentProcessId,Name,CommandLine |
+            Select-Object ProcessId,ParentProcessId,Name |
             Format-Table -Wrap | Out-String | Write-Host
         throw "StudyFlow did not exit gracefully after 30 seconds (closeRequested=$closeRequested)"
     }
