@@ -94,3 +94,34 @@ test('failed terminal verification can retry without replaying or resending hear
   assert.ok(calls.every(input=>input.operation==='zhidao.progress.verify'&&input.course_key==='A'));
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
+
+test('start is visibly pending and rapid repeated clicks launch only one run',async()=>{
+ const launch=deferred();let calls=0;let view;
+ const idle={...running,state:'idle',run_id:null,zhs_progress:null};
+ const env=setup({getLegacyStatus:async()=>idle,startLegacy:async()=>{calls++;return launch.promise;}});
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,props));});
+  const button=view.root.findAllByType('button').find(n=>words(n).includes('启动原版任务'));
+  act(()=>{button.props.onClick();button.props.onClick();});
+  assert.match(words(view.root),/启动中…/);
+  assert.equal(view.root.findAllByType('button').find(n=>words(n).includes('启动中…')).props.disabled,true);
+  assert.equal(calls,1);
+  await act(async()=>{launch.resolve(running);});
+  assert.match(words(view.root),/原版进程运行中/);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
+
+test('stop shows pending state without treating an unfinished kill as success',async()=>{
+ const termination=deferred();let stopCalls=0;let view;
+ const env=setup({getLegacyStatus:async()=>running,stopLegacy:async()=>{stopCalls++;return termination.promise;}});
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,props));});
+  const stop=view.root.findAllByType('button').find(n=>words(n)===' 停止');
+  await act(async()=>{stop.props.onClick();await Promise.resolve();});
+  assert.match(words(view.root),/停止中…/);
+  assert.doesNotMatch(words(view.root),/已终止由学序启动的原版任务/);
+  assert.equal(stopCalls,1);
+  await act(async()=>{termination.resolve({...running,state:'stopped'});});
+  assert.match(words(view.root),/已终止由学序启动的原版任务/);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
