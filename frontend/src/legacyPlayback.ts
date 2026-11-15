@@ -36,6 +36,13 @@ export type YuketangLiveProgress = {
   stopped: number;
   concurrent: boolean | null;
   worker_slots: Array<{slot:number;video_index:number|null;state:"waiting"|"preparing"|"watching"|"completed"|"skipped"|"failed"|"stopped"|"unknown"}>;
+  video_tasks: Array<{
+    video_index: number; name: string|null;
+    state: "preparing"|"watching"|"completed"|"skipped"|"failed"|"stopped"|"unknown";
+    simulation_percent: number|null; simulation_position: number|null;
+    simulation_duration: number|null; server_percent: number|null;
+    server_position: number|null; server_source: "initial"|"periodic"|"final"|null;
+  }>;
   rich_total: number | null;
   rich_current: number | null;
   rich_processed: number;
