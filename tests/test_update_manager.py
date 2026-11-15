@@ -63,3 +63,24 @@ def test_update_ipc_has_explicit_error_codes(monkeypatch):
     assert response == {'id':'u', 'ok':True, 'data':{'release':None}}
     bad = bridge.dispatch({'id':'u', 'version':1, 'operation':'updates.settings.save', 'settings':{}})
     assert bad['error'] == 'INVALID_UPDATE_SETTINGS'
+
+
+def test_update_bridge_preserves_safe_failure_category(monkeypatch):
+    from studyflow.services import bridge, update_manager
+    def blocked(_version):
+        raise updater.UpdateError("UPDATE_NETWORK_FAILED", "Private network detail")
+    monkeypatch.setattr(update_manager, "check", blocked)
+    result = bridge.dispatch({"id": "u", "version": 1, "operation": "updates.check",
+                              "current_version": "0.1.0"})
+    assert result == {"id": "u", "ok": False, "error": "UPDATE_NETWORK_FAILED"}
+    assert "Private" not in str(result)
+
+
+def test_missing_installer_is_not_misreported_as_invalid_preferences(monkeypatch, tmp_path):
+    from studyflow.services import bridge, update_manager
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(updater, "release_info", lambda *a, **k: {
+        "version": "v0.2.0", "notes": "release", "assets": []})
+    result = bridge.dispatch({"id": "u", "version": 1, "operation": "updates.download",
+                              "current_version": "0.1.0", "release_version": "v0.2.0"})
+    assert result["error"] == "UPDATE_ASSET_UNAVAILABLE"
