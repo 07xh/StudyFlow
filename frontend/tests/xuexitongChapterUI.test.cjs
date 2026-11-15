@@ -19,7 +19,8 @@ test("third platform chapter UI reuses read-only IPC, filters and avoids redunda
       taskCalls++;
       return [
         {id:"video:1",type:"video",chapter_id:"42",title:"讲解视频",completed:false},
-        {id:"document:2",type:"document",chapter_id:"42",title:"实验讲义",completed:true}
+        {id:"document:2",type:"document",chapter_id:"42",title:"实验讲义",completed:true},
+        {id:"read:3",type:"read",chapter_id:"42",title:"课后阅读",completed:null}
       ];
     }
     throw new Error("Unexpected mock request: "+message.operation);
@@ -42,13 +43,20 @@ test("third platform chapter UI reuses read-only IPC, filters and avoids redunda
     assert.ok(button("查看任务点"));
     await act(async()=>{button("查看任务点").props.onClick();});
     assert.equal(taskCalls,1);
-    assert.equal(view.root.findAllByProps({className:"sf-xxt-task-item"}).length,2);
+    assert.equal(view.root.findAllByProps({className:"sf-xxt-task-item"}).length,3);
     const typeSelect=view.root.findAllByType("select").find(node=>
       node.findAllByType("option").some(option=>option.props.value==="video")
     );
     assert.ok(typeSelect);
     await act(async()=>{typeSelect.props.onChange({target:{value:"document"}});});
     assert.equal(view.root.findAllByProps({className:"sf-xxt-task-item"}).length,1);
+    await act(async()=>{typeSelect.props.onChange({target:{value:"all"}});});
+    const statusSelect=view.root.findAllByType("select").find(node=>
+      node.findAllByType("option").some(option=>option.props.value==="unknown")
+    );
+    await act(async()=>{statusSelect.props.onChange({target:{value:"unknown"}});});
+    assert.equal(view.root.findAllByProps({className:"sf-xxt-task-item"}).length,1);
+    assert.match(JSON.stringify(view.toJSON()),/待核验/);
     await act(async()=>{button("收起任务点").props.onClick();});
     await act(async()=>{button("查看任务点").props.onClick();});
     assert.equal(taskCalls,1,"reopening a chapter should reuse recent server metadata");
