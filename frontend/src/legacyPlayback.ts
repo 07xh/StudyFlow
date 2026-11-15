@@ -52,14 +52,31 @@ export async function getYuketangLiveProgress(runId: string): Promise<YuketangLi
 
 
 // ZHS 0.1.5 play flags; original heartbeat timing remains inside ZHS.
-export type OriginalZhsOptions = {speed:number;limit_minutes:number;learn_optional:boolean};
-export const originalZhsDefaults:Readonly<OriginalZhsOptions> = Object.freeze({
-  speed:1.5,limit_minutes:0,learn_optional:false
+export type ZhsStoredOptions = {
+  speed:number;speed_cap:number;limit_minutes:number;learn_optional:boolean;
+  max_videos:number;stop_on_error:boolean;
+};
+export type OriginalZhsOptions = ZhsStoredOptions & {
+  scope_mode:"all"|"selected";selected_ids:number[];
+};
+export const originalZhsDefaults:Readonly<ZhsStoredOptions> = Object.freeze({
+  speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,
+  max_videos:0,stop_on_error:false
 });
-export function validateZhsOptions(value:OriginalZhsOptions):boolean {
-  return Number.isFinite(value.speed) && value.speed>=1 && value.speed<=2 &&
+export function validateZhsStoredOptions(value:ZhsStoredOptions):boolean {
+  return !!value && Number.isFinite(value.speed) && value.speed>=1 && value.speed<=2 &&
+    Number.isFinite(value.speed_cap) && value.speed_cap>=1 && value.speed_cap<=2 &&
     Number.isInteger(value.limit_minutes) && value.limit_minutes>=0 && value.limit_minutes<=1440 &&
-    typeof value.learn_optional==="boolean";
+    Number.isInteger(value.max_videos) && value.max_videos>=0 && value.max_videos<=1000 &&
+    typeof value.learn_optional==="boolean" && typeof value.stop_on_error==="boolean";
+}
+export function validateZhsOptions(value:OriginalZhsOptions):boolean {
+  const ids=value?.selected_ids;
+  return validateZhsStoredOptions(value) && (value.scope_mode==="all"||value.scope_mode==="selected") &&
+    Array.isArray(ids) && ids.length<=256 &&
+    ids.every(id=>Number.isSafeInteger(id)&&id>0&&id<=Number.MAX_SAFE_INTEGER) &&
+    new Set(ids).size===ids.length &&
+    (value.scope_mode==="all"?ids.length===0:ids.length>0);
 }
 
 // Names and defaults are the original YKT main.py environment settings.

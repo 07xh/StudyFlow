@@ -1,6 +1,6 @@
 import {invoke} from "@tauri-apps/api/core";
 import type {Platform, PlatformState, Course} from "./types";
-import type {OriginalYktOptions,OriginalZhsOptions} from "./legacyPlayback";
+import type {OriginalYktOptions,ZhsStoredOptions} from "./legacyPlayback";
 
 export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
@@ -21,7 +21,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.settings.get"}
   | {id: string; version: 1; operation: "yuketang.settings.save"; settings: OriginalYktOptions}
   | {id: string; version: 1; operation: "zhidao.zhs.settings.get"}
-  | {id: string; version: 1; operation: "zhidao.zhs.settings.save"; settings: OriginalZhsOptions}
+  | {id: string; version: 1; operation: "zhidao.zhs.settings.save"; settings: ZhsStoredOptions}
   | {id: string; version: 1; operation: "zhidao.cookie.import"; content: string; mode: "file" | "text"}
   | {id: string; version: 1; operation: "yuketang.progress"; run_id: string}
   | {id: string; version: 1; operation: "zhidao.progress.sync"}
@@ -41,7 +41,7 @@ export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boo
 export type ZhidaoPlayerTarget = {course_key:string;course_type:"ai"|"shared";course_id:string;class_id:string;recruit_and_course_id:string;title:string};
 export type ZhidaoDiagnostic = {code:number;state:string;lines:string[]};
 export type ZhidaoDocument = {id:string;title:string;content:string};
-export type ZhidaoCourseDetail = {course_key:string;title:string;course_type:"ai"|"shared";verified:boolean;stale:boolean;verified_at:string|null;done:number;total:number;percent:number|null;items:Array<{name:string;theme?:string;progress_percent?:number;fully_progressed?:boolean;duration_seconds?:number;studied_seconds?:number;server_completed?:boolean}>};
+export type ZhidaoCourseDetail = {course_key:string;title:string;course_type:"ai"|"shared";verified:boolean;stale:boolean;verified_at:string|null;done:number;total:number;percent:number|null;items:Array<{name:string;theme?:string;knowledge_id?:number;video_id?:number;chapter_id?:number|null;chapter_name?:string;progress_percent?:number;fully_progressed?:boolean;duration_seconds?:number;studied_seconds?:number;server_completed?:boolean}>};
 
 export type BridgeResponse<T> =
   | {id: string | null; ok: true; data: T}

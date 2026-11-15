@@ -326,7 +326,7 @@ export function LegacyPlaybackPanel({
       <small className="sf-ykt-live-note">并发模式下，各槽位状态来自原版 Worker 日志。心跳无法对应到单个视频，百分比保持空白；诊断区的最近值也不代表课程总进度。</small>
       </details>
     </div>}
-    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} onReady={setZhsOptions} onEvent={onEvent}/>}
+    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
     {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
       <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>
       <select id="legacy-zhidao-course" value={selection} onChange={e=>setSelection(e.target.value)}>
