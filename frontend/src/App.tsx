@@ -241,10 +241,9 @@ export default function App(){
       if(manual)setNotice(message);
       recordEvent(name,manual?"同步课程":"自动同步课程","warning",message);
     }finally{
-      if(checkpoint.epoch===epoch){
-        checkpoint.inFlight=false;
-        if(manual)setBusy(previous=>previous===platform?"":previous);
-      }
+      if(checkpoint.epoch===epoch)checkpoint.inFlight=false;
+      // Even a superseded manual request must release its own button lock.
+      if(manual)setBusy(previous=>previous===platform?"":previous);
     }
   },[desktop,consentAccepted,recordEvent]);
 
