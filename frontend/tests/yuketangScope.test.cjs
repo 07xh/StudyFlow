@@ -28,6 +28,11 @@ test('classroom scope saves in its own section without resending credentials or 
  try{
   await act(async()=>{view=create(React.createElement(App));});
   act(()=>shell.onNavigate('platform-yuketang'));
+  assert.equal(view.root.findAllByType('input').some(n=>n.props.value==='11'),false,
+    'Classroom scope must not be rendered on the platform course home');
+  const settingsAction=view.root.findAllByType('button').find(n=>words(n)==='参数设置');
+  assert.ok(settingsAction,'Platform settings must remain directly accessible');
+  act(()=>settingsAction.props.onClick());
   assert.equal(view.root.findAllByType('input').find(n=>n.props.value==='11').props.type,'text');
   act(()=>view.root.findAllByType('input').find(n=>n.props.value==='11').props.onChange({target:{value:'33'}}));
   const button=label=>view.root.findAllByType('button').find(n=>words(n)===label);
