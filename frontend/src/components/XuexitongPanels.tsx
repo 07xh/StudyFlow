@@ -1,8 +1,13 @@
 import {useEffect,useState} from "react";
 import type {Course} from "../types";
 import {friendlyBridgeError,request,type XuexitongSettings,type XuexitongTaskItem} from "../bridge";
+import {
+  chapterOverview,filterXuexitongChapters,filterXuexitongTasks,
+  type XuexitongChapter,type ChapterFilter,type TaskFilter,type CompletionFilter
+} from "../xuexitongCatalog";
+import "./XuexitongPanels.css";
 
-type Chapter = {id:string;title:string;completed:boolean;locked:boolean};
+type Chapter = XuexitongChapter;
 const initialSettings:XuexitongSettings={
   playback_speed:1,concurrency:2,skip_completed:true,verify_after_run:true
 };
@@ -134,6 +139,14 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
   const [taskLoading,setTaskLoading]=useState(false);
   const [tasks,setTasks]=useState<XuexitongTaskItem[]>([]);
   const [taskError,setTaskError]=useState("");
+  const [chapterSearch,setChapterSearch]=useState("");
+  const [chapterFilter,setChapterFilter]=useState<ChapterFilter>("all");
+  const [taskSearch,setTaskSearch]=useState("");
+  const [taskFilter,setTaskFilter]=useState<TaskFilter>("all");
+  const [taskCompletion,setTaskCompletion]=useState<CompletionFilter>("all");
+  const overview=chapterOverview(chapters);
+  const visibleChapters=filterXuexitongChapters(chapters,chapterSearch,chapterFilter);
+  const visibleTasks=filterXuexitongTasks(tasks,taskSearch,taskFilter,taskCompletion);
 
   useEffect(()=>{
     if(!desktop)return;
@@ -167,35 +180,99 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
     return ()=>{live=false;};
   },[desktop,course.course_id,expanded,revision]);
 
-  return <section aria-label="学习通章节与任务点">
-    <div className="section-head">
-      <h3>章节与任务点</h3>
+  return <section aria-label="学习通章节与任务点" className="sf-xxt-catalog">
+    <div className="section-head sf-xxt-heading">
+      <div>
+        <h3>章节与任务点</h3>
+        <p className="sf-muted">
+          已读取 {overview.total} 个章节 · 标记完成 {overview.completed} · 待学习 {overview.pending} · 未解锁 {overview.locked}
+        </p>
+      </div>
       <button type="button" className="secondary" disabled={!desktop||loading}
         onClick={()=>setRevision(value=>value+1)}>刷新章节</button>
     </div>
+    <div className="sf-xxt-filters" role="group" aria-label="章节筛选">
+      <label className="sf-xxt-search"><span>搜索章节</span>
+        <input type="search" value={chapterSearch} placeholder="章节名称或 ID"
+          onChange={event=>setChapterSearch(event.target.value)}/>
+      </label>
+      <label className="sf-xxt-select"><span>章节状态</span>
+        <select value={chapterFilter} onChange={event=>setChapterFilter(event.target.value as ChapterFilter)}>
+          <option value="all">全部章节</option>
+          <option value="pending">待学习</option>
+          <option value="completed">已标记完成</option>
+          <option value="locked">未解锁</option>
+        </select>
+      </label>
+    </div>
     {loading&&<p role="status" className="sf-muted">正在读取真实章节…</p>}
     {message&&<p role="status" className="sf-muted">{message}</p>}
-    <div className="sf-recent-list">
-      {chapters.map(item=><article key={item.id} className="sf-recent-row">
-        <div className="sf-recent-main">
-          <strong title={item.title}>{item.title}</strong>
-          <p className="sf-muted">{item.locked?"未解锁":item.completed?"已标记完成":"待学习"}</p>
-          {expanded===item.id&&<div aria-label="本章节任务点">
-            {taskLoading&&<p role="status" className="sf-muted">读取视频、文档及测验任务…</p>}
-            {taskError&&<p role="alert">{taskError}</p>}
-            {!taskLoading&&!taskError&&tasks.length===0&&<p className="sf-muted">本章节没有返回可识别的任务点。</p>}
-            {!taskLoading&&tasks.map(task=><p key={task.id}>
-              <strong>{taskLabels[task.type]??"其他任务"}</strong>
-              {" · "}{task.title}{" · "}{task.completed?"已完成":"未完成"}
-            </p>)}
-          </div>}
+    {!loading&&chapters.length>0&&visibleChapters.length===0&&
+      <p className="sf-muted" role="status">没有符合当前筛选条件的章节。</p>}
+    <div className="sf-xxt-chapters">
+      {visibleChapters.map(item=><article key={item.id} className="sf-xxt-chapter">
+        <div className="sf-xxt-chapter-head">
+          <div className="sf-xxt-chapter-title">
+            <strong title={item.title}>{item.title}</strong>
+            <span className="sf-xxt-chapter-id">#{item.id}</span>
+          </div>
+          <span className={"sf-xxt-state "+(item.locked?"locked":item.completed?"completed":"pending")}>
+            {item.locked?"未解锁":item.completed?"已标记完成":"待学习"}
+          </span>
+          <button type="button" className="secondary" disabled={!desktop||loading||item.locked}
+            aria-expanded={expanded===item.id} aria-label={item.title+"："+(expanded===item.id?"收起任务点":"查看任务点")}
+            onClick={()=>{
+              setExpanded(previous=>previous===item.id?null:item.id);
+              setTaskSearch("");setTaskFilter("all");setTaskCompletion("all");
+            }}>
+            {expanded===item.id?"收起":"查看任务点"}
+          </button>
         </div>
-        <button className="secondary" type="button" disabled={!desktop||loading||item.locked}
-          aria-expanded={expanded===item.id}
-          onClick={()=>setExpanded(previous=>previous===item.id?null:item.id)}>
-          {expanded===item.id?"收起":"查看任务点"}
-        </button>
+        {expanded===item.id&&<div className="sf-xxt-task-panel" aria-label={item.title+"的任务点"}>
+          <div className="sf-xxt-filters sf-xxt-task-filters" role="group" aria-label="任务点筛选">
+            <label className="sf-xxt-search"><span>搜索任务</span>
+              <input type="search" value={taskSearch} placeholder="任务名称"
+                onChange={event=>setTaskSearch(event.target.value)}/>
+            </label>
+            <label className="sf-xxt-select"><span>任务类型</span>
+              <select value={taskFilter} onChange={event=>setTaskFilter(event.target.value as TaskFilter)}>
+                <option value="all">全部类型</option><option value="video">视频</option>
+                <option value="audio">音频</option><option value="document">文档</option>
+                <option value="read">阅读</option><option value="workid">测验</option>
+                <option value="live">直播</option><option value="other">其他</option>
+              </select>
+            </label>
+            <label className="sf-xxt-select"><span>任务状态</span>
+              <select value={taskCompletion} onChange={event=>setTaskCompletion(event.target.value as CompletionFilter)}>
+                <option value="all">全部状态</option><option value="pending">未完成</option>
+                <option value="completed">已标记完成</option>
+              </select>
+            </label>
+          </div>
+          {taskLoading&&<p role="status" className="sf-muted">读取本章节任务点…</p>}
+          {taskError&&<p role="alert">{taskError}</p>}
+          {!taskLoading&&!taskError&&
+            <p className="sf-xxt-task-summary">{visibleTasks.length}/{tasks.length} 项任务
+              {tasks.length>0?" · 服务器标记完成 "+tasks.filter(task=>task.completed).length+" 项":""}
+            </p>}
+          {!taskLoading&&!taskError&&visibleTasks.length===0&&
+            <p className="sf-muted" role="status">
+              {tasks.length===0?"本章节未返回可识别的任务点。":"没有符合筛选条件的任务。"}
+            </p>}
+          <ul className="sf-xxt-task-list">
+            {!taskLoading&&visibleTasks.map(task=><li key={task.id} className="sf-xxt-task-item">
+              <span className="sf-xxt-task-type">{taskLabels[task.type]??"其他任务"}</span>
+              <strong title={task.title}>{task.title}</strong>
+              <span className={"sf-xxt-state "+(task.completed?"completed":"pending")}>
+                {task.completed?"已标记完成":"未完成"}
+              </span>
+            </li>)}
+          </ul>
+        </div>}
       </article>)}
     </div>
+    <p className="sf-muted sf-xxt-evidence-note">
+      章节与任务状态来自学习通页面返回的标记，不等于官方课程总进度。
+    </p>
   </section>;
 }
