@@ -266,6 +266,73 @@ def test_first_run_consent_is_persisted_in_studyflow_app_data(tmp_path, monkeypa
     assert (tmp_path / "StudyFlow" / "privacy-accepted-v1.flag").is_file()
 
 
+
+def test_verification_rejects_switch_to_another_valid_login(session_cache, monkeypatch):
+    """A valid new user's cached progress must not satisfy an old run."""
+    directory, first_fp = session_cache
+    course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
+    key = legacy_runtime.progress_key(course)
+    course_path = directory / "zhidao-courses.json"
+    progress_path = directory / "zhidao-progress.json"
+
+    def save_session(fingerprint, verified_at):
+        course_path.write_text(json.dumps({
+            "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+            "incomplete": False, "courses": [course],
+        }), encoding="utf-8")
+        progress_path.write_text(json.dumps({
+            "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+            "incomplete": False, "courses": [{
+                **course, "knowledgePointCount": 2, "fullProgressPoints": 2,
+                "lastVerifiedAt": verified_at,
+            }],
+        }), encoding="utf-8")
+
+    save_session(first_fp, "2026-11-13T10:00:00+00:00")
+
+    def fake_run(*_args, **_kwargs):
+        # The original user's run finishes after login is changed. The new
+        # session's cache is internally valid and appears to contain newer
+        # progress, but cannot be attributed to the previous run.
+        cookies = b"SECOND_FAKE_USER"
+        (directory / "cookies.json").write_bytes(cookies)
+        second_fp = hmac.new(b"s" * 32, cookies, hashlib.sha256).hexdigest()
+        save_session(second_fp, "2026-11-14T10:00:00+00:00")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="session or course changed"):
+        legacy_runtime.verify_course(key)
+
+
+def test_progress_snapshot_reads_one_session_for_directory_and_evidence(monkeypatch):
+    """An account rotation between two cache reads must not mix their data."""
+    course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
+    seen = []
+
+    def one_session():
+        seen.append(True)
+        if len(seen) != 1:
+            raise AssertionError("Progress snapshot re-read the session")
+        return [course], "a" * 64
+
+    def progress_for_session(fingerprint):
+        assert fingerprint == "a" * 64
+        return {"incomplete": False, "fetchedAt": "2026-11-14T10:00:00+00:00",
+                "courses": [{
+                    **course, "knowledgePointCount": 3, "fullProgressPoints": 1,
+                    "lastVerifiedAt": "2026-11-14T10:00:00+00:00",
+                }]}
+
+    monkeypatch.setattr(legacy_runtime, "_session_course_cache", one_session)
+    monkeypatch.setattr(legacy_runtime, "_progress_cache", progress_for_session)
+    snapshot = legacy_runtime._progress_snapshot()
+    assert len(seen) == 1
+    assert snapshot["incomplete"] is False
+    assert snapshot["courses"][0].progress_evidence == "server_verified"
+    assert snapshot["courses"][0].progress_percent == 33.3
+
+
 @pytest.mark.parametrize("change", ["unchanged", "unrelated", "stale", "fresh"])
 def test_single_course_verification_requires_new_target_server_evidence(session_cache, monkeypatch, change):
     """Exit 0 is insufficient unless the selected course gained fresh evidence."""
