@@ -401,12 +401,17 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
                   <strong>{video.name}</strong>
                   <span className={"sf-record-status is-"+(video.progress_percent===null?"unverified":
                     video.server_completed?"completed":"incomplete")}>
-                    {video.progress_percent===null?"未核验":verifiedPercentLabel(video.progress_percent)}
+                    {video.progress_percent===null?"未核验":
+                      video.server_completed&&video.progress_percent<100?"已完成":verifiedPercentLabel(video.progress_percent)}
                   </span>
                 </div>
                 <small>{video.progress_percent===null
                   ?"服务器未返回可确认的进度"
-                  :video.server_completed?"服务器已确认完成":"服务器已核验 · 尚未完成"}
+                  :video.server_completed
+                    ?video.progress_percent<100
+                      ?"服务器已确认完成 · 原始观看进度 "+verifiedPercentLabel(video.progress_percent)+"（口径不同）"
+                      :"服务器已确认完成"
+                    :"服务器已核验 · 尚未完成"}
                   {video.last_point_seconds!==null&&
                     " · 最后位置 "+duration(video.last_point_seconds)}
                   {video.duration_seconds!==null&&
@@ -439,7 +444,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     </div>}
     <details className="sf-technical-note">
       <summary>进度口径</summary>
-      <p className="sf-muted">首次进入或手动刷新时逐批核验全课（每批最多 {PAGE_SIZE} 节）；播放中仅按唯一名称定位的视频进行单节服务器只读复核，结束后有限补查，也可手动复核某一节。统计只包括真实服务端记录。
+      <p className="sf-muted">首次进入或手动刷新时逐批核验全课（每批最多 {PAGE_SIZE} 节）；播放中仅按唯一名称定位的视频进行单节服务器只读复核，结束后有限补查，也可手动复核某一节。完成状态优先使用服务器明确返回的完成标志；观看率可能不是 100%，但不影响已确认完成的归类。统计只包括真实服务端记录。
         未核验不等于 0%，本地播放位置和任务日志不等于服务器学习进度。</p>
     </details>
   </section>;
