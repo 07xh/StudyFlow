@@ -33,7 +33,11 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
         operation:"zhidao.course.detail",course_key:course.course_id
       });
       if(current===revision.current)setDetail(result);
-    }catch(error){if(current===revision.current)setMessage(friendlyBridgeError(error));}
+    }catch(error){if(current===revision.current){
+      // An actual read failure must not leave old rows looking current.
+      setDetail(null);
+      setMessage(friendlyBridgeError(error));
+    }}
     finally{if(current===revision.current)setBusy(false);}
   },[desktop,course.course_id,course.verified_at,course.stale]);
 
