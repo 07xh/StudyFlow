@@ -15,6 +15,7 @@ New-Item -ItemType Directory -Force $markerDirectory,$legacyInstallDirectory,$le
 [IO.File]::WriteAllText($legacyInstallMarker, 'preserve-original-zhs-install')
 [IO.File]::WriteAllText($legacyDataMarker, 'preserve-original-zhs-data')
 $app = $null
+$bridgeLockHolder = $null
 $oldPath = $env:PATH
 $oldYktHome = $env:YKT_HOME
 $probeYktHome = Join-Path ([IO.Path]::GetTempPath()) ('StudyFlowYktSmoke-' + [guid]::NewGuid().ToString('N'))
@@ -75,6 +76,42 @@ try {
             throw 'Install/upgrade changed the original ZHSDesktop installation or ~/.zhs user data'
         }
     }
+    # Regression: a detached Python bridge can hold the EXE after the UI exits.
+    # Hold its JSONL stdin pipe open without making platform/network requests.
+    $bridgeLockHolder = [System.Diagnostics.Process]::new()
+    $bridgeStart = [System.Diagnostics.ProcessStartInfo]::new()
+    $bridgeStart.FileName = $bridge
+    $bridgeStart.UseShellExecute = $false
+    $bridgeStart.CreateNoWindow = $true
+    $bridgeStart.RedirectStandardInput = $true
+    $bridgeStart.RedirectStandardOutput = $true
+    $bridgeLockHolder.StartInfo = $bridgeStart
+    if (-not $bridgeLockHolder.Start()) { throw 'Could not launch detached bridge regression worker' }
+    Start-Sleep -Seconds 2
+    if ($bridgeLockHolder.HasExited) { throw 'Detached bridge exited before the upgrade lock check' }
+    $originalBridgeHash = (Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash
+    $blocked = Start-Process -FilePath $installers[0].FullName -ArgumentList @('/S', "/D=$root") -Wait -PassThru
+    if ($blocked.ExitCode -eq 0) { throw 'Silent upgrade must refuse to overwrite a running Python bridge' }
+    if ((Get-FileHash -LiteralPath $bridge -Algorithm SHA256).Hash -cne $originalBridgeHash) {
+        throw 'Blocked installer changed the in-use Python bridge'
+    }
+    if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') {
+        throw 'Blocked upgrade changed StudyFlow user data'
+    }
+    $bridgeLockHolder.StandardInput.Close()
+    if (-not $bridgeLockHolder.WaitForExit(10000)) {
+        $bridgeLockHolder.Kill()
+        $bridgeLockHolder.WaitForExit()
+    }
+    $bridgeLockHolder.Dispose()
+    $bridgeLockHolder = $null
+    $retried = Start-Process -FilePath $installers[0].FullName -ArgumentList @('/S', "/D=$root") -Wait -PassThru
+    if ($retried.ExitCode -ne 0) { throw "Upgrade retry after bridge exit failed: $($retried.ExitCode)" }
+    if (-not (Test-Path -LiteralPath $bridge)) { throw 'Bridge missing after successful upgrade retry' }
+    if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') {
+        throw 'Upgrade retry changed StudyFlow user data'
+    }
+
     # Restore the normal process environment before launching the desktop app.
     $env:PATH = $oldPath
     if ($null -eq $oldYktHome) { Remove-Item Env:YKT_HOME -ErrorAction SilentlyContinue }
@@ -102,6 +139,13 @@ try {
     if ($null -eq $oldYktHome) { Remove-Item Env:YKT_HOME -ErrorAction SilentlyContinue }
     else { $env:YKT_HOME = $oldYktHome }
     if ($null -ne $app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+    if ($null -ne $bridgeLockHolder) {
+        if (-not $bridgeLockHolder.HasExited) {
+            $bridgeLockHolder.Kill()
+            $bridgeLockHolder.WaitForExit()
+        }
+        $bridgeLockHolder.Dispose()
+    }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $legacyInstallMarker,$legacyDataMarker -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $probeYktHome -Recurse -Force -ErrorAction SilentlyContinue

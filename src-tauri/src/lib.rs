@@ -358,8 +358,22 @@ fn zhidao_open_official_site() -> Result<(), String> {
     }
 }
 
+// An explicit Exit IPC command does not necessarily destroy the main window
+// before the process exits. Stop only services owned by this instance first,
+// so the next installer can replace the bundled bridge executable.
+fn shutdown_owned_services(app: &tauri::AppHandle) {
+    app.state::<legacy_tasks::LegacyTasks>().shutdown();
+    app.state::<zhidao_player::ZhidaoPlayerManager>().shutdown();
+    let qr_worker = app.state::<QrBridgeState>();
+    if let Ok(mut guard) = qr_worker.lock() {
+        // Drop sends QR cancellation and reaps its child, when present.
+        guard.take();
+    };
+}
+
 #[tauri::command]
 fn studyflow_exit(app: tauri::AppHandle) {
+    shutdown_owned_services(&app);
     app.exit(0);
 }
 
@@ -445,8 +459,7 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
-                window.state::<legacy_tasks::LegacyTasks>().shutdown();
-                window.state::<zhidao_player::ZhidaoPlayerManager>().shutdown();
+                shutdown_owned_services(window.app_handle());
             }
         })
         .run(tauri::generate_context!())
