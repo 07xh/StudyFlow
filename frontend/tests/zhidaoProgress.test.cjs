@@ -34,9 +34,13 @@ test("chapter record filters only the current course's verified server rows",()=
  assert.match(detail,/detail\?\.course_key===course\.course_id/);
  assert.match(detail,/lessonStatus\(item,kind\)===statusFilter/);
  assert.match(detail,/chapterOf\(item\)===chapterFilter/);
- assert.match(detail,/type="search"/);
+ const shared=source("ui/CourseRecordViews.tsx");
+ assert.match(shared,/type="search"/);
+ assert.match(detail,/CourseRecordToolbar/);
+ assert.match(detail,/CourseChapterGroup/);
+ assert.match(shared,/aria-expanded=\{expanded\}/);
  assert.match(detail,/没有符合当前筛选条件的学习记录/);
- assert.match(detail,/value="unverified"/);
+ assert.match(detail,/id:"unverified"/);
  assert.match(detail,/server_completed===false/);
  assert.match(detail,/fully_progressed===true/);
 });
@@ -47,4 +51,21 @@ test("verified percentages are labeled by their actual evidence type",()=>{
  assert.match(presentation,/满进度知识点占比/);
  assert.match(presentation,/已完成视频占比/);
  assert.match(card,/course\.course_type==="ai"/);
+});
+
+test("Zhidao and Rain Classroom reuse the same course record components and preserve evidence",()=>{
+ const zd=source("components/ZhidaoCourseDetailPanel.tsx");
+ const ykt=source("components/YuketangCourseDetailPanel.tsx");
+ const shared=source("ui/CourseRecordViews.tsx");
+ assert.match(zd,/sf-unified-records/);
+ assert.match(ykt,/sf-unified-records/);
+ for(const body of [zd,ykt]){
+   assert.match(body,/CourseRecordToolbar/);
+   assert.match(body,/CourseChapterGroup/);
+   assert.match(body,/onExpandAll/);
+ }
+ assert.match(zd,/currentDetail\?\.stale/);
+ assert.match(ykt,/progress_percent===null/);
+ assert.match(shared,/搜索学习记录/);
+ assert.match(shared,/aria-label="章节筛选"/);
 });

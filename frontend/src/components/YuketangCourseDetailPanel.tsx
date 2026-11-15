@@ -1,13 +1,21 @@
-import {useCallback,useEffect,useId,useMemo,useRef,useState} from "react";
-import {ChevronDown,ChevronRight,RefreshCw} from "lucide-react";
+import {useCallback,useEffect,useMemo,useRef,useState} from "react";
+import {RefreshCw} from "lucide-react";
 import {friendlyBridgeError,request,type YuketangCourseProgress,
   type YuketangVideoProgress} from "../bridge";
 import type {Course} from "../types";
+import {CourseChapterGroup,CourseRecordToolbar} from "../ui/CourseRecordViews";
 
 type Props={course:Course;desktop:boolean;connected:boolean;scopeDirty:boolean};
 type LoadState="idle"|"loading"|"ready"|"blocked"|"error";
 type ProgressFilter="all"|"pending"|"done"|"unknown";
 const PAGE_SIZE=8;
+
+/** Display precision must never round a non-complete server record up to 100%. */
+function verifiedPercentLabel(value:number){
+  if(value>0&&value<0.1)return "<0.1%";
+  if(value<100)return (Math.floor(value*10)/10).toFixed(1)+"%";
+  return "100%";
+}
 
 function duration(value:number|null){
   if(value===null||!Number.isFinite(value)||value<0)return "—";
@@ -46,7 +54,8 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
   const revision=useRef(0);
   const [filter,setFilter]=useState<ProgressFilter>("all");
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
-  const panelId=useId();
+  const [search,setSearch]=useState("");
+  const [chapterFilter,setChapterFilter]=useState("");
 
   // One user action verifies the whole course. Keep requests within the existing
   // server-side limit and run them sequentially to avoid an unbounded burst.
@@ -107,6 +116,8 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
   useEffect(()=>{
     setFilter("all");
     setExpanded({});
+    setSearch("");
+    setChapterFilter("");
   },[course.course_id]);
 
   const chapters=useMemo(()=>{
@@ -128,18 +139,25 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     {id:"done",label:"已完成",count:completed},
     {id:"unknown",label:"未核验",count:unknown},
   ];
-  // Filtering is local to the fetched page(s); it never claims a whole-course status.
-  const visibleChapters=useMemo(()=>chapters.map(([chapter,items])=>[
-    chapter,items.filter(video=>filter==="all"||
-      (filter==="unknown"&&video.progress_percent===null)||
-      (filter==="done"&&video.server_completed===true)||
-      (filter==="pending"&&video.progress_percent!==null&&video.server_completed===false))
-  ] as [string,YuketangVideoProgress[]]).filter(([,items])=>items.length>0),[chapters,filter]);
+  // Search/chapter/status filters operate only on authentic fetched records.
+  const visibleChapters=useMemo(()=>{
+    const term=search.trim().toLocaleLowerCase();
+    return chapters.filter(([chapter])=>!chapterFilter||chapterFilter===chapter)
+      .map(([chapter,items])=>[chapter,items.filter(video=>
+        (filter==="all"||
+          (filter==="unknown"&&video.progress_percent===null)||
+          (filter==="done"&&video.server_completed===true)||
+          (filter==="pending"&&video.progress_percent!==null&&video.server_completed===false))&&
+        (!term||video.name.toLocaleLowerCase().includes(term)||chapter.toLocaleLowerCase().includes(term))
+      )] as [string,YuketangVideoProgress[]])
+      .filter(([,items])=>items.length>0);
+  },[chapters,filter,search,chapterFilter]);
+  const visibleCount=visibleChapters.reduce((n,[,items])=>n+items.length,0);
   const toggleAll=(open:boolean)=>{
     setExpanded(Object.fromEntries(chapters.map(([name])=>[name,open])));
   };
 
-  return <section className="sf-ykt-course-chapters course-v2-detail sf-zhidao-course-detail"
+  return <section className="sf-ykt-course-chapters course-v2-detail sf-zhidao-course-detail sf-unified-records"
     aria-label="雨课堂章节学习进度">
     <div className="sf-zd-detail-heading">
       <div>
@@ -153,7 +171,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
         <RefreshCw size={14}/>{state==="loading"?"核验全课中…":"重新核验全课"}
       </button>
     </div>
-    {videos.length>0&&<div className="sf-zd-detail-summary sf-ykt-progress-summary">
+    {videos.length>0&&<div className="sf-zd-detail-summary sf-ykt-progress-summary sf-record-summary">
       <div><span>已读取视频</span><strong>{videos.length} / {total}</strong></div>
       <div><span>服务器已核验</span><strong>{verified.length} / {videos.length}</strong></div>
       <div><span>已确认完成</span><strong>{completed} 节</strong></div>
@@ -165,20 +183,12 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
       本次已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}
     </p>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
-    {videos.length>0&&<div className="sf-ykt-progress-toolbar">
-      <div className="sf-ykt-progress-filters" role="group" aria-label="筛选已读取视频的进度">
-        {filters.map(option=><button key={option.id} type="button"
-          className={filter===option.id?"active":""}
-          aria-pressed={filter===option.id} onClick={()=>setFilter(option.id)}>
-          {option.label} <span>{option.count}</span>
-        </button>)}
-      </div>
-      <div className="sf-ykt-expand-actions">
-        <button className="secondary" type="button" onClick={()=>toggleAll(true)}>展开全部</button>
-        <button className="secondary" type="button" onClick={()=>toggleAll(false)}>收起全部</button>
-      </div>
-    </div>}
-    {(state==="ready"||videos.length>0)&&<div className="sf-ykt-videos">
+    {videos.length>0&&<CourseRecordToolbar key={course.course_id}
+      filters={filters} activeFilter={filter} onFilter={value=>setFilter(value as ProgressFilter)}
+      search={search} onSearch={setSearch}
+      chapters={chapters.map(([name])=>name)} chapter={chapterFilter} onChapter={setChapterFilter}
+      visibleCount={visibleCount} totalCount={videos.length} onExpandAll={toggleAll}/>}
+    {(state==="ready"||videos.length>0)&&<div className="sf-ykt-videos sf-record-chapters">
       {videos.length===0
         ?<p className="sf-muted">当前课堂没有可识别的视频章节，或课程尚未发布视频。</p>
         :visibleChapters.length===0
@@ -188,43 +198,32 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
             const count=allItems.filter(item=>item.progress_percent!==null).length;
             const done=allItems.filter(item=>item.server_completed===true).length;
             const isExpanded=expanded[chapter]??index===0;
-            return <div className="sf-ykt-chapter-group" key={chapter}>
-              <button type="button" className="sf-ykt-chapter-toggle"
-                aria-expanded={isExpanded} aria-controls={panelId+"-chapter-"+index}
-                onClick={()=>setExpanded(previous=>({...previous,[chapter]:!isExpanded}))}>
-                <span className="sf-ykt-chapter-name">
-                  {isExpanded?<ChevronDown size={16}/>:<ChevronRight size={16}/>}
-                  <strong>{chapter}</strong>
-                </span>
-                <span className="sf-ykt-chapter-stats">
-                  已读取 {allItems.length} 节 · 核验 {count} 节 · 完成 {done} 节
-                </span>
-              </button>
-              {isExpanded&&<div className="sf-zd-detail-list sf-zd-detail-list-expanded"
-                id={panelId+"-chapter-"+index}>
-                {items.map(video=><article className="sf-zd-detail-item" key={video.id}>
-                  <div className="sf-zd-detail-item-head">
-                    <strong>{video.name}</strong>
-                    <span>{video.progress_percent===null?"未核验":
-                      video.progress_percent.toFixed(1)+"%"}</span>
-                  </div>
-                  <small>{video.progress_percent===null
-                    ?"服务器未返回可确认的进度"
-                    :video.server_completed?"服务器已确认完成":"服务器已核验 · 尚未完成"}
-                    {video.last_point_seconds!==null&&
-                      " · 最后位置 "+duration(video.last_point_seconds)}
-                    {video.duration_seconds!==null&&
-                      " / 总时长 "+duration(video.duration_seconds)}
-                  </small>
-                  {video.progress_percent!==null&&
-                    <div className="sf-zd-detail-track" role="progressbar"
-                      aria-label={video.name+"服务器进度"}
-                      aria-valuemin={0} aria-valuemax={100} aria-valuenow={video.progress_percent}>
-                      <span style={{width:video.progress_percent+"%"}}/>
-                    </div>}
-                </article>)}
-              </div>}
-            </div>;
+            return <CourseChapterGroup key={chapter} title={chapter}
+              meta={`已读取 ${allItems.length} 节 · 已核验 ${count} 节 · 已完成 ${done} 节`}
+              expanded={isExpanded} onToggle={()=>setExpanded(previous=>({...previous,[chapter]:!isExpanded}))}>
+              {items.map(video=><article className="sf-zd-detail-item sf-record-item" key={video.id}>
+                <div className="sf-zd-detail-item-head">
+                  <strong>{video.name}</strong>
+                  <span className={"sf-record-status is-"+(video.progress_percent===null?"unverified":
+                    video.server_completed?"completed":"incomplete")}>
+                    {video.progress_percent===null?"未核验":verifiedPercentLabel(video.progress_percent)}
+                  </span>
+                </div>
+                <small>{video.progress_percent===null
+                  ?"服务器未返回可确认的进度"
+                  :video.server_completed?"服务器已确认完成":"服务器已核验 · 尚未完成"}
+                  {video.last_point_seconds!==null&&
+                    " · 最后位置 "+duration(video.last_point_seconds)}
+                  {video.duration_seconds!==null&&
+                    " / 总时长 "+duration(video.duration_seconds)}
+                </small>
+                {video.progress_percent!==null&&
+                  <div className="sf-zd-detail-track" role="progressbar" aria-label={video.name+"服务器进度"}
+                    aria-valuemin={0} aria-valuemax={100} aria-valuenow={video.progress_percent}>
+                    <span style={{width:video.progress_percent+"%"}}/>
+                  </div>}
+              </article>)}
+            </CourseChapterGroup>;
           })}
     </div>}
     {nextOffset!==null&&state==="error"&&<div className="actions sf-ykt-page-actions">

@@ -6,11 +6,19 @@ const ts=require('typescript');
 const React=require('react');
 const {create,act}=require('react-test-renderer');
 
+function sharedViews(){
+ const source=fs.readFileSync(path.join(__dirname,'../src/ui/CourseRecordViews.tsx'),'utf8');
+ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText;
+ const mod={exports:{}};
+ new Function('module','exports','require',code)(mod,mod.exports,require);
+ return mod.exports;
+}
+
 function component(request){
  const source=fs.readFileSync(path.join(__dirname,'../src/components/ZhidaoCourseDetailPanel.tsx'),'utf8');
  const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText;
  const mod={exports:{}};
- new Function('module','exports','require',code)(mod,mod.exports,name=>name==='../bridge'?{request,friendlyBridgeError:()=> 'failed'}:require(name));
+ new Function('module','exports','require',code)(mod,mod.exports,name=>name==='../bridge'?{request,friendlyBridgeError:()=> 'failed'}:name==='../ui/CourseRecordViews'?sharedViews():require(name));
  return mod.exports.ZhidaoCourseDetailPanel;
 }
 const course={platform:'zhidao',course_id:'a'.repeat(64),title:'course',course_type:'ai',verified_at:'2026-11-14T12:00:00Z'};
@@ -33,4 +41,19 @@ test('chapter detail follows verification timestamp and clears failed refresh',a
 test('clears a selected course when the current session no longer contains it',()=>{
  const source=fs.readFileSync(path.join(__dirname,'../src/App.tsx'),'utf8');
  assert.match(source,/useEffect\(\(\)=>\{\s*if\(!selectedCourse\)return;\s*if\(!selectedSessionCourse\(courses,selectedCourse\)\)setSelectedCourse\(null\);\s*\},\[courses,selectedCourse\]\);/);
+});
+
+test('Zhidao full-knowledge flag is not mislabeled unverified when percent is absent',async()=>{
+ const Panel=component(async()=>({
+  course_key:course.course_id,course_type:'ai',verified:true,stale:false,done:1,total:1,
+  items:[{name:'已完成知识点',fully_progressed:true}]
+ }));
+ let view;
+ await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
+ const status=view.root.findAllByType('span').find(node=>
+  String(node.props.className||'').includes('sf-record-status'));
+ assert.ok(status);
+ assert.equal(status.props.children,'已达满进度');
+ assert.doesNotMatch(JSON.stringify(view.toJSON()),/0.0%/);
+ act(()=>view.unmount());
 });

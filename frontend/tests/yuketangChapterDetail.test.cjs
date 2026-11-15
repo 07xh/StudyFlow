@@ -6,6 +6,16 @@ const ts=require("typescript");
 const React=require("react");
 const {create,act}=require("react-test-renderer");
 
+function sharedViews(){
+  const source=fs.readFileSync(path.join(__dirname,"../src/ui/CourseRecordViews.tsx"),"utf8");
+  const code=ts.transpileModule(source,{fileName:"CourseRecordViews.tsx",compilerOptions:{
+    module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020
+  }}).outputText;
+  const mod={exports:{}};
+  new Function("module","exports","require",code)(mod,mod.exports,require);
+  return mod.exports;
+}
+
 function component(request){
   const source=fs.readFileSync(path.join(__dirname,"../src/components/YuketangCourseDetailPanel.tsx"),"utf8");
   const code=ts.transpileModule(source,{fileName:"YuketangCourseDetailPanel.tsx",compilerOptions:{
@@ -13,7 +23,8 @@ function component(request){
   }}).outputText;
   const mod={exports:{}};
   new Function("module","exports","require",code)(mod,mod.exports,name=>
-    name==="../bridge"?{request,friendlyBridgeError:()=> "读取失败"}:require(name));
+    name==="../bridge"?{request,friendlyBridgeError:()=> "读取失败"}:
+    name==="../ui/CourseRecordViews"?sharedViews():require(name));
   return mod.exports.YuketangCourseDetailPanel;
 }
 const course={platform:"yuketang",course_id:"123",title:"课程"};
@@ -42,7 +53,8 @@ test("Rain Classroom per-lesson server progress groups chapters and never invent
   assert.match(output,/第二章/);
   assert.match(output,/视频12/);
   assert.match(output,/42.5%/);
-  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  const secondChapter=view.root.findAllByType("button").find(button=>
+    String(button.props.className||"").includes("sf-ykt-chapter-toggle")&&button.props["aria-expanded"]===false);
   assert.ok(secondChapter);
   await act(async()=>{secondChapter.props.onClick();});
   assert.match(JSON.stringify(view.toJSON()),/服务器未返回可确认的进度/);
@@ -92,7 +104,8 @@ test("progress batches automatically verify all lessons without another click",a
   let view;
   await act(async()=>{view=create(React.createElement(Panel,props));});
   assert.deepEqual(seen,[0,8]);
-  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  const secondChapter=view.root.findAllByType("button").find(button=>
+    String(button.props.className||"").includes("sf-ykt-chapter-toggle")&&button.props["aria-expanded"]===false);
   assert.ok(secondChapter);
   await act(async()=>{secondChapter.props.onClick();});
   const out=JSON.stringify(view.toJSON());
@@ -127,7 +140,8 @@ test("later batch failure retains verified evidence and resumes at failed offset
   failing=false;
   await act(async()=>{retry.props.onClick();});
   assert.deepEqual(seen,[0,8,8]);
-  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  const secondChapter=view.root.findAllByType("button").find(button=>
+    String(button.props.className||"").includes("sf-ykt-chapter-toggle")&&button.props["aria-expanded"]===false);
   await act(async()=>{secondChapter.props.onClick();});
   out=JSON.stringify(view.toJSON());
   assert.match(out,/视频9/);
@@ -195,5 +209,49 @@ test("Rain Classroom filters only fetched verified states and supports chapter e
   const expand=view.root.findAllByType("button").find(button=>button.props.children==="展开全部");
   await act(async()=>{expand.props.onClick();});
   assert.match(JSON.stringify(view.toJSON()),/视频done/);
+  act(()=>view.unmount());
+});
+
+test("Rain Classroom shares search and chapter controls with Zhidao",async()=>{
+  const Panel=component(async()=>page([
+    video("a","章节A",80),video("b","章节B",100),
+  ]));
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const findButton=label=>view.root.findAllByType("button")
+    .find(button=>button.props["aria-label"]===label);
+  await act(async()=>{findButton("搜索学习记录").props.onClick();});
+  const input=view.root.findByType("input");
+  await act(async()=>{input.props.onChange({target:{value:"视频b"}});});
+  let out=JSON.stringify(view.toJSON());
+  assert.doesNotMatch(out,/视频a/);
+  const collapse=view.root.findAllByType("button")
+    .find(button=>button.props.children==="收起全部");
+  await act(async()=>{collapse.props.onClick();});
+  assert.equal(view.root.findAllByType("article").length,0);
+  const expand=view.root.findAllByType("button")
+    .find(button=>button.props.children==="展开全部");
+  await act(async()=>{expand.props.onClick();});
+  out=JSON.stringify(view.toJSON());
+  assert.match(out,/视频b/);
+  await act(async()=>{input.props.onChange({target:{value:""}});});
+  const select=view.root.findByType("select");
+  await act(async()=>{select.props.onChange({target:{value:"章节A"}});});
+  out=JSON.stringify(view.toJSON());
+  assert.match(out,/章节A/);
+  assert.doesNotMatch(out,/视频b/);
+  act(()=>view.unmount());
+});
+
+test("99.999% verified video cannot be displayed as server-completed 100%",async()=>{
+  const Panel=component(async()=>page([{
+    ...video("near","第一章",99.999),server_completed:false
+  }]));
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const out=JSON.stringify(view.toJSON());
+  assert.match(out,/99.9%/);
+  assert.match(out,/服务器已核验 · 尚未完成/);
+  assert.doesNotMatch(out,/100.0%/);
   act(()=>view.unmount());
 });
