@@ -333,8 +333,6 @@ export default function App(){
           onClick={()=>setPlatformSettingsOpen(previous=>previous===platform?null:platform)}>
           <SlidersHorizontal size={15}/>{platformSettingsOpen===platform?"返回平台":"参数设置"}
         </button>
-        <button type="button" className={platforms[platform].status==="connected"?"primary":"secondary"}
-          onClick={()=>enterCourses(platform)}>打开课程列表</button>
         <button type="button" className="secondary" disabled={!desktop||!!busy||platforms[platform].status!=="connected"}
           onClick={()=>void sync(platform)}>同步课程列表</button>
       </div>
