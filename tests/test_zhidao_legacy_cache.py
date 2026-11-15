@@ -54,6 +54,22 @@ def test_real_cache_adapter_preserves_type_stale_and_identity(session_cache, mon
     assert all("route1" not in row.course_id for row in result)
 
 
+@pytest.mark.parametrize("exit_code,stdout,expected", [
+    (0, "[SESSION_OK] server confirmed\\n", True),
+    (1, "[SESSION_OK] server confirmed\\n", False),
+    (4, "[SESSION_OK] server confirmed\\n", False),
+    (0, "[SESSION_UNCONFIRMED] login unknown\\n", False),
+    (0, "", False),
+])
+def test_login_probe_requires_successful_process_and_explicit_server_confirmation(
+    monkeypatch, exit_code, stdout, expected
+):
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda command, timeout: (
+        SimpleNamespace(returncode=exit_code, stdout=stdout)
+    ))
+    assert legacy_runtime.probe_login() is expected
+
+
 def test_rotated_cookie_fails_closed(session_cache, monkeypatch):
     cache, fingerprint = session_cache
     (cache / "zhidao-courses.json").write_text(
