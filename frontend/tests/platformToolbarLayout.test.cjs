@@ -7,10 +7,10 @@ const source=file=>fs.readFileSync(path.join(__dirname,"..","src",file),"utf8");
 test("platform toolbar keeps settings and sync in one ordered row without a duplicate course-list button",()=>{
   const app=source("App.tsx");
   const css=source("style.css");
-  const block=app.slice(app.indexOf('className="sf-platform-toolbar actions"'),app.indexOf("platformSettingsOpen===platform?renderPlatformSettings(platform)"));
+  const block=app.slice(app.indexOf('className="sf-platform-toolbar actions"'),app.indexOf('      {platformSettingsOpen===platform\n        ?renderPlatformSettings(platform)'));
   assert.ok(block.length>0);
-  const settings=block.indexOf("参数设置"),sync=block.indexOf("同步课程列表");
-  assert.ok(settings>=0&&sync>settings,"settings and synchronization must stay in this order");
+  const account=block.indexOf("账号与连接"),settings=block.indexOf("参数设置"),sync=block.indexOf("同步课程列表");
+  assert.ok(account>=0&&settings>account&&sync>settings,"account, settings and synchronization remain together");
   assert.doesNotMatch(block,/打开课程列表/,"the platform landing already contains the course list");
   assert.match(block,/role="group" aria-label="平台操作"/);
   assert.ok(block.includes("<SlidersHorizontal size={15}/>"));
@@ -24,17 +24,23 @@ test("platform settings open separately without duplicating the main workspace c
   const app=source("App.tsx");
   const ykt=source("components/YuketangTaskArea.tsx");
   assert.match(app,/const renderPlatformSettings=\(platform:Platform\)=>/);
-  assert.match(app,/platformSettingsOpen===platform\?renderPlatformSettings\(platform\)/);
+  assert.match(app,/platformSettingsOpen===platform\s+\?renderPlatformSettings\(platform\)/);
   assert.match(app,/id="platform:zhidao:defaults"/);
   assert.match(app,/id="platform:zhidao:progress"/);
   assert.match(app,/id="platform:zhidao:data"/);
-  assert.match(app,/<YuketangTaskArea view="settings"/);
-  assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\} view="player"/);
+  assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\} view="both"/);
   assert.match(ykt,/view\?:"both"\|"player"\|"settings"/);
   assert.match(ykt,/view!=="settings"&&<LegacyPlaybackPanel/);
   assert.match(ykt,/view!=="player"&&<div className="sf-inline-settings"/);
   assert.match(ykt,/view==="settings"\|\|settingsOpen/);
-  assert.match(app,/id="platform:yuketang:tasks" title="平台批量任务"/);
+  assert.match(app,/id="platform:yuketang:tasks" title="平台批量任务与默认参数"/);
+  const settingsBlock=app.slice(app.indexOf('const renderPlatformSettings='),app.indexOf('const renderPlatformDetail='));
+  const landingBlock=app.slice(app.indexOf('const renderPlatformDetail='),app.indexOf('async function configureFromPanel'));
+  assert.match(settingsBlock,/<PlatformCard/);
+  assert.match(settingsBlock,/id="platform:zhidao:tasks"/);
+  assert.match(settingsBlock,/id="platform:yuketang:content"/);
+  assert.doesNotMatch(landingBlock,/<PlatformCard|<YuketangContentPanel|<RuntimeTaskList|<YuketangTaskArea/);
+  assert.match(landingBlock,/:selected\?renderCourseWorkspace\(selected\):renderCourses\(platform\)/);
 });
 
 test("LightC frame puts global settings beside real window buttons and keeps platform row fixed",()=>{
