@@ -300,7 +300,7 @@ export function LegacyPlaybackPanel({
         <span>任务运行状态</span>
         <strong>{statusReadFailed ? "状态待核实" : status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "检测中" : "未连接桌面端"}</strong>
         <small>约每 2 秒更新</small>
-        {status?.state==="exited"&&ownsStatus&&<div className="sf-task-context sf-zhs-exit-diagnostic" role="status" aria-live="polite">
+        {status?.state==="exited"&&ownsStatus&&!statusReadFailed&&<div className="sf-task-context sf-zhs-exit-diagnostic" role="status" aria-live="polite">
           <strong>{legacyExitMessage(status)}（退出码：{status.exit_code??"未知"}）</strong>
           {status.exit_code!==0&&<small>{zhsDiagnosticMessage(status)}</small>}
           {status.exit_code===0&&!status.zhs_progress&&<small>本次未采集到播放进度，是否完成请以服务器只读核验为准。</small>}
@@ -424,7 +424,7 @@ export function LegacyPlaybackPanel({
       <span>任务所属课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
     </div>}
 
-    {platform==="yuketang"&&status?.state==="exited"&&ownsStatus&&<p className="legacy-state-note">
+    {platform==="yuketang"&&status?.state==="exited"&&ownsStatus&&!statusReadFailed&&<p className="legacy-state-note">
       {legacyExitMessage(status)}（退出码：{status.exit_code ?? "未知"}）
     </p>}
     {status?.run_id&&ownsStatus&&<RunParameters parameters={events.find(event=>event.runner===(platform==="zhidao"?"zhs":"yuketang")&&event.runId===status.run_id&&event.parameters)?.parameters}/>}
