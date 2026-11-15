@@ -6,6 +6,7 @@ import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
+import {XuexitongLoginPanel,XuexitongCourseDetailPanel} from "./components/XuexitongPanels";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -58,8 +59,8 @@ type CourseSyncFeedback={phase:CourseSyncPhase;error:string};
 function readPlatformLoginExpanded():Record<Platform,boolean>{
   try{
     const saved=JSON.parse(window.localStorage.getItem(PLATFORM_LOGIN_EXPANDED_KEY)||"{}");
-    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true};
-  }catch{return {zhidao:false,yuketang:false};}
+    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true,xuexitong:saved.xuexitong===true};
+  }catch{return {zhidao:false,yuketang:false,xuexitong:false};}
 }
 
 function readActivity():ActivityEntry[]{
@@ -86,9 +87,9 @@ export default function App(){
     subscribeYuketangVerification,getYuketangVerificationRevision,getYuketangVerificationRevision);
   const platformsRef=useRef(platforms);
   platformsRef.current=platforms;
-  const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint()});
+  const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint(),xuexitong:newCourseSyncCheckpoint()});
   const [syncFeedback,setSyncFeedback]=useState<Record<Platform,CourseSyncFeedback>>({
-    zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""}
+    zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""},xuexitong:{phase:"idle",error:""}
   });
   const [statusCheckRevision,setStatusCheckRevision]=useState(0);
   const [busy,setBusy]=useState("");
@@ -381,16 +382,16 @@ export default function App(){
     if(!desktop||!consentAccepted)return;
     const newStatusCheck=statusCheckRevision!==lastObservedStatusCheck.current;
     lastObservedStatusCheck.current=statusCheckRevision;
-    for(const platform of ["zhidao","yuketang"] as const){
+    for(const platform of ["zhidao","yuketang","xuexitong"] as const){
       if(platforms[platform].status!=="connected")continue;
       if(newStatusCheck||page==="platform-"+platform)void sync(platform);
     }
-  },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,statusCheckRevision,sync]);
+  },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,platforms.xuexitong.status,statusCheckRevision,sync]);
 
   useEffect(()=>{
     if(!desktop||!consentAccepted||typeof window.addEventListener!=="function")return;
     const onFocus=()=>{
-      const platform=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null;
+      const platform=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":null;
       if(platform&&platformsRef.current[platform].status==="connected")void sync(platform);
     };
     window.addEventListener("focus",onFocus);
@@ -468,7 +469,7 @@ export default function App(){
         enabled:previous.preferences[course.course_id]??true
       });
     }
-    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
+    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":course.platform==="xuexitong"?"platform-xuexitong":"platform-yuketang");
   }
   function courseMode(course:Course):"official"|"zhs-original"{
     const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
@@ -484,6 +485,7 @@ export default function App(){
       onChange={updateConfiguration}
       onSubmit={()=>void configureFromPanel()} onOpenScope={openYuketangScopeFields}
       onClear={()=>setClearDialogOpen(true)}/>;
+    if(platform==="xuexitong")return <XuexitongLoginPanel desktop={desktop} onConnected={()=>{invalidatePlatform("xuexitong",true);void refresh();}}/>;
     return null;
   }
 
@@ -550,6 +552,9 @@ export default function App(){
       </CollapsibleSection>
 
       </>}
+    </>:platform==="xuexitong"?<>
+      {platformSettingsSection==="parameters"&&<p className="sf-muted">学习通模块已接入真实课程目录读取。执行与心跳控制尚未上线。</p>}
+      {platformSettingsSection==="advanced"&&<p className="sf-muted">已保存的登录会话使用 Windows 凭据管理器；可在「账号与连接」清除。</p>}
     </>:<>
       {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings"
         desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
@@ -747,6 +752,8 @@ export default function App(){
             <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
+        </>:course.platform==="xuexitong"?<>
+          <p className="sf-muted">学习通真实课程及章节读取已接入；本地任务执行器尚未接入。</p>
         </>:<>
           <p className="sf-course-scope-note">
             雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
@@ -768,6 +775,10 @@ export default function App(){
             onAutoVerifyChange={configureAutoVerify}
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
+      </>:course.platform==="xuexitong"?<>
+        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
+          <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
+        </CollapsibleSection>
       </>:<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习进度" defaultExpanded={true}>
           <YuketangCourseDetailPanel course={course} desktop={desktop}
@@ -786,9 +797,10 @@ export default function App(){
 
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
   const workspaceCourse=(page==="platform-zhidao"&&activeSelectedCourse?.platform==="zhidao"
-    ||page==="platform-yuketang"&&activeSelectedCourse?.platform==="yuketang")
+    ||page==="platform-yuketang"&&activeSelectedCourse?.platform==="yuketang"
+    ||page==="platform-xuexitong"&&activeSelectedCourse?.platform==="xuexitong")
     ?activeSelectedCourse:null;
-  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null;
+  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":null;
   const activeMetric=workspaceCourse?courseMetric(workspaceCourse,workspaceCourse.platform==="yuketang"?yuketangSummaries[workspaceCourse.course_id]:undefined):null;
   const activeCourseProgress=activeMetric?.percent??null;
   const platformOverview=headerPlatform?platformProgressOverview(platforms[headerPlatform].courses,yuketangSummaries):null;
@@ -868,6 +880,7 @@ export default function App(){
     <AppShell page={page} onNavigate={next=>{
       if(next==="platform-zhidao"){goPlatform("zhidao");return;}
       if(next==="platform-yuketang"){goPlatform("yuketang");return;}
+      if(next==="platform-xuexitong"){goPlatform("xuexitong");return;}
       setPlatformSettingsOpen(null);
       setSelectedCourse(null);
       setPage(next);
@@ -899,6 +912,7 @@ export default function App(){
       {page==="platforms"&&renderPlatforms()}
       {page==="platform-zhidao"&&renderPlatformDetail("zhidao")}
       {page==="platform-yuketang"&&renderPlatformDetail("yuketang")}
+      {page==="platform-xuexitong"&&renderPlatformDetail("xuexitong")}
       {page==="records"&&renderRecords()}
       {page==="logs"&&renderLogs()}
       {page==="settings"&&<>
