@@ -1,6 +1,6 @@
 import {useEffect,useState} from "react";
 import {CheckCircle2,ExternalLink,History,RefreshCw,Sparkles} from "lucide-react";
-import {OFFICIAL_RELEASES_URL,openOfficialReleases} from "../releaseNavigation";
+import {OFFICIAL_RELEASES_URL,openOfficialReleases,openLatestRelease} from "../releaseNavigation";
 import type {ReleaseChangelogEntry} from "../bridge";
 import type {NotesDialogState} from "../useReleaseChangelog";
 import {SettingsDialog} from "./SettingsDialog";
@@ -66,8 +66,12 @@ export function ReleaseNotesDialog({state,dark,onClose,onOpenUpdates,onRetry}:{
       </div>
       <footer className="sf-release-actions">
         <a href={OFFICIAL_RELEASES_URL} target="_blank" rel="noopener noreferrer"
+          onClick={event=>void openLatestRelease(event,setBrowserError)}>
+          <ExternalLink size={14}/>GitHub 最新版
+        </a>
+        <a href={OFFICIAL_RELEASES_URL} target="_blank" rel="noopener noreferrer"
           onClick={event=>void openOfficialReleases(event,setBrowserError)}>
-          <ExternalLink size={14}/>GitHub 完整记录
+          <History size={14}/>全部历史版本
         </a>
         <div className="sf-release-action-buttons">
           {state.error&&<button type="button" className="secondary" onClick={onRetry}>
