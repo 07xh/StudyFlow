@@ -44,7 +44,10 @@ const server=http.createServer((req,res)=>{
    await page.getByRole('button',{name:'参数设置',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),1);
    assert.equal(await page.locator('.sf-platform-card').count(),1,'Account management belongs only to platform settings');
-   assert.equal(await page.getByText('雨课堂默认参数',{exact:true}).count(),1);
+   await page.getByRole('button',{name:'平台批量任务与默认参数，展开'}).click();
+   await page.getByRole('button',{name:'平台默认参数（下次启动生效）'}).click();
+   assert.equal(await page.getByText('雨课堂默认参数',{exact:true}).count(),1,
+     'The original parameters remain accessible under the platform settings view');
    await page.getByRole('button',{name:'返回课程列表',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),0);
    assert.equal(await page.locator('.sf-platform-courses').count(),1,'Returning from settings must restore the platform course list');
