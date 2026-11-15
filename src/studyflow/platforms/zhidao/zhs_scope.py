@@ -21,7 +21,7 @@ class ScopeInvalid(BaseException):
 
 
 @contextmanager
-def scoped_upstream_play(options: dict | None, is_ai: bool):
+def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
     if options is None:
         yield
         return
@@ -29,6 +29,10 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
     scoped = options["scope_mode"] == "selected"
     maximum = options["max_videos"]
     stop_on_error = options["stop_on_error"]
+    resource_mode = options.get("resource_mode", "all")
+
+    if not is_ai and resource_mode == "reading":
+        raise ScopeInvalid()
 
     if is_ai:
         from zhs.ai.course import AiCourseManager
@@ -36,7 +40,42 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
 
         original_targets = AiCourseManager._iter_targets
         original_video = AiVideoPlayer.play_video
+        original_resource = getattr(AiCourseManager, "_process_resource", None)
         count = 0
+
+        def resource_kind(item):
+            detail = getattr(item, "resources_detail", None)
+            key = (getattr(detail, "resources_type", None),
+                   getattr(detail, "resources_distribute_type", None))
+            if key in ((1, 3), (2, 2)):
+                return "video"
+            if key == (1, 4):
+                return "ppt"
+            if key == (2, 1):
+                return "article"
+            return "other"
+
+        def process_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs):
+            kind = resource_kind(item)
+            if resource_mode == "video" and kind != "video":
+                return None
+            if resource_mode == "reading" and kind not in ("ppt", "article"):
+                return None
+            detail = getattr(item, "resources_detail", None)
+            # The upstream may skip already-completed or optional resources.
+            # Those are NOT an active video/PPT/reading item in the UI.
+            optional_enabled = args[2] if len(args) > 2 else kwargs.get("learn_optional", False)
+            active = getattr(item, "study_status", None) != 1 and (
+                getattr(detail, "resources_sync_type", 1) == 1 or optional_enabled is True
+            )
+            if active and on_resource is not None:
+                try:
+                    on_resource(kind, getattr(detail, "resources_name", None))
+                except Exception:
+                    # UI-only callbacks must not change original ZHS flow.
+                    pass
+            return original_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs)
+
 
         def targets(manager, course_info):
             candidates = list(original_targets(manager, course_info))
@@ -66,11 +105,15 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
 
         AiCourseManager._iter_targets = targets
         AiVideoPlayer.play_video = video
+        if callable(original_resource):
+            AiCourseManager._process_resource = process_resource
         try:
             yield
         finally:
             AiCourseManager._iter_targets = original_targets
             AiVideoPlayer.play_video = original_video
+            if callable(original_resource):
+                AiCourseManager._process_resource = original_resource
     else:
         from zhs.zhidao.video import ZhidaoVideoPlayer
         from zhs.exceptions import CaptchaRequired, TimeLimitExceeded
@@ -119,6 +162,18 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
             return result
 
         def video(player, *args, **kwargs):
+            # In shared courses the upstream video model already has the real
+            # title. Observe it without querying additional endpoints.
+            if on_resource is not None:
+                video_id = args[1] if len(args) > 1 else kwargs.get("video_id")
+                ctx = args[2] if len(args) > 2 else kwargs.get("ctx")
+                try:
+                    resource = getattr(ctx, "videos", {}).get(video_id)
+                    if resource is not None and getattr(resource, "watch_state", None) != 1:
+                        on_resource("video", getattr(resource, "name", None))
+                except Exception:
+                    # Local display instrumentation never interrupts playback.
+                    pass
             try:
                 return original_video(player, *args, **kwargs)
             except (CaptchaRequired, TimeLimitExceeded):

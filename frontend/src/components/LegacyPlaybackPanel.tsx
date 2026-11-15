@@ -1,4 +1,6 @@
 import {RunParameters} from "./RunParameters";
+import {rememberTaskRecovery,discardTaskRecovery} from "../taskRecovery";
+import type {YuketangScope,YuketangSessionMarker} from "../bridge";
 import {ZhsTaskSettingsPanel} from "./ZhsTaskSettingsPanel";
 import {useCallback, useEffect, useId, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
@@ -80,6 +82,13 @@ export function LegacyPlaybackPanel({
   const ownsStatus=platform!=="zhidao"||Boolean(status?.course_id&&status.course_id===selection);
   const liveZhs = !statusReadFailed && platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
+  const zhsKind=liveZhs?.resource_kind;
+  const zhsKindLabel=zhsKind==="video"?"视频":zhsKind==="ppt"?"PPT":
+    zhsKind==="article"?"文章":zhsKind==="other"?"其他资源":"类型待识别";
+  // Previous local snapshots have no resourceKind. The upstream 'playing'
+  // frame is still video-only; retain its bounded percent during upgrades.
+  const zhsSegment=!liveZhs?.resource_kind||liveZhs.resource_kind==="video"
+    ?liveZhs?.video_segment_percent:null;
   const selectedCourse=courses.find(course=>course.platform==="zhidao"&&course.course_id===selection)??null;
   const startHintId=useId();
   // Keep the existing launch gates; expose the first blocking condition instead of an unexplained disabled button.
@@ -223,13 +232,33 @@ export function LegacyPlaybackPanel({
     const requestId = ++latestStatusRequest.current;
     setBusy(true); setMessage("");setYktProgress(null);
     try {
-      if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
+      let lastScope:YuketangScope|null=null;
+      let sessionMarker:string|null=null;
+      if(platform==="yuketang"){
+        await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
+        lastScope=await request<YuketangScope>({operation:"yuketang.scope.get"});
+        try{
+          const identity=await request<YuketangSessionMarker>({operation:"yuketang.session.marker"});
+          sessionMarker=/^[a-f0-9]{64}$/.test(identity.marker)?identity.marker:null;
+        }catch{/* Recovery metadata must not prevent the original task launching. */}
+      }
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined, platform === "zhidao" ? zhsOptions ?? undefined : undefined);
+      if(next.state==="running"&&next.run_id){
+        const persisted=platform==="zhidao"&&zhsOptions
+          ?rememberTaskRecovery({version:1,platform:"zhidao",runId:next.run_id,startedAt:Date.now(),
+              courseId:selection,zhsOptions})
+          :platform==="yuketang"&&lastScope&&sessionMarker
+            ?rememberTaskRecovery({version:1,platform:"yuketang",runId:next.run_id,startedAt:Date.now(),
+                courseId:null,classroomId:lastScope.classroom_id,universityId:lastScope.university_id,
+                sessionMarker,yuketangOptions:options})
+            :false;
+        if(!persisted)setMessage("任务已启动，但本机恢复记录保存失败；请检查应用存储权限。");
+      }
       if (requestId === latestStatusRequest.current && currentPlatform.current === platform) {
         setStatus(next);setStatusReadFailed(false);
       }
-      if (currentPlatform.current === platform) setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
+      if (currentPlatform.current === platform) setMessage(previous=>previous||"已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
       onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:zhsOptions?{...zhsOptions,selected_ids:zhsOptions.selected_ids?.length??0}:undefined});
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
@@ -257,6 +286,7 @@ export function LegacyPlaybackPanel({
         return;
       }
       const next = await stopLegacy(platform,status.run_id);
+      discardTaskRecovery(platform,status.run_id);
       if (requestId === latestStatusRequest.current && currentPlatform.current === platform) {
         setStatus(next);setStatusReadFailed(false);
       }
@@ -305,29 +335,35 @@ export function LegacyPlaybackPanel({
           {status.exit_code!==0&&<small>{zhsDiagnosticMessage(status)}</small>}
           {status.exit_code===0&&!status.zhs_progress&&<small>本次未采集到播放进度，是否完成请以服务器只读核验为准。</small>}
         </div>}
-        {platform==="zhidao"&&<div className="sf-zhs-local" aria-label="ZHS 原版本地模拟片段">
+        {platform==="zhidao"&&<div className="sf-zhs-local" aria-label="ZHS 原版资源及视频片段状态">
           <div className="sf-zhs-local-heading">
-            <span>本地模拟片段</span>
-            <strong>{liveZhs?.video_segment_percent != null
-              ? liveZhs.video_segment_percent.toFixed(1)+"%"
-              : "—"}</strong>
+            <span>正在处理 · {zhsKindLabel}</span>
+            <strong>{status?.state==="running" ? "运行中":status?.state==="exited"?"已结束":"未运行"}</strong>
           </div>
-          {liveZhs?.video_segment_percent != null
-            ? <div className="sf-verified-track" role="progressbar" aria-label="当前本地模拟片段进度"
-                aria-valuemin={0} aria-valuemax={100} aria-valuenow={liveZhs.video_segment_percent}>
-                <span style={{width:liveZhs.video_segment_percent+"%"}}/>
+          <strong className="sf-ykt-video-name" title={liveZhs?.resource_name??undefined}>
+            {liveZhs?.resource_name??"原版尚未提供当前资源名称"}
+          </strong>
+          {liveZhs?.resource_index!=null&&liveZhs.resource_total!=null&&
+            <small>知识点内第 {liveZhs.resource_index}/{liveZhs.resource_total} 项资源 · 此序号不是已完成数量</small>}
+          <div className="sf-zhs-local-heading">
+            <span>当前视频片段位置（不是课程进度）</span>
+            <strong>{zhsSegment!=null?zhsSegment.toFixed(1)+"%":"—"}</strong>
+          </div>
+          {zhsSegment!=null
+            ? <div className="sf-verified-track" role="progressbar" aria-label="当前视频片段位置"
+                aria-valuemin={0} aria-valuemax={100} aria-valuenow={zhsSegment}>
+                <span style={{width:zhsSegment+"%"}}/>
               </div>
             : <small>{status?.state==="running"
                 ? status.course_id===selection
-                  ? status.zhs_stale ? "本地进度输出已过期，等待新的原版输出" : "等待原版输出"
+                  ? status.zhs_stale ? "本地进度输出已过期" : "当前不是已识别的视频片段，或原版尚未输出数字"
                   : "请选择正在运行的课程"
                 : liveZhs ? "上次运行的最终采样" : "未获取到进度记录"}</small>}
           {status?.state==="running"&&status.course_id===selection&&status.zhs_stale&&
-            <small role="status">任务进程仍在运行，但最近的本地进度采样已过期；不代表服务器学习失败或完成。</small>}
-          {liveZhs?.resource_index!=null&&liveZhs.resource_total!=null&&
-            <small>当前知识点资源 {liveZhs.resource_index}/{liveZhs.resource_total}</small>}
+            <small role="status">任务进程仍在运行，但最近的本地采样已过期。</small>}
           {status?.state === "exited" && liveZhs &&
             <small>任务已结束 · 显示结束前最后一次真实采样</small>}
+          <small>切换视频会重新从 0% 计数；片段数字不代表观看倍速或服务器学习进度。</small>
           <small>仅原版本地输出，非服务器确认进度</small>
         </div>}
       </div>

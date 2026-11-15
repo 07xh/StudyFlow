@@ -7,6 +7,7 @@ import {originalZhsDefaults,validateZhsOptions,validateZhsStoredOptions,
 import type {TaskRecorder} from "../activity";
 
 type ScopeMode="all"|"selected";
+type ResourceMode="all"|"video"|"reading";
 type Item={id:number;name:string;group:string;completed:boolean};
 function itemId(detail:ZhidaoCourseDetail,item:ZhidaoCourseDetail["items"][number]){
   return detail.course_type==="ai"?item.knowledge_id:item.video_id;
@@ -32,6 +33,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const [opened,setOpened]=useState(false);
   const [detail,setDetail]=useState<ZhidaoCourseDetail|null>(null);
   const [scopeMode,setScopeMode]=useState<ScopeMode>("all");
+  const [resourceMode,setResourceMode]=useState<ResourceMode>("all");
   const [selectedIds,setSelectedIds]=useState<number[]>([]);
   const revision=useRef(0);
   const detailRevision=useRef(0);
@@ -46,10 +48,11 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const ready=useMemo<OriginalZhsOptions|null>(()=>{
     if(!saved||busy||dirty||!valid||!courseId||loadedFor!==courseId)return null;
     if(scopeMode==="selected" && (!items.length||!selectedIds.every(id=>idsAvailable.has(id))))return null;
-    const result:OriginalZhsOptions={...saved,scope_mode:scopeMode,
+    if(courseType!=="ai" && resourceMode==="reading")return null;
+    const result:OriginalZhsOptions={...saved,scope_mode:scopeMode,resource_mode:resourceMode,
       selected_ids:scopeMode==="selected"?selectedIds:[]};
     return validateZhsOptions(result)?result:null;
-  },[saved,busy,dirty,valid,courseId,loadedFor,scopeMode,selectedIds,items,idsAvailable]);
+  },[saved,busy,dirty,valid,courseId,loadedFor,courseType,scopeMode,resourceMode,selectedIds,items,idsAvailable]);
   useEffect(()=>{readyRef.current?.(ready);},[ready]);
 
   const load=useCallback(async()=>{
@@ -66,16 +69,20 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   },[desktop,courseId]);
   useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
   useEffect(()=>{
-    setDetail(null);setScopeMode("all");setSelectedIds([]);
+    setDetail(null);setScopeMode("all");setResourceMode("all");setSelectedIds([]);
     if(!courseId)return;
     try{
       const stored=JSON.parse(window.localStorage.getItem(scopeKey)||"null");
       if(stored && (stored.mode==="all"||stored.mode==="selected")&&Array.isArray(stored.ids)&&
          stored.ids.length<=256 && stored.ids.every((id:unknown)=>typeof id==="number"&&Number.isSafeInteger(id)&&id>0)){
         setScopeMode(stored.mode);setSelectedIds([...new Set<number>(stored.ids)]);
+        if(stored.resourceMode==="all"||stored.resourceMode==="video"||
+            (stored.resourceMode==="reading"&&courseType==="ai")){
+          setResourceMode(stored.resourceMode);
+        }
       }
     }catch{/* Invalid local selection never becomes an execution option. */}
-  },[scopeKey,courseId]);
+  },[scopeKey,courseId,courseType]);
   const fetchDetail=useCallback(async()=>{
     if(!desktop||!courseId)return;
     const key=courseId,seq=++detailRevision.current;
@@ -88,9 +95,9 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   },[desktop,courseId]);
   useEffect(()=>{void fetchDetail();return ()=>{detailRevision.current++;};},[fetchDetail]);
 
-  function persistScope(mode:ScopeMode,ids:number[]){
-    setScopeMode(mode);setSelectedIds(ids);
-    try{window.localStorage.setItem(scopeKey,JSON.stringify({mode,ids}));}catch{/* session-only */}
+  function persistScope(mode:ScopeMode,ids:number[],kind:ResourceMode=resourceMode){
+    setScopeMode(mode);setSelectedIds(ids);setResourceMode(kind);
+    try{window.localStorage.setItem(scopeKey,JSON.stringify({mode,ids,resourceMode:kind}));}catch{/* session-only */}
   }
   function update<K extends keyof ZhsStoredOptions>(key:K,value:ZhsStoredOptions[K]){
     setOptions(previous=>({...previous,[key]:value}));
@@ -139,13 +146,25 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               disabled={!desktop||busy} onChange={e=>update("limit_minutes",Number(e.target.value))}/></label>
         </div>
         <div className="legacy-flags">
+          <label title="ZHS 0.1.5 原版自动跳过已完成内容，暂不支持在学序中关闭此行为。">
+            <input type="checkbox" checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/>
+            跳过已完成 <small className="sf-muted">（原版自动启用）</small>
+          </label>
           {courseType==="ai"&&<label><input type="checkbox" checked={options.learn_optional} disabled={!desktop||busy}
             onChange={e=>update("learn_optional",e.currentTarget.checked)}/>AI 课程包含选学资源</label>}
           <label><input type="checkbox" checked={options.stop_on_error} disabled={!desktop||busy}
             onChange={e=>update("stop_on_error",e.currentTarget.checked)}/>视频处理异常时停止任务</label>
         </div>
-        <p className="sf-ykt-advanced-note">原版会跳过已完成视频；不提供无效的“强制重看”开关。共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
+        <p className="sf-ykt-advanced-note">“跳过已完成”由 ZHS 0.1.5 原版自动执行，已标记为固定开启；目前不能通过关闭 UI 开关强制重看。共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
         <div className="legacy-option-grid">
+          <label><span>本次选择的资源类型</span>
+            <select value={resourceMode} disabled={!desktop||!courseId||busy}
+              onChange={e=>persistScope(scopeMode,selectedIds,e.target.value as ResourceMode)}>
+              <option value="all">全部资源（原版处理顺序）</option>
+              <option value="video">只选择视频 / 课程视频</option>
+              {courseType==="ai"&&<option value="reading">只选择文章 / PPT（AI 课程）</option>}
+            </select>
+          </label>
           <label><span>本次执行范围</span>
             <select value={scopeMode} disabled={!desktop||!courseId}
               onChange={e=>persistScope(e.target.value as ScopeMode,selectedIds)}>
@@ -154,6 +173,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
             </select>
           </label>
         </div>
+        <p className="sf-ykt-advanced-note">仅针对当前课程的真实资源选择类型，不更改 ZHS 原版的发送节奏。视频比例是单个片段位置，切换视频或知识点时可从 0 开始；课程总体进度以服务器核验为准。停止后再次启动会创建新的原版进程，不会续用已停止的进程。</p>
         {scopeMode==="selected"&&<div className="sf-ykt-advanced-options">
           <div className="actions"><button className="secondary" type="button" disabled={!desktop}
             onClick={()=>void fetchDetail()}><RefreshCw size={14}/>刷新已核验目录</button>

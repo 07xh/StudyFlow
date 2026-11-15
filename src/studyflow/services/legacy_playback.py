@@ -6,6 +6,7 @@ upstream main.py from the StudyFlow Windows package. No algorithm replacement.
 """
 from __future__ import annotations
 
+import errno
 import hashlib
 import hmac
 import json
@@ -25,6 +26,7 @@ from studyflow.platforms.zhidao.legacy_runtime import installation_root
 from studyflow.platforms.zhidao.zhs_settings import (
     validate_run_settings as validate_zhs_settings,
 )
+from studyflow.services.zhs_resource_monitor import create_resource_monitor
 from studyflow.platforms.zhidao.zhs_scope import (
     scoped_upstream_play, ScopeLimitReached, ScopeFailed, ScopeInvalid,
 )
@@ -180,6 +182,18 @@ class _RefreshingZhsSink:
         # stdout and stderr may be written from different ZHS worker threads.
         # Serialize local observer state; never touch the upstream sender.
         self._lock = threading.Lock()
+
+    def mark_resource(self, kind: str, name: object) -> None:
+        # Same lock as stdout/stderr observations: a resource switch and a
+        # numeric console update cannot publish mismatched snapshots.
+        with self._lock:
+            if self.disabled or not hasattr(self.sink, "mark_resource"):
+                return
+            try:
+                self.sink.mark_resource(kind, name)
+                self.last_publish = time.monotonic()
+            except Exception:
+                self.disabled = True
 
     def receive(self, chunk: str) -> None:
         with self._lock:
@@ -365,7 +379,9 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                     observer = runpy.run_path(str(original), run_name="studyflow_vendor_zhs_monitor")
                     root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
                     sink = _RefreshingZhsSink(
-                        observer["NumericTelemetry"](monitor_token, directory=root / "StudyFlow")
+                        create_resource_monitor(
+                            observer["NumericTelemetry"], monitor_token, directory=root / "StudyFlow"
+                        )
                     )
                     # Rich-based CLIs may emit progress to stderr, not stdout.
                     # Each observer forwards output unchanged and stores numbers only.
@@ -377,7 +393,10 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                 sys.stderr = original_stderr
         # Per-run scope only controls the original traversal; not heartbeat sender.
         with _observe_zhs_cli_stages() as stage:
-            with scoped_upstream_play(options, is_ai):
+            with scoped_upstream_play(
+                options, is_ai,
+                on_resource=sink.mark_resource if sink is not None else None,
+            ):
                 result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
         code = result if isinstance(result, int) else 0
@@ -485,10 +504,53 @@ def run_zhidao_original(course_key: str, monitor_token: str | None = None, zhs_o
         return 1
 
 
+
+@contextmanager
+def _exclusive_worker(platform: str):
+    """Hold an OS-owned lock for the whole legacy worker lifetime.
+
+    Survives parent crashes as long as the child remains alive. Do not delete
+    or trust the lock-file PID; only the active OS lock is meaningful.
+    """
+    if platform not in ("zhidao", "yuketang"):
+        raise ValueError("Unsupported worker")
+    root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "StudyFlow"
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / f"legacy-worker-{platform}.lock").open("a+b") as stream:
+        stream.seek(0, os.SEEK_END)
+        if stream.tell() == 0:
+            stream.write(b"\0")
+            stream.flush()
+        stream.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            try:
+                yield
+            finally:
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                yield
+            finally:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+def _run_exclusive(platform: str, callback) -> int:
+    try:
+        with _exclusive_worker(platform):
+            return callback()
+    except OSError as exc:
+        return 10 if exc.errno in (errno.EACCES, errno.EAGAIN) else 11
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["--legacy-yuketang"]:
-        return run_yuketang_original()
+        return _run_exclusive("yuketang", run_yuketang_original)
     if len(args) in (2, 3, 4) and args[0] == "--legacy-zhidao":
         if len(args) == 4:
             try:
@@ -501,7 +563,7 @@ def main(argv: list[str] | None = None) -> int:
             options = None
         token = args[2] if len(args) >= 3 else None
         try:
-            return run_zhidao_original(args[1], token, options)
+            return _run_exclusive("zhidao", lambda: run_zhidao_original(args[1], token, options))
         except Exception:
             # A failure outside upstream CLI must still be visible as a safe
             # category; never persist exception strings from account/cache code.

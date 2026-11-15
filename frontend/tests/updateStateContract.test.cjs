@@ -17,15 +17,17 @@ test("new installations use beta channel while published builds are candidates",
   assert.ok(code.includes('useState<UpdateSettings>({channel:"beta",mode:"download"})'));
 });
 
-test("release page action is routed to the default browser on Windows", () => {
-  const fs = require("node:fs");
-  const path = require("node:path");
-  const rust = fs.readFileSync(path.join(__dirname, "../../src-tauri/src/lib.rs"), "utf8");
-  assert.match(code, /onClick=\{event=>void openOfficialReleasePage\(event\)\}/);
-  assert.match(code, /invoke\("studyflow_open_releases"\)/);
-  assert.match(code, /无法打开系统浏览器，请手动访问/);
-  assert.match(rust, /fn studyflow_open_releases\(\)/);
-  assert.match(rust, /Command::new\("explorer.exe"\)/);
-  assert.match(rust, /studyflow_exit, updates_open_folder, studyflow_open_releases,/);
-  assert.match(rust, /https:\/\/github\.com\/07xh\/StudyFlow\/releases/);
+test("settings and new-version dialog both open official releases in the system browser",()=>{
+  const nav=fs.readFileSync(path.join(__dirname,"../src/releaseNavigation.ts"),"utf8");
+  const dialog=fs.readFileSync(path.join(__dirname,"../src/ui/ReleaseNotesDialog.tsx"),"utf8");
+  const rust=fs.readFileSync(path.join(__dirname,"../../src-tauri/src/lib.rs"),"utf8");
+  assert.match(code,/onClick=\{event=>void openOfficialReleases\(event,setMessage\)\}/);
+  assert.match(dialog,/onClick=\{event=>void openOfficialReleases\(event,setBrowserError\)\}/);
+  assert.match(dialog,/browserError&&<p role="status"/);
+  assert.match(nav,/if\(!isDesktop\(\)\)return/);
+  assert.match(nav,/event.preventDefault\(\)/);
+  assert.match(nav,/invoke\("studyflow_open_releases"\)/);
+  assert.match(rust,/fn studyflow_open_releases\(\)/);
+  assert.match(rust,/Command::new\("explorer.exe"\)/);
+  assert.match(rust,/studyflow_exit, updates_open_folder, studyflow_open_releases,/);
 });
