@@ -46,3 +46,11 @@ test("verification timestamps are compared as instants, not strings",()=>{
  const [merged]=mergeZhidaoEvidence([old],[newRecord]);
  assert.equal(merged.progress_percent,45);
 });
+
+test("do not merge older account records into another authenticated session",()=>{
+ const previous=make("2026-11-15T02:30:00Z",45);
+ const otherLogin=make("2026-11-15T02:00:00Z",10,{session_marker:"b".repeat(64)});
+ const noMarker=make("2026-11-15T02:00:00Z",10,{session_marker:null});
+ assert.deepEqual(mergeZhidaoEvidence([previous],[otherLogin]),[otherLogin]);
+ assert.deepEqual(mergeZhidaoEvidence([previous],[noMarker]),[noMarker]);
+});
