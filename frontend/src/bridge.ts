@@ -115,7 +115,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
   }
   if (!result.ok) {
     const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
-                             "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
+                             "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
                              "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
                              "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
@@ -240,6 +240,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
     case "PLATFORM_NOT_READY": return "真实平台课程读取失败；请检查账号、网络和原版运行时。";
     case "CREDENTIAL_STORAGE_FAILED": return "Windows 凭据管理器保存失败。";
+    case "INVALID_YUKETANG_CONFIGURATION": return "雨课堂配置格式无效：请核对 Session ID、CSRF Token，并确保课堂 ID 和学校 ID 均为 1–24 位数字。";
     case "YUKETANG_SETTINGS_UNAVAILABLE": return "原版雨课堂配置未能读取或保存；旧配置未被覆盖。";
     case "INVALID_YUKETANG_SETTINGS": return "雨课堂参数不符合原版可用范围，未保存。";
     case "UNSUPPORTED_VERSION": return "桌面端与数据服务协议版本不一致。";
