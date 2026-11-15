@@ -121,13 +121,46 @@ try {
     Start-Sleep -Seconds 5
     $app.Refresh()
     if ($app.HasExited) { throw "Installed desktop app exited early: $($app.ExitCode)" }
-    Stop-Process -Id $app.Id -Force
-    Wait-Process -Id $app.Id -ErrorAction SilentlyContinue
+    # A forced process kill bypasses the application's exit cleanup and may
+    # leave its bundled Python bridge running. Exercise a normal window close.
+    $closeRequested = $false
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        $app.Refresh()
+        if ($app.HasExited) { throw "Installed desktop app exited during shutdown probe: $($app.ExitCode)" }
+        if ($app.CloseMainWindow()) {
+            $closeRequested = $true
+            break
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $closeRequested) { throw 'Could not request normal desktop window close in Windows smoke' }
+    if (-not $app.WaitForExit(15000)) {
+        throw 'Desktop app did not exit after normal window close'
+    }
+    $app.Dispose()
     $app = $null
+
+    # Verify the installed sidecar has released its EXE file before uninstall.
+    # This checks the same safety property as the NSIS lock guard, without
+    # killing a user process or weakening the install/uninstall protection.
+    $bridgeReleased = $false
+    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+        try {
+            $probe = [IO.File]::Open($bridge, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            $probe.Dispose()
+            $bridgeReleased = $true
+            break
+        } catch [IO.IOException] {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    if (-not $bridgeReleased) {
+        throw 'Installed bridge remains locked after normal UI exit; uninstall must not bypass its lock guard'
+    }
     $uninstaller = Join-Path $root 'uninstall.exe'
     if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'NSIS uninstaller missing' }
     $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "_?=$root") -Wait -PassThru
-    if ($remove.ExitCode -ne 0) { throw 'NSIS uninstall failed' }
+    if ($remove.ExitCode -ne 0) { throw "NSIS uninstall failed with exit code $($remove.ExitCode)" }
     if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Uninstall changed StudyFlow user data' }
     if ([IO.File]::ReadAllText($legacyInstallMarker) -cne 'preserve-original-zhs-install' -or
         [IO.File]::ReadAllText($legacyDataMarker) -cne 'preserve-original-zhs-data') {
