@@ -18,6 +18,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
   | {id: string; version: 1; operation: "xuexitong.session.configure"; cookie: string}
   | {id: string; version: 1; operation: "xuexitong.session.clear"}
+  | {id: string; version: 1; operation: "xuexitong.settings.get"}
+  | {id: string; version: 1; operation: "xuexitong.settings.save"; settings: XuexitongSettings}
+  | {id: string; version: 1; operation: "xuexitong.chapter.tasks"; course_id: string; chapter_id: string}
   | {id: string; version: 1; operation: "xuexitong.chapters.list"; course_id: string}
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"; course_id?: string}
   | {id: string; version: 1; operation: "yuketang.course.detail"; course_id: string; offset: number; limit: number}
@@ -42,6 +45,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "studyflow.consent.status" | "studyflow.consent.accept"}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
 
+export type XuexitongSettings = {playback_speed:number;concurrency:number;skip_completed:boolean;verify_after_run:boolean};
+export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean};
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
 export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
@@ -118,7 +123,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
     throw new Error("INVALID_IPC_RESPONSE");
   }
   if (!result.ok) {
-    const allowed = new Set(["INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
+    const allowed = new Set(["INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
                              "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
@@ -241,6 +246,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "INVALID_XUEXITONG_SETTINGS": return "学习通参数超出允许范围，原设置未修改。";
+    case "XUEXITONG_SETTINGS_UNAVAILABLE": return "学习通本机设置保存失败，请检查本地文件权限。";
     case "INVALID_XUEXITONG_COOKIE": return "学习通登录会话格式不正确，请确认包含有效的 _uid/UID。";
     case "XUEXITONG_CREDENTIAL_STORAGE_FAILED": return "学习通登录会话未能写入 Windows 凭据管理器。";
     case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
