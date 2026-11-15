@@ -13,15 +13,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     if len(args) != 1 or not COURSE_KEY.fullmatch(args[0]):
         return 2
 
+    from .legacy_runtime import _session_course_cache
     from .upstream import zhidao_only
     key = args[0]
-    rows = zhidao_only.read_cache(zhidao_only.COURSES).get("courses", [])
-    if not isinstance(rows, list):
-        return 2
+    # Apply exactly the same current-login, completeness and cache-schema
+    # checks as the UI bridge. A direct --zhidao-verify-one invocation must not
+    # silently trust stale or partial course lists from another session.
+    try:
+        rows, _ = _session_course_cache()
+    except (OSError, RuntimeError, ValueError):
+        return 4
     matches = [
         row for row in rows
-        if isinstance(row, dict) and row.get("courseType") in ("ai", "shared")
+        if row.get("courseType") in ("ai", "shared")
         and zhidao_only.progress_key(row) == key
+        and row.get("stale") is not True
     ]
     if len(matches) != 1:
         return 2
