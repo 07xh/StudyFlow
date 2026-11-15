@@ -359,9 +359,9 @@ export default function App(){
         <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容">
           <YuketangContentPanel config={config} videos={videos} desktop={desktop} busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"} dirty={scopeDirty} hasSession={hasYuketangSession} hasSign={hasYuketangSign} onChange={updateConfiguration} onSave={()=>void saveYuketangScope()} onShowVideos={()=>void showVideos()}/>
         </CollapsibleSection>
-        <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务与默认参数">
+        <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务">
           <p className={scopeDirty?"sf-task-context":"sf-muted"}>启动和停止作用于雨课堂已保存的课堂范围，不限定为当前浏览的单门课程。{scopeDirty&&" 新编辑的课堂范围尚未保存。"}</p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
+          <YuketangTaskArea view="player" courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
         </CollapsibleSection>
       </>}
