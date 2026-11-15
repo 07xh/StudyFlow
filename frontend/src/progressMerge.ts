@@ -22,7 +22,10 @@ export function mergeZhidaoEvidence(previous:Course[],incoming:Course[]):Course[
   return incoming.map(course=>{
     if(course.platform!=="zhidao"||course.stale)return course;
     const prior=byId.get(course.course_id);
-    if(!prior)return course;
+    // Neither timestamp nor title proves account identity; require both records
+    // to belong to the same authenticated session before retaining old values.
+    if(!prior||!course.session_marker||!prior.session_marker||
+       course.session_marker!==prior.session_marker)return course;
     const priorAt=verificationTime(prior);
     const nextAt=verificationTime(course);
     if(priorAt===null||nextAt===null||nextAt>=priorAt)return course;
