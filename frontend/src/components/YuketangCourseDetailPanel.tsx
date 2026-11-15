@@ -10,6 +10,13 @@ type LoadState="idle"|"loading"|"ready"|"blocked"|"error";
 type ProgressFilter="all"|"pending"|"done"|"unknown";
 const PAGE_SIZE=8;
 
+/** Display precision must never round a non-complete server record up to 100%. */
+function verifiedPercentLabel(value:number){
+  if(value>0&&value<0.1)return "<0.1%";
+  if(value<100)return (Math.floor(value*10)/10).toFixed(1)+"%";
+  return "100%";
+}
+
 function duration(value:number|null){
   if(value===null||!Number.isFinite(value)||value<0)return "—";
   const seconds=Math.floor(value);
@@ -199,7 +206,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
                   <strong>{video.name}</strong>
                   <span className={"sf-record-status is-"+(video.progress_percent===null?"unverified":
                     video.server_completed?"completed":"incomplete")}>
-                    {video.progress_percent===null?"未核验":video.progress_percent.toFixed(1)+"%"}
+                    {video.progress_percent===null?"未核验":verifiedPercentLabel(video.progress_percent)}
                   </span>
                 </div>
                 <small>{video.progress_percent===null
