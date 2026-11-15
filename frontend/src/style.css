@@ -128,9 +128,6 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
   flex:0 0 auto;white-space:nowrap;min-height:36px;
 }
 .sf-shell .sf-platform-toolbar.actions>button:first-child{margin-left:auto}
-.sf-shell .sf-platform-settings-action.is-active{
-  color:var(--accent-text);border-color:var(--accent);background:var(--soft-accent);
-}
 .sf-shell .sf-platform-settings-view{
   display:flex;flex-direction:column;gap:11px;min-width:0;
 }
@@ -140,4 +137,3 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 .sf-shell .sf-platform-settings-heading p{
   margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.5;
 }
-.sf-shell .sf-platform-settings-view .sf-inline-settings{min-width:0}

@@ -1784,14 +1784,6 @@
   border-radius:12px;margin-top:12px;overflow:hidden;
 }
 .sf-shell .sf-inline-settings__toggle{min-height:38px;padding:9px 11px}
-.sf-shell .sf-inline-settings>.sf-zd-player-settings,
-.sf-shell .sf-inline-settings>.sf-yuketang-settings-panel{
-  width:100%;margin:0;padding:12px;border:0;border-top:1px solid var(--line);
-  border-radius:0;box-shadow:none;
-}
-.sf-shell .sf-inline-settings .sf-zd-player-settings{
-  padding:12px;border-top:1px solid var(--line);
-}
 .sf-shell .sf-inline-activity .sf-zd-activity-list{margin:0}
 .sf-shell .sf-inline-settings__toggle:focus-visible{
   outline:2px solid var(--accent);outline-offset:-3px;
@@ -1800,7 +1792,6 @@
 .sf-shell .sf-inline-settings__toggle{display:flex;align-items:center;gap:9px;width:100%;border:0;background:transparent;color:var(--text);cursor:pointer;text-align:left;font-size:13px}
 .sf-shell .sf-inline-settings__toggle strong{flex:1}
 .sf-shell .sf-inline-settings__toggle>svg:last-child{color:var(--muted);transition:transform .16s}
-.sf-shell .sf-inline-settings__toggle>svg:last-child.is-open{transform:rotate(180deg)}
 .sf-shell .sf-inline-settings__toggle:hover{background:var(--soft-accent)}
 .sf-shell .sf-runtime-mode[hidden]{display:none!important}
 
