@@ -17,6 +17,7 @@ const tasks=[
   {id:"document:12",chapter_id:"11",type:"document",title:"公式讲义",completed:true},
   {id:"workid:13",chapter_id:"11",type:"workid",title:"章节测验",completed:false},
   {id:"audio:14",chapter_id:"11",type:"audio",title:"课堂音频",completed:true},
+  {id:"read:15",chapter_id:"11",type:"read",title:"阅读任务",completed:null},
 ];
 
 test("chapter counts keep locked items distinct from completed markers",()=>{
@@ -57,6 +58,8 @@ test("tasks filter by independent type and server-marked status",()=>{
     ["video:11","workid:13"]
   );
   assert.deepEqual(filterXuexitongTasks(tasks,"","other","all"),[]);
+  assert.deepEqual(filterXuexitongTasks(tasks,"","all","unknown").map(t=>t.id),["read:15"]);
+  assert.deepEqual(filterXuexitongTasks(tasks,"","all","pending").map(t=>t.id),["video:11","workid:13"]);
 });
 
 test("empty data produces no simulated progress or placeholder tasks",()=>{
