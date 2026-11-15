@@ -208,7 +208,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
-        | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get" => Ok(()),
+        | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
+        | "yuketang.session.marker" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),

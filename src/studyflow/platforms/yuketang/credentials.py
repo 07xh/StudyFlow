@@ -98,3 +98,35 @@ def save_scope(scope: dict) -> dict:
     updated = YuketangConfig.from_dict({**current.__dict__, **scope})
     save(updated.__dict__)
     return scope_metadata(updated)
+
+
+def recovery_marker(config: YuketangConfig | None) -> str | None:
+    """Opaque, per-install HMAC of current authenticated session and scope."""
+    if config is None:
+        return None
+    import hashlib
+    import hmac
+    from pathlib import Path
+    import secrets
+
+    root = Path(os.getenv("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "StudyFlow"
+    root.mkdir(parents=True, exist_ok=True)
+    key_path = root / "yuketang-recovery-salt.bin"
+    try:
+        key = key_path.read_bytes()
+    except FileNotFoundError:
+        try:
+            fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            key = key_path.read_bytes()
+        else:
+            with os.fdopen(fd, "wb") as out:
+                out.write(secrets.token_bytes(32))
+                out.flush()
+                os.fsync(out.fileno())
+            key = key_path.read_bytes()
+    if len(key) != 32:
+        raise ValueError("Invalid local recovery salt")
+    material = "\0".join((config.session_id, config.csrf_token, config.sign,
+                          config.classroom_id, config.university_id)).encode("utf-8")
+    return hmac.new(key, material, hashlib.sha256).hexdigest()
