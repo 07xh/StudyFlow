@@ -6,6 +6,8 @@ import io
 import json
 import runpy
 import sys
+import threading
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -137,6 +139,52 @@ def test_numeric_observer_fails_open_for_original_cli_on_snapshot_io_error(monke
     assert "70.0%" in destination.getvalue()
     assert len(calls) == 1
     assert raw.last_snapshot is None
+
+
+
+def test_shared_zhs_observer_serializes_stdout_stderr():
+    """A single telemetry sink is shared by both streams and may be called concurrently."""
+    entered = threading.Event()
+    release = threading.Event()
+    attempted = threading.Event()
+    calls = []
+
+    class BlockingNumericSink:
+        last_snapshot = None
+
+        def receive(self, chunk: str) -> None:
+            calls.append(chunk)
+            if chunk == "stderr":
+                entered.set()
+                if not release.wait(timeout=3):
+                    raise AssertionError("first observer call timed out")
+            self.last_snapshot = (chunk,)
+
+    observer = legacy._RefreshingZhsSink(BlockingNumericSink())
+    first = threading.Thread(target=observer.receive, args=("stderr",), daemon=True)
+
+    def second_stream():
+        attempted.set()
+        observer.receive("stdout")
+
+    second = threading.Thread(target=second_stream, daemon=True)
+    first.start()
+    try:
+        assert entered.wait(timeout=2)
+        second.start()
+        assert attempted.wait(timeout=2)
+        # The second stream must not enter the same mutable sink while the
+        # first is still processing; otherwise snapshots can race.
+        time.sleep(0.03)
+        assert calls == ["stderr"]
+    finally:
+        release.set()
+        first.join(timeout=2)
+        if second.ident is not None:
+            second.join(timeout=2)
+    assert not first.is_alive() and not second.is_alive()
+    assert calls == ["stderr", "stdout"]
+    assert observer.disabled is False
 
 
 def test_invalid_monitor_token_does_not_start_legacy_task(monkeypatch):
