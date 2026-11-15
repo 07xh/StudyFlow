@@ -445,7 +445,7 @@ export default function App(){
           </>}
         <button type="button" className="secondary"
           disabled={!desktop||Boolean(busy)||syncFeedback[platform].phase==="syncing"||platforms[platform].status!=="connected"}
-          onClick={()=>void sync(platform,true)}>{syncFeedback[platform].phase==="syncing"?"课程同步中…":"刷新课程"}</button>
+          onClick={()=>void sync(platform,true)}>{syncFeedback[platform].phase==="syncing"?"课程同步中…":"同步课程列表"}</button>
       </div>
       {platformSettingsOpen===platform
         ?renderPlatformSettings(platform)
@@ -647,8 +647,8 @@ export default function App(){
             :platforms[platform].status==="connected"
               ?syncFeedback[platform].phase==="syncing"?"正在自动读取课程，请稍候。"
               :syncFeedback[platform].phase==="failed"
-                ?"读取失败："+syncFeedback[platform].error+"；请点击「刷新课程」重试。"
-                :"已自动尝试读取当前平台课程；如课程尚未出现，可点击「刷新课程」重试。"
+                ?"读取失败："+syncFeedback[platform].error+"；请点击「同步课程列表」重试。"
+                :"已自动尝试读取当前平台课程；如课程尚未出现，可点击「同步课程列表」重试。"
               :"请点击上方「账号与连接」登录当前平台，登录通过后会自动同步真实课程。"}
           action={platforms[platform].status!=="connected"
             ?<button className="secondary" type="button"
