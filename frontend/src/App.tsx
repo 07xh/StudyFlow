@@ -220,7 +220,10 @@ export default function App(){
       for(const status of statuses){
         if(platformInfo(status.platform)&&status.status!=="connected"){
           invalidateCourseSync(syncCheckpoints.current[status.platform]);
-          if(status.platform==="yuketang")resetYuketangVerification();
+          if(status.platform==="yuketang"){
+            resetYuketangVerification();
+            setYuketangAutoVerify({courseId:"",enabled:false,preferences:{}});
+          }
         }
       }
       setSyncFeedback(previous=>{
@@ -381,6 +384,7 @@ export default function App(){
 
   function updateConfiguration(field:keyof Config,value:string){
     resetYuketangVerification();
+    setYuketangAutoVerify({courseId:"",enabled:false,preferences:{}});
     configurationRevision.current++;
     setConfig(previous=>({...previous,[field]:value}));
     if(field==="classroom_id"||field==="university_id"||field==="sign"){setVideos([]);setScopeDirty(true);}
@@ -568,7 +572,10 @@ export default function App(){
 
   function invalidatePlatform(platform:Platform, resetStatus = false){
     invalidateCourseSync(syncCheckpoints.current[platform]);
-    if(platform==="yuketang")resetYuketangVerification();
+    if(platform==="yuketang"){
+      resetYuketangVerification();
+      setYuketangAutoVerify({courseId:"",enabled:false,preferences:{}});
+    }
     setSyncFeedback(previous=>({...previous,[platform]:{phase:"idle",error:""}}));
     setPlatforms(previous=>({...previous,[platform]:resetStatus
       ?initialPlatforms[platform]
