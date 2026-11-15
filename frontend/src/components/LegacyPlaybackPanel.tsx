@@ -84,7 +84,7 @@ export function LegacyPlaybackPanel({
       yktProgress?.worker_slots?.length||(options.use_concurrent?options.max_concurrent_videos:1))
     :0;
   const videoTasks=yktProgress?.video_tasks??[];
-  const videoByIndex=new Map(videoTasks.map(video=>[video.video_index,video]));
+  const videoByIndex=new Map<number,YktVideoTask>(videoTasks.map(video=>[video.video_index,video]));
   const workerSlots=Array.from({length:Math.max(0,Math.min(32,workerCount))},(_,index)=>{
     const observed=yktProgress?.worker_slots?.[index];
     const slot=observed??{slot:index+1,video_index:null,
