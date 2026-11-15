@@ -69,12 +69,16 @@ pub struct ZhsOptions {
     stop_on_error: bool,
     scope_mode: String,
     selected_ids: Vec<u64>,
+    #[serde(default = "default_zhs_resource_mode")]
+    resource_mode: String,
 }
+fn default_zhs_resource_mode() -> String { "all".into() }
 impl ZhsOptions {
     fn validate(&self) -> Result<(), String> {
         if !self.speed.is_finite() || self.speed < 1.0 || self.speed > 2.0
             || !self.speed_cap.is_finite() || self.speed_cap < 1.0 || self.speed_cap > 2.0
             || self.limit_minutes > 1440 || self.max_videos > 1000
+            || !matches!(self.resource_mode.as_str(), "all" | "video" | "reading")
             || (self.scope_mode != "all" && self.scope_mode != "selected")
             || self.selected_ids.len() > 256
             || (self.scope_mode == "all" && !self.selected_ids.is_empty())
@@ -110,6 +114,8 @@ pub struct ZhsProgress {
     video_segment_percent: Option<f64>,
     resource_index: Option<u64>,
     resource_total: Option<u64>,
+    resource_kind: Option<String>,
+    resource_name: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -219,8 +225,34 @@ fn read_zhs_snapshot(token: &str) -> Option<ZhsProgress> {
         if i < 1 || t < i || t > 100000 { return None; }
         (Some(i), Some(t))
     };
-    if percent.is_none() && index.is_none() { return None; }
-    Some(ZhsProgress { video_segment_percent: percent, resource_index: index, resource_total: total })
+    // These fields are sourced from the original ZHS resource model, never
+    // from raw console stderr. Reject malformed or unbounded local data.
+    let kind = match data.get("resourceKind") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(raw) => {
+            let value = raw.as_str()?;
+            if !matches!(value, "video" | "ppt" | "article" | "other") { return None; }
+            Some(value.to_owned())
+        }
+    };
+    let name = match data.get("resourceName") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(raw) => {
+            let value = raw.as_str()?;
+            if value.is_empty() || value.chars().count() > 90 || value.chars().any(char::is_control)
+                || value.contains('@') || value.contains('=') ||
+                ["http:", "https:", "cookie", "token", "authorization", "password", "secret", "apikey", "api_key"]
+                    .iter().any(|marker| value.to_lowercase().contains(marker)) {
+                return None;
+            }
+            Some(value.to_owned())
+        }
+    };
+    if percent.is_none() && index.is_none() && kind.is_none() { return None; }
+    Some(ZhsProgress {
+        video_segment_percent: percent, resource_index: index, resource_total: total,
+        resource_kind: kind, resource_name: name,
+    })
 }
 
 fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, String> {
@@ -501,6 +533,7 @@ mod tests {
     fn expired_zhs_snapshot_is_not_presented_as_live_progress() {
         let progress = ZhsProgress {
             video_segment_percent: Some(32.0), resource_index: Some(1), resource_total: Some(3),
+            resource_kind: Some("video".into()), resource_name: Some("示例视频".into()),
         };
         let mut task = LegacyJob {
             child: None, state: "running".into(), exit_code: None, run_id: None,
