@@ -1,6 +1,7 @@
 import type {ActivityEntry,TaskRecorder} from "../activity";
 import {useCallback,useEffect,useRef,useState} from "react";
-import {ChevronDown,RefreshCw,Save,SlidersHorizontal} from "lucide-react";
+import {RefreshCw,Save,SlidersHorizontal} from "lucide-react";
+import {SettingsDialog} from "../ui/SettingsDialog";
 import {friendlyBridgeError,request} from "../bridge";
 import type {Course} from "../types";
 import {LegacyPlaybackPanel} from "./LegacyPlaybackPanel";
@@ -14,22 +15,16 @@ type Props={
   connected:boolean;
   onEvent?:TaskRecorder;
   detailMode?:boolean;
+  dark?:boolean;
   events?:ActivityEntry[];
   view?:"both"|"player"|"settings";
 };
-export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=false,events=[],view="both"}:Props){
+export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=false,dark=true,events=[],view="both"}:Props){
   const [options,setOptions]=useState<OriginalYktOptions>({...originalYktDefaults});
   const [loaded,setLoaded]=useState(false);
   const [busy,setBusy]=useState<"load"|"save"|null>(null);
   const [message,setMessage]=useState("");
-  const [settingsOpen,setSettingsOpen]=useState(()=>{
-    try{return window.localStorage.getItem("studyflow.yuketang.settings-open")==="true";}
-    catch{return false;}
-  });
-  useEffect(()=>{
-    try{window.localStorage.setItem("studyflow.yuketang.settings-open",String(settingsOpen));}
-    catch{/* Keep settings expansion in this session. */}
-  },[settingsOpen]);
+  const [settingsOpen,setSettingsOpen]=useState(false);
   const onEventRef=useRef(onEvent);
   useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
 
@@ -46,6 +41,11 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   },[desktop]);
 
   useEffect(()=>{void load();},[load]);
+  // Settings are also editable in the platform modal while a course task stays mounted.
+  // Re-read persisted options after a successful save so the next launch cannot use stale values.
+  const latestSettingsSave=events.find(entry=>entry.platform==="雨课堂"&&
+    entry.action==="保存原版参数"&&entry.result==="success")?.id;
+  useEffect(()=>{if(latestSettingsSave)void load();},[latestSettingsSave,load]);
 
   function update<K extends keyof OriginalYktOptions>(key:K,value:OriginalYktOptions[K]){
     setOptions(previous=>({...previous,[key]:value}));
@@ -68,17 +68,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
     }finally{setBusy(null);}
   }
 
-  return <>
-    {view!=="settings"&&<LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
-      connected={connected} yuketangOptions={options} settingsReady={loaded}
-      detailMode={detailMode} onEvent={onEvent} events={events}/>}
-    {view!=="player"&&<div className="sf-inline-settings">
-      {view!=="settings"&&<button type="button" className="sf-inline-settings__toggle"
-        aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(previous=>!previous)}>
-        <SlidersHorizontal size={16}/><strong>平台默认参数（下次启动生效）</strong>
-        <ChevronDown size={16} className={settingsOpen?"is-open":""}/>
-      </button>}
-      {(view==="settings"||settingsOpen)&&<section className="legacy-playback-panel sf-yuketang-settings-panel">
+  const settingsPanel=<section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head">
         <div><h3><SlidersHorizontal size={17}/>雨课堂默认参数</h3></div>
         <span className="legacy-run-state">{loaded?"已读取本机配置":"等待读取配置"}</span>
@@ -146,7 +136,19 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
       <p className="legacy-disclaimer">设置单独保存在雨课堂平台配置中；启动任务时由学序透传给原版执行器，不修改原版心跳逻辑。</p>
-      </section>}
+      </section>;
+  return <>
+    {view!=="settings"&&<LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
+      connected={connected} yuketangOptions={options} settingsReady={loaded}
+      detailMode={detailMode} onEvent={onEvent} events={events}/>}
+    {view!=="player"&&<div className="sf-inline-settings">
+      {view!=="settings"&&<button type="button" className="sf-inline-settings__toggle"
+        aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(true)}>
+        <SlidersHorizontal size={16}/><strong>平台默认参数（下次启动生效）</strong>
+        <span className="sf-muted">点击设置</span>
+      </button>}
+      {view==="settings"?settingsPanel:<SettingsDialog open={settingsOpen} dark={dark}
+        title="雨课堂 · 播放参数" onClose={()=>setSettingsOpen(false)}>{settingsPanel}</SettingsDialog>}
     </div>}
   </>;
 }

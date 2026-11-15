@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
-import {ChevronDown,RefreshCw,Save,SlidersHorizontal} from "lucide-react";
+import {RefreshCw,Save,SlidersHorizontal} from "lucide-react";
+import {SettingsDialog} from "../ui/SettingsDialog";
 import {friendlyBridgeError,request,type ZhidaoCourseDetail} from "../bridge";
 import {originalZhsDefaults,validateZhsOptions,validateZhsStoredOptions,
   type OriginalZhsOptions,type ZhsStoredOptions} from "../legacyPlayback";
@@ -19,8 +20,8 @@ function safeItems(detail:ZhidaoCourseDetail|null,courseId:string):Item[]{
       (item.chapter_name||"未分组章节"),completed:detail.course_type==="ai"?Boolean(item.fully_progressed):Boolean(item.server_completed)}];
   });
 }
-export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEvent}:{
-  desktop:boolean;courseId:string;courseType?:"ai"|"shared"|null;
+export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onReady,onEvent}:{
+  desktop:boolean;dark?:boolean;courseId:string;courseType?:"ai"|"shared"|null;
   onReady?:(options:OriginalZhsOptions|null)=>void;onEvent?:TaskRecorder;
 }){
   const [options,setOptions]=useState<ZhsStoredOptions>({...originalZhsDefaults});
@@ -112,11 +113,14 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
   },[items]);
 
   return <div className="sf-inline-settings">
-    <button type="button" className="sf-inline-settings__toggle" aria-expanded={opened} onClick={()=>setOpened(v=>!v)}>
+    <button type="button" className="sf-inline-settings__toggle" aria-expanded={opened}
+      onClick={()=>setOpened(true)}>
       <SlidersHorizontal size={16}/><strong>ZHS 原版 · 观看控制</strong>
-      <ChevronDown size={16} className={opened?"is-open":""}/>
+      <span className="sf-muted">点击设置</span>
     </button>
-    {opened&&<section className="legacy-playback-panel sf-yuketang-settings-panel">
+    <SettingsDialog open={opened} dark={dark} title="当前课程 · ZHS 参数"
+      onClose={()=>setOpened(false)}>
+      <section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head"><div><h3>ZHS 0.1.5 任务参数</h3></div>
         <span className="legacy-run-state">{saved?"本机参数已加载":"未读取参数"}</span></div>
       <div className="legacy-options">
@@ -194,6 +198,7 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
         </details>
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
-    </section>}
+      </section>
+    </SettingsDialog>
   </div>;
 }

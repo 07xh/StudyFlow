@@ -53,7 +53,7 @@ test("original settings and cookie import use the Python bridge instead of local
  assert.match(panel,/yuketang.settings.save/);
  assert.match(panel,/LegacyPlaybackPanel platform="yuketang"/);
  const stored=Array.from(panel.matchAll(/localStorage\.setItem\(([^;]+)\);/g),m=>m[1]);
- assert.deepEqual(stored,['"studyflow.yuketang.settings-open",String(settingsOpen)']);
+ assert.deepEqual(stored,[],"Opening a second-level dialog must not persist an auto-open flag");
  assert.doesNotMatch(legacy,/localStorage/);
  assert.match(login,/zhidao.cookie.import/);
 });
@@ -111,7 +111,6 @@ test("course details use one foldable workspace and show total progress only in 
  assert.match(app,/renderCourseWorkspace/);
  assert.doesNotMatch(app,/sf-course-total-progress/);
  assert.match(app,/<section className="sf-course-playback-stage" aria-label="播放控制">/);
- assert.doesNotMatch(app,/title="当前课程任务"/);
  assert.match(app,/headerTitle=\{workspaceCourse\?"课程详情":undefined\}/);
  assert.match(app,/courseProgress=\{activeCourseProgress\}/);
  assert.match(app,/activeSelectedCourse/);

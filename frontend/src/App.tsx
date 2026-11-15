@@ -40,11 +40,13 @@ import {ThemeModeSelector} from "./ui/ThemeModeSelector";
 import {Switch} from "./ui/Switch";
 import {EmptyState} from "./ui/EmptyState";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
+import {SettingsDialog} from "./ui/SettingsDialog";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const ACTIVITY_KEY="studyflow.activity.v1";
 const PLATFORM_LOGIN_EXPANDED_KEY="studyflow.platform-login.expanded.v1";
 type CourseSyncPhase="idle"|"syncing"|"synced"|"failed";
+type PlatformSettingsSection="account"|"parameters"|"advanced";
 type CourseSyncFeedback={phase:CourseSyncPhase;error:string};
 function readPlatformLoginExpanded():Record<Platform,boolean>{
   try{
@@ -97,6 +99,8 @@ export default function App(){
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
+  const [platformSettingsSection,setPlatformSettingsSection]=useState<PlatformSettingsSection>("parameters");
+  const [courseLogsOpen,setCourseLogsOpen]=useState(false);
   const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
   useEffect(()=>{
     try{window.localStorage.setItem(PLATFORM_LOGIN_EXPANDED_KEY,JSON.stringify(platformLoginExpanded));}
@@ -300,7 +304,13 @@ export default function App(){
     }finally{setBusy("");}
   }
 
+  function openPlatformSettings(platform:Platform,section:PlatformSettingsSection="parameters"){
+    setCourseLogsOpen(false);
+    setPlatformSettingsSection(section);
+    setPlatformSettingsOpen(platform);
+  }
   function enterCourses(platform:Platform){
+    setCourseLogsOpen(false);
     setPlatformSettingsOpen(null);
     setSelectedCourse(null);
     setQuery("");
@@ -311,7 +321,7 @@ export default function App(){
     enterCourses(platform);
     if(openLogin){
       setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
-      setPlatformSettingsOpen(platform);
+      openPlatformSettings(platform,"account");
     }
   }
 
@@ -322,7 +332,7 @@ export default function App(){
     if(field==="sign")setSignDirty(true);
   }
   function inspectCourse(course:Course){
-    setPlatformSettingsOpen(null);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
+    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
   function courseMode(course:Course):"official"|"zhs-original"{
     const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
@@ -369,23 +379,29 @@ export default function App(){
     </section>;
   };
   const renderPlatformSettings=(platform:Platform)=> <section className="sf-platform-settings-view" aria-label={platformNames[platform]+"参数设置"}>
+    <nav className="sf-settings-menu" aria-label="平台设置分类">
+      {([["account","账号与连接"],["parameters","播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
+        <button type="button" key={section} aria-pressed={platformSettingsSection===section}
+          onClick={()=>setPlatformSettingsSection(section)}>{label}</button>)}
+    </nav>
     <div className="sf-platform-settings-heading">
-      <h3>{platformNames[platform]} · 参数设置</h3>
-      <p>平台配置与维护集中管理，保存后按各项设置的生效规则执行。</p>
+      <h3>{platformNames[platform]} · {platformSettingsSection==="account"?"账号与连接":platformSettingsSection==="parameters"?"播放参数":"高级管理"}</h3>
+      <p>这些设置在二级页面中完成，不会替换当前课程的播放和进度视图。</p>
     </div>
-    <PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
+    {platformSettingsSection==="account"&&<PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
       desktop={desktop} busy={Boolean(busy)||syncFeedback[platform].phase==="syncing"} variant="account"
       expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform,true)}
       onEnterCourses={()=>enterCourses(platform)}
       onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
       {renderPlatformLogin(platform)}
-    </PlatformCard>
-    {platform==="zhidao"?<>
-      <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
+    </PlatformCard>}
+    {platformSettingsSection!=="account"&&(platform==="zhidao"?<>
+      {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
       {renderZhidaoModeSwitch()}
       <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-      <p className="sf-muted">ZHS 原版观看参数请在课程播放工作台的原版播放设置中调整；与官方播放器设置独立。</p>
-      </CollapsibleSection>
+      <p className="sf-muted">ZHS 原版观看控制已移到课程播放区的独立参数弹窗；与官方播放器默认参数独立。</p>
+      </CollapsibleSection>}
+      {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
       <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
@@ -401,7 +417,12 @@ export default function App(){
         <button className="text-button" type="button"
           onClick={()=>setPage("tasks")}>管理全部运行任务</button>
       </CollapsibleSection>
+      </>}
     </>:<>
+      {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings" dark={dark}
+        desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
+        events={activity} onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>}
+      {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容" defaultExpanded={false}>
         <YuketangContentPanel config={config} videos={videos} desktop={desktop}
           busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"}
@@ -414,42 +435,39 @@ export default function App(){
           原版批量任务作用于已保存的雨课堂课堂范围，而非当前选择的单门课程。
           {scopeDirty&&" 新编辑的课堂范围尚未保存。"}
         </p>
-        <YuketangTaskArea courses={platforms.yuketang.courses} view="both"
+        <YuketangTaskArea courses={platforms.yuketang.courses} view="player" dark={dark}
           desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
           events={activity}
           onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
       </CollapsibleSection>
-    </>}
+      </>}
+    </>)}
+    <button className="text-button" type="button" onClick={()=>{setPlatformSettingsOpen(null);setPage("logs");}}>打开完整日志与诊断记录</button>
   </section>;
 
-  // Each platform owns a full course landing, a selected-course workspace, and a separate settings view.
+  // Platform configuration is a second-level overlay; the live course stays mounted.
   const renderPlatformDetail=(platform:Platform)=>{
     if(!platformInfo(platform))return null;
     const selected=activeSelectedCourse?.platform===platform?activeSelectedCourse:null;
     return <div className="sf-platform-workspace">
-      {(!selected||platformSettingsOpen===platform)&&<div className="sf-platform-toolbar actions" role="group" aria-label="平台操作">
-        {platformSettingsOpen===platform
-          ?<button type="button" className="secondary sf-platform-settings-action is-active"
-            onClick={()=>setPlatformSettingsOpen(null)}>
-            <ArrowLeft size={15}/>{selected?"返回课程详情":"返回课程列表"}
-          </button>
-          :<>
-            <button type="button" className="secondary" onClick={()=>{
-              setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
-              setPlatformSettingsOpen(platform);
-            }}>账号与连接</button>
-            <button type="button" className="secondary sf-platform-settings-action"
-              onClick={()=>setPlatformSettingsOpen(platform)}>
-              <SlidersHorizontal size={15}/>参数设置
-            </button>
-          </>}
+      {!selected&&<div className="sf-platform-toolbar actions" role="group" aria-label="平台操作">
+        <button type="button" className="secondary" onClick={()=>{
+          setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+          openPlatformSettings(platform,"account");
+        }}>账号与连接</button>
+        <button type="button" className="secondary sf-platform-settings-action"
+          onClick={()=>openPlatformSettings(platform,"parameters")}>
+          <SlidersHorizontal size={15}/>参数设置
+        </button>
         <button type="button" className="secondary"
           disabled={!desktop||Boolean(busy)||syncFeedback[platform].phase==="syncing"||platforms[platform].status!=="connected"}
           onClick={()=>void sync(platform,true)}>{syncFeedback[platform].phase==="syncing"?"课程同步中…":"同步课程列表"}</button>
       </div>}
-      {platformSettingsOpen===platform
-        ?renderPlatformSettings(platform)
-        :selected?renderCourseWorkspace(selected):renderCourses(platform)}
+      {selected?renderCourseWorkspace(selected):renderCourses(platform)}
+      <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
+        title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}>
+        {platformSettingsOpen===platform&&renderPlatformSettings(platform)}
+      </SettingsDialog>
     </div>;
   };
 
@@ -567,10 +585,12 @@ export default function App(){
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
         <div className="sf-course-top-actions">
-          <button className="secondary" onClick={()=>setPlatformSettingsOpen(course.platform)}>
+          <button className="secondary" onClick={()=>openPlatformSettings(course.platform,"parameters")}>
             <SlidersHorizontal size={15}/>平台设置
           </button>
-          <button className="secondary" onClick={()=>setPage("tasks")}>运行任务</button>
+          <button className="secondary sf-course-logs-action" type="button"
+            onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
+          <button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>运行任务</button>
         </div>
       </div>
       <div className="sf-course-playback-heading">
@@ -590,7 +610,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
-            <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
+            <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:<>
@@ -598,7 +618,7 @@ export default function App(){
             雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
             需要切换课堂范围或默认播放参数时，请使用右上方「平台设置」。
           </p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
+          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" dark={dark} detailMode
             desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
             events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
@@ -618,10 +638,13 @@ export default function App(){
             connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
         </CollapsibleSection>
       </>}
-      <CollapsibleSection id={scope+"logs"} title="操作记录与诊断" defaultExpanded={false}>
+      <SettingsDialog open={courseLogsOpen} dark={dark} title={course.title+" · 日志与诊断"}
+        onClose={()=>setCourseLogsOpen(false)}>
         <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>
-        <button className="text-button" onClick={()=>setPage("logs")}>查看平台与历史未归属记录</button>
-      </CollapsibleSection>
+        <button className="secondary" type="button" onClick={()=>{setCourseLogsOpen(false);setPage("logs");}}>
+          查看平台与历史未归属记录
+        </button>
+      </SettingsDialog>
     </section>;
   };
 
@@ -669,7 +692,7 @@ export default function App(){
             ?<button className="secondary" type="button"
               onClick={()=>{
                 setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
-                setPlatformSettingsOpen(platform);
+                openPlatformSettings(platform,"account");
               }}>
                 前往账号登录
               </button>:undefined}/>}

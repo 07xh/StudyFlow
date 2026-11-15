@@ -41,9 +41,9 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected, onEvent, onCourseVerified, yuketangOptions, settingsReady=true, courseId, detailMode=false, events=[], onOpenTasks
+  platform, courses, desktop, connected, dark=true, onEvent, onCourseVerified, yuketangOptions, settingsReady=true, courseId, detailMode=false, events=[], onOpenTasks
 }: {
-  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean;
+  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean; dark?:boolean;
   onEvent?:TaskRecorder;
   onCourseVerified?:(course:Course)=>void;
   yuketangOptions?: OriginalYktOptions;
@@ -93,7 +93,7 @@ export function LegacyPlaybackPanel({
       !selectedCourse?"当前课程未在已同步课程列表中；请重新同步课程。":
       selectedCourse.stale?"当前课程数据已过期；请重新同步课程。":
       !playableCourses.some(course=>course.course_id===selection)?"当前课程缺少原版执行器支持的课程类型；请同步课程后确认课程类型，或使用官方播放器。":
-      !zhsOptions?"ZHS 本机参数尚未就绪；请展开下方「ZHS 原版 · 观看控制」，查看参数状态并重新读取或保存。":null:
+      !zhsOptions?"ZHS 本机参数尚未就绪；请打开「ZHS 原版 · 观看控制」设置弹窗，查看参数状态并重新读取或保存。":null:
       !settingsReady?"雨课堂默认参数尚未读取；请进入平台参数设置检查。":
       !validateOriginalOptions(options)?"雨课堂参数不在支持范围内；请进入平台参数设置修正。":null;
   const workerCount=platform==="yuketang"
@@ -412,7 +412,7 @@ export function LegacyPlaybackPanel({
       <small className="sf-ykt-live-note">并发模式下，按原版 Worker 实际调用归属记录本地事件及服务器响应；未能归属的进度仍留空。日志记录的服务器响应不等于课程最终完成，诊断区最近值也不代表课程总进度。</small>
       </details>
     </div>}
-    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
+    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} dark={dark} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
     {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
       <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>
       <select id="legacy-zhidao-course" value={selection} onChange={e=>setSelection(e.target.value)}>
