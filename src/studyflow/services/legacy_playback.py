@@ -218,6 +218,8 @@ _ZHS_DIAGNOSTIC_CODES = frozenset({
     "INTERACTIVE_INPUT_REQUIRED", "UPSTREAM_NONZERO_EXIT",
     "EXECUTOR_EXCEPTION", "WORKER_ENTRY_EXCEPTION",
     "ZHS_SESSION_PREFLIGHT_FAILED", "ZHS_COURSE_URL_FAILED",
+    "ZHS_COOKIE_RESTORE_FAILED", "ZHS_SESSION_EXPIRED",
+    "ZHS_SESSION_UNAVAILABLE",
 })
 
 
@@ -286,8 +288,40 @@ def _observe_zhs_cli_stages():
         original_load = getattr(upstream, "_load_config_and_session", None)
         if callable(original_load):
             def checked_load(*args, **kwargs):
-                result = original_load(*args, **kwargs)
-                if result is None:
+                # ZHS bootstrap reads local cookies and checks the session
+                # before it raises typer.Exit(1). Observe the two decisions
+                # without replacing credentials, responses or network calls.
+                bootstrap = sys.modules.get("zhs.cli.bootstrap")
+                restored = {}
+                if bootstrap is not None:
+                    restore_cookies = getattr(bootstrap, "try_restore_cookies", None)
+                    if callable(restore_cookies):
+                        def observed_restore(*a, **kw):
+                            outcome = restore_cookies(*a, **kw)
+                            if not outcome:
+                                markers["failure"] = "ZHS_COOKIE_RESTORE_FAILED"
+                            return outcome
+                        restored["try_restore_cookies"] = restore_cookies
+                        setattr(bootstrap, "try_restore_cookies", observed_restore)
+                    verify_session = getattr(bootstrap, "verify_session", None)
+                    if callable(verify_session):
+                        def observed_verify(*a, **kw):
+                            outcome = verify_session(*a, **kw)
+                            name = getattr(outcome, "name", None)
+                            if name == "EXPIRED":
+                                markers["failure"] = "ZHS_SESSION_EXPIRED"
+                            elif name == "UNAVAILABLE":
+                                markers["failure"] = "ZHS_SESSION_UNAVAILABLE"
+                            return outcome
+                        restored["verify_session"] = verify_session
+                        setattr(bootstrap, "verify_session", observed_verify)
+                try:
+                    result = original_load(*args, **kwargs)
+                finally:
+                    if bootstrap is not None:
+                        for name, original in restored.items():
+                            setattr(bootstrap, name, original)
+                if result is None and markers["failure"] is None:
                     markers["failure"] = "ZHS_SESSION_PREFLIGHT_FAILED"
                 return result
             originals["_load_config_and_session"] = original_load
