@@ -97,7 +97,11 @@ test("platform login is available first and worker status stays distinct from co
   const end=app.indexOf("async function configureFromPanel",start);
   const detail=app.slice(start,end);
   assert.ok(start>=0&&end>start);
-  assert.ok(detail.indexOf("PlatformCard")<detail.indexOf("RuntimeTaskList"));
+  const settings=app.slice(app.indexOf("const renderPlatformSettings="),start);
+  assert.match(settings,/<PlatformCard/);
+  assert.match(settings,/<RuntimeTaskList/);
+  assert.doesNotMatch(detail,/<PlatformCard|<RuntimeTaskList|<YuketangContentPanel/);
+  assert.match(detail, /renderCourses\(platform\)/);
   assert.match(playback,/sf-live-progress-summary/);
   assert.match(playback,/workerSlots\.map/);
   assert.doesNotMatch(playback,/sf-live-course-progress/);
