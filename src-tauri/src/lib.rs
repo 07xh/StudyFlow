@@ -245,7 +245,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong")) => Ok(()),
         "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
             .is_some_and(|value| !value.is_empty() && value.len() <= 8192
-                && !value.contains(['\\r', '\\n'])) => Ok(()),
+                && !value.contains('\r') && !value.contains('\n')) => Ok(()),
         "xuexitong.chapters.list" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|value| {
                 let parts: Vec<&str> = value.split(':').collect();
