@@ -187,3 +187,52 @@ def test_shared_child_failure_is_not_swallowed_by_original_course_loop(monkeypat
     assert zhs_queue.run_queue("a"*64,"b"*32,opts) == 0
     child_options = json.loads(captured[0][-2])
     assert child_options["stop_on_error"] is True
+
+
+@pytest.mark.parametrize("fatal_class", ["CaptchaRequired", "TimeLimitExceeded"])
+def test_shared_fatal_condition_escapes_upstream_normal_return(monkeypatch, fatal_class):
+    from types import ModuleType
+    from studyflow.platforms.zhidao.zhs_scope import scoped_upstream_play, ScopeFailed
+    errors = ModuleType("zhs.exceptions")
+    errors.CaptchaRequired, errors.TimeLimitExceeded = type("CaptchaRequired",(Exception,),{}),type("TimeLimitExceeded",(Exception,),{})
+    module = ModuleType("zhs.zhidao.video")
+    class Player:
+        def play_course(self, route, context):
+            try: self.play_video(route,1,context)
+            except (errors.CaptchaRequired, errors.TimeLimitExceeded): return None
+        def play_video(self, *args): raise getattr(errors,fatal_class)()
+    module.ZhidaoVideoPlayer = Player
+    monkeypatch.setitem(sys.modules,"zhs.exceptions",errors)
+    monkeypatch.setitem(sys.modules,"zhs.zhidao.video",module)
+    options = {**zhs_settings.DEFAULTS,"scope_mode":"selected","selected_ids":[1],"resource_mode":"video"}
+    with scoped_upstream_play(options,False,target_resource=(None,1)):
+        with pytest.raises(ScopeFailed): Player().play_video("",1,NS(videos={}))
+
+
+def test_fatal_child_diagnostic_halts_queue_even_when_generic_errors_continue(tmp_path,monkeypatch):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    monkeypatch.setenv("LOCALAPPDATA",str(tmp_path))
+    directory = tmp_path / "StudyFlow"
+    children = []
+    def launch(target, token):
+        script = "import json,sys,time,pathlib;pathlib.Path(sys.argv[1]).write_text(json.dumps({'v':1,'token':sys.argv[2],'at':time.time(),'code':'CAPTCHA_REQUIRED'}));sys.exit(13)"
+        child = subprocess.Popen([sys.executable,"-c",script,str(directory/f"zhs-diagnostic-{token}.json"),token],stdin=subprocess.PIPE)
+        children.append(child)
+        return child
+    assert supervise([QueueTarget(i,None,"video",None) for i in (1,2,3)],2,"f"*32,directory,launch) == 13
+    assert len(children) == 2
+    assert all(child.poll() is not None for child in children)
+    data = json.loads((directory/f"zhs-diagnostic-{'f'*32}.json").read_text())
+    assert data["code"] == "CAPTCHA_REQUIRED"
+
+
+def test_exited_rows_clear_their_last_local_percentage(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    def launch(target, token):
+        script = "import json,sys,time,pathlib;pathlib.Path(sys.argv[1]).write_text(json.dumps({'v':1,'token':sys.argv[2],'at':time.time(),'videoSegmentPercent':48.5}));time.sleep(.05)"
+        return subprocess.Popen([sys.executable,"-c",script,str(tmp_path/f"monitor-zhs-{token}.json"),token],stdin=subprocess.PIPE)
+    assert supervise([QueueTarget(1,None,"video",None)],2,"e"*32,tmp_path,launch) == 0
+    row = json.loads((tmp_path/f"zhs-queue-{'e'*32}.json").read_text())["tasks"][0]
+    assert row["state"] == "exited"
+    assert row["percent"] is None
+    assert row["stale"] is True

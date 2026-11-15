@@ -408,7 +408,8 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
         return code
     except ScopeLimitReached:
         return 12
-    except ScopeFailed:
+    except ScopeFailed as exc:
+        _write_zhs_diagnostic(monitor_token, _classify_zhs_failure(exc.__cause__ or exc))
         return 13
     except ScopeInvalid:
         return 14

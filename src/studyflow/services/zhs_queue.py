@@ -153,6 +153,24 @@ def terminate(child: subprocess.Popen) -> None:
         child.stdin.close()
 
 
+def fatal_diagnostic(directory: Path, token: str) -> str | None:
+    path = directory / f"zhs-diagnostic-{token}.json"
+    try:
+        if path.is_symlink() or path.stat().st_size > 512:
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        at = data.get("at")
+        code = data.get("code")
+        if (data.get("v") == 1 and data.get("token") == token
+                and type(at) in (float, int) and math.isfinite(at) and -10 <= time.time()-at <= 120
+                and code in ("CAPTCHA_REQUIRED", "TIME_RESTRICTED", "LOGIN_REQUIRED", "INTERACTIVE_INPUT_REQUIRED",
+                             "ZHS_SESSION_EXPIRED", "ZHS_COOKIE_RESTORE_FAILED")):
+            return code
+    except (OSError, ValueError, TypeError):
+        pass
+    return None
+
+
 def supervise(targets: list[QueueTarget], concurrency: int, token: str, directory: Path,
               launch, *, stop_on_error: bool = False, limit_seconds: float = 0) -> int:
     """Bounded process pool with an exclusive barrier around nonvideo resources."""
@@ -162,6 +180,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     running = {}  # row index -> (owned process, private telemetry nonce)
     deadline = time.monotonic() + limit_seconds if limit_seconds else None
     exit_code = 0
+    fatal = None
 
     def publish(state):
         atomic_json(directory / f"zhs-queue-{token}.json", {
@@ -199,7 +218,11 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
                 percent = local_percent(directory, child_token)
                 rows[index].update(percent=percent, stale=percent is None)
                 if code is not None:
-                    rows[index].update(state="exited" if code == 0 else "failed", exit_code=code)
+                    rows[index].update(state="exited" if code == 0 else "failed", exit_code=code,
+                                       percent=None, stale=True)
+                    child_fatal = fatal_diagnostic(directory, child_token)
+                    if child_fatal:
+                        fatal = child_fatal
                     terminate(child)
                     running.pop(index)
                     for prefix in ("monitor-zhs-", "zhs-diagnostic-"):
@@ -209,7 +232,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
             if deadline is not None and time.monotonic() >= deadline:
                 exit_code = 12
                 break
-            if exit_code and stop_on_error:
+            if fatal or (exit_code and stop_on_error):
                 break
             for index, target in enumerate(targets):
                 if rows[index]["state"] != "queued":
@@ -242,6 +265,10 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
             if row["state"] in ("queued", "running"):
                 stop(index)
         publish("exited")
+        if fatal:
+            atomic_json(directory / f"zhs-diagnostic-{token}.json", {
+                "v":1, "token":token, "at":time.time(), "code":fatal,
+            })
     return exit_code
 
 

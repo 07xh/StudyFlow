@@ -192,7 +192,11 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None, ta
                     pass
             try:
                 return original_video(player, *args, **kwargs)
-            except (CaptchaRequired, TimeLimitExceeded):
+            except (CaptchaRequired, TimeLimitExceeded) as exc:
+                if target_resource is not None:
+                    # The upstream course loop converts these to a normal
+                    # return. A queue must observe the fatal condition instead.
+                    raise ScopeFailed() from exc
                 raise
             except Exception as exc:
                 if stop_on_error:

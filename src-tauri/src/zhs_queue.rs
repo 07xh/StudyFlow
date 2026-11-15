@@ -71,7 +71,7 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let percent = if raw_percent.is_null() { None } else {
             let percent = raw_percent.as_f64()?;
             if !percent.is_finite() || !(0.0..=100.0).contains(&percent) { return None; }
-            if row_stale || row_state == "stopped" { None } else { Some(percent) }
+            if row_stale || row_state != "running" { None } else { Some(percent) }
         };
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
             Some(row.get("exit_code")?.as_i64()?)

@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from "react";
 import {Square} from "lucide-react";
-import {stopZhsVideo,legacyError,legacyExitMessage,type LegacyTaskStatus} from "../legacyPlayback";
+import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type LegacyTaskStatus} from "../legacyPlayback";
 
 const labels:Record<string,string>={queued:"排队中",running:"运行中",exited:"本轮结束 · 待核验",
   failed:"执行失败",stopped:"已停止",unknown:"状态待核实"};
@@ -38,7 +38,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   function row(task:NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number]){
     const inProgress=task.state==="queued"||task.state==="running";
     const pendingStop=active&&inProgress&&requested.has(task.task_id);
-    const percent=!stale&&!task.stale&&task.kind==="video"?task.percent:null;
+    const percent=!stale&&!task.stale&&task.kind==="video"&&task.state==="running"?task.percent:null;
     return <article className="sf-ykt-worker" key={task.task_id}>
       <div className="sf-ykt-worker-heading">
         <span>{kinds[task.kind]} · {stale&&inProgress?"状态待核实":pendingStop?"正在停止":labels[task.state]}</span>
@@ -52,9 +52,9 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         aria-label={(task.name??"此视频")+"本地片段位置"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
         <span style={{width:percent+"%"}}/>
       </div>}
-      <small className="sf-muted">{stale||task.stale?"暂无新采样":
-        task.state==="exited"?"进程已退出，学习记录待平台核验":
+      <small className="sf-muted">{task.state==="exited"?"进程已退出，学习记录待平台核验":
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
+        stale||task.stale?"暂无新采样":
         percent==null?(task.state==="queued"?"等待空闲位置":"等待进度采样"):"本地观测 · 非服务器完成进度"}</small>
     </article>;
   }
@@ -69,6 +69,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     {ended.length>0&&<details className="sf-ykt-video-details"><summary>本轮记录 · {ended.length} 项</summary>
       <div className="sf-ykt-worker-grid">{ended.slice(-100).map(row)}</div></details>}
     {status.state==="exited"&&<p role="status">{legacyExitMessage(status)}</p>}
+    {status.state==="exited"&&status.exit_code!==0&&status.diagnostic_code&&<p role="status">{zhsDiagnosticMessage(status)}</p>}
     {message&&<p role="status">{message}</p>}
     <small className="sf-muted">各视频独立运行，结束后自动补位。课程进度以服务器核验为准。</small>
   </section>;

@@ -90,11 +90,11 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
   const label=current?courseMetric(current).label:"服务器核验比例";
   const timestamp=current?.verified_at
     ?new Date(current.verified_at).toLocaleString()
-    :"尚无当前会话的核验时间";
+    :"尚未核验";
 
   return <section className="legacy-playback-panel sf-zhidao-progress-panel">
     <div className="section-head">
-      <div><h3><ShieldCheck size={17}/> 知到服务器进度核验</h3></div>
+      <div><h3><ShieldCheck size={17}/> 服务器进度</h3></div>
       <span className="legacy-run-state">只读查询</span>
     </div>
     <div className={"sf-zd-progress-grid"+(detailMode?" is-detail":"")}>
@@ -113,9 +113,10 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
         <span>{detailMode?"服务器核验状态":label}</span>
         <strong>{detailMode?(view?.status==="verified"?"已核验":view?.status==="cached"?"历史缓存":"待核验"):
           view?.percent===null||view?.percent===undefined?"—":view.percent.toFixed(1)+"%"}</strong>
-        <small>{view?.label??"等待课程同步"} · {view?.detail??"暂无可确认进度"}</small>
-        <small>当前课程服务器核验：{timestamp}</small>
-        {!detailMode&&<small>全部课程同步时间：{fetchedAt?new Date(fetchedAt).toLocaleString():"尚未同步"}</small>}
+        {!detailMode&&typeof view?.percent==="number"&&<progress className="sf-zd-verification-progress"
+          value={view.percent} max={100} aria-label={label}/>}
+        <small>{view?.label??"等待课程同步"}</small>
+        <small>最近核验：{timestamp}</small>
       </div>
     </div>
     <div className="sf-zd-progress-actions">
@@ -128,17 +129,19 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
         <RefreshCw size={15}/>{busy==="sync"?"同步中…":"同步全部进度"}
       </button>}
     </div>
+    {!detailMode&&<p className="sf-zd-progress-sync-time">全部课程同步：{fetchedAt?new Date(fetchedAt).toLocaleString():"尚未同步"}</p>}
     {<div className="sf-zd-progress-auto">
-      <div><strong>自动只读核验</strong><small>每 2 分钟检查当前选定课程；切换页面仍继续，关闭应用即停止。至少间隔 1 分钟。</small>
+      <div><strong>自动核验所选课程</strong><small>每 2 分钟检查一次，切换页面后继续。</small>
         {autoVerifyEnabled&&autoVerifyCourseId!==selected&&<small role="status">当前后台监测：{courses.find(course=>course.course_id===autoVerifyCourseId)?.title??"另一门课程"}。切换到该课程可以关闭。</small>}
       </div>
-      <Switch checked={monitor} disabled={!desktop||!connected||!selected}
+      <Switch checked={monitor} disabled={!desktop||!connected||!selected||busy!==null}
         onChange={checked=>onAutoVerifyChange(selected,checked)} aria-label="开启每两分钟知到单课只读核验"/>
     </div>}
     {visibleError&&<p className="sf-zd-progress-message" role="alert">服务器进度暂未更新：{visibleError}；{view?.status==="verified"?"已保留上次有效核验记录。":"当前没有可确认的服务器记录。"}</p>}
     {message&&!visibleError&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     <details className="sf-technical-note"><summary>核验说明</summary><p className="sf-zd-progress-note">
       {incomplete?"本次同步存在未完成项。":"只读取平台已有记录，不提交学习进度。"}
+      {view?.detail} 自动核验关闭应用后停止。
       智慧课程优先显示知到服务器课程列表返回的课程进度（schedule）；缺少有效字段时，明确退回“满进度知识点占比”。掌握度是另一项指标；共享课显示已完成视频占比。
     </p></details>
   </section>;
