@@ -42,7 +42,7 @@ def _course_payload(course):
         "platform": course.platform.value, "course_id": course.course_id, "title": course.title,
         "progress_percent": course.progress_percent, "course_type": course.course_type,
         "stale": course.stale, "progress_evidence": course.progress_evidence,
-        "verified_at": course.verified_at,
+        "verified_at": course.verified_at, "session_marker": course.session_marker,
     }
 
 
