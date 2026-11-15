@@ -16,11 +16,15 @@ type Props={
   courseId?:string;
   courseTitle?:string;
   detailMode?:boolean;
+  autoVerifyCourseId:string;
+  autoVerifyEnabled:boolean;
+  autoVerifyError?:string;
+  onAutoVerifyChange:(courseId:string,enabled:boolean)=>void;
 };
 
-export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,onEvent,courseId,courseTitle,detailMode=false}:Props){
+export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,onEvent,courseId,courseTitle,detailMode=false,
+  autoVerifyCourseId,autoVerifyEnabled,autoVerifyError="",onAutoVerifyChange}:Props){
   const [selected,setSelected]=useState(courseId??"");
-  const [monitor,setMonitor]=useState(detailMode);
   const [busy,setBusy]=useState<"sync"|"verify"|null>(null);
   const [message,setMessage]=useState("");
   const [incomplete,setIncomplete]=useState(false);
@@ -29,7 +33,6 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
   const mountedRef=useRef(false);
   const selectedRef=useRef(selected);
   selectedRef.current=selected;
-  const lastAutomaticCheck=useRef({course:"",at:0});
   useEffect(()=>{mountedRef.current=true;return ()=>{mountedRef.current=false;};},[]);
   const busyRef=useRef(false);
   const onCoursesUpdatedRef=useRef(onCoursesUpdated);
@@ -81,21 +84,9 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
     }
   },[desktop,connected,selected]);
 
-  useEffect(()=>{
-    if(!desktop||!monitor||!connected||!selected)return;
-    const check=()=>{
-      if(typeof document!=="undefined"&&document.visibilityState==="hidden")return;
-      if(busyRef.current)return;
-      const now=Date.now();
-      if(lastAutomaticCheck.current.course===selected&&now-lastAutomaticCheck.current.at<60000)return;
-      lastAutomaticCheck.current={course:selected,at:now};
-      void run("verify",true);
-    };
-    check();
-    const timer=window.setInterval(check,120000);
-    window.addEventListener?.("focus",check);
-    return ()=>{window.clearInterval(timer);window.removeEventListener?.("focus",check);};
-  },[desktop,monitor,connected,selected,run,busy]);
+  // The timer is owned by App, so navigating away cannot cancel monitoring.
+  const monitor=autoVerifyEnabled&&autoVerifyCourseId===selected;
+  const visibleError=lastError||(monitor?autoVerifyError:"");
 
   const label=current?.course_type==="ai"?"满进度知识点占比":current?.course_type==="shared"?"已完成视频占比":"服务器核验比例";
   const timestamp=current?.verified_at
@@ -139,11 +130,12 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       </button>}
     </div>
     {<div className="sf-zd-progress-auto">
-      <div><strong>自动只读核验</strong><small>进入课程详情默认开启；每 2 分钟或返回窗口时检查，至少间隔 1 分钟。</small></div>
-      <Switch checked={monitor} onChange={setMonitor} aria-label="开启每两分钟知到单课只读核验"/>
+      <div><strong>自动只读核验</strong><small>每 2 分钟检查当前选定课程；切换页面仍继续，关闭应用即停止。至少间隔 1 分钟。</small></div>
+      <Switch checked={monitor} disabled={!desktop||!connected||!selected}
+        onChange={checked=>onAutoVerifyChange(selected,checked)} aria-label="开启每两分钟知到单课只读核验"/>
     </div>}
-    {lastError&&<p className="sf-zd-progress-message" role="alert">服务器进度暂未更新：{lastError}；{view?.status==="verified"?"已保留上次有效核验记录。":"当前没有可确认的服务器记录。"}</p>}
-    {message&&!lastError&&<p className="sf-zd-progress-message" role="status">{message}</p>}
+    {visibleError&&<p className="sf-zd-progress-message" role="alert">服务器进度暂未更新：{visibleError}；{view?.status==="verified"?"已保留上次有效核验记录。":"当前没有可确认的服务器记录。"}</p>}
+    {message&&!visibleError&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     <details className="sf-technical-note"><summary>核验说明</summary><p className="sf-zd-progress-note">
       {incomplete?"本次同步存在未完成项。":"只读取平台已有记录，不提交学习进度。"}
       智慧课程比例统计已达满进度的知识点；共享课比例统计已完成视频数量，均不代表官方课程总进度或观看时长。
