@@ -63,6 +63,28 @@ export async function getYuketangLiveProgress(runId: string): Promise<YuketangLi
 }
 
 
+// These course-scoped targets affect only the local worker, never verified status.
+const thresholdPrefix="studyflow.yuketang.execution.";
+function thresholdKey(classroom:string,university:string):string|null {
+  return /^[0-9]{1,24}$/.test(classroom)&&/^[0-9]{1,24}$/.test(university)
+    ?thresholdPrefix+university+"."+classroom:null;
+}
+export function readYuketangCourseThreshold(classroom:string,university:string):number|null {
+  const key=thresholdKey(classroom,university);
+  if(!key)return null;
+  try {
+    const raw=window.localStorage.getItem(key);
+    return raw!==null&&/^(?:[1-9]|[1-9][0-9]|100)$/.test(raw)?Number(raw):null;
+  } catch {return null;}
+}
+export function saveYuketangCourseThreshold(classroom:string,university:string,value:number|null):void {
+  const key=thresholdKey(classroom,university);
+  if(!key||!(value===null||(Number.isInteger(value)&&value>=1&&value<=100)))
+    throw new Error("INVALID_SETTINGS");
+  if(value===null)window.localStorage.removeItem(key);
+  else window.localStorage.setItem(key,String(value));
+}
+
 // ZHS 0.1.5 play flags; original heartbeat timing remains inside ZHS.
 export type ZhsStoredOptions = {
   speed:number;speed_cap:number;limit_minutes:number;learn_optional:boolean;
@@ -170,10 +192,10 @@ export async function startLegacy(
   return invoke<LegacyTaskStatus>("legacy_start", {
     platform,
     courseId: platform === "zhidao" ? courseId : null,
-    // Preserve the original options shape but never let the old 90% default
-    // prematurely end or skip an unfinished video in StudyFlow.
+    // An explicit classroom override is allowed. Missing settings use a
+    // conservative local 100% target, not the old global 90% default.
     options: platform === "yuketang"
-      ? {...(options ?? originalYktDefaults), completion_threshold:100}
+      ? options ?? {...originalYktDefaults,completion_threshold:100}
       : null,
     zhsOptions: platform === "zhidao" ? zhsOptions ?? null : null,
   });

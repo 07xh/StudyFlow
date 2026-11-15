@@ -8,7 +8,7 @@ import type {ActivityEntry,TaskRecorder} from "../activity";
 import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError,type ZhidaoProgressSnapshot} from "../bridge";
 import {
-  getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, zhsDiagnosticMessage, originalYktDefaults, startLegacy, stopLegacy,
+  getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, zhsDiagnosticMessage, originalYktDefaults, readYuketangCourseThreshold, startLegacy, stopLegacy,
   validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type OriginalZhsOptions, type YuketangLiveProgress
 } from "../legacyPlayback";
 
@@ -241,16 +241,21 @@ export function LegacyPlaybackPanel({
     try {
       let lastScope:YuketangScope|null=null;
       let sessionMarker:string|null=null;
+      let launchOptions=options;
       if(platform==="yuketang"){
-        await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
         lastScope=await request<YuketangScope>({operation:"yuketang.scope.get"});
+        if(!lastScope.has_session||!lastScope.classroom_id||!lastScope.university_id)
+          throw new Error("YUKETANG_SCOPE_UNAVAILABLE");
+        // Resolve on launch so switching classrooms cannot reuse the old value.
+        launchOptions={...options,completion_threshold:
+          readYuketangCourseThreshold(lastScope.classroom_id,lastScope.university_id)??100};
         try{
           const identity=await request<YuketangSessionMarker>({operation:"yuketang.session.marker"});
           sessionMarker=/^[a-f0-9]{64}$/.test(identity.marker)?identity.marker:null;
         }catch{/* Recovery metadata must not prevent the original task launching. */}
       }
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
-        platform === "yuketang" ? options : undefined, platform === "zhidao" ? zhsOptions ?? undefined : undefined);
+        platform === "yuketang" ? launchOptions : undefined, platform === "zhidao" ? zhsOptions ?? undefined : undefined);
       if(next.state==="running"&&next.run_id){
         const persisted=platform==="zhidao"&&zhsOptions
           ?rememberTaskRecovery({version:1,platform:"zhidao",runId:next.run_id,startedAt:Date.now(),
@@ -258,7 +263,7 @@ export function LegacyPlaybackPanel({
           :platform==="yuketang"&&lastScope&&sessionMarker
             ?rememberTaskRecovery({version:1,platform:"yuketang",runId:next.run_id,startedAt:Date.now(),
                 courseId:null,classroomId:lastScope.classroom_id,universityId:lastScope.university_id,
-                sessionMarker,yuketangOptions:options})
+                sessionMarker,yuketangOptions:launchOptions})
             :false;
         if(!persisted)setMessage("任务已启动，但本机恢复记录保存失败；请检查应用存储权限。");
       }
@@ -266,7 +271,7 @@ export function LegacyPlaybackPanel({
         setStatus(next);setStatusReadFailed(false);
       }
       if (currentPlatform.current === platform) setMessage(previous=>previous||"已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
-      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:zhsOptions?{...zhsOptions,selected_ids:zhsOptions.selected_ids?.length??0}:undefined});
+      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...launchOptions}:zhsOptions?{...zhsOptions,selected_ids:zhsOptions.selected_ids?.length??0}:undefined});
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
       if (currentPlatform.current === platform) setMessage(msg);
