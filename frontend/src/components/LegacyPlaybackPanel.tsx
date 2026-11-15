@@ -106,7 +106,7 @@ export function LegacyPlaybackPanel({
   }, [desktop, platform]);
 
   useEffect(() => {
-    if(courseId){setSelection(courseId);setZhsOptions(null);}
+    if(courseId)setSelection(courseId);
   },[courseId]);
 
   useEffect(() => {
