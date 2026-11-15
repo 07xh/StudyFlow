@@ -623,7 +623,7 @@ export default function App(){
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
       </>:<>
-        <CollapsibleSection id={scope+"chapters"} title="章节与视频" defaultExpanded={true}>
+        <CollapsibleSection id={scope+"chapters"} title="章节与学习进度" defaultExpanded={true}>
           <YuketangCourseDetailPanel course={course} desktop={desktop}
             connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
         </CollapsibleSection>

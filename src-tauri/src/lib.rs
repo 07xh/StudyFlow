@@ -237,6 +237,11 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
+        "yuketang.course.detail" if request.get("course_id").and_then(|x| x.as_str())
+            .is_some_and(|id| !id.is_empty() && id.len() <= 24 && id.bytes().all(|c| c.is_ascii_digit()))
+            && request.get("offset").and_then(|x| x.as_u64()).is_some_and(|n| n <= 5000)
+            && request.get("limit").and_then(|x| x.as_u64()).is_some_and(|n| (1..=12).contains(&n)) => Ok(()),
+
         "yuketang.progress" if request.get("run_id").and_then(|x| x.as_str())
             .is_some_and(|id| {
                 let mut parts = id.split('-');
@@ -469,6 +474,25 @@ mod ipc_validation_tests {
         for operation in ["zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"] {
             let request = json!({"id":"qr-test","version":1,"operation":operation});
             assert!(validate(&request).is_ok(), "QR operation was rejected: {operation}");
+        }
+    }
+
+    #[test]
+    fn yuketang_course_detail_validates_course_and_bounded_progress_pages() {
+        let valid = json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+            "course_id":"123","offset":0,"limit":8});
+        assert!(validate(&valid).is_ok());
+        for bad in [
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"../123","offset":0,"limit":8}),
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"123","offset":5001,"limit":8}),
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"123","offset":0,"limit":13}),
+            json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
+                "course_id":"123","offset":0,"limit":true})
+        ] {
+            assert!(validate(&bad).is_err());
         }
     }
 

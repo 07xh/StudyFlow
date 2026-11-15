@@ -6,6 +6,7 @@ No video progress submission or synthetic watching is exposed.
 from __future__ import annotations
 
 from typing import Any
+import math
 import requests
 
 BASE_URL = "https://changjiang.yuketang.cn"
@@ -108,3 +109,92 @@ class YuketangReadOnly:
                     # Some classroom versions put a video directly in a section.
                     add_video(section, chapter_name, section_name)
         return videos
+
+
+    @staticmethod
+    def _positive_id(value: object) -> str | None:
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            return None
+        number = str(value)
+        return number if number.isascii() and number.isdecimal() and 1 <= len(number) <= 24 and int(number) > 0 else None
+
+    @staticmethod
+    def _nonnegative_number(value: object) -> float | None:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        number = float(value)
+        return number if math.isfinite(number) and 0 <= number <= 1_000_000 else None
+
+    def read_video_progress(self, classroom_id: str, leaf_id: str) -> dict[str, float | None]:
+        """Read one original Rain Classroom video's server progress, without a heartbeat.
+
+        The chapter leaf identifier is used only after leaf_info verifies the
+        current classroom and returns user/course IDs. Never guess IDs from
+        a section, a cookie, or a cached local playback position.
+        """
+        classroom = self._positive_id(classroom_id)
+        leaf = self._positive_id(leaf_id)
+        if classroom is None or leaf is None:
+            raise ValueError("Invalid classroom/video identifier")
+        leaf_info = self._get(
+            f"/mooc-api/v1/lms/learn/leaf_info/{classroom}/{leaf}/", {}, classroom
+        )
+        if leaf_info.get("success") is not True or not isinstance(leaf_info.get("data"), dict):
+            raise ValueError("Unverified Rain Classroom leaf")
+        data = leaf_info["data"]
+        user_id = self._positive_id(data.get("user_id"))
+        course_id = self._positive_id(data.get("course_id"))
+        declared_classroom = data.get("classroom_id")
+        if declared_classroom is not None and self._positive_id(declared_classroom) != classroom:
+            raise ValueError("Leaf belongs to another classroom")
+        if user_id is None or course_id is None:
+            raise ValueError("Leaf lacks authenticated user/course identifiers")
+
+        # This is the exact read-only progress endpoint and query shape used
+        # in the preserved Rain Classroom main.py. No heartbeat/write endpoint.
+        response = self.session.get(
+            BASE_URL + "/video-log/get_video_watch_progress/",
+            params={"cid": course_id, "user_id": user_id, "classroom_id": classroom,
+                    "video_type": "video", "vtype": "rate",
+                    "video_id": leaf, "snapshot": 1},
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Xt-Agent": "web", "classroom-id": classroom,
+                "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": self.csrf_token,
+                "university-id": self.university_id, "uv-id": self.university_id,
+                "xtbz": "ykt",
+            },
+            timeout=(5, 10), allow_redirects=False,
+        )
+        if response.status_code != 200:
+            raise ValueError("No authenticated progress response")
+        payload = response.json()
+        if not isinstance(payload, dict) or str(payload.get("code")) != "0":
+            raise ValueError("Server did not confirm progress")
+        records = payload.get("data")
+        if not isinstance(records, dict):
+            raise ValueError("Server progress data unavailable")
+        record = records.get(leaf)
+        if not isinstance(record, dict):
+            raise ValueError("Video has no server-confirmed progress")
+        raw_rate = record.get("rate")
+        if isinstance(raw_rate, bool) or not isinstance(raw_rate, (int, float)):
+            raise ValueError("Invalid server progress rate")
+        rate = float(raw_rate)
+        if not math.isfinite(rate) or not 0 <= rate <= 1:
+            raise ValueError("Invalid server progress rate")
+        last_position = self._nonnegative_number(record.get("last_point"))
+        duration = None
+        for candidate in (data.get("duration"), (data.get("content_info") or {}).get("media", {}).get("duration")
+                          if isinstance(data.get("content_info"), dict)
+                          and isinstance(data["content_info"].get("media"), dict) else None):
+            number = self._nonnegative_number(candidate)
+            if number is not None and number > 0:
+                duration = number
+                break
+        percent = round(rate * 100, 1)
+        if rate < 1.0 and percent >= 100.0:
+            percent = 99.9
+        return {"progress_percent": percent, "server_completed": rate == 1.0,
+                "last_point_seconds": last_position,
+                "duration_seconds": duration}

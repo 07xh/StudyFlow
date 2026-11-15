@@ -11,7 +11,7 @@ test("course detail opens on playback controls without a fold gate",()=>{
   assert.match(part,/<section className="sf-course-playback-stage" aria-label="播放控制">/);
   assert.doesNotMatch(part,/id=\{scope\+"runtime"\}/,"running player must not be hidden behind a fold");
   assert.match(part,/view="player"[^>]*detailMode/,"Rain Classroom platform options should not repeat in the course player");
-  assert.match(part,/title="章节与视频" defaultExpanded=\{true\}/);
+  assert.match(part,/title="章节与学习进度" defaultExpanded=\{true\}/);
   assert.match(part,/<SettingsDialog open=\{courseLogsOpen\}/);
 });
 

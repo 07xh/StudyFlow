@@ -155,3 +155,24 @@ def test_yuketang_chapter_request_is_course_scoped_and_legacy_compatible(monkeyp
     assert call(course_id="99")["error"] == "COURSE_NOT_FOUND"
     assert call(course_id="../invalid")["error"] == "INVALID_REQUEST"
     assert seen == ["123", None, "99"]
+
+
+def test_yuketang_detail_bridge_scopes_course_and_bounds_page_size(monkeypatch):
+    seen = []
+    def course_progress(course_id, *, offset, limit):
+        seen.append((course_id, offset, limit))
+        if course_id == "99":
+            raise LookupError("other classroom")
+        return {"course_id":course_id, "offset":offset, "total":1,
+                "next_offset":None,"items":[{"name":"视频","progress_percent":52.0}]}
+    monkeypatch.setattr(bridge.ADAPTERS["yuketang"], "course_progress", course_progress)
+    request={"id":"yd1","version":1,"operation":"yuketang.course.detail",
+             "course_id":"123","offset":0,"limit":8}
+    response=dispatch(request)
+    assert response["ok"] and response["data"]["items"][0]["progress_percent"] == 52.0
+    assert seen == [("123",0,8)]
+    for update in ({"course_id":"../33"}, {"offset":-1}, {"offset":True},
+                   {"limit":13},{"limit":False}):
+        assert dispatch({**request,**update})["error"] == "INVALID_REQUEST"
+    assert dispatch({**request,"course_id":"99"})["error"] == "COURSE_NOT_FOUND"
+    assert seen[-1] == ("99",0,8)
