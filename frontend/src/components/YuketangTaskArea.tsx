@@ -24,14 +24,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   const [loaded,setLoaded]=useState(false);
   const [busy,setBusy]=useState<"load"|"save"|null>(null);
   const [message,setMessage]=useState("");
-  const [settingsOpen,setSettingsOpen]=useState(()=>{
-    try{return window.localStorage.getItem("studyflow.yuketang.settings-open")==="true";}
-    catch{return false;}
-  });
-  useEffect(()=>{
-    try{window.localStorage.setItem("studyflow.yuketang.settings-open",String(settingsOpen));}
-    catch{/* Keep settings expansion in this session. */}
-  },[settingsOpen]);
+  const [settingsOpen,setSettingsOpen]=useState(false);
   const onEventRef=useRef(onEvent);
   useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
 
