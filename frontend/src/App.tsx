@@ -514,15 +514,15 @@ export default function App(){
       <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
     </section>;
   };
-  const renderPlatformSettings=(platform:Platform)=> <section className="sf-platform-settings-view" aria-label={platformNames[platform]+"参数设置"}>
+  const renderSettingsNavigation=()=>
     <nav className="sf-settings-menu" aria-label="平台设置分类">
       {([["account","账号与连接"],["parameters","播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
           onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
-    </nav>
+    </nav>;
+  const renderPlatformSettings=(platform:Platform)=> <section className="sf-platform-settings-view" aria-label={platformNames[platform]+"参数设置"}>
     <div className="sf-platform-settings-heading">
-      <h3>{platformNames[platform]} · {platformSettingsSection==="account"?"账号与连接":platformSettingsSection==="parameters"?"播放参数":"高级管理"}</h3>
-      <p>这些设置在二级页面中完成，不会替换当前课程的播放和进度视图。</p>
+      <p>{platformSettingsSection==="account"?"管理当前平台的登录与连接。":platformSettingsSection==="parameters"?"设置后续播放使用的默认参数。":"核验平台进度，或维护本机数据。"}</p>
     </div>
     {platformSettingsSection==="account"&&<PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
       desktop={desktop} busy={Boolean(busy)||syncFeedback[platform].phase==="syncing"} variant="account"
@@ -538,7 +538,7 @@ export default function App(){
       <p className="sf-muted">ZHS 原版观看控制已移到课程播放区的独立参数弹窗；与官方播放器默认参数独立。</p>
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
-      <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
+      <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
       <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
       autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
       onAutoVerifyChange={configureAutoVerify}
@@ -594,6 +594,7 @@ export default function App(){
       </div>}
       {selected?renderCourseWorkspace(selected):renderCourses(platform)}
       <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
+        navigation={renderSettingsNavigation()} contentKey={platformSettingsSection}
         title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}>
         {platformSettingsOpen===platform&&renderPlatformSettings(platform)}
       </SettingsDialog>

@@ -45,6 +45,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Verify hierarchy at desktop and minimum-window widths
         run: node tests/browserHierarchy.cjs
+      - name: Verify settings portal layout and keyboard interactions
+        run: node tests/browserSettings.cjs
       - name: Upload empty-account UI captures
         if: always()
         uses: actions/upload-artifact@v4

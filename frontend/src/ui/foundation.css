@@ -1199,72 +1199,72 @@
 
 
 /* 2026-11-14 UI refinement: shared type scale, aligned cards and independent controls. */
-.sf-shell .main{
+.sf-shell :is(.main,.sf-settings-modal-body){
   font-size:13px;
   line-height:1.55;
   font-family:Inter,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
 }
-.sf-shell .main *,
+.sf-shell :is(.main,.sf-settings-modal-body) *,
 .sf-consent-dialog *{box-sizing:border-box}
-.sf-shell .main section,
-.sf-shell .main article,
-.sf-shell .main .sf-platform-task-section{min-width:0}
-.sf-shell .main .section-head{
+.sf-shell :is(.main,.sf-settings-modal-body) section,
+.sf-shell :is(.main,.sf-settings-modal-body) article,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-platform-task-section{min-width:0}
+.sf-shell :is(.main,.sf-settings-modal-body) .section-head{
   min-height:36px;
   align-items:center;
   gap:12px;
   margin-bottom:12px;
 }
-.sf-shell .main .section-head h3{
+.sf-shell :is(.main,.sf-settings-modal-body) .section-head h3{
   font-size:15px;
   line-height:1.4;
   font-weight:700;
 }
-.sf-shell .main p{font-size:12px;line-height:1.6}
-.sf-shell .main small{font-size:11px;line-height:1.5}
-.sf-shell .main button.primary,
-.sf-shell .main button.secondary,
-.sf-shell .main .actions button{
+.sf-shell :is(.main,.sf-settings-modal-body) p{font-size:12px;line-height:1.6}
+.sf-shell :is(.main,.sf-settings-modal-body) small{font-size:11px;line-height:1.5}
+.sf-shell :is(.main,.sf-settings-modal-body) button.primary,
+.sf-shell :is(.main,.sf-settings-modal-body) button.secondary,
+.sf-shell :is(.main,.sf-settings-modal-body) .actions button{
   min-height:36px;
   padding:8px 12px;
   font-size:12px;
   line-height:1.35;
 }
-.sf-shell .main input:not([type="checkbox"]):not([type="radio"]),
-.sf-shell .main select,
-.sf-shell .main textarea{
+.sf-shell :is(.main,.sf-settings-modal-body) input:not([type="checkbox"]):not([type="radio"]),
+.sf-shell :is(.main,.sf-settings-modal-body) select,
+.sf-shell :is(.main,.sf-settings-modal-body) textarea{
   min-height:38px;
   font-size:12px;
   line-height:1.4;
 }
-.sf-shell .main .legacy-playback-panel,
-.sf-shell .main .settings-card,
-.sf-shell .main .course-v2-detail,
-.sf-shell .main .sf-zd-mode-selector{
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-playback-panel,
+.sf-shell :is(.main,.sf-settings-modal-body) .settings-card,
+.sf-shell :is(.main,.sf-settings-modal-body) .course-v2-detail,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-mode-selector{
   width:100%;
   min-width:0;
   box-sizing:border-box;
 }
-.sf-shell .main .sf-platform-task-section{width:100%;margin-bottom:14px}
-.sf-shell .main .sf-zd-official-grid,
-.sf-shell .main .sf-zd-progress-grid,
-.sf-shell .main .sf-live-progress-summary{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-platform-task-section{width:100%;margin-bottom:14px}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-official-grid,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-grid,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-progress-summary{
   align-items:stretch;
 }
-.sf-shell .main .sf-zd-official-grid>*,
-.sf-shell .main .sf-zd-progress-grid>*,
-.sf-shell .main .sf-live-progress-summary>*{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-official-grid>*,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-grid>*,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-progress-summary>*{
   min-width:0;
   height:100%;
   box-sizing:border-box;
 }
-.sf-shell .main .sf-zd-progress-grid{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-grid{
   display:grid;
   grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);
   align-items:stretch;
   gap:12px;
 }
-.sf-shell .main .sf-zd-progress-grid>label{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-grid>label{
   display:flex;
   flex-direction:column;
   justify-content:center;
@@ -1278,8 +1278,8 @@
   font-size:12px;
   font-weight:600;
 }
-.sf-shell .main .sf-zd-progress-grid>label select{width:100%;min-width:0}
-.sf-shell .main .sf-zd-progress-value{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-grid>label select{width:100%;min-width:0}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-value{
   min-height:116px;
   display:flex;
   flex-direction:column;
@@ -1290,10 +1290,10 @@
   border-radius:12px;
   background:rgba(255,255,255,.025);
 }
-.sf-shell .main .sf-zd-progress-value>span{color:var(--muted);font-size:12px;line-height:1.4}
-.sf-shell .main .sf-zd-progress-value>strong{color:var(--text);font-size:24px;line-height:1.2;font-variant-numeric:tabular-nums}
-.sf-shell .main .sf-zd-progress-value>small{color:var(--muted);font-size:11px;line-height:1.5}
-.sf-shell .main .sf-zd-progress-auto{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-value>span{color:var(--muted);font-size:12px;line-height:1.4}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-value>strong{color:var(--text);font-size:24px;line-height:1.2;font-variant-numeric:tabular-nums}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-value>small{color:var(--muted);font-size:11px;line-height:1.5}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-auto{
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -1305,15 +1305,15 @@
   border-radius:12px;
   background:rgba(255,255,255,.025);
 }
-.sf-shell .main .sf-zd-progress-auto>div{display:grid;gap:4px;min-width:0}
-.sf-shell .main .sf-zd-progress-auto strong{font-size:13px;line-height:1.4}
-.sf-shell .main .sf-zd-progress-auto small{font-size:11px;line-height:1.5}
-.sf-shell .main .sf-zd-player-settings{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-auto>div{display:grid;gap:4px;min-width:0}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-auto strong{font-size:13px;line-height:1.4}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-auto small{font-size:11px;line-height:1.5}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-player-settings{
   grid-template-columns:repeat(4,minmax(0,1fr));
   align-items:stretch;
   gap:10px;
 }
-.sf-shell .main .sf-zd-player-settings>label{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-player-settings>label{
   min-width:0;
   min-height:66px;
   display:flex;
@@ -1324,44 +1324,44 @@
   font-size:12px;
   line-height:1.45;
 }
-.sf-shell .main .sf-zd-player-settings>label:first-child{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-player-settings>label:first-child{
   display:grid;
   align-content:center;
 }
-.sf-shell .main .sf-live-state,
-.sf-shell .main .sf-live-course-progress{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-state,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-course-progress{
   min-height:100%;
   height:100%;
 }
-.sf-shell .main .sf-live-state>span,
-.sf-shell .main .sf-live-course-heading>span{font-size:12px;line-height:1.4}
-.sf-shell .main .sf-live-state>small,
-.sf-shell .main .sf-live-course-heading>small{font-size:11px;line-height:1.5}
-.sf-shell .main .sf-ykt-live-grid{align-items:stretch;gap:10px}
-.sf-shell .main .sf-ykt-live-item{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-state>span,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-course-heading>span{font-size:12px;line-height:1.4}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-state>small,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-live-course-heading>small{font-size:11px;line-height:1.5}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-ykt-live-grid{align-items:stretch;gap:10px}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-ykt-live-item{
   min-width:0;
   min-height:128px;
   height:100%;
   padding:13px;
 }
-.sf-shell .main .sf-ykt-live-item>span,
-.sf-shell .main .sf-ykt-live-item>small{font-size:11px;line-height:1.5}
-.sf-shell .main .legacy-option-grid{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-ykt-live-item>span,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-ykt-live-item>small{font-size:11px;line-height:1.5}
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-option-grid{
   grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));
   align-items:stretch;
   gap:10px;
 }
-.sf-shell .main .legacy-option-grid label{
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-option-grid label{
   display:flex;
   flex-direction:column;
   justify-content:space-between;
   gap:7px;
   min-width:0;
 }
-.sf-shell .main .legacy-option-grid label span,
-.sf-shell .main .legacy-field label{font-size:11px;line-height:1.45}
-.sf-shell .main .legacy-flags{align-items:stretch;gap:9px}
-.sf-shell .main .legacy-flags label{
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-option-grid label span,
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-field label{font-size:11px;line-height:1.45}
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-flags{align-items:stretch;gap:9px}
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-flags label{
   min-height:38px;
   padding:8px 11px;
   border:1px solid var(--line);
@@ -1370,19 +1370,19 @@
   font-size:11px;
   line-height:1.4;
 }
-.sf-shell .main .legacy-state-note,
-.sf-shell .main .legacy-disclaimer,
-.sf-shell .main .sf-zd-progress-note,
-.sf-shell .main .sf-ykt-live-note{font-size:11px;line-height:1.6}
-.sf-shell .main .sf-zd-progress-actions{
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-state-note,
+.sf-shell :is(.main,.sf-settings-modal-body) .legacy-disclaimer,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-note,
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-ykt-live-note{font-size:11px;line-height:1.6}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-actions{
   display:flex;
   align-items:center;
   flex-wrap:wrap;
   gap:9px;
   margin-top:12px;
 }
-.sf-shell .main .sf-zd-progress-auto .sf-switch{margin-left:10px;flex:none}
-.sf-shell .main .sf-zd-progress-actions button{min-width:140px}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-auto .sf-switch{margin-left:10px;flex:none}
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-actions button{min-width:140px}
 .sf-shell .sf-switch{width:42px;height:24px}
 .sf-shell .sf-switch-thumb{width:18px;height:18px}
 .sf-shell .sf-switch input:checked+.sf-switch-thumb{transform:translateX(18px)}
@@ -1396,16 +1396,16 @@
 .sf-consent-confirmation{font-size:12px;line-height:1.55}
 .sf-consent-actions button{min-width:148px}
 @media(max-width:900px){
-  .sf-shell .main .sf-zd-player-settings{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-player-settings{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:760px){
-  .sf-shell .main .sf-zd-progress-grid,
-  .sf-shell .main .sf-zd-official-grid{grid-template-columns:minmax(0,1fr)}
-  .sf-shell .main .sf-zd-progress-value{min-height:104px}
+  .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-grid,
+  .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-official-grid{grid-template-columns:minmax(0,1fr)}
+  .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-value{min-height:104px}
 }
 @media(max-width:600px){
-  .sf-shell .main .sf-zd-player-settings{grid-template-columns:minmax(0,1fr)}
-  .sf-shell .main .sf-zd-progress-actions button{flex:1 1 100%}
+  .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-player-settings{grid-template-columns:minmax(0,1fr)}
+  .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-actions button{flex:1 1 100%}
   .sf-consent-dialog{max-height:92vh}
   .sf-consent-header{padding:14px}
   .sf-consent-actions button{min-width:0}
@@ -1685,7 +1685,7 @@
   gap:11px;
   min-width:0;
 }
-.sf-shell .main .sf-fold{
+.sf-shell :is(.main,.sf-settings-modal-body) .sf-fold{
   display:block;
   min-width:0;
   margin:0;
@@ -1694,7 +1694,7 @@
   border-radius:15px;
   background:linear-gradient(150deg,rgba(255,255,255,.045),rgba(255,255,255,.015));
 }
-.sf-shell:not(.dark) .main .sf-fold{background:var(--panel)}
+.sf-shell:not(.dark) :is(.main,.sf-settings-modal-body) .sf-fold{background:var(--panel)}
 .sf-shell .sf-fold-toggle{
   display:flex;
   justify-content:space-between;

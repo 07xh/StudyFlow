@@ -24,7 +24,7 @@ test('classroom scope saves in its own section without resending credentials or 
   'components/UpdatePanel.tsx':{UpdatePanel:Null},
   'components/ZhidaoPlayerMonitor.tsx':{ZhidaoPlayerMonitor:Null},
   'components/YuketangTaskArea.tsx':{YuketangTaskArea:Null},
-  'ui/SettingsDialog.tsx':{SettingsDialog:({open,children})=>open?children:null}
+  'ui/SettingsDialog.tsx':{SettingsDialog:({open,children,navigation})=>open?React.createElement(React.Fragment,null,navigation,children):null}
  }).default;
  try{
   await act(async()=>{view=create(React.createElement(App));});

@@ -74,7 +74,7 @@ test('scope shortcut opens a previously collapsed section and preserves entered 
     'components/UpdatePanel.tsx':{UpdatePanel:Null},
     'components/ZhidaoPlayerMonitor.tsx':{ZhidaoPlayerMonitor:Null},
     'components/YuketangTaskArea.tsx':{YuketangTaskArea:Null},
-    'ui/SettingsDialog.tsx':{SettingsDialog:({open,children})=>open?children:null}
+    'ui/SettingsDialog.tsx':{SettingsDialog:({open,children,navigation})=>open?React.createElement(React.Fragment,null,navigation,children):null}
   }).default;
   const button=label=>view.root.findAllByType('button').find(n=>words(n)===label);
   try{
