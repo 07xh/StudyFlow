@@ -125,3 +125,37 @@ def test_changelog_ipc_checks_input_and_preserves_safe_errors(monkeypatch):
     result = bridge.dispatch(req)
     assert result["error"] == "UPDATE_NETWORK_FAILED"
     assert "Private" not in str(result)
+
+def test_beta_update_chooses_highest_published_version_out_of_api_order(monkeypatch):
+    import io
+    import json
+    releases = [
+        {"tag_name": "v0.1.1-rc.9", "body": "outdated"},
+        {"tag_name": "v0.1.1-rc.18", "body": "update 18"},
+        {"tag_name": "v0.1.1-rc.17", "body": "update 17"},
+        {"tag_name": "v0.1.1-rc.19", "body": "update 19"},
+        {"tag_name": "v0.1.1-rc.20", "draft": True, "body": "not published"},
+    ]
+    monkeypatch.setattr(updater, "urlopen",
+                        lambda *a, **k: io.BytesIO(json.dumps(releases).encode()))
+    selected = updater.release_info("0.1.1-rc.17", channel="beta")
+    assert selected is not None
+    assert selected["version"] == "v0.1.1-rc.19"
+    assert selected["notes"] == "update 19"
+
+
+def test_history_sorts_versions_even_when_github_returns_unsorted_releases(monkeypatch):
+    import io
+    import json
+    releases = [
+        {"tag_name": "v0.1.1-rc.9", "body": "nine"},
+        {"tag_name": "v0.1.1-rc.18", "body": "eighteen"},
+        {"tag_name": "v0.1.1-rc.17", "body": "seventeen"},
+        {"tag_name": "v0.1.1-rc.10", "body": "ten"},
+    ]
+    monkeypatch.setattr(updater, "urlopen",
+                        lambda *a, **k: io.BytesIO(json.dumps(releases).encode()))
+    history = updater.release_notes("0.1.1-rc.18", history=True)
+    assert [entry["version"] for entry in history] == [
+        "v0.1.1-rc.18", "v0.1.1-rc.17", "v0.1.1-rc.10", "v0.1.1-rc.9"
+    ]
