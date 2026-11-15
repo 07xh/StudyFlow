@@ -24,6 +24,7 @@ class QueueTarget:
     knowledge_id: int | None
     kind: str
     name: str | None
+    chapter_name: str | None = None
 
     @property
     def task_id(self) -> str:
@@ -95,10 +96,30 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             ctx = manager.get_context(route, force=True)
             if not selected.issubset(ctx.videos) or options.get("resource_mode") == "reading":
                 raise ScopeInvalid()
-            for video in ctx.videos.values():
-                if (selected and video.video_id not in selected) or video.watch_state == 1:
+            # Traverse the real chapter -> lesson -> video tree in the same
+            # order as ZHS 0.1.5's play_course. The videos dictionary is an
+            # index, not a contractual lesson/chapter ordering.
+            visited = set()
+            for chapter in ctx.chapters:
+                chapter_name = safe_resource_title(chapter.name)
+                for lesson in chapter.video_lessons:
+                    for item in lesson.video_small_lessons:
+                        video_id = item.video_id
+                        if video_id in visited:
+                            continue
+                        visited.add(video_id)
+                        video = ctx.videos.get(video_id)
+                        if video is None or (selected and video_id not in selected) or video.watch_state == 1:
+                            continue
+                        targets.append(QueueTarget(
+                            video_id, None, "video", safe_resource_title(video.name), chapter_name
+                        ))
+            # Keep any valid orphan videos available, but never assign a
+            # fabricated chapter name to a resource absent from the tree.
+            for video_id, video in ctx.videos.items():
+                if video_id in visited or (selected and video_id not in selected) or video.watch_state == 1:
                     continue
-                targets.append(QueueTarget(video.video_id, None, "video", safe_resource_title(video.name)))
+                targets.append(QueueTarget(video_id, None, "video", safe_resource_title(video.name)))
     finally:
         session.close()
     # A duplicate model must never schedule a video twice.
@@ -175,8 +196,9 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
               launch, *, stop_on_error: bool = False, limit_seconds: float = 0) -> int:
     """Bounded process pool with an exclusive barrier around nonvideo resources."""
     directory.mkdir(parents=True, exist_ok=True)
-    rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
-             "state": "queued", "percent": None, "stale": False, "exit_code": None} for t in targets]
+    rows = [{"task_id": t.task_id, "name": t.name, "chapter": t.chapter_name,
+             "kind": t.kind, "state": "queued",
+             "percent": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
     deadline = time.monotonic() + limit_seconds if limit_seconds else None
     exit_code = 0
