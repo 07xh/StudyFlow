@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {getLegacyStatus,stopLegacy,type LegacyTaskState} from './legacyPlayback';
+import {discardTaskRecovery} from './taskRecovery';
 import type {Platform} from './types';
 import type {Runner} from './activity';
 export type RuntimeTask={runner:Runner;platform:Platform;state:LegacyTaskState;courseId:string|null;runId:string|null;exitCode:number|null;unavailable?:boolean};
@@ -39,5 +40,6 @@ export async function stopRuntime(task:RuntimeTask){
   const status=await getLegacyStatus(task.platform);
   if(status.state!=='running'||status.run_id!==task.runId||status.course_id!==task.courseId)throw Error('运行任务已变化，请刷新后再操作。');
   await stopLegacy(task.platform,task.runId);
+  discardTaskRecovery(task.platform,task.runId);
  }
 }

@@ -1,5 +1,6 @@
 import {cleanContext,courseEvents,executionEvents,storedActivity,type ActivityEntry,type EventContext,type EventResult} from "./activity";
 import {useRuntimeTasks} from "./runtimeTasks";
+import {TaskRecoveryPanel} from "./taskRecovery";
 import {getYuketangLiveProgress} from "./legacyPlayback";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
@@ -831,6 +832,10 @@ export default function App(){
       currentPlatformStatus={headerPlatform?platforms[headerPlatform].status:undefined}
       courseOptions={headerPlatform?platforms[headerPlatform].courses.map(course=>({id:course.course_id,title:course.title})):[]}
       onCourseSelect={id=>{const course=courses.find(course=>course.platform===headerPlatform&&course.course_id===id);if(course)inspectCourse(course);}}>
+      <TaskRecoveryPanel desktop={desktop} consentAccepted={consentAccepted}
+        visible={page==="home"||page==="tasks"} tasks={runtime.tasks} loading={runtime.loading}
+        connected={{zhidao:platforms.zhidao.status==="connected",yuketang:platforms.yuketang.status==="connected"}}
+        courses={courses} onRefresh={runtime.refresh}/>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="tasks"&&renderTasks()}
       {page==="platforms"&&renderPlatforms()}
