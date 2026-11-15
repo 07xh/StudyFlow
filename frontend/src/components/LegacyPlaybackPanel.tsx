@@ -175,7 +175,7 @@ export function LegacyPlaybackPanel({
         platform === "yuketang" ? options : undefined, platform === "zhidao" ? zhsOptions ?? undefined : undefined);
       if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
       if (currentPlatform.current === platform) setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
-      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:zhsOptions?{...zhsOptions}:undefined});
+      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:zhsOptions?{...zhsOptions,selected_ids:zhsOptions.selected_ids.length}:undefined});
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
       if (currentPlatform.current === platform) setMessage(msg);

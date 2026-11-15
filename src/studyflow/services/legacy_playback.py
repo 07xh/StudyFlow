@@ -288,8 +288,13 @@ def run_zhidao_original(course_key: str, monitor_token: str | None = None, zhs_o
         if is_ai and options["learn_optional"]:
             arguments.append("--learn-optional")
     # Old AI wrapper is retained for callers without custom options.
-    bundled = (_run_bundled_zhs(course_id, class_id, monitor_token) if is_ai and options is None
-               else _run_bundled_zhs_args(arguments, monitor_token, options, is_ai))
+    if options is None and is_ai:
+        bundled = _run_bundled_zhs(course_id, class_id, monitor_token)
+    elif options is None:
+        # Old callers keep the two-argument upstream compatibility wrapper.
+        bundled = _run_bundled_zhs_args(arguments, monitor_token)
+    else:
+        bundled = _run_bundled_zhs_args(arguments, monitor_token, options, is_ai)
     if bundled is not None:
         return bundled
 

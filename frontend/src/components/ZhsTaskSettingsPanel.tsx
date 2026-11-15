@@ -14,7 +14,7 @@ function safeItems(detail:ZhidaoCourseDetail|null):Item[]{
   if(!detail?.verified||detail.stale)return [];
   return detail.items.flatMap(item=>{
     const id=itemId(detail,item);
-    if(!Number.isSafeInteger(id)||!id||id<=0)return [];
+    if(typeof id!=="number"||!Number.isSafeInteger(id)||id<=0)return [];
     return [{id,name:item.name,group:detail.course_type==="ai"?(item.theme||"其他知识点"):
       (item.chapter_name||"未分组章节"),completed:detail.course_type==="ai"?Boolean(item.fully_progressed):Boolean(item.server_completed)}];
   });

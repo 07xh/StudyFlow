@@ -429,7 +429,7 @@ def read_course_detail(course_key: str) -> dict:
                     continue
                 knowledge_id = item.get("knowledgeId")
                 if type(knowledge_id) is not int or knowledge_id <= 0:
-                    continue
+                    knowledge_id = None
                 items.append({
                     "knowledge_id": knowledge_id,
                     "name": str(item.get("name") or "未命名知识点")[:200],
@@ -453,7 +453,7 @@ def read_course_detail(course_key: str) -> dict:
                 completed = item.get("serverCompleted") is True
                 video_id = item.get("videoId")
                 if type(video_id) is not int or video_id <= 0:
-                    continue
+                    video_id = None
                 chapter_id = item.get("chapterId")
                 items.append({
                     "video_id": video_id,
