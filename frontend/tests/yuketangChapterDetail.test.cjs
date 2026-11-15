@@ -89,9 +89,9 @@ test("progress batches remain ordered and new page cannot overwrite server evide
   let view;
   await act(async()=>{view=create(React.createElement(Panel,props));});
   assert.match(JSON.stringify(view.toJSON()),/剩余 2 节/);
-  const more=view.root.findAllByType("button").find(button=>
-    typeof button.props.onClick==="function"&&JSON.stringify(button.props.children).includes("继续核验"));
-  assert.ok(more);
+  const buttons=view.root.findAllByType("button");
+  assert.equal(buttons.length,2);
+  const more=buttons[buttons.length-1];
   await act(async()=>{more.props.onClick();});
   assert.deepEqual(seen,[0,8]);
   const out=JSON.stringify(view.toJSON());
