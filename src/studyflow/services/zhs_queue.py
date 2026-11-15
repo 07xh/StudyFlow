@@ -305,9 +305,12 @@ def run_queue(course_key: str, token: str, options: dict) -> int:
 
 def watch_parent_pipe() -> None:
     """Parent owns the write end. EOF means it exited, including crash/kill."""
+    descriptor = sys.stdin.fileno()
     def wait_for_eof():
         try:
-            while sys.stdin.buffer.read(1):
+            # Never hold BufferedReader's lock across interpreter shutdown:
+            # normal worker completion must be able to close stdin safely.
+            while os.read(descriptor, 1):
                 pass
         finally:
             os._exit(15)

@@ -28,23 +28,23 @@
 
 Files: `zhs_settings.py`, new `services/zhs_queue.py`, `zhs_scope.py`, tests.
 Interfaces: `concurrency: int`; `QueueTarget` with resource ID / optional knowledge ID / kind / safe name; `discover_targets(course, options)` uses current session and readers; `scoped_upstream_play(..., target_resource=None)` rejects nonmatching resources.
-- [ ] Write failing settings migration/bounds and exact target split/scope tests; run to RED.
-- [ ] Implement defaults, migration, catalog and exact resource restriction; run to GREEN.
-- [ ] Commit settings/catalog changes.
+- [x] Write failing settings migration/bounds and exact target split/scope tests; run to RED.
+- [x] Implement defaults, migration, catalog and exact resource restriction; run to GREEN.
+- [x] Commit settings/catalog changes.
 
 ### Task 2: Supervisor and packaged workers
 
 Files: new `services/zhs_queue.py`, `legacy_playback.py`, `packaging/bridge_entry.py`, tests.
 Interfaces: `run_queue(course_key, token, options)` returns process status; atomic queue snapshot and per-row stop files keyed by run token; child mode receives exact target + options and monitors stdin EOF.
-- [ ] Write subprocess tests for two simultaneous workers, refill, failure isolation, serial nonvideo barriers and stop; run to RED.
-- [ ] Implement supervisor, packaged/source launch, worker parent watchdog and child target invocation; run to GREEN.
-- [ ] Run Python suite and commit.
+- [x] Write subprocess tests for two simultaneous workers, refill, failure isolation, serial nonvideo barriers and stop; run to RED.
+- [x] Implement supervisor, packaged/source launch, worker parent watchdog and child target invocation; run to GREEN.
+- [x] Run Python suite and commit.
 
 ### Task 3: Native status and frontend controls
 
 Files: new `src-tauri/src/zhs_queue.rs`, `legacy_tasks.rs`, `lib.rs`, `legacyPlayback.ts`, `ZhsTaskSettingsPanel.tsx`, new `ZhsQueuePanel.tsx`, `LegacyPlaybackPanel.tsx`, UI tests.
 Interfaces: optional `zhs_queue` in legacy status; rows include opaque ID, kind, name, state and optional fresh local percent; command `zhs_queue_stop_video(expected_run_id, task_id)`.
-- [ ] Write failing parser/IPC/UI tests for stale identity, per-video rows and stop action.
-- [ ] Add bounded native parsing, identity-checked controls, settings and accessible independent progress bars.
-- [ ] Run full Python/Node suites, frontend build and native checks available in environment; review and commit.
-- [ ] Push feature branch and open reviewable PR; do not claim Windows or real-account success without evidence.
+- [x] Write failing parser/IPC/UI tests for stale identity, per-video rows and stop action.
+- [x] Add bounded native parsing, identity-checked controls, settings and accessible independent progress bars.
+- [x] Run full Python/Node suites, frontend build and native checks available in environment; review and commit.
+- [x] Push feature branch and open reviewable PR; do not claim Windows or real-account success without evidence.

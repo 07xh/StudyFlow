@@ -152,6 +152,18 @@ def test_child_parent_watchdog_exits_when_owner_pipe_closes():
             child.wait()
 
 
+def test_worker_can_exit_normally_while_parent_still_owns_stdin():
+    script = ("from studyflow.services.zhs_queue import watch_parent_pipe; "
+              "import time; watch_parent_pipe(); time.sleep(.1)")
+    child = subprocess.Popen([sys.executable,"-c",script],stdin=subprocess.PIPE,stderr=subprocess.PIPE)
+    try:
+        assert child.wait(timeout=5) == 0
+    finally:
+        child.stdin.close()
+        if child.poll() is None:
+            child.kill();child.wait()
+
+
 def test_malformed_stop_file_does_not_end_entire_queue(tmp_path):
     from studyflow.services.zhs_queue import QueueTarget, supervise
     target = QueueTarget(1, None, "video", "第一讲")
