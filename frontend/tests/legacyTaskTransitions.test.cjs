@@ -141,7 +141,7 @@ test('transient status failure preserves owned run for safe stop but hides stale
    return running;
   },
   stopLegacy:async(platform,expectedRunId)=>{sent.push([platform,expectedRunId]);return stopped;}
- });let view;
+ },{request:async()=>({courses:[]})});let view;
  try{
   await act(async()=>{view=create(React.createElement(env.Panel,props));});
   assert.match(words(view.root),/48.5%/);
