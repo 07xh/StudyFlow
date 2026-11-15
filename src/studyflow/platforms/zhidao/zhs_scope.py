@@ -112,7 +112,11 @@ def scoped_upstream_play(options: dict | None, is_ai: bool):
                 ch.video_lessons = lessons
             ctx.chapters = [ch for ch in ctx.chapters if ch.video_lessons]
             ctx.videos = {ident: item for ident, item in ctx.videos.items() if ident in chosen}
-            return original_course(player, rac_id, ctx)
+            was_limited = maximum > 0 and len(chosen) < len(eligible)
+            result = original_course(player, rac_id, ctx)
+            if was_limited:
+                raise ScopeLimitReached()
+            return result
 
         def video(player, *args, **kwargs):
             try:

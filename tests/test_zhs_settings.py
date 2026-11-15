@@ -8,15 +8,17 @@ from studyflow.services import legacy_playback as legacy
 def test_zhs_settings_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     assert zhs_settings.read_settings() == zhs_settings.DEFAULTS
-    options = {"speed": 1.25, "limit_minutes": 30, "learn_optional": True}
+    options = {**zhs_settings.DEFAULTS, "speed": 1.25, "limit_minutes": 30, "learn_optional": True}
     assert zhs_settings.save_settings(options) == options
     assert zhs_settings.read_settings() == options
     for invalid in (
-        {"speed": math.inf, "limit_minutes": 30, "learn_optional": True},
-        {"speed": 2.5, "limit_minutes": 30, "learn_optional": True},
-        {"speed": 1.5, "limit_minutes": True, "learn_optional": False},
-        {"speed": 1.5, "limit_minutes": -1, "learn_optional": False},
-        {"speed": 1.5, "limit_minutes": 0, "learn_optional": 1},
+        {**options, "speed": math.inf},
+        {**options, "speed": 2.5},
+        {**options, "limit_minutes": True},
+        {**options, "limit_minutes": -1},
+        {**options, "learn_optional": 1},
+        {**options, "speed_cap": math.inf},
+        {**options, "max_videos": -1},
         {**options, "heartbeat_interval": 1},
     ):
         with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
@@ -29,15 +31,32 @@ def test_zhs_cli_options_are_passed_to_original_typer(monkeypatch):
                         lambda key: {"courseType": "ai", "courseId": "11", "classId": "22"})
     seen = []
     monkeypatch.setattr(legacy, "_run_bundled_zhs_args",
-                        lambda arguments, token: seen.append((arguments, token)) or 0)
-    options = {"speed": 1.25, "limit_minutes": 30, "learn_optional": True}
+                        lambda arguments, token, options, is_ai: seen.append((arguments, token, options, is_ai)) or 0)
+    options = {**zhs_settings.DEFAULTS, "speed": 1.25, "limit_minutes": 30, "learn_optional": True,
+               "scope_mode": "all", "selected_ids": []}
     assert legacy.run_zhidao_original("a" * 64, "b" * 32, options) == 0
     assert seen == [(["play", "-c", "11:22", "--type", "ai",
-                     "--speed", "1.25", "--limit", "30", "--learn-optional"], "b" * 32)]
+                     "--speed", "1.25", "--limit", "30", "--learn-optional"], "b" * 32, options, True)]
 
 
 def test_zhs_refuses_invalid_worker_settings(monkeypatch):
     monkeypatch.setattr(legacy, "_current_course_row", lambda key: pytest.fail("Must not load course"))
-    bad = {"speed": 1.5, "limit_minutes": 0, "learn_optional": False, "heartbeat_interval": 1}
+    bad = {**zhs_settings.DEFAULTS, "scope_mode": "all", "selected_ids": [], "heartbeat_interval": 1}
     assert legacy.run_zhidao_original("a" * 64, None, bad) == 2
     assert legacy.main(["--legacy-zhidao", "a" * 64, "b" * 32, "{invalid"]) == 2
+
+
+
+def test_scope_contract_rejects_unknown_and_duplicate_ids():
+    original = {**zhs_settings.DEFAULTS, "scope_mode": "selected", "selected_ids": [1, 3]}
+    assert zhs_settings.validate_run_settings(original)["selected_ids"] == [1, 3]
+    for altered in (
+        {**original, "selected_ids": []},
+        {**original, "selected_ids": [1, 1]},
+        {**original, "selected_ids": [-1]},
+        {**original, "selected_ids": [True]},
+        {**original, "scope_mode": "all"},
+        {**original, "heartbeat_interval": 1},
+    ):
+        with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
+            zhs_settings.validate_run_settings(altered)

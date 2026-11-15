@@ -20,7 +20,7 @@ function safeItems(detail:ZhidaoCourseDetail|null):Item[]{
   });
 }
 export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEvent}:{
-  desktop:boolean;courseId:string;courseType?:"ai"|"shared";
+  desktop:boolean;courseId:string;courseType?:"ai"|"shared"|null;
   onReady?:(options:OriginalZhsOptions|null)=>void;onEvent?:TaskRecorder;
 }){
   const [options,setOptions]=useState<ZhsStoredOptions>({...originalZhsDefaults});
