@@ -151,7 +151,8 @@ def test_per_video_observed_progress_remains_scoped_to_actual_worker():
     assert second["server_percent"] == 19.5 and second["server_source"] == "periodic"
     assert third["state"] == "skipped" and third["server_percent"] == 95.0
     assert "ID: 88" not in str(p["video_tasks"])
-    assert p["simulation_percent"] == 70.0 and p["server_percent"] == 60.0
+    # Global server result was deliberately cleared when the next video began.
+    assert p["simulation_percent"] == 70.0 and p["server_percent"] is None
 
 
 def test_missing_worker_tag_keeps_every_video_percentage_unknown():
