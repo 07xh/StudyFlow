@@ -2169,3 +2169,90 @@
     grid-template-columns:minmax(0,1fr);
   }
 }
+
+
+/* Zhidao chapter records: same clear status pills and groups as Rain Classroom.
+   Search stays a secondary, compact disclosure instead of occupying the primary row. */
+.sf-shell .sf-zd-unified-chapters .sf-zd-filter-tools{
+  display:flex;flex:1 1 270px;align-items:center;justify-content:flex-end;
+  flex-wrap:wrap;gap:8px;min-width:0;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-chapter-select{
+  display:flex;align-items:center;gap:7px;min-width:0;max-width:300px;
+  font-size:11px;color:var(--muted);
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-chapter-select > span{
+  flex:none;white-space:nowrap;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-chapter-select select{
+  width:clamp(105px,16vw,180px);min-width:0;min-height:34px;
+  padding:5px 8px;overflow:hidden;text-overflow:ellipsis;
+  border:1px solid var(--line);border-radius:9px;
+  background:var(--side);color:var(--text);font-size:11px;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-filter-count{
+  color:var(--muted);font-size:11px;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-trigger,
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-close{
+  display:grid;place-items:center;flex:none;width:34px;height:34px;
+  padding:0;border:1px solid var(--line);border-radius:9px;
+  color:var(--muted);background:rgba(255,255,255,.025);cursor:pointer;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-trigger:hover,
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-trigger.active,
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-close:hover{
+  color:var(--accent-text);background:var(--soft-accent);
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-trigger:focus-visible,
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-close:focus-visible,
+.sf-shell .sf-zd-unified-chapters .sf-ykt-progress-filters button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-panel{
+  display:flex;align-items:center;gap:9px;min-width:0;
+  margin-top:0;padding:7px 9px;border:1px solid var(--line);
+  border-radius:10px;background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-panel > svg{flex:none;color:var(--muted)}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-panel input{
+  width:100%;min-width:0;flex:1;min-height:30px;padding:4px 6px;
+  border:0;background:transparent;color:var(--text);font-size:12px;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-panel input:focus{outline:none}
+.sf-shell .sf-zd-unified-chapters .sf-zd-search-panel:focus-within{
+  border-color:var(--accent);
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-chapter-groups{
+  display:grid;grid-template-columns:minmax(0,1fr);
+  gap:9px;width:100%;min-width:0;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-chapter-groups > p{
+  margin:8px 0;color:var(--muted);font-size:12px;
+}
+.sf-shell .sf-zd-unified-chapters .sf-zd-detail-summary.sf-ykt-progress-summary{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+@media(max-width:900px){
+  .sf-shell .sf-zd-unified-chapters .sf-ykt-progress-toolbar{
+    align-items:flex-start;flex-direction:column;
+  }
+  .sf-shell .sf-zd-unified-chapters .sf-zd-filter-tools{
+    flex:0 1 auto;width:100%;justify-content:flex-start;
+  }
+}
+@media(max-width:600px){
+  .sf-shell .sf-zd-unified-chapters .sf-zd-detail-summary.sf-ykt-progress-summary{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .sf-shell .sf-zd-unified-chapters .sf-zd-filter-tools{gap:7px}
+  .sf-shell .sf-zd-unified-chapters .sf-zd-chapter-select{
+    flex:1 1 150px;max-width:none;
+  }
+  .sf-shell .sf-zd-unified-chapters .sf-zd-chapter-select select{
+    flex:1 1 auto;width:100%;
+  }
+  .sf-shell .sf-zd-unified-chapters .sf-zd-filter-count{order:3;flex:1 1 100%}
+  .sf-shell .sf-zd-unified-chapters .sf-zd-expand-actions{order:4}
+}
