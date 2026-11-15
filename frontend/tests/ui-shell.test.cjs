@@ -99,7 +99,8 @@ test("platform login is available first and worker status stays distinct from co
   assert.ok(start>=0&&end>start);
   const settings=app.slice(app.indexOf("const renderPlatformSettings="),start);
   assert.match(settings,/<PlatformCard/);
-  assert.match(settings,/<RuntimeTaskList/);
+  assert.doesNotMatch(settings,/<RuntimeTaskList/,"Platform settings must not mount a second task manager");
+  assert.match(settings,/打开学习任务/);
   assert.doesNotMatch(detail,/<PlatformCard|<RuntimeTaskList|<YuketangContentPanel/);
   assert.match(detail, /renderCourses\(platform\)/);
   assert.match(playback,/sf-live-progress-summary/);

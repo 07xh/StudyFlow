@@ -410,16 +410,10 @@ export default function App(){
       <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
       <ZhidaoAccountTools desktop={desktop} dark={dark} view="data" onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
       </CollapsibleSection>
-      <CollapsibleSection id="platform:zhidao:tasks" title="平台运行概览" defaultExpanded={false}>
-        <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses}
-          events={activity} platform="zhidao" desktop={desktop} compact
-          onRefresh={runtime.refresh} onInspect={inspectCourse}/>
-        <button className="text-button" type="button"
-          onClick={()=>setPage("tasks")}>管理全部运行任务</button>
-      </CollapsibleSection>
+
       </>}
     </>:<>
-      {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings" dark={dark}
+      {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings"
         desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
         events={activity} onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>}
       {platformSettingsSection==="advanced"&&<>
@@ -430,18 +424,14 @@ export default function App(){
           onChange={updateConfiguration} onSave={()=>void saveYuketangScope()}
           onShowVideos={()=>void showVideos()}/>
       </CollapsibleSection>
-      <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务与默认参数" defaultExpanded={false}>
-        <p className={scopeDirty?"sf-task-context":"sf-muted"}>
-          原版批量任务作用于已保存的雨课堂课堂范围，而非当前选择的单门课程。
-          {scopeDirty&&" 新编辑的课堂范围尚未保存。"}
-        </p>
-        <YuketangTaskArea courses={platforms.yuketang.courses} view="player" dark={dark}
-          desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
-          events={activity}
-          onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
-      </CollapsibleSection>
+
       </>}
     </>)}
+    {platformSettingsSection==="advanced"&&<div className="actions">
+      <button className="secondary" type="button" onClick={()=>{setPlatformSettingsOpen(null);setPage("tasks");}}>
+        打开学习任务
+      </button>
+    </div>}
     <button className="text-button" type="button" onClick={()=>{setPlatformSettingsOpen(null);setPage("logs");}}>打开完整日志与诊断记录</button>
   </section>;
 
@@ -618,7 +608,7 @@ export default function App(){
             雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
             需要切换课堂范围或默认播放参数时，请使用右上方「平台设置」。
           </p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" dark={dark} detailMode
+          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
             desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
             events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>

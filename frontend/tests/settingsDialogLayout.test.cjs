@@ -17,11 +17,11 @@ test("course and platform parameter controls open a shared dialog without unmoun
   const ykt=source("components/YuketangTaskArea.tsx");
   const legacy=source("components/LegacyPlaybackPanel.tsx");
   assert.match(zhs,/<SettingsDialog open=\{opened\}/);
-  assert.match(ykt,/<SettingsDialog open=\{settingsOpen\}/);
-  assert.match(ykt,/view!=="settings"&&<LegacyPlaybackPanel/);
+  assert.doesNotMatch(ykt,/<SettingsDialog|settingsOpen/);
+  assert.match(ykt,/if\(view==="player"\)return <LegacyPlaybackPanel/);
   assert.match(legacy,/<ZhsTaskSettingsPanel/);
   assert.match(legacy,/startUnavailableReason/);
-  assert.doesNotMatch(ykt,/settings-open"\),String\(settingsOpen\)/);
+  assert.match(ykt,/return <section className="legacy-playback-panel sf-yuketang-settings-panel"/);
 });
 test("course activity and diagnostics open separately from running controls",()=>{
   const app=source("App.tsx");
