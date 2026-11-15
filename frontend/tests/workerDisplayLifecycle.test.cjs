@@ -31,7 +31,8 @@ async function renderStatus(state,progress){
   const cards=view.root.findAll(n=>n.props.className==='sf-ykt-worker');
   return cards.map(card=>JSON.stringify({
    small:card.findAllByType('small').map(n=>n.children),
-   labels:card.findAllByType('span').map(n=>n.children)
+   labels:card.findAllByType('span').map(n=>n.children),
+   strong:card.findAllByType('strong').map(n=>n.children)
   }));
  }finally{
   if(view)act(()=>view.unmount());
@@ -58,4 +59,37 @@ test('process exit clears executing labels while retaining confirmed terminal wo
  assert.match(cards[0],/状态待核实/);
  assert.doesNotMatch(cards[0],/执行中/);
  assert.match(cards[1],/已完成/);
+});
+
+
+test('two concurrent video slots display only their own observed percentages',async()=>{
+ const cards=await renderStatus('running',{
+  ...progress,worker_slots:[
+   {slot:1,video_index:1,state:'watching'},
+   {slot:2,video_index:2,state:'preparing'}
+  ],
+  video_tasks:[
+   {video_index:1,name:'第一讲',state:'watching',simulation_percent:40,simulation_position:48,
+    simulation_duration:120,server_percent:22,server_position:26,server_source:'periodic'},
+   {video_index:2,name:'第二讲',state:'preparing',simulation_percent:null,simulation_position:null,
+    simulation_duration:80,server_percent:null,server_position:null,server_source:null}
+  ]
+ });
+ assert.equal(cards.length,2);
+ assert.match(cards[0],/第一讲/);
+ assert.match(cards[0],/40\.0%/);
+ assert.match(cards[0],/22\.0%/);
+ assert.match(cards[1],/第二讲/);
+ assert.doesNotMatch(cards[1],/40\.0%|22\.0%/);
+ assert.match(cards[1],/尚未获得可归属的响应/);
+});
+
+test('the video view separates log observations from overall course completion',()=>{
+ const text=fs.readFileSync(path.join(__dirname,'../src/components/LegacyPlaybackPanel.tsx'),'utf8');
+ assert.match(text,/逐视频详情/);
+ assert.match(text,/videoTasks\.map/);
+ assert.match(text,/YktVideoEvidence/);
+ assert.match(text,/服务器返回/);
+ assert.match(text,/未能归属的进度仍留空/);
+ assert.doesNotMatch(text,/server_percent\s*\?\?\s*simulation_percent/);
 });
