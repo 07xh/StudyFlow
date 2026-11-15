@@ -154,7 +154,7 @@ def test_zhs_upstream_preflight_stage_observer_preserves_original_behavior(
 
     def cli(*, args, standalone_mode):
         assert standalone_mode is False
-        assert load_config(False, False, None) is None
+        assert upstream._load_config_and_session(False, False, None) is None
         raise SystemExit(1)
 
     upstream._load_config_and_session = load_config
