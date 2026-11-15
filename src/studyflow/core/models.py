@@ -19,6 +19,7 @@ class Course:
     progress_evidence: str | None = None
     verified_at: str | None = None
     session_marker: str | None = None  # Opaque, session-scoped UI merge guard; never a cookie.
+    progress_metric: str | None = None  # Only set for a known server-backed metric.
 
     def __post_init__(self) -> None:
         if not self.course_id or not self.title:
@@ -27,6 +28,8 @@ class Course:
             raise ValueError("unsupported course_type")
         if not isinstance(self.stale, bool):
             raise ValueError("stale must be bool")
+        if self.progress_metric not in (None, "official_ai_schedule", "knowledge_point_full", "completed_videos"):
+            raise ValueError("unsupported progress metric")
         if self.progress_evidence not in (None, "server_verified"):
             raise ValueError("unsupported progress evidence")
         if self.progress_evidence == "server_verified" and not self.verified_at:

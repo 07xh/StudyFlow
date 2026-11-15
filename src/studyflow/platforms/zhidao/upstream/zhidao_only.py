@@ -11,6 +11,7 @@ import json
 import socket
 import hmac
 import hashlib
+import math
 import tempfile
 import time
 from contextlib import contextmanager
@@ -286,6 +287,12 @@ def doctor_server() -> int:
         safe_close(session)
 
 
+def _valid_percent(value: Any) -> bool:
+    """Only explicit finite numeric server values are course-progress evidence."""
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and 0 <= value <= 100)
+
+
 def ai_course_list(session: Any) -> list[dict[str, Any]]:
     """Use ZHS's authenticated, read-only query, but preserve API errors.
 
@@ -321,6 +328,13 @@ def ai_course_list(session: Any) -> list[dict[str, Any]]:
             "classId": class_id,
             "courseType": "ai",
         }
+        # queryStudentAICourseList exposes 'schedule' (course progress) and
+        # 'mastery' (independent score). Keep only the former; never infer it
+        # from the number of fully completed knowledge points.
+        schedule = row.get("schedule")
+        if _valid_percent(schedule):
+            item["officialProgressPercent"] = round(float(schedule), 1)
+            item["officialVerifiedAt"] = datetime.now(timezone.utc).isoformat()
         item["officialLearningUrl"] = official_learning_url(item)
         parsed.append(item)
     # A legitimately empty list must remain valid for accounts with no AI courses.
@@ -440,7 +454,23 @@ def verify_one(course_type: str, course_id: str, class_id: str = "") -> int:
             return 2
         selected = candidates[0]
         if course_type == "ai":
-            detail = read_with_retry(lambda: ai_progress(AiCourseManager(session), selected))
+            # Do not reuse an old schedule from the cached directory as fresh.
+            # Resolve the authenticated official overall progress again on
+            # every single-course verification, separately from knowledge points.
+            clean = {key: value for key, value in selected.items()
+                     if key not in ("officialProgressPercent", "officialVerifiedAt")}
+            try:
+                updated_ai = read_with_retry(lambda: ai_course_list(session))
+                fresh_matches = [row for row in updated_ai if identity(row) == identity(selected)]
+                if len(fresh_matches) == 1:
+                    for field in ("officialProgressPercent", "officialVerifiedAt"):
+                        if field in fresh_matches[0]:
+                            clean[field] = fresh_matches[0][field]
+            except Exception:
+                # Knowledge-point verification remains useful if the separate
+                # course directory endpoint is temporarily unavailable.
+                pass
+            detail = read_with_retry(lambda: ai_progress(AiCourseManager(session), clean))
         else:
             mgr = ZhidaoCourseManager(session)
             _, lookups = read_with_retry(lambda: shared_course_list(mgr))

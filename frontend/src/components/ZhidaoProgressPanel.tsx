@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {RefreshCw,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoProgressSnapshot} from "../bridge";
-import {presentCourse} from "../presentation";
+import {presentCourse,courseMetric} from "../presentation";
 import type {Course} from "../types";
 import type {TaskRecorder} from "../activity";
 import {Switch} from "../ui/Switch";
@@ -88,7 +88,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
   const monitor=autoVerifyEnabled&&autoVerifyCourseId===selected;
   const visibleError=lastError||(monitor?autoVerifyError:"");
 
-  const label=current?.course_type==="ai"?"满进度知识点占比":current?.course_type==="shared"?"已完成视频占比":"服务器核验比例";
+  const label=current?courseMetric(current).label:"服务器核验比例";
   const timestamp=current?.verified_at
     ?new Date(current.verified_at).toLocaleString()
     :"尚无当前会话的核验时间";
@@ -140,7 +140,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
     {message&&!visibleError&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     <details className="sf-technical-note"><summary>核验说明</summary><p className="sf-zd-progress-note">
       {incomplete?"本次同步存在未完成项。":"只读取平台已有记录，不提交学习进度。"}
-      智慧课程比例统计已达满进度的知识点；共享课比例统计已完成视频数量，均不代表官方课程总进度或观看时长。
+      智慧课程优先显示知到服务器课程列表返回的课程进度（schedule）；缺少有效字段时，明确退回“满进度知识点占比”。掌握度是另一项指标；共享课显示已完成视频占比。
     </p></details>
   </section>;
 }
