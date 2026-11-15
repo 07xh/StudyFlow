@@ -261,7 +261,7 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
             <label className="sf-xxt-select"><span>任务状态</span>
               <select value={taskCompletion} onChange={event=>setTaskCompletion(event.target.value as CompletionFilter)}>
                 <option value="all">全部状态</option><option value="pending">未完成</option>
-                <option value="completed">已标记完成</option>
+                <option value="completed">已标记完成</option><option value="unknown">待核验</option>
               </select>
             </label>
           </div>
@@ -269,7 +269,7 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
           {taskError&&<p role="alert">{taskError}</p>}
           {!taskLoading&&!taskError&&
             <p className="sf-xxt-task-summary">{visibleTasks.length}/{tasks.length} 项任务
-              {tasks.length>0?" · 服务器标记完成 "+tasks.filter(task=>task.completed).length+" 项":""}
+              {tasks.length>0?" · 已标记完成 "+tasks.filter(task=>task.completed===true).length+" 项 · 待核验 "+tasks.filter(task=>task.completed===null).length+" 项":""}
             </p>}
           {!taskLoading&&!taskError&&visibleTasks.length===0&&
             <p className="sf-muted" role="status">
@@ -279,8 +279,8 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
             {!taskLoading&&visibleTasks.map(task=><li key={task.id} className="sf-xxt-task-item">
               <span className="sf-xxt-task-type">{taskLabels[task.type]??"其他任务"}</span>
               <strong title={task.title}>{task.title}</strong>
-              <span className={"sf-xxt-state "+(task.completed?"completed":"pending")}>
-                {task.completed?"已标记完成":"未完成"}
+              <span className={"sf-xxt-state "+(task.completed===true?"completed":task.completed===false?"pending":"unknown")}>
+                {task.completed===true?"已标记完成":task.completed===false?"未完成":"待核验"}
               </span>
             </li>)}
           </ul>
