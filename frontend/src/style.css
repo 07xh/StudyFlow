@@ -118,7 +118,7 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 }
 @media(max-width:700px) {.legacy-playback-panel{padding:15px}}
 
-/* Platform actions: three compact buttons form a single right-aligned row. */
+/* Platform actions: settings and synchronization stay right-aligned on one row. */
 .sf-shell .sf-platform-toolbar.actions{
   display:flex;flex-wrap:nowrap;align-items:center;justify-content:flex-start;
   min-width:0;max-width:100%;gap:8px;overflow-x:auto;overflow-y:hidden;
