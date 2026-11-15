@@ -23,6 +23,7 @@ export function useReleaseChangelog(desktop:boolean,consentAccepted:boolean){
   const dialogRef=useRef(dialog);
   dialogRef.current=dialog;
   const requestGeneration=useRef(0);
+  const lastCheckAt=useRef(0);
   const lastNotesRequest=useRef<{scope:"startup"|"history";version:string;previous?:string}|null>(null);
 
   function open(scope:"startup"|"history",version:string,previous?:string){
@@ -70,6 +71,10 @@ export function useReleaseChangelog(desktop:boolean,consentAccepted:boolean){
     let active=true,busy=false;
     async function checkPublishedRelease(){
       if(!active||busy||dialogRef.current)return;
+      // Window focus can fire repeatedly while navigating other apps.
+      // Avoid exhausting GitHub's anonymous API allowance.
+      if(Date.now()-lastCheckAt.current<5*60*1000)return;
+      lastCheckAt.current=Date.now();
       busy=true;
       try{
         const result=await request<{release:AvailableUpdate|null}>({
