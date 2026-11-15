@@ -66,9 +66,10 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.locator('.sf-platform-login').getByLabel('Session ID',{exact:true}).count(),1);
    assert.equal(await page.locator('.sf-platform-login').getByLabel('课堂 ID',{exact:true}).count(),0);
    assert.equal(await page.locator('.sf-platform-login').getByText('读取章节视频',{exact:true}).count(),0);
+   await page.getByRole('button',{name:'课堂范围与章节内容，展开'}).click();
    assert.equal(await page.getByLabel('课堂 ID',{exact:true}).count(),1);
    assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),1,
-     'Classroom scope remains available under platform management');
+     'Classroom scope is available after expanding the platform management section');
    assert.equal(await page.locator('.sf-ykt-worker').count(),0,'No invented worker states before launch');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Page cannot overflow horizontally');
    await page.mouse.move(0,0);
