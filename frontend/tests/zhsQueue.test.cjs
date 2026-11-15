@@ -45,7 +45,10 @@ test('stale or failed polling hides all percentages and disables row controls',a
   let view;
   try{
    await act(async()=>{view=create(React.createElement(Panel,{...props,onRefresh:async()=>{}}));});
-   assert.equal(view.root.findAllByProps({role:'progressbar'}).length,0);
+   const placeholders=view.root.findAllByProps({role:'progressbar'});
+   assert.equal(placeholders.length,2,'running tasks retain nonnumeric placeholders');
+   assert.ok(placeholders.every(p=>p.props['aria-valuenow']===undefined));
+   assert.ok(placeholders.every(p=>/is-indeterminate/.test(p.props.className)));
    assert.doesNotMatch(words(view.root),/25%|63%/);
    assert.ok(view.root.findAllByType('button').every(b=>b.props.disabled));
   }finally{if(view)act(()=>view.unmount());}
