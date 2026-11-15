@@ -1,8 +1,12 @@
 # Reusable, isolated StudyFlow sidecar build. Never modifies the original ZHSDesktop.
 $ErrorActionPreference = 'Stop'
 Set-Location (Resolve-Path (Join-Path $PSScriptRoot '..'))
+# Never modify the installed pip package or original ZHSDesktop.
+$stage = Join-Path $PSScriptRoot '..\build\zhs-stage'
+python -m studyflow.services.zhs_upstream_patch prepare $stage
+if ($LASTEXITCODE -ne 0) { throw 'Reviewed upstream ZHS sources do not match this installation' }
 $flags = @('--noconfirm','--clean','--onefile','--console',
-  '--name','studyflow-bridge','--paths','src',
+  '--name','studyflow-bridge','--paths','src','--paths',$stage,
   '--collect-all','keyring','--collect-all','zhs','--copy-metadata','zhs',
   '--add-data',"$((Resolve-Path 'legacy/yuketang/main.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/yuketang/exe_entry.py').Path);legacy/yuketang",
@@ -10,8 +14,15 @@ $flags = @('--noconfirm','--clean','--onefile','--console',
   '--hidden-import','dotenv',
   '--distpath','packaging/sidecar','--workpath','build/pyinstaller',
   '--specpath','build/specs','packaging/bridge_entry.py')
-python -m PyInstaller @flags
-if ($LASTEXITCODE -ne 0) { throw 'Standalone Zhidao sidecar build failed' }
+$previousPythonPath = $env:PYTHONPATH
+$env:PYTHONPATH = "$stage" + $(if ($previousPythonPath) { ";$previousPythonPath" } else { "" })
+try {
+  python -m PyInstaller @flags
+  if ($LASTEXITCODE -ne 0) { throw 'Standalone Zhidao sidecar build failed' }
+} finally {
+  if ($null -eq $previousPythonPath) { Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue }
+  else { $env:PYTHONPATH = $previousPythonPath }
+}
 
 $bridge = Join-Path $PSScriptRoot '..\packaging\sidecar\studyflow-bridge.exe'
 if (-not (Test-Path -LiteralPath $bridge -PathType Leaf)) {

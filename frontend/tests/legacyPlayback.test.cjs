@@ -207,3 +207,12 @@ test("ZHS scoped task settings prohibit forged identifiers and unknown ranges",(
   assert.equal(legacy.validateZhsOptions({...valid,max_videos:1001}),false);
   assert.equal(legacy.validateZhsOptions({...valid,speed_cap:3}),false);
 });
+
+test("status polling is single-flight and failed status reads remain visible", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /statusPollInFlight\.current === platform/);
+  assert.match(panel, /statusPollInFlight\.current = platform/);
+  assert.match(panel, /无法读取本地任务状态；请重试。/);
+  assert.match(panel, /verificationRetry/);
+  assert.match(panel, /重试服务器核验/);
+});

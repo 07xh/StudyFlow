@@ -76,3 +76,21 @@ test('a poll issued before starting cannot overwrite the new run, while the even
   assert.equal(events[0][3].courseId,'A');
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
+
+test('failed terminal verification can retry without replaying or resending heartbeats',async()=>{
+ const calls=[],verified=[];
+ const target={...course,progress_evidence:'server_verified',verified_at:'2026-11-15T10:00:00Z',progress_percent:45};
+ const env=setup({getLegacyStatus:async()=>({...running,state:'exited',exit_code:0})},{
+  request:async input=>{calls.push(input);if(calls.length===1)throw new Error('temporarily offline');return {courses:[target]};}
+ });let view;
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,{...props,onCourseVerified:c=>verified.push(c)}));});
+  assert.equal(calls.length,1);
+  const retry=view.root.findAllByType('button').find(n=>words(n).includes('重试服务器核验'));
+  assert.ok(retry,'an unknown server result must be explicitly retryable');
+  await act(async()=>retry.props.onClick());
+  assert.equal(calls.length,2);
+  assert.deepEqual(verified,[target]);
+  assert.ok(calls.every(input=>input.operation==='zhidao.progress.verify'&&input.course_key==='A'));
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});

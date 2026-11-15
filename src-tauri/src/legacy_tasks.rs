@@ -140,7 +140,8 @@ fn remove_zhs_snapshot(token: Option<&str>) {
 /// Never mistake local simulated progress for confirmed platform learning progress.
 fn read_zhs_snapshot(token: &str) -> Option<ZhsProgress> {
     let path = zhs_snapshot_path(token)?;
-    let metadata = fs::metadata(&path).ok()?;
+    // Do not follow local telemetry symlinks.
+    let metadata = fs::symlink_metadata(&path).ok()?;
     if !metadata.is_file() || metadata.len() < 2 || metadata.len() > 2048 {
         return None;
     }

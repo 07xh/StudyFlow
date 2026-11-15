@@ -497,3 +497,21 @@ def test_direct_verifier_entry_rejects_stale_and_other_session_courses(session_c
         assert calls == [("ai", "11", "21")]
     else:
         assert not calls
+
+
+@pytest.mark.parametrize("exit_code,stdout,expected", [
+    (0, "[SESSION_OK] server confirmed\\n", True),
+    (1, "[SESSION_OK] server confirmed\\n", False),
+    (4, "[SESSION_OK] server confirmed\\n", False),
+    (0, "[SESSION_UNCONFIRMED] login unknown\\n", False),
+    (0, "", False),
+])
+def test_login_probe_requires_successful_process_and_explicit_server_confirmation(
+    monkeypatch, exit_code, stdout, expected
+):
+    def fake_readonly(command, timeout):
+        assert (command, timeout) == ("session-check", 65)
+        return SimpleNamespace(returncode=exit_code, stdout=stdout)
+
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", fake_readonly)
+    assert legacy_runtime.probe_login() is expected
