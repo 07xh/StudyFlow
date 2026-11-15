@@ -279,6 +279,14 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except (OSError, ValueError):
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": progress}
+    if operation == "yuketang.session.marker":
+        try:
+            marker = credentials.recovery_marker(credentials.load())
+            if marker is None:
+                return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
+            return {"id": request_id, "ok": True, "data": {"marker": marker}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "CREDENTIAL_STORAGE_FAILED"}
     if operation == "yuketang.scope.get":
         try:
             return {"id": request_id, "ok": True, "data": credentials.scope_metadata(credentials.load())}
