@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 #[derive(Default)]
@@ -239,7 +239,6 @@ pub async fn zhidao_player_prepare(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub async fn zhidao_player_start(
     app: AppHandle,
-    state: State<'_, ZhidaoPlayerManager>,
     course_key: String,
     speed: String,
     allow_minimize: bool,
@@ -273,14 +272,33 @@ pub async fn zhidao_player_start(
         return Err("COURSE_ROUTE_UNAVAILABLE".into());
     }
 
+    // SDK extraction, file copies and PowerShell launch must not stall the UI.
+    // Copy only validated route values into the background worker.
+    let course_type = course_type.to_owned();
+    let course_id = course_id.to_owned();
+    let class_id = class_id.to_owned();
+    let route = route.to_owned();
+    tauri::async_runtime::spawn_blocking(move || {
+        start_official_player_blocking(
+            app, course_key, speed, allow_minimize, auto_start, auto_next,
+            course_type, course_id, class_id, route,
+        )
+    }).await.map_err(|_| "PLAYER_LAUNCH_FAILED".to_string())?
+}
+
+fn start_official_player_blocking(
+    app: AppHandle, course_key: String, speed: String,
+    allow_minimize: bool, auto_start: bool, auto_next: bool,
+    course_type: String, course_id: String, class_id: String, route: String,
+) -> Result<OfficialPlayerStatus, String> {
     let (local, root) = copy_player_assets(&app)?;
     if !webview_sdk_ready(&root) {
-        let app_for_prepare = app.clone();
-        // First use attempts the pinned SDK download. If it is unavailable,
-        // the unchanged upstream player retains its explicit official-browser fallback.
-        let _ = tauri::async_runtime::spawn_blocking(move || prepare_runtime(&app_for_prepare)).await;
+        // First use attempts the pinned SDK download on this blocking worker.
+        // The original official-browser fallback remains unchanged.
+        let _ = prepare_runtime(&app);
     }
 
+    let state = app.state::<ZhidaoPlayerManager>();
     let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
     if let Some(previous) = guard.as_mut() {
         let current = status_of(previous);
@@ -297,13 +315,13 @@ pub async fn zhidao_player_start(
         let mut command = Command::new("powershell.exe");
         command.args(["-NoProfile", "-STA", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"])
             .arg(script)
-            .arg("-CourseType").arg(course_type)
-            .arg("-CourseId").arg(course_id)
-            .arg("-ClassId").arg(class_id)
+            .arg("-CourseType").arg(&course_type)
+            .arg("-CourseId").arg(&course_id)
+            .arg("-ClassId").arg(&class_id)
             .arg("-Speed").arg(&speed)
             .arg("-MonitorToken").arg(&token);
         if course_type == "shared" {
-            command.args(["-RecruitAndCourseId", route]);
+            command.arg("-RecruitAndCourseId").arg(&route);
         }
         if allow_minimize { command.arg("-AllowMinimize"); }
         if auto_start { command.arg("-AutoStart"); }
@@ -329,7 +347,14 @@ pub async fn zhidao_player_start(
 }
 
 #[tauri::command]
-pub fn zhidao_player_status(state: State<'_, ZhidaoPlayerManager>) -> Result<OfficialPlayerStatus, String> {
+pub async fn zhidao_player_status(app: AppHandle) -> Result<OfficialPlayerStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<ZhidaoPlayerManager>();
+        zhidao_player_status_blocking(state.inner())
+    }).await.map_err(|_| "PLAYER_STATUS_FAILED".to_string())?
+}
+
+fn zhidao_player_status_blocking(state: &ZhidaoPlayerManager) -> Result<OfficialPlayerStatus, String> {
     let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
     match guard.as_mut() {
         Some(job) => Ok(status_of(job)),
@@ -341,8 +366,16 @@ pub fn zhidao_player_status(state: State<'_, ZhidaoPlayerManager>) -> Result<Off
     }
 }
 
+// taskkill + process wait must run off the Tauri command/UI thread.
 #[tauri::command]
-pub fn zhidao_player_stop(state: State<'_, ZhidaoPlayerManager>, expected_run_id: Option<String>) -> Result<OfficialPlayerStatus, String> {
+pub async fn zhidao_player_stop(app: AppHandle, expected_run_id: Option<String>) -> Result<OfficialPlayerStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<ZhidaoPlayerManager>();
+        zhidao_player_stop_blocking(state.inner(), expected_run_id)
+    }).await.map_err(|_| "PLAYER_STOP_FAILED".to_string())?
+}
+
+fn zhidao_player_stop_blocking(state: &ZhidaoPlayerManager, expected_run_id: Option<String>) -> Result<OfficialPlayerStatus, String> {
     let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
     let Some(job) = guard.as_mut() else {
         return Ok(OfficialPlayerStatus {
