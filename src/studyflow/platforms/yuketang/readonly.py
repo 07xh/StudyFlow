@@ -161,6 +161,7 @@ class YuketangReadOnly:
                 "Accept": "application/json, text/plain, */*",
                 "Xt-Agent": "web", "classroom-id": classroom,
                 "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": self.csrf_token,
+                "Cache-Control": "no-cache, no-store", "Pragma": "no-cache",
                 "university-id": self.university_id, "uv-id": self.university_id,
                 "xtbz": "ykt",
             },
