@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, Manager};
 
 #[derive(serde::Deserialize)]
 pub struct OriginalYktOptions {
@@ -58,6 +58,37 @@ impl OriginalYktOptions {
     }
 }
 
+// ZHS 0.1.5 supports these CLI flags; heartbeat timing and concurrency are not configurable.
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct ZhsOptions {
+    speed: f64,
+    speed_cap: f64,
+    limit_minutes: u16,
+    learn_optional: bool,
+    max_videos: u16,
+    stop_on_error: bool,
+    scope_mode: String,
+    selected_ids: Vec<u64>,
+}
+impl ZhsOptions {
+    fn validate(&self) -> Result<(), String> {
+        if !self.speed.is_finite() || self.speed < 1.0 || self.speed > 2.0
+            || !self.speed_cap.is_finite() || self.speed_cap < 1.0 || self.speed_cap > 2.0
+            || self.limit_minutes > 1440 || self.max_videos > 1000
+            || (self.scope_mode != "all" && self.scope_mode != "selected")
+            || self.selected_ids.len() > 256
+            || (self.scope_mode == "all" && !self.selected_ids.is_empty())
+            || (self.scope_mode == "selected" && self.selected_ids.is_empty())
+            || self.selected_ids.iter().any(|id| *id == 0 || *id > i64::MAX as u64)
+            || {
+                let ids: std::collections::HashSet<_> = self.selected_ids.iter().collect();
+                ids.len() != self.selected_ids.len()
+            } {
+            return Err("INVALID_SETTINGS".into());
+        }
+        Ok(())
+    }
+}
 #[derive(Default)]
 pub struct LegacyTasks {
     jobs: Mutex<HashMap<String, LegacyJob>>,
@@ -223,7 +254,8 @@ fn valid_course_key(key: &str) -> bool {
 #[tauri::command]
 pub fn legacy_start(
     app: AppHandle, state: State<'_, LegacyTasks>,
-    platform: String, course_id: Option<String>, options: Option<OriginalYktOptions>
+    platform: String, course_id: Option<String>, options: Option<OriginalYktOptions>,
+    zhs_options: Option<ZhsOptions>
 ) -> Result<LegacyStatus, String> {
     if platform != "zhidao" && platform != "yuketang" {
         return Err("UNKNOWN_PLATFORM".into());
@@ -234,10 +266,14 @@ pub fn legacy_start(
     if platform == "yuketang" && course_id.is_some() {
         return Err("INVALID_REQUEST".into());
     }
-    if platform == "zhidao" && options.is_some() {
+    if (platform == "zhidao" && options.is_some())
+        || (platform == "yuketang" && zhs_options.is_some()) {
         return Err("INVALID_REQUEST".into());
     }
     if let Some(settings) = &options {
+        settings.validate()?;
+    }
+    if let Some(settings) = &zhs_options {
         settings.validate()?;
     }
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
@@ -261,6 +297,9 @@ pub fn legacy_start(
         command.arg("--legacy-zhidao")
             .arg(course_id.as_deref().unwrap_or(""))
             .arg(monitor_token.as_deref().unwrap_or(""));
+        if let Some(settings) = &zhs_options {
+            command.arg(serde_json::to_string(settings).map_err(|_| "INVALID_SETTINGS")?);
+        }
     } else {
         command.arg("--legacy-yuketang");
         if let Some(ref id) = run_id { command.env("STUDYFLOW_YKT_RUN_ID", id); }
@@ -275,6 +314,9 @@ pub fn legacy_start(
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
     let child = command.spawn().map_err(|_| "LEGACY_LAUNCH_FAILED")?;
+    let wallclock_limit = if platform == "zhidao" {
+        zhs_options.as_ref().map(|x| x.limit_minutes).unwrap_or(0)
+    } else { 0 };
     guard.insert(platform.clone(), LegacyJob {
         child: Some(child), state: "running".into(), exit_code: None,
         run_id: run_id.clone(),
@@ -282,6 +324,29 @@ pub fn legacy_start(
         monitor_token,
         last_zhs_progress: None,
     });
+    if wallclock_limit > 0 {
+        // Dedicated timer enforces the cap even when the UI is minimized or not polling.
+        // It never owns a heartbeat generator; it only stops this run's child tree.
+        let watcher_app = app.clone();
+        let expected = run_id.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(u64::from(wallclock_limit) * 60));
+            let managed = watcher_app.state::<LegacyTasks>();
+            if let Ok(mut tasks) = managed.jobs.lock() {
+                if let Some(task) = tasks.get_mut("zhidao") {
+                    if task.run_id == expected &&
+                       status_of("zhidao", task).map(|s| s.state == "running").unwrap_or(false) {
+                        if let Some(mut process) = task.child.take() {
+                            terminate_tree(&mut process);
+                            task.exit_code = Some(12);
+                            task.state = "exited".into();
+                            remove_zhs_snapshot(task.monitor_token.as_deref());
+                        }
+                    }
+                }
+            };
+        });
+    }
     Ok(LegacyStatus {
         platform: platform.clone(), state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },

@@ -175,3 +175,35 @@ test("original ZHS exit triggers exactly scoped read-only course reconciliation"
   // Reconcile is a read-only bridge operation, not a playback or heartbeat.
   assert.doesNotMatch(panel, /saveDatabaseIntervalTimeV2|studyRecord\/report|generateHeartbeat/);
 });
+
+
+test("ZHS options use documented CLI fields and the existing process bridge",async()=>{
+  const calls=[];
+  const legacy=loadWithStub(async (name,props)=>{calls.push({name,props});return {state:"running"};});
+  const valid={...legacy.originalZhsDefaults,speed:1.25,limit_minutes:30,learn_optional:true,scope_mode:"all",selected_ids:[]};
+  assert.equal(legacy.validateZhsOptions(valid),true);
+  assert.equal(legacy.validateZhsOptions({...valid,speed:Infinity}),false);
+  assert.equal(legacy.validateZhsOptions({...valid,limit_minutes:-1}),false);
+  await assert.rejects(legacy.startLegacy("zhidao","a".repeat(64),undefined,{...valid,speed:3}),/INVALID_SETTINGS/);
+  assert.equal(calls.length,0);
+  await legacy.startLegacy("zhidao","a".repeat(64),undefined,valid);
+  assert.deepEqual(calls[0].props.zhsOptions,valid);
+  assert.equal(calls[0].props.options,null);
+  const panel=fs.readFileSync(path.join(__dirname,"..","src","components","ZhsTaskSettingsPanel.tsx"),"utf8");
+  assert.match(panel,/zhidao.zhs.settings.get/);
+  assert.match(panel,/zhidao.zhs.settings.save/);
+  assert.doesNotMatch(panel,/saveDatabaseIntervalTimeV2|generateHeartbeat/);
+});
+
+
+
+test("ZHS scoped task settings prohibit forged identifiers and unknown ranges",()=>{
+  const legacy=loadWithStub(async()=>{});
+  const valid={...legacy.originalZhsDefaults,scope_mode:"selected",selected_ids:[11,22]};
+  assert.equal(legacy.validateZhsOptions(valid),true);
+  assert.equal(legacy.validateZhsOptions({...valid,selected_ids:[11,11]}),false);
+  assert.equal(legacy.validateZhsOptions({...valid,selected_ids:[-1]}),false);
+  assert.equal(legacy.validateZhsOptions({...valid,scope_mode:"all"}),false);
+  assert.equal(legacy.validateZhsOptions({...valid,max_videos:1001}),false);
+  assert.equal(legacy.validateZhsOptions({...valid,speed_cap:3}),false);
+});

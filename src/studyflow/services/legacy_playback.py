@@ -20,6 +20,12 @@ import time
 
 from studyflow.platforms.zhidao.courses import progress_key
 from studyflow.platforms.zhidao.legacy_runtime import installation_root
+from studyflow.platforms.zhidao.zhs_settings import (
+    validate_run_settings as validate_zhs_settings,
+)
+from studyflow.platforms.zhidao.zhs_scope import (
+    scoped_upstream_play, ScopeLimitReached, ScopeFailed, ScopeInvalid,
+)
 from studyflow.platforms.yuketang.credentials import load as load_yuketang
 from studyflow.platforms.yuketang.legacy_config import default_config_home, prepare_environment
 
@@ -198,7 +204,8 @@ class _RefreshingZhsSink:
                 self.last_publish = now
 
 
-def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None) -> int | None:
+def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None,
+                          options: dict | None = None, is_ai: bool = False) -> int | None:
     """Run upstream ZHS 0.1.5 CLI unchanged; None means no bundled runtime."""
     from importlib.metadata import PackageNotFoundError, version
     try:
@@ -228,10 +235,17 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                 sink = None
                 sys.stdout = original_stdout
                 sys.stderr = original_stderr
-        # Do not change upstream progress, heartbeat or login behavior.
-        result = zhs_app(args=arguments, standalone_mode=False)
+        # Per-run scope only controls the original traversal; not heartbeat sender.
+        with scoped_upstream_play(options, is_ai):
+            result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
         return result if isinstance(result, int) else 0
+    except ScopeLimitReached:
+        return 12
+    except ScopeFailed:
+        return 13
+    except ScopeInvalid:
+        return 14
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 1
     except EOFError:
@@ -256,8 +270,12 @@ def _run_bundled_zhs(course_id: str, class_id: str, monitor_token: str | None = 
     )
 
 
-def run_zhidao_original(course_key: str, monitor_token: str | None = None) -> int:
+def run_zhidao_original(course_key: str, monitor_token: str | None = None, zhs_options: dict | None = None) -> int:
     if monitor_token is not None and MONITOR_TOKEN.fullmatch(monitor_token) is None:
+        return 2
+    try:
+        options = validate_zhs_settings(zhs_options) if zhs_options is not None else None
+    except ValueError:
         return 2
     try:
         course = _current_course_row(course_key)
@@ -272,18 +290,37 @@ def run_zhidao_original(course_key: str, monitor_token: str | None = None) -> in
             return 6
         return 4
 
-    # Retain the original AI wrapper; shared courses use ZHS's existing --url.
-    bundled = (_run_bundled_zhs(course_id, class_id, monitor_token) if is_ai
-               else _run_bundled_zhs_args(arguments, monitor_token))
+    # Documented upstream flags only: no replacement heartbeat sender.
+    if options is not None:
+        # Shared ZHS uses speed + uniform(-0.15, 0.15); clamp its base.
+        effective_speed = min(options["speed"], options["speed_cap"] - (0.15 if not is_ai else 0.0))
+        arguments.extend(["--speed", str(round(effective_speed, 4))])
+        if options["limit_minutes"]:
+            arguments.extend(["--limit", str(options["limit_minutes"])])
+        if is_ai and options["learn_optional"]:
+            arguments.append("--learn-optional")
+    # Old AI wrapper is retained for callers without custom options.
+    if options is None and is_ai:
+        bundled = _run_bundled_zhs(course_id, class_id, monitor_token)
+    elif options is None:
+        # Old callers keep the two-argument upstream compatibility wrapper.
+        bundled = _run_bundled_zhs_args(arguments, monitor_token)
+    else:
+        bundled = _run_bundled_zhs_args(arguments, monitor_token, options, is_ai)
     if bundled is not None:
         return bundled
 
     # Older ZHSDesktop installs are a fallback only; no upstream files edited.
     installed = installation_root()
     if is_ai:
+        # The original .cmd fallback does not support flags. Do not silently drop custom settings.
+        if options is not None:
+            return 5  # The original .cmd cannot honor scoped or bounded options.
         executable = installed / "Zhidao-Task.cmd"
         command = [str(executable), "play-ai", course_id, class_id]
     else:
+        if options is not None:
+            return 5
         executable = installed / ".venv" / "Scripts" / "zhs.exe"
         command = [str(executable), *arguments]
     if not executable.is_file():
@@ -301,8 +338,17 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if args == ["--legacy-yuketang"]:
         return run_yuketang_original()
-    if len(args) in (2, 3) and args[0] == "--legacy-zhidao":
-        return run_zhidao_original(args[1], args[2] if len(args) == 3 else None)
+    if len(args) in (2, 3, 4) and args[0] == "--legacy-zhidao":
+        if len(args) == 4:
+            try:
+                if len(args[3]) > 16384:
+                    return 2
+                options = validate_zhs_settings(json.loads(args[3]))
+            except (ValueError, TypeError):
+                return 2
+        else:
+            options = None
+        return run_zhidao_original(args[1], args[2] if len(args) >= 3 else None, options)
     return 2
 
 

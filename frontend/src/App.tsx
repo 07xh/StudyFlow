@@ -324,6 +324,7 @@ export default function App(){
         <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
           {renderZhidaoModeSwitch()}
           <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+          <p className="sf-muted">ZHS 原版观看参数请在课程详情的「当前课程任务」中展开设置；与官方播放器设置独立。</p>
         </CollapsibleSection>
         <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}

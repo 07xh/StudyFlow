@@ -8,9 +8,15 @@ const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {
 function setup(overrides={},bridge={}){
  const previous=global.window;let tick;
  global.window={setInterval:fn=>{tick=fn;return 1;},clearInterval:()=>{}};
- const Panel=load('components/LegacyPlaybackPanel.tsx',{'bridge.ts':{friendlyBridgeError:String,...bridge},'legacyPlayback.ts':{
-  getLegacyStatus:async()=>running,legacyError:String,legacyExitMessage:()=>'',originalYktDefaults:{},...overrides
- }}).LegacyPlaybackPanel;
+ const Panel=load('components/LegacyPlaybackPanel.tsx',{
+  'bridge.ts':{friendlyBridgeError:String,...bridge},
+  'legacyPlayback.ts':{getLegacyStatus:async()=>running,legacyError:String,legacyExitMessage:()=>'',originalYktDefaults:{},...overrides},
+  // Isolate task-state assertions from settings child while preserving a loaded default.
+  'components/ZhsTaskSettingsPanel.tsx':{ZhsTaskSettingsPanel:({onReady})=>{
+    React.useEffect(()=>{onReady?.({speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,max_videos:0,stop_on_error:false,scope_mode:"all",selected_ids:[]});},[onReady]);
+    return null;
+  }}
+ }).LegacyPlaybackPanel;
  return {Panel,tick:()=>tick(),restore:()=>{if(previous===undefined)delete global.window;else global.window=previous;}};
 }
 const props={platform:'zhidao',courses:[course],desktop:true,connected:true,courseId:'A',detailMode:true};

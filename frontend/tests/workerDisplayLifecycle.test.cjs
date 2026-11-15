@@ -16,6 +16,7 @@ async function renderStatus(state,progress){
  new Function('module','exports','require',code)(mod,mod.exports,name=>{
   if(name==='../legacyPlayback')return legacy;
   if(name==='./RunParameters')return require('./helpers/load.cjs')('components/RunParameters.tsx');
+   if(name==='./ZhsTaskSettingsPanel')return {ZhsTaskSettingsPanel:()=>null};
   if(name==='../bridge')return {request:async()=>({}),friendlyBridgeError:String};
   if(name==='lucide-react')return new Proxy({},{get:()=>()=>null});
   return require(name);
