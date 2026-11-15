@@ -12,7 +12,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
 import sys
@@ -98,6 +98,28 @@ def _progress_cache(fingerprint: str) -> dict:
     return data
 
 
+def _verified_instant(value: object) -> datetime | None:
+    """Accept only timezone-aware, plausible verification timestamps.
+
+    Timestamps in the original cache are formatted using UTC, but older
+    versions and extensions may serialize equivalent instants with different
+    offsets. Do not compare those strings lexicographically.
+    """
+    if not isinstance(value, str) or not value or len(value) > 64:
+        return None
+    try:
+        instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if instant.tzinfo is None or instant.utcoffset() is None:
+            return None
+        instant = instant.astimezone(timezone.utc)
+        # A far-future cache entry cannot be evidence of a completed read.
+        if instant > datetime.now(timezone.utc) + timedelta(hours=24):
+            return None
+        return instant
+    except (ValueError, OverflowError):
+        return None
+
+
 def _progress_percent(row: dict) -> float | None:
     if row.get("stale") is True:
         return None
@@ -116,12 +138,22 @@ def _progress_percent(row: dict) -> float | None:
 def _courses_from_current_cache() -> list[Course]:
     rows, fingerprint = _session_course_cache()
     progress = _progress_cache(fingerprint)
-    by_key = {}
+    by_key: dict[str, dict] = {}
+    seen_keys: set[str] = set()
+    ambiguous_keys: set[str] = set()
     for item in progress.get("courses", []):
-        if (isinstance(item, dict) and item.get("courseType") in ("ai", "shared")
-                and isinstance(item.get("lastVerifiedAt"), str) and item.get("lastVerifiedAt")
-                and item.get("stale") is not True):
-            by_key[progress_key(item)] = item
+        if not isinstance(item, dict) or item.get("courseType") not in ("ai", "shared"):
+            continue
+        key = progress_key(item)
+        if key in seen_keys:
+            ambiguous_keys.add(key)
+        seen_keys.add(key)
+        if item.get("stale") is not True and _verified_instant(item.get("lastVerifiedAt")):
+            by_key[key] = item
+    # Duplicate identity is ambiguous even if just one copy has a valid date.
+    # Never let the last JSON row silently win over the first.
+    for key in ambiguous_keys:
+        by_key.pop(key, None)
 
     courses: list[Course] = []
     for row in rows:
@@ -182,11 +214,14 @@ def verify_course(course_key: str) -> dict:
     # actually consulted the platform. Save the selected course's marker first.
     previous_rows = _progress_cache(fingerprint).get("courses", [])
     previous_markers = [
-        row.get("lastVerifiedAt") for row in previous_rows
+        _verified_instant(row.get("lastVerifiedAt")) for row in previous_rows
         if isinstance(row, dict) and row.get("courseType") in ("ai", "shared")
-        and progress_key(row) == course_key and isinstance(row.get("lastVerifiedAt"), str)
+        and progress_key(row) == course_key
     ]
-    previous_marker = previous_markers[0] if len(previous_markers) == 1 else ""
+    # Duplicate target records cannot establish a reliable baseline.
+    if len(previous_markers) > 1:
+        raise RuntimeError("Zhidao single-course verification has ambiguous history")
+    previous_marker = previous_markers[0] if previous_markers else None
     if getattr(sys, "frozen", False):
         arguments = [sys.executable, "--zhidao-verify-one", course_key]
     else:
@@ -202,9 +237,10 @@ def verify_course(course_key: str) -> dict:
         raise RuntimeError("Zhidao single-course verification failed")
     snapshot = _progress_snapshot()
     target = [course for course in snapshot["courses"] if course.course_id == course_key]
+    fresh_marker = _verified_instant(target[0].verified_at) if len(target) == 1 else None
     if (len(target) != 1 or target[0].progress_evidence != "server_verified"
-            or not target[0].verified_at
-            or target[0].verified_at <= previous_marker):
+            or fresh_marker is None
+            or (previous_marker is not None and fresh_marker <= previous_marker)):
         # A zero exit code with an unchanged/stale cache is NOT a new server
         # verification. Never promote old data to a fresh success.
         raise RuntimeError("Zhidao single-course verification returned no fresh evidence")
