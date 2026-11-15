@@ -229,7 +229,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     </div>}
     {nextOffset!==null&&state==="error"&&<div className="actions sf-ykt-page-actions">
       <button type="button" className="secondary"
-        disabled={state==="loading"||!connected||scopeDirty}
+        disabled={!connected||scopeDirty}
         onClick={()=>void load(nextOffset,false)}>
         {"继续核验剩余视频（剩余 "+Math.max(0,total-videos.length)+" 节）"}
       </button>
