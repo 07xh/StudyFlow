@@ -480,11 +480,10 @@ export default function App(){
       onImported={()=>{invalidatePlatform("zhidao");recordEvent("知到","导入 Cookie","success","服务器已确认会话");void refresh();}}/><ZhidaoAccountTools desktop={desktop} dark={dark} onDataChanged={()=>{invalidatePlatform("zhidao",true);void refresh();}}/></>;
     if(platform==="yuketang")return <YuketangLoginPanel config={config}
       desktop={desktop} busy={Boolean(busy)}
-      connected={platforms.yuketang.status==="connected"} videos={videos}
+      connected={platforms.yuketang.status==="connected"}
       onChange={updateConfiguration}
       onSubmit={()=>void configureFromPanel()} onOpenScope={openYuketangScopeFields}
-      onClear={()=>setClearDialogOpen(true)}
-      onShowVideos={()=>void showVideos()}/>;
+      onClear={()=>setClearDialogOpen(true)}/>;
     return null;
   }
 
@@ -740,7 +739,7 @@ export default function App(){
         {course.platform==="zhidao"?<>
           {renderZhidaoModeSwitch(course)}
           <div className="sf-runtime-mode" hidden={mode!=="official"}>
-            <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")} onCoursesUpdated={updateCourses}
+            <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>

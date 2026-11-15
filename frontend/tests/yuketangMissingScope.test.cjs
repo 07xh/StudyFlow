@@ -21,9 +21,9 @@ test('account form blocks save, names missing fields and offers an actionable sc
   let saves=0,jumps=0;
   let view;
   await act(async()=>{view=create(React.createElement(YuketangLoginPanel,{
-    config:empty,desktop:true,busy:false,connected:false,videos:[],
+    config:empty,desktop:true,busy:false,connected:false,
     onChange:()=>{},onSubmit:()=>{saves++;},onOpenScope:()=>{jumps++;},
-    onClear:()=>{},onShowVideos:()=>{}
+    onClear:()=>{}
   }));});
   try{
     await act(async()=>view.root.findByType('form').props.onSubmit({preventDefault(){}}));

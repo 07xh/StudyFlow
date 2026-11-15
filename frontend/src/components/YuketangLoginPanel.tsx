@@ -1,6 +1,6 @@
 import {useState,type FormEvent} from "react";
-import {BookOpen,KeyRound,RefreshCw,ShieldCheck,Trash2} from "lucide-react";
-import type {Config,Video} from "../bridge";
+import {KeyRound,ShieldCheck,Trash2} from "lucide-react";
+import type {Config} from "../bridge";
 import {yuketangScopeIssues} from "../yuketangScopeValidation";
 
 const fields=[
@@ -14,15 +14,13 @@ type Props={
   desktop:boolean;
   busy:boolean;
   connected:boolean;
-  videos:Video[];
   onChange:(field:FieldId,value:string)=>void;
   onSubmit:()=>void;
   onOpenScope:()=>void;
   onClear:()=>void;
-  onShowVideos:()=>void;
 };
 
-export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChange,onSubmit,onOpenScope,onClear,onShowVideos}:Props){
+export function YuketangLoginPanel({config,desktop,busy,connected,onChange,onSubmit,onOpenScope,onClear}:Props){
   const [attempted,setAttempted]=useState(false);
   const issues=yuketangScopeIssues(config);
   function submit(event:FormEvent<HTMLFormElement>){
