@@ -4,13 +4,14 @@ const fs=require("node:fs");
 const path=require("node:path");
 const source=file=>fs.readFileSync(path.join(__dirname,"..","src",file),"utf8");
 
-test("platform toolbar keeps settings, course list and sync in one ordered row",()=>{
+test("platform toolbar keeps settings and sync in one ordered row without a duplicate course-list button",()=>{
   const app=source("App.tsx");
   const css=source("style.css");
   const block=app.slice(app.indexOf('className="sf-platform-toolbar actions"'),app.indexOf("platformSettingsOpen===platform?renderPlatformSettings(platform)"));
   assert.ok(block.length>0);
-  const settings=block.indexOf("参数设置"),courses=block.indexOf("打开课程列表"),sync=block.indexOf("同步课程列表");
-  assert.ok(settings>=0&&courses>settings&&sync>courses,"buttons must stay in the intended order");
+  const settings=block.indexOf("参数设置"),sync=block.indexOf("同步课程列表");
+  assert.ok(settings>=0&&sync>settings,"settings and synchronization must stay in this order");
+  assert.doesNotMatch(block,/打开课程列表/,"the platform landing already contains the course list");
   assert.match(block,/role="group" aria-label="平台操作"/);
   assert.ok(block.includes("<SlidersHorizontal size={15}/>"));
   assert.match(css,/\.sf-shell \.sf-platform-toolbar\.actions\{[\s\S]*?flex-wrap:nowrap/);

@@ -26,14 +26,19 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByRole('button',{name:'关闭窗口'}).count(),1,'Custom window controls must render');
    assert.equal(await page.getByRole('button',{name:'关闭窗口'}).isDisabled(),true,'Window buttons cannot invoke native commands in browser preview');
    assert.equal(await page.getByRole('progressbar').count(),0,'Empty account cannot have percentage progress');
+   assert.equal(await page.getByRole('button',{name:'课程中心',exact:true}).count(),0,'The global course center navigation is removed');
    await page.getByRole('button',{name:'雨课堂',exact:true}).click();
+   assert.equal(await page.locator('.sf-platform-courses').count(),1,'The selected platform opens on its course list');
+   assert.equal(await page.getByRole('heading',{name:'课程列表',exact:true}).count(),1);
+   assert.equal(await page.locator('.sf-filters,.sf-filter').count(),0,'The old global platform filter is removed');
    assert.equal(await page.locator('.sf-platform-login').count(),0,'Account form starts collapsed until requested');
    const row=page.locator('.sf-platform-toolbar');
-   const actionLabels=['参数设置','打开课程列表','同步课程列表'];
+   const actionLabels=['参数设置','同步课程列表'];
    const boxes=await Promise.all(actionLabels.map(async label=>page.getByRole('button',{name:label,exact:true}).boundingBox()));
    assert.ok(boxes.every(Boolean),'All platform actions must be visible');
-   assert.ok(boxes.every(box=>Math.abs(box.y-boxes[0].y)<1.5),'All three platform actions must stay in the same row');
-   assert.ok(boxes[0].x<boxes[1].x&&boxes[1].x<boxes[2].x,'Action order must remain settings / open / sync');
+   assert.ok(boxes.every(box=>Math.abs(box.y-boxes[0].y)<1.5),'Both platform actions must stay in the same row');
+   assert.ok(boxes[0].x<boxes[1].x,'Action order must remain settings / sync');
+   assert.equal(await page.getByRole('button',{name:'打开课程列表',exact:true}).count(),0);
    assert.equal(await row.evaluate(element=>getComputedStyle(element).flexWrap),'nowrap');
    await page.getByRole('button',{name:'参数设置',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),1);
@@ -41,6 +46,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.locator('.sf-platform-card').count(),0,'Platform settings must not duplicate account workspace');
    await page.getByRole('button',{name:'返回平台',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),0);
+   assert.equal(await page.locator('.sf-platform-courses').count(),1,'Returning from settings must restore the platform course list');
 
    const beforeScroll=await page.locator('.sf-workspace-header').boundingBox();
    await page.locator('main').evaluate(element=>{element.scrollTop=element.scrollHeight;});

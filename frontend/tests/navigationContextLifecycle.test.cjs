@@ -13,11 +13,12 @@ test('navigation preserves valid selection without leaking its heading to anothe
  const store=new Map();
  global.window={localStorage:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)}};
  const course={platform:'zhidao',course_id:'test-course',title:'test course',progress_percent:25,progress_evidence:'server_verified',verified_at:'2026-11-14T12:00:00Z',course_type:'shared'};
+ const yuketangCourse={platform:'yuketang',course_id:'ykt-course',title:'other platform course',progress_percent:null};
  let shell,monitor,view;
  const Null=()=>null;
  const presentation=evaluate(compile('presentation.ts'),require);
  const App=evaluate(compile('App.tsx'),name=>{
-  if(name==='./platforms')return {initialPlatforms:{zhidao:{platform:'zhidao',status:'connected',courses:[course]},yuketang:{platform:'yuketang',status:'not_connected',courses:[]}}};
+  if(name==='./platforms')return {initialPlatforms:{zhidao:{platform:'zhidao',status:'connected',courses:[course]},yuketang:{platform:'yuketang',status:'connected',courses:[yuketangCourse]}}};
   if(name==='./presentation')return presentation;
   if(name==='./activity')return require('./helpers/load.cjs')('activity.ts');
   if(name==='./runtimeTasks')return require('./helpers/load.cjs')('runtimeTasks.ts');
@@ -25,7 +26,7 @@ test('navigation preserves valid selection without leaking its heading to anothe
   if(name==='./ui/registry')return {platformRegistry:[{id:'zhidao',name:'知到'},{id:'yuketang',name:'雨课堂'}],platformInfo:id=>({id,name:id==='zhidao'?'知到':'雨课堂'})};
   if(name==='./ui/useAppearance')return {useAppearance:()=>({dark:false,mode:'light',setMode:()=>{},toggleTheme:()=>{}})};
   if(name==='./ui/AppShell')return {AppShell:props=>{shell=props;return props.children;}};
-  if(name==='./ui/CourseCard')return {CourseCard:props=>React.createElement('button',{'data-select-course':true,onClick:()=>props.onInspect(props.course)})};
+  if(name==='./ui/CourseCard')return {CourseCard:props=>React.createElement('button',{'data-select-course':true,'data-course-id':props.course.course_id,onClick:()=>props.onInspect(props.course)})};
   if(name==='./ui/CollapsibleSection')return {CollapsibleSection:props=>props.children};
   if(name==='./components/ZhidaoPlayerMonitor')return {ZhidaoPlayerMonitor:props=>{monitor=props;return null;}};
   if(name==='lucide-react')return new Proxy({},{get:()=>Null});
@@ -34,7 +35,8 @@ test('navigation preserves valid selection without leaking its heading to anothe
  }).default;
  try{
   await act(async()=>{view=create(React.createElement(App));});
-  act(()=>shell.onNavigate('courses'));
+  act(()=>shell.onNavigate('platform-zhidao'));
+  assert.deepEqual(view.root.findAllByProps({'data-select-course':true}).map(node=>node.props['data-course-id']),['test-course']);
   act(()=>view.root.findByProps({'data-select-course':true}).props.onClick());
   assert.equal(shell.currentCourseTitle,'test course');
   assert.equal(shell.courseProgress,25);
@@ -44,7 +46,11 @@ test('navigation preserves valid selection without leaking its heading to anothe
   act(()=>shell.onNavigate('platform-yuketang'));
   assert.equal(shell.currentPlatform,'雨课堂');
   assert.equal(shell.currentCourseTitle,undefined);
-  act(()=>shell.onNavigate('courses'));
+  assert.deepEqual(view.root.findAllByProps({'data-select-course':true}).map(node=>node.props['data-course-id']),['ykt-course']);
+  act(()=>shell.onNavigate('platform-zhidao'));
+  assert.equal(shell.currentCourseTitle,undefined);
+  assert.deepEqual(view.root.findAllByProps({'data-select-course':true}).map(node=>node.props['data-course-id']),['test-course']);
+  act(()=>view.root.findByProps({'data-select-course':true}).props.onClick());
   assert.equal(shell.currentCourseTitle,'test course');
   act(()=>monitor.onCoursesUpdated([]));
   assert.equal(shell.currentCourseTitle,undefined);

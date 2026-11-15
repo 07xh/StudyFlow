@@ -83,7 +83,6 @@ export default function App(){
   const [videos,setVideos]=useState<Video[]>([]);
   const [config,setConfig]=useState<Config>(emptyConfiguration);
   const [query,setQuery]=useState("");
-  const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
@@ -135,11 +134,6 @@ export default function App(){
     if(!selectedCourse)return;
     if(!selectedSessionCourse(courses,selectedCourse))setSelectedCourse(null);
   },[courses,selectedCourse]);
-  const filtered=useMemo(()=>courses.filter(course=>
-    (coursePlatform==="all"||course.platform===coursePlatform)&&
-    (course.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())||
-      course.course_id.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-  ),[courses,coursePlatform,query]);
   const verifiedCourses=useMemo(()=>courses.filter(course=>
     !course.stale&&course.progress_evidence==="server_verified"&&typeof course.verified_at==="string"&&
     course.verified_at.length>0&&course.progress_percent!==null
@@ -241,15 +235,15 @@ export default function App(){
   }
 
   function enterCourses(platform:Platform){
-
-    setPlatformSettingsOpen(null);setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
+    setPlatformSettingsOpen(null);
+    setSelectedCourse(null);
+    setQuery("");
+    setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
   function goPlatform(platform:Platform,openLogin=false){
-
-    setPlatformSettingsOpen(null);
+    enterCourses(platform);
     if(openLogin)setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
-    setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
   function updateConfiguration(field:keyof Config,value:string){
@@ -259,7 +253,7 @@ export default function App(){
     if(field==="sign")setSignDirty(true);
   }
   function inspectCourse(course:Course){
-    setSelectedCourse(course);setCoursePlatform(course.platform);setPage("courses");
+    setPlatformSettingsOpen(null);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
   function courseMode(course:Course):"official"|"zhs-original"{
     const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
@@ -339,12 +333,12 @@ export default function App(){
           onClick={()=>setPlatformSettingsOpen(previous=>previous===platform?null:platform)}>
           <SlidersHorizontal size={15}/>{platformSettingsOpen===platform?"返回平台":"参数设置"}
         </button>
-        <button type="button" className={platforms[platform].status==="connected"?"primary":"secondary"}
-          onClick={()=>enterCourses(platform)}>打开课程列表</button>
         <button type="button" className="secondary" disabled={!desktop||!!busy||platforms[platform].status!=="connected"}
           onClick={()=>void sync(platform)}>同步课程列表</button>
       </div>
       {platformSettingsOpen===platform?renderPlatformSettings(platform):<>
+      {activeSelectedCourse?.platform===platform?renderCourseWorkspace(activeSelectedCourse):<>
+      {renderCourses(platform)}
       <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop} busy={Boolean(busy)} variant="account"
         expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform)} onEnterCourses={()=>enterCourses(platform)}
         onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
@@ -364,6 +358,7 @@ export default function App(){
           <YuketangTaskArea courses={platforms.yuketang.courses} view="player" desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
         </CollapsibleSection>
+      </>}
       </>}
       </>}
     </div>;
@@ -435,8 +430,8 @@ export default function App(){
   const renderRecentCourses=()=> <section className="sf-recent-section">
     <div className="section-head">
       <h3>课程概览</h3>
-      <button className="text-button" type="button" onClick={()=>{setCoursePlatform("all");setPage("courses");}}>
-        查看全部<ChevronRight size={16}/>
+      <button className="text-button" type="button" onClick={()=>setPage("platforms")}>
+        查看学习平台<ChevronRight size={16}/>
       </button>
     </div>
     {courses.length===0
@@ -465,7 +460,7 @@ export default function App(){
                 aria-valuenow={data.percent}><span style={{width:data.percent+"%"}}/></div>}
             </div>
             <button className="secondary sf-recent-detail" type="button"
-              onClick={()=>{setSelectedCourse(course);setCoursePlatform(course.platform);setPage("courses");}}>
+              onClick={()=>inspectCourse(course)}>
               课程详情
             </button>
           </article>;
@@ -479,7 +474,7 @@ export default function App(){
     const mode=courseMode(course);
     return <section className="sf-course-workspace">
       <div className="sf-course-detail-topline">
-        <button className="secondary" onClick={()=>setSelectedCourse(null)}><ArrowLeft size={15}/>返回课程列表</button>
+        <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
         <button className="secondary" onClick={()=>setPage("tasks")}>查看运行任务</button>
       </div>
       {course.platform==="zhidao"?<>
@@ -511,39 +506,43 @@ export default function App(){
   };
 
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
-  const workspaceCourse=page==="courses"?activeSelectedCourse:null;
-  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":workspaceCourse?.platform??(page==="courses"&&coursePlatform!=="all"?coursePlatform as Platform:null);
+  const workspaceCourse=(page==="platform-zhidao"&&activeSelectedCourse?.platform==="zhidao"
+    ||page==="platform-yuketang"&&activeSelectedCourse?.platform==="yuketang")
+    ?activeSelectedCourse:null;
+  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null;
   const activeMetric=workspaceCourse?courseMetric(workspaceCourse):null;
   const activeCourseProgress=activeMetric?.percent??null;
 
-  const renderCourses=()=> activeSelectedCourse
-    ?renderCourseWorkspace(activeSelectedCourse)
-    :<section>
-      <div className="section-head">
-        <h3>课程列表</h3>
-        {coursePlatform!=="all"&&<button className="secondary" type="button" disabled={!desktop||Boolean(busy)}
-          onClick={()=>void sync(coursePlatform as Platform)}>
-          <RefreshCw size={15}/>同步当前平台
-        </button>}
-      </div>
+  const renderCourses=(platform:Platform)=>{
+    const platformCourses=platforms[platform].courses;
+    const search=query.trim().toLocaleLowerCase();
+    const visible=platformCourses.filter(course=>
+      course.title.toLocaleLowerCase().includes(search)||
+      course.course_id.toLocaleLowerCase().includes(search));
+    return <section className="sf-platform-courses" aria-label={platformNames[platform]+"课程列表"}>
+      <div className="section-head"><h3>课程列表</h3></div>
       <div className="sf-search-toolbar">
         <label className="sf-search"><Search size={16}/><input type="search"
-          placeholder="搜索课程名称或 ID" value={query} onChange={event=>setQuery(event.target.value)}
-          aria-label="搜索课程"/></label>
-        <div className="sf-filters" aria-label="按平台筛选">
-          {[{id:"all",name:"全部平台"},...platformRegistry].map(option=><button type="button"
-            key={option.id} aria-pressed={coursePlatform===option.id}
-            className={coursePlatform===option.id?"sf-filter is-selected":"sf-filter"}
-            onClick={()=>setCoursePlatform(option.id)}>{option.name}</button>)}
-        </div>
+          placeholder="搜索当前平台课程名称或 ID" value={query} onChange={event=>setQuery(event.target.value)}
+          aria-label="搜索当前平台课程"/></label>
       </div>
-      {filtered.length>0
-        ?<div className="course-grid">{filtered.map(course=>
-          <CourseCard course={course} onInspect={course=>{setSelectedCourse(course);}} key={course.platform+":"+course.course_id}/>)}</div>
-        :<EmptyState icon={BookOpen} title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
-          description={courses.length>0?"可以更换搜索词或平台筛选。":"在平台卡片中完成登录并同步后，真实课程会显示在这里。"}
-          action={courses.length===0?<button className="secondary" type="button" onClick={()=>setPage("platforms")}>前往平台登录</button>:undefined}/>}
+      {visible.length>0
+        ?<div className="course-grid">{visible.map(course=>
+          <CourseCard course={course} onInspect={inspectCourse} key={course.platform+":"+course.course_id}/>)}</div>
+        :<EmptyState icon={BookOpen}
+          title={platformCourses.length>0?"未找到匹配课程":"暂无真实课程数据"}
+          description={platformCourses.length>0
+            ?"可以更换搜索词。当前只显示"+platformNames[platform]+"课程。"
+            :platforms[platform].status==="connected"
+              ?"请点击上方「同步课程列表」读取当前平台真实课程。"
+              :"请在下方「账号与连接」登录当前平台，再同步真实课程。"}
+          action={platforms[platform].status!=="connected"
+            ?<button className="secondary" type="button"
+              onClick={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:true}))}>
+                展开账号登录
+              </button>:undefined}/>}
     </section>;
+  };
 
   const renderTasks=()=> <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} desktop={desktop} onRefresh={runtime.refresh} onInspect={inspectCourse}
     onEvent={(action,result,detail,context)=>recordEvent(context?.runner==="yuketang"?"雨课堂":"知到",action,result,detail,context)}/>;
@@ -575,7 +574,10 @@ export default function App(){
 
   return <>
     <AppShell page={page} onNavigate={next=>{
+      if(next==="platform-zhidao"){goPlatform("zhidao");return;}
+      if(next==="platform-yuketang"){goPlatform("yuketang");return;}
       setPlatformSettingsOpen(null);
+      setSelectedCourse(null);
       setPage(next);
     }}
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
@@ -589,7 +591,6 @@ export default function App(){
       courseOptions={headerPlatform?platforms[headerPlatform].courses.map(course=>({id:course.course_id,title:course.title})):[]}
       onCourseSelect={id=>{const course=courses.find(course=>course.platform===headerPlatform&&course.course_id===id);if(course)inspectCourse(course);}}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
-      {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
       {page==="platforms"&&renderPlatforms()}
       {page==="platform-zhidao"&&renderPlatformDetail("zhidao")}

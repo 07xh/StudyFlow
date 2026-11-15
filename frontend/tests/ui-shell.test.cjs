@@ -7,7 +7,7 @@ const read = relative => fs.readFileSync(path.join(__dirname,"..",relative),"utf
 test("LightC-style slim navigation is always visible and reserves its own column", () => {
   const shell=read("src/ui/AppShell.tsx");
   const css=read("src/ui/foundation.css");
-  for(const page of ["home","courses","tasks","platforms","records","logs"])
+  for(const page of ["home","platform-zhidao","platform-yuketang","tasks","platforms","records","logs"])
     assert.match(shell,new RegExp('id:"'+page+'"'));
   assert.match(shell,/sf-settings-button/);
   assert.match(shell,/id:"platform-zhidao"/);

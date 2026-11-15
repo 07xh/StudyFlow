@@ -11,6 +11,7 @@ test("new graphite shell keeps dedicated sidebar pages",()=>{
  assert.match(shell,/"platform-yuketang"/);
  assert.match(shell,/sf-subnav/);
  assert.match(shell,/setPlatformExpanded/);
+ assert.doesNotMatch(shell,/id:"courses",label:"课程中心"/);
 });
 
 test("new dashboard keeps platform-owned login and task panels",()=>{

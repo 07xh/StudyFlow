@@ -11,10 +11,10 @@ test('global and unverified header contexts have no percentage track, verified m
  try{
   act(()=>{view=create(React.createElement(Shell,base));});
   assert.equal(view.root.findAllByProps({role:'progressbar'}).length,0);
-  act(()=>view.update(React.createElement(Shell,{...base,page:'courses',currentCourseTitle:'A',courseProgress:null,metricLabel:'满进度知识点占比',courseEvidence:'历史缓存待核验'})));
+  act(()=>view.update(React.createElement(Shell,{...base,page:'platform-zhidao',currentCourseTitle:'A',courseProgress:null,metricLabel:'满进度知识点占比',courseEvidence:'历史缓存待核验'})));
   assert.equal(view.root.findAllByProps({role:'progressbar'}).length,0);
   assert.match(words(view.root),/满进度知识点占比.*历史缓存待核验/);
-  act(()=>view.update(React.createElement(Shell,{...base,page:'courses',currentCourseTitle:'A',courseProgress:40,metricLabel:'满进度知识点占比',courseEvidence:'服务器已核验'})));
+  act(()=>view.update(React.createElement(Shell,{...base,page:'platform-zhidao',currentCourseTitle:'A',courseProgress:40,metricLabel:'满进度知识点占比',courseEvidence:'服务器已核验'})));
   assert.equal(view.root.findByProps({role:'progressbar'}).props['aria-valuenow'],40);
   assert.equal(view.root.findByProps({role:'progressbar'}).props['aria-label'],'满进度知识点占比');
  }finally{if(view)act(()=>view.unmount());restore();}
