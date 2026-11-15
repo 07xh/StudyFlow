@@ -193,26 +193,23 @@ export function verifyYuketangCourse(
   return running;
 }
 
-/** Only uniquely named, previously enumerated videos may be refreshed from
- * playback events; never infer an ID from worker indices or local percentages. */
-export async function verifyYuketangPlayedVideo(
-  courseId:string,videoName:string,access:Access,force=false
+/** Verify a single previously enumerated video by its exact server leaf ID.
+ * A fresh server reply may remain below 100%; never infer completion from
+ * local end position or from the legacy worker's configurable threshold. */
+async function verifyKnownYuketangVideo(
+  courseId:string,videoId:string,index:number,access:Access,force=false
 ):Promise<boolean>{
-  if(!courseId||!videoName||!access.desktop||!access.connected||access.scopeDirty)return false;
+  if(!courseId||!videoId||!access.desktop||!access.connected||access.scopeDirty)return false;
   const entry=entries.get(courseId);
   if(!entry||entry.fullRun||entry.snapshot.checkedAt===null||
      entry.snapshot.nextOffset!==null)return false;
-  const exact=videoName.normalize("NFKC").trim();
-  const matches=entry.snapshot.videos.flatMap((video,index)=>
-    video.name.normalize("NFKC").trim()===exact?[{video,index}]:[]);
-  if(matches.length!==1)return false;
-  const {video,index}=matches[0];
-  if(video.server_completed===true)return false;
+  const previous=entry.snapshot.videos[index];
+  if(!previous||previous.id!==videoId||previous.server_completed===true)return false;
   const now=Date.now();
-  if(entry.targetRequests.size>=3||entry.targetRequests.has(video.id)||
-     (!force&&now-(entry.targetAttempts.get(video.id)??0)<25_000))return false;
-  entry.targetAttempts.set(video.id,now);
-  entry.targetRequests.add(video.id);
+  if(entry.targetRequests.size>=3||entry.targetRequests.has(videoId)||
+     (!force&&now-(entry.targetAttempts.get(videoId)??0)<25_000))return false;
+  entry.targetAttempts.set(videoId,now);
+  entry.targetRequests.add(videoId);
   const revision=entry.revision;
   try{
     const data=await request<YuketangCourseProgress>({
@@ -220,21 +217,49 @@ export async function verifyYuketangPlayedVideo(
     });
     if(revision!==entry.revision||entry.fullRun||
        !validPage(data,courseId,index)||data.total!==entry.snapshot.total||
-       data.items.length!==1||data.items[0].id!==video.id)return false;
+       data.items.length!==1||data.items[0].id!==videoId)return false;
     const confirmed=data.items[0];
     // Missing server evidence must never replace earlier authentic progress.
     if(confirmed.progress_percent===null||confirmed.verified_at===null)return false;
     const updated=[...entry.snapshot.videos];
-    if(updated[index]?.id!==video.id)return false;
+    if(updated[index]?.id!==videoId)return false;
     updated[index]=confirmed;
     publish(entry,{...entry.snapshot,videos:updated,lastPlaybackAt:Date.now()});
     return true;
   }catch{
-    // Playback observations cannot establish server completion; keep evidence.
+    // Preserve the last confirmed server record on a transient read failure.
     return false;
   }finally{
-    if(revision===entry.revision)entry.targetRequests.delete(video.id);
+    if(revision===entry.revision)entry.targetRequests.delete(videoId);
   }
+}
+
+/** An explicit per-row recheck does not depend on possibly duplicate titles. */
+export function verifyYuketangVideoAtIndex(
+  courseId:string,videoId:string,index:number,access:Access
+):Promise<boolean>{
+  return verifyKnownYuketangVideo(courseId,videoId,index,access,true);
+}
+
+/** Playback events have only a title: never guess among duplicate names. */
+export async function verifyYuketangPlayedVideo(
+  courseId:string,videoName:string,access:Access,force=false
+):Promise<boolean>{
+  if(!courseId||!videoName||!access.desktop||!access.connected||access.scopeDirty)return false;
+  const entry=entries.get(courseId);
+  if(!entry)return false;
+  const exact=videoName.normalize("NFKC").trim();
+  const matches=entry.snapshot.videos.flatMap((video,index)=>
+    video.name.normalize("NFKC").trim()===exact?[{video,index}]:[]);
+  if(matches.length!==1)return false;
+  const {video,index}=matches[0];
+  return verifyKnownYuketangVideo(courseId,video.id,index,access,force);
+}
+
+function reachedServerVideoEnd(video:YuketangVideoProgress){
+  return video.progress_percent!==null&&video.server_completed===false&&
+    video.last_point_seconds!==null&&video.duration_seconds!==null&&
+    video.duration_seconds>0&&video.last_point_seconds>=video.duration_seconds-1;
 }
 
 /** Current classroom: UI is a view over the app-session verification snapshot. */
@@ -254,6 +279,8 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
   const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   const [search,setSearch]=useState("");
   const [chapterFilter,setChapterFilter]=useState("");
+  const [checkingVideo,setCheckingVideo]=useState<string|null>(null);
+  const [singleCheckMessage,setSingleCheckMessage]=useState("");
 
   // A route change never invalidates progress and never triggers a second full scan.
   useEffect(()=>{
@@ -261,11 +288,29 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
   },[course.course_id,desktop,connected,scopeDirty]);
   useEffect(()=>{
     setFilter("all");setExpanded({});setSearch("");setChapterFilter("");
+    setCheckingVideo(null);setSingleCheckMessage("");
   },[course.course_id]);
   const refresh=()=>void verifyYuketangCourse(
     course.course_id,{desktop,connected,scopeDirty},{manual:true});
   const resume=()=>void verifyYuketangCourse(
     course.course_id,{desktop,connected,scopeDirty},{manual:true,resume:true});
+
+  const recheckVideo=async(video:YuketangVideoProgress)=>{
+    const index=entry.snapshot.videos.findIndex(item=>item.id===video.id);
+    if(index<0)return;
+    setCheckingVideo(video.id);
+    setSingleCheckMessage("");
+    try{
+      const confirmed=await verifyYuketangVideoAtIndex(course.course_id,video.id,index,{
+        desktop,connected,scopeDirty
+      });
+      setSingleCheckMessage(confirmed
+        ?"已重新读取这一节的服务器进度；是否完成仍以平台返回的记录为准。"
+        :"该节服务器复核暂未成功，继续保留上次核验结果。");
+    }finally{
+      setCheckingVideo(current=>current===video.id?null:current);
+    }
+  };
 
   const chapters=useMemo(()=>{
     const groups=new Map<string,YuketangVideoProgress[]>();
@@ -319,7 +364,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
       </button>
     </div>
     {checkedAt!==null&&!blocked&&<p className="sf-ykt-scan-state" role="status">上次全课核验：{new Date(checkedAt).toLocaleString()}。返回课程不重复扫描。</p>}
-    {lastPlaybackAt!==null&&!blocked&&<p className="sf-ykt-scan-state" role="status">最近播放视频复核：{new Date(lastPlaybackAt).toLocaleString()}（仅对应视频）。</p>}
+    {lastPlaybackAt!==null&&!blocked&&<p className="sf-ykt-scan-state" role="status">最近播放视频复核 / 单节手动复核：{new Date(lastPlaybackAt).toLocaleString()}（仅对应视频）。</p>}
     {videos.length>0&&<div className="sf-zd-detail-summary sf-ykt-progress-summary sf-record-summary">
       <div><span>已读取视频</span><strong>{videos.length} / {total}</strong></div>
       <div><span>服务器已核验</span><strong>{verified.length} / {videos.length}</strong></div>
@@ -332,6 +377,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
       本次已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}
     </p>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
+    {singleCheckMessage&&<p className="sf-ykt-scan-state" role="status">{singleCheckMessage}</p>}
     {videos.length>0&&<CourseRecordToolbar key={course.course_id}
       filters={filters} activeFilter={filter} onFilter={value=>setFilter(value as ProgressFilter)}
       search={search} onSearch={setSearch}
@@ -366,6 +412,15 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
                   {video.duration_seconds!==null&&
                     " / 总时长 "+duration(video.duration_seconds)}
                 </small>
+                {reachedServerVideoEnd(video)&&<small className="sf-muted">
+                  播放位置已到末尾，但平台仍未确认完成；可只复核这一节。
+                </small>}
+                {video.server_completed!==true&&checkedAt!==null&&nextOffset===null&&
+                  <button type="button" className="secondary sf-ykt-single-recheck"
+                    disabled={!desktop||!connected||scopeDirty||state==="loading"||checkingVideo!==null}
+                    onClick={()=>void recheckVideo(video)}>
+                    <RefreshCw size={13}/>{checkingVideo===video.id?"复核中…":"只复核此节"}
+                  </button>}
                 {video.progress_percent!==null&&
                   <div className="sf-zd-detail-track" role="progressbar" aria-label={video.name+"服务器进度"}
                     aria-valuemin={0} aria-valuemax={100} aria-valuenow={video.progress_percent}>
@@ -384,7 +439,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     </div>}
     <details className="sf-technical-note">
       <summary>进度口径</summary>
-      <p className="sf-muted">首次进入或手动刷新时逐批核验全课（每批最多 {PAGE_SIZE} 节）；播放中仅按唯一名称定位的视频进行单节服务器只读复核。统计只包括真实服务端记录。
+      <p className="sf-muted">首次进入或手动刷新时逐批核验全课（每批最多 {PAGE_SIZE} 节）；播放中仅按唯一名称定位的视频进行单节服务器只读复核，结束后有限补查，也可手动复核某一节。统计只包括真实服务端记录。
         未核验不等于 0%，本地播放位置和任务日志不等于服务器学习进度。</p>
     </details>
   </section>;
