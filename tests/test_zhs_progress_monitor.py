@@ -126,14 +126,14 @@ def test_numeric_observer_fails_open_for_original_cli_on_snapshot_io_error(monke
     destination = io.StringIO()
     tee = vendor["StdoutObserver"](destination, wrapped)
 
-    assert tee.write("\\rplaying [======] 60.0%") > 0
+    assert tee.write("playing [======] 60.0%") > 0
     assert "60.0%" in destination.getvalue()
     assert wrapped.disabled is True
     assert len(calls) == 1
     assert not raw.path.exists()
 
     # Further CLI writes must still pass through without repeated file IO.
-    tee.write("\\rplaying [=======] 70.0%")
+    tee.write("\nplaying [=======] 70.0%")
     assert "70.0%" in destination.getvalue()
     assert len(calls) == 1
     assert raw.last_snapshot is None
