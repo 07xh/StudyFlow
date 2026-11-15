@@ -62,13 +62,28 @@ impl OriginalYktOptions {
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct ZhsOptions {
     speed: f64,
+    speed_cap: f64,
     limit_minutes: u16,
     learn_optional: bool,
+    max_videos: u16,
+    stop_on_error: bool,
+    scope_mode: String,
+    selected_ids: Vec<u64>,
 }
 impl ZhsOptions {
     fn validate(&self) -> Result<(), String> {
         if !self.speed.is_finite() || self.speed < 1.0 || self.speed > 2.0
-            || self.limit_minutes > 1440 {
+            || !self.speed_cap.is_finite() || self.speed_cap < 1.0 || self.speed_cap > 2.0
+            || self.limit_minutes > 1440 || self.max_videos > 1000
+            || (self.scope_mode != "all" && self.scope_mode != "selected")
+            || self.selected_ids.len() > 256
+            || (self.scope_mode == "all" && !self.selected_ids.is_empty())
+            || (self.scope_mode == "selected" && self.selected_ids.is_empty())
+            || self.selected_ids.iter().any(|id| *id == 0 || *id > i64::MAX as u64)
+            || {
+                let ids: std::collections::HashSet<_> = self.selected_ids.iter().collect();
+                ids.len() != self.selected_ids.len()
+            } {
             return Err("INVALID_SETTINGS".into());
         }
         Ok(())
