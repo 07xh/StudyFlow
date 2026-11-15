@@ -98,3 +98,36 @@ def test_ai_resources_are_filtered_without_changing_original_processing(monkeypa
     with pytest.raises(ScopeInvalid):
         with scoped_upstream_play({**opts, "resource_mode":"reading"}, False):
             pass
+
+
+def test_only_scheduled_ai_resources_are_marked_active(monkeypatch):
+    course_mod, video_mod = ModuleType("zhs.ai.course"), ModuleType("zhs.ai.video")
+    calls = []
+    class Manager:
+        def _iter_targets(self, _info):
+            return iter([])
+        def _process_resource(self, _course, _class, _knowledge, item, *args, **kwargs):
+            calls.append(item)
+            return None
+    class Player:
+        def play_video(self, *args, **kwargs):
+            return None
+    course_mod.AiCourseManager, video_mod.AiVideoPlayer = Manager, Player
+    monkeypatch.setitem(sys.modules, "zhs.ai.course", course_mod)
+    monkeypatch.setitem(sys.modules, "zhs.ai.video", video_mod)
+    def item(status, sync):
+        return SimpleNamespace(
+            study_status=status,
+            resources_detail=SimpleNamespace(
+                resources_type=1, resources_distribute_type=3,
+                resources_name="课程视频", resources_sync_type=sync
+            ),
+        )
+    shown = []
+    options = {"scope_mode": "all", "selected_ids": [], "max_videos": 0,
+               "stop_on_error": False, "resource_mode": "all"}
+    with scoped_upstream_play(options, True, on_resource=lambda kind,name: shown.append((kind,name))):
+        for resource in (item(1,1), item(0,2), item(0,1)):
+            Manager()._process_resource(1,2,3,resource)
+    assert len(calls) == 3  # Original method retains its own completion/optional rules.
+    assert shown == [("video", "课程视频")]
