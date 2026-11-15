@@ -56,3 +56,20 @@ export function decideLaunch(current:string,previous:string|null,existing:boolea
   if(previous===null)return existing?"upgrade":"fresh";
   return compareVersions(current,previous)>0?"upgrade":"unchanged";
 }
+
+/** A newly published GitHub Release is a different notification from an installed upgrade. */
+export const LAST_DISMISSED_RELEASE_KEY="studyflow.release.dismissed.v1";
+export function shouldPromptForRelease(installed:string,published:string,dismissed:string|null):boolean{
+  if(!validVersion(installed)||!validVersion(published))return false;
+  return compareVersions(published,installed)>0
+    && (!dismissed||!validVersion(dismissed)||compareVersions(published,dismissed)>0);
+}
+export function readDismissedRelease():string|null{
+  try{return window.localStorage.getItem(LAST_DISMISSED_RELEASE_KEY);}
+  catch{return null;}
+}
+export function markReleaseDismissed(version:string):void{
+  if(!validVersion(version))return;
+  try{window.localStorage.setItem(LAST_DISMISSED_RELEASE_KEY,version);}
+  catch{/* Notification preferences must never block the app. */}
+}

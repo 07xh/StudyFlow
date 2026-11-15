@@ -918,7 +918,9 @@ export default function App(){
       <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
     </AppShell>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
-    <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}/>
+    <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}
+      onRetry={releaseChangelog.retry}
+      onOpenUpdates={()=>{releaseChangelog.close();setPage("settings");}}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}
