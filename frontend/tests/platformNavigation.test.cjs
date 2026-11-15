@@ -110,7 +110,8 @@ test("course details use one foldable workspace and show total progress only in 
  const css=source("ui/foundation.css");
  assert.match(app,/renderCourseWorkspace/);
  assert.doesNotMatch(app,/sf-course-total-progress/);
- assert.match(app,/<CollapsibleSection id={scope\+"runtime"}/);
+ assert.match(app,/<section className="sf-course-playback-stage" aria-label="播放控制">/);
+ assert.doesNotMatch(app,/title="当前课程任务"/);
  assert.match(app,/headerTitle=\{workspaceCourse\?"课程详情":undefined\}/);
  assert.match(app,/courseProgress=\{activeCourseProgress\}/);
  assert.match(app,/activeSelectedCourse/);

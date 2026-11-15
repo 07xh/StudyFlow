@@ -384,7 +384,7 @@ export default function App(){
       <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
       {renderZhidaoModeSwitch()}
       <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-      <p className="sf-muted">ZHS 原版观看参数请在课程详情的「当前课程任务」中展开设置；与官方播放器设置独立。</p>
+      <p className="sf-muted">ZHS 原版观看参数请在课程播放工作台的原版播放设置中调整；与官方播放器设置独立。</p>
       </CollapsibleSection>
       <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
       <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
@@ -427,7 +427,7 @@ export default function App(){
     if(!platformInfo(platform))return null;
     const selected=activeSelectedCourse?.platform===platform?activeSelectedCourse:null;
     return <div className="sf-platform-workspace">
-      <div className="sf-platform-toolbar actions" role="group" aria-label="平台操作">
+      {(!selected||platformSettingsOpen===platform)&&<div className="sf-platform-toolbar actions" role="group" aria-label="平台操作">
         {platformSettingsOpen===platform
           ?<button type="button" className="secondary sf-platform-settings-action is-active"
             onClick={()=>setPlatformSettingsOpen(null)}>
@@ -446,7 +446,7 @@ export default function App(){
         <button type="button" className="secondary"
           disabled={!desktop||Boolean(busy)||syncFeedback[platform].phase==="syncing"||platforms[platform].status!=="connected"}
           onClick={()=>void sync(platform,true)}>{syncFeedback[platform].phase==="syncing"?"课程同步中…":"同步课程列表"}</button>
-      </div>
+      </div>}
       {platformSettingsOpen===platform
         ?renderPlatformSettings(platform)
         :selected?renderCourseWorkspace(selected):renderCourses(platform)}
@@ -563,14 +563,28 @@ export default function App(){
     const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{...previous[course.platform],courses:list}}));
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
-    return <section className="sf-course-workspace">
+    return <section className="sf-course-workspace" aria-label="课程播放工作台">
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
-        <button className="secondary" onClick={()=>setPage("tasks")}>查看运行任务</button>
+        <div className="sf-course-top-actions">
+          <button className="secondary" onClick={()=>setPlatformSettingsOpen(course.platform)}>
+            <SlidersHorizontal size={15}/>平台设置
+          </button>
+          <button className="secondary" onClick={()=>setPage("tasks")}>运行任务</button>
+        </div>
       </div>
-      {course.platform==="zhidao"?<>
-        {renderZhidaoModeSwitch(course)}
-        <CollapsibleSection id={scope+"runtime"} title="当前课程任务">
+      <div className="sf-course-playback-heading">
+        <span className="eyebrow">{platformNames[course.platform]} / 播放工作台</span>
+        <h2>{course.title}</h2>
+        <p>在这里管理播放与查看真实章节；平台账号、默认参数和历史记录不再占用首屏。</p>
+      </div>
+      <section className="sf-course-playback-stage" aria-label="播放控制">
+        <div className="sf-course-player-heading">
+          <h3>播放控制</h3>
+          <span>运行状态与课程进度分别显示，互不替代</span>
+        </div>
+        {course.platform==="zhidao"?<>
+          {renderZhidaoModeSwitch(course)}
           <div className="sf-runtime-mode" hidden={mode!=="official"}>
             <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")} onCoursesUpdated={updateCourses}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
@@ -579,32 +593,32 @@ export default function App(){
             <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
+        </>:<>
+          <p className="sf-course-scope-note">
+            雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
+            需要切换课堂范围或默认播放参数时，请使用右上方「平台设置」。
+          </p>
+          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
+            desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
+            events={activity}
+            onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
+        </>}
+      </section>
+      {course.platform==="zhidao"?<>
+        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
+          <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
-        <CollapsibleSection id={scope+"chapters"} title="章节进度" defaultExpanded={false}><ZhidaoCourseDetailPanel course={course} desktop={desktop}/></CollapsibleSection>
-        <CollapsibleSection id={scope+"server"} title="当前课程进度核验" defaultExpanded={false}>
+        <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
       </>:<>
-        <CollapsibleSection id={scope+"runtime"} title="雨课堂任务与播放参数">
-          <p className="sf-task-context">
-            当前选中课程为「{course.title}」。雨课堂原版执行器仍按平台已保存的课堂范围运行，
-            不会仅因选中这门课程就限制任务范围；本区展示的是平台级运行状态与参数。
-          </p>
-          <YuketangTaskArea courses={platforms.yuketang.courses} view="both" detailMode
-            desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
-            events={activity}
-            onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
-          <button className="text-button" type="button" onClick={()=>setPlatformSettingsOpen("yuketang")}>
-            管理课堂范围与平台默认参数
-          </button>
-        </CollapsibleSection>
-        <CollapsibleSection id={scope+"chapters"} title="章节与课程内容" defaultExpanded={false}>
+        <CollapsibleSection id={scope+"chapters"} title="章节与视频" defaultExpanded={true}>
           <YuketangCourseDetailPanel course={course} desktop={desktop}
             connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
         </CollapsibleSection>
       </>}
-      <CollapsibleSection id={scope+"logs"} title="当前课程操作记录" defaultExpanded={false}>
+      <CollapsibleSection id={scope+"logs"} title="操作记录与诊断" defaultExpanded={false}>
         <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>
         <button className="text-button" onClick={()=>setPage("logs")}>查看平台与历史未归属记录</button>
       </CollapsibleSection>
