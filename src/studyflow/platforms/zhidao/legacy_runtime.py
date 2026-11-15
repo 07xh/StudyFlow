@@ -163,6 +163,8 @@ def _courses_from_current_cache(
         by_key.pop(key, None)
 
     courses: list[Course] = []
+    # Namespaced opaque marker prevents joining asynchronous results across logins.
+    session_marker = hashlib.sha256(("studyflow-ui-progress:" + fingerprint).encode("utf-8")).hexdigest()
     for row in rows:
         title = row.get("name") or row.get("courseName")
         identifier = row.get("courseId")
@@ -181,6 +183,7 @@ def _courses_from_current_cache(
             course_type=course_type, stale=stale,
             progress_evidence="server_verified" if verified_at and not stale else None,
             verified_at=verified_at if not stale else None,
+            session_marker=session_marker,
         ))
     return courses
 
