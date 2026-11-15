@@ -25,7 +25,11 @@ function component(request){
   new Function("module","exports","require",code)(mod,mod.exports,name=>
     name==="../bridge"?{request,friendlyBridgeError:()=> "读取失败"}:
     name==="../ui/CourseRecordViews"?sharedViews():require(name));
-  return mod.exports.YuketangCourseDetailPanel;
+  const Panel=mod.exports.YuketangCourseDetailPanel;
+  Panel.verify=mod.exports.verifyYuketangCourse;
+  Panel.verifyPlayed=mod.exports.verifyYuketangPlayedVideo;
+  Panel.reset=mod.exports.resetYuketangVerification;
+  return Panel;
 }
 const course={platform:"yuketang",course_id:"123",title:"课程"};
 const props={course,desktop:true,connected:true,scopeDirty:false};
@@ -77,7 +81,7 @@ test("unsaved classroom scope blocks progress reads and clears previous course c
   act(()=>view.unmount());
 });
 
-test("failed refresh does not retain stale per-video percentages",async()=>{
+test("failed manual refresh preserves last server verified rows",async()=>{
   let calls=0;
   const Panel=component(async()=>{
     calls++;
@@ -88,8 +92,9 @@ test("failed refresh does not retain stale per-video percentages",async()=>{
   await act(async()=>{view=create(React.createElement(Panel,props));});
   const button=view.root.findAllByType("button")[0];
   await act(async()=>{button.props.onClick();});
-  assert.match(JSON.stringify(view.toJSON()),/读取失败/);
-  assert.doesNotMatch(JSON.stringify(view.toJSON()),/视频12/);
+  assert.match(JSON.stringify(view.toJSON()),/手动刷新未成功/);
+  assert.match(JSON.stringify(view.toJSON()),/视频12/);
+  assert.match(JSON.stringify(view.toJSON()),/50.0%/);
   act(()=>view.unmount());
 });
 
@@ -253,5 +258,108 @@ test("99.999% verified video cannot be displayed as server-completed 100%",async
   assert.match(out,/99.9%/);
   assert.match(out,/服务器已核验 · 尚未完成/);
   assert.doesNotMatch(out,/100.0%/);
+  act(()=>view.unmount());
+});
+
+test("initial entry verifies once; later page navigation reuses the server snapshot",async()=>{
+  let calls=0;
+  const Panel=component(async()=>{calls++;return page([video("x","章节1",40)]);});
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  assert.equal(calls,1);
+  assert.match(JSON.stringify(view.toJSON()),/40.0%/);
+  act(()=>view.unmount());
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  assert.equal(calls,1);
+  assert.match(JSON.stringify(view.toJSON()),/上次全课核验/);
+  assert.match(JSON.stringify(view.toJSON()),/40.0%/);
+  act(()=>view.unmount());
+});
+
+test("manual full refresh is explicit and replaces the prior complete snapshot",async()=>{
+  let rate=10,calls=0;
+  const Panel=component(async()=>{calls++;return page([video("x","章节1",rate)]);});
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  rate=75;
+  assert.equal(calls,1);
+  const refresh=view.root.findAllByType("button").find(button=>
+    button.props.className==="secondary"&&
+    button.props.children?.some?.(item=>item==="重新核验全课"));
+  assert.ok(refresh);
+  await act(async()=>{refresh.props.onClick();});
+  assert.equal(calls,2);
+  assert.match(JSON.stringify(view.toJSON()),/75.0%/);
+  act(()=>view.unmount());
+});
+
+test("playback verified video updates only one server row, no full-course recheck",async()=>{
+  const queries=[];
+  let updated=false;
+  const Panel=component(async request=>{
+    queries.push([request.offset,request.limit]);
+    if(request.limit===1){
+      assert.equal(request.offset,1);
+      return page([video("b","第二章",updated?85:20)],1,2,null);
+    }
+    return page([video("a","第一章",100),video("b","第二章",20)]);
+  });
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  assert.deepEqual(queries,[[0,8]]);
+  updated=true;
+  await act(async()=>{
+    assert.equal(await Panel.verifyPlayed("123","视频b",{
+      desktop:true,connected:true,scopeDirty:false
+    }),true);
+  });
+  assert.deepEqual(queries,[[0,8],[1,1]]);
+  assert.match(JSON.stringify(view.toJSON()),/85.0%/);
+  assert.match(JSON.stringify(view.toJSON()),/最近播放视频复核/);
+  act(()=>view.unmount());
+});
+
+test("ambiguous playback names never guess which video to refresh",async()=>{
+  let calls=0;
+  const Panel=component(async()=>{calls++;return page([
+    {...video("a","第一章",10),name:"同名"},
+    {...video("b","第二章",20),name:"同名"},
+  ]);});
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  assert.equal(await Panel.verifyPlayed("123","同名",{
+    desktop:true,connected:true,scopeDirty:false
+  }),false);
+  assert.equal(calls,1);
+  act(()=>view.unmount());
+});
+
+test("playback cannot overwrite a verified record with missing server evidence",async()=>{
+  const Panel=component(async req=>req.limit===1
+    ?page([video("a","第一章",null)],0,1,null)
+    :page([video("a","第一章",42)]));
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  await act(async()=>{
+    assert.equal(await Panel.verifyPlayed("123","视频a",{
+      desktop:true,connected:true,scopeDirty:false
+    }),false);
+  });
+  assert.match(JSON.stringify(view.toJSON()),/42.0%/);
+  act(()=>view.unmount());
+});
+
+test("changed account/scope invalidates both the snapshot and late server response",async()=>{
+  let reply;
+  const Panel=component(()=>new Promise(resolve=>{reply=resolve;}));
+  const run=Panel.verify("123",{desktop:true,connected:true,scopeDirty:false});
+  Panel.reset();
+  reply(page([video("stale","旧章节",99)]));
+  await run;
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,{
+    ...props,connected:false
+  }));});
+  assert.doesNotMatch(JSON.stringify(view.toJSON()),/旧章节/);
   act(()=>view.unmount());
 });
