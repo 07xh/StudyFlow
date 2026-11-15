@@ -453,3 +453,24 @@ test("single-video refresh picks the exact server ID even when chapter titles re
   assert.match(JSON.stringify(view.toJSON()),/已确认完成/);
   act(()=>view.unmount());
 });
+
+
+test("authoritative completed=1 classifies a 98.1% watched video as done without falsifying the rate",async()=>{
+  const reported={...video("done981","第五章",98.1),
+    name:"信息化战争的发展趋势",last_point_seconds:1179,duration_seconds:1179,
+    server_completed:true};
+  const Panel=component(async()=>page([reported],0,1,null));
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const out=JSON.stringify(view.toJSON());
+  assert.equal(Panel.summary("123").completed,1);
+  assert.match(out,/服务器已确认完成 · 原始观看进度 98.1%（口径不同）/);
+  assert.match(out,/已完成/);
+  assert.doesNotMatch(out,/服务器已核验 · 尚未完成/);
+  assert.doesNotMatch(out,/播放位置已到末尾，但平台仍未确认完成/);
+  assert.doesNotMatch(out,/sf-ykt-single-recheck/);
+  const progress=view.root.findAllByProps({"aria-label":"信息化战争的发展趋势服务器进度"});
+  assert.equal(progress.length,1);
+  assert.equal(progress[0].props["aria-valuenow"],98.1);
+  act(()=>view.unmount());
+});
