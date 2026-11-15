@@ -314,7 +314,7 @@ def resolve_course(course_key: str) -> dict:
 
 PLAYER_DEFAULTS = {
     "speed": "1.5", "allowMinimize": True, "autoStart": True,
-    "autoNext": True, "mode": "official",
+    "autoNext": True, "mode": "zhs-original",
 }
 PLAYER_SPEEDS = {"1", "1.25", "1.5", "2"}
 
@@ -356,7 +356,7 @@ def save_player_settings(value: object) -> dict:
         raise ValueError("INVALID_PLAYER_SETTINGS")
     if any(not isinstance(value.get(name), bool) for name in ("allowMinimize", "autoStart", "autoNext")):
         raise ValueError("INVALID_PLAYER_SETTINGS")
-    mode = value.get("mode", "official")
+    mode = value.get("mode", "zhs-original")
     if mode not in ("official", "zhs-original"):
         raise ValueError("INVALID_PLAYER_SETTINGS")
     settings = {
