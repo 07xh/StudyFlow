@@ -157,15 +157,10 @@ def test_tauri_task_manager_keeps_original_qr_and_supported_platforms():
     assert '"--legacy-zhidao"' in tasks
 
 
-def test_zhs_shared_course_uses_existing_upstream_url_without_rewriting_sender(monkeypatch, tmp_path):
-    """A normal Zhidao shared course must not be silently excluded as non-AI."""
-    from urllib.parse import quote
-
-    route = "example+route/=="
-    row = {
-        "courseType": "shared", "courseId": "0",
-        "recruitAndCourseId": route, "name": "offline shared course",
-    }
+def test_zhs_shared_course_uses_safe_upstream_url_without_rewriting_sender(monkeypatch):
+    """Only URL-safe identities survive ZHS 0.1.5's alphanumeric URL parser."""
+    route = "abc123XYZ"
+    row = {"courseType": "shared", "courseId": "0", "recruitAndCourseId": route}
     monkeypatch.setattr(legacy, "_current_course_row", lambda key: row)
     seen = []
     monkeypatch.setattr(legacy, "_run_bundled_zhs_args",
@@ -173,8 +168,29 @@ def test_zhs_shared_course_uses_existing_upstream_url_without_rewriting_sender(m
     assert legacy.run_zhidao_original("a" * 64, "b" * 32) == 0
     assert seen == [([
         "play", "--url",
-        "https://studyvideoh5.zhihuishu.com/stuStudy?recruitAndCourseId=" + quote(route, safe=""),
+        "https://studyvideoh5.zhihuishu.com/stuStudy?recruitAndCourseId=" + route,
     ], "b" * 32)]
+
+
+def test_shared_course_encoded_identifier_falls_back_to_upstream_course_lookup(monkeypatch):
+    """Percent encoding cannot fix the upstream parser's [A-Za-z0-9]+ regex."""
+    row = {"courseType": "shared", "courseId": "123",
+           "recruitAndCourseId": "example+route/=="}
+    monkeypatch.setattr(legacy, "_current_course_row", lambda key: row)
+    calls = []
+    monkeypatch.setattr(legacy, "_run_bundled_zhs_args",
+                        lambda args, token: calls.append(args) or 0)
+    assert legacy.run_zhidao_original("a" * 64) == 0
+    assert calls == [["play", "-c", "123", "--type", "zhidao"]]
+
+
+def test_shared_course_rejects_unparseable_opaque_route_without_numeric_id(monkeypatch):
+    row = {"courseType": "shared", "courseId": "0",
+           "recruitAndCourseId": "example+route/=="}
+    monkeypatch.setattr(legacy, "_current_course_row", lambda key: row)
+    monkeypatch.setattr(legacy, "_run_bundled_zhs_args",
+                        lambda *args: pytest.fail("must not pass a truncated course identifier"))
+    assert legacy.run_zhidao_original("a" * 64) == 6
 
 
 def test_shared_zhs_course_with_numeric_id_uses_upstream_original_course_lookup(monkeypatch):

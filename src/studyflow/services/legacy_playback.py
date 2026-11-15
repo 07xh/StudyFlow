@@ -143,19 +143,24 @@ def _course_ids_for_current_session(key: str) -> tuple[str, str]:
     return _ai_course_ids(row)
 
 
-_SHARED_ROUTE = re.compile(r"^[A-Za-z0-9_+./=:-]{1,512}$")
+# ZHS 0.1.5's parse_play_url captures only [A-Za-z0-9]+. Its parser
+# truncates an opaque recruitAndCourseId at '/', '+', '=', or '%' even when
+# the URL is correctly percent-encoded. Never pass a truncated identity.
+_SHARED_ROUTE = re.compile(r"^[A-Za-z0-9]{1,512}$")
 
 
 def _shared_play_arguments(row: dict) -> list[str]:
-    """Use the upstream ZHS shared-course URL resolver, never a guessed ID."""
-    from urllib.parse import quote
+    """Choose only a route ZHS 0.1.5 can resolve without truncation."""
     route = str(row.get("recruitAndCourseId") or "").strip()
     if _SHARED_ROUTE.fullmatch(route):
-        url = "https://studyvideoh5.zhihuishu.com/stuStudy?recruitAndCourseId=" + quote(route, safe="")
+        url = "https://studyvideoh5.zhihuishu.com/stuStudy?recruitAndCourseId=" + route
         return ["play", "--url", url]
+    # Upstream -c resolves courseId to the current session's exact opaque
+    # recruitAndCourseId; it avoids the narrower play-URL parser entirely.
     course_id = str(row.get("courseId") or "").strip()
     if ID.fullmatch(course_id) and int(course_id) > 0:
         return ["play", "-c", course_id, "--type", "zhidao"]
+    # Do not fabricate or truncate a course identifier on fallback.
     raise RuntimeError("COURSE_ROUTE_UNAVAILABLE")
 
 
