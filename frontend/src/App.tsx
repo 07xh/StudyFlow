@@ -15,7 +15,7 @@ import {useZhidaoAutoVerify} from "./zhidaoAutoVerify";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
-import {YuketangCourseDetailPanel} from "./components/YuketangCourseDetailPanel";
+import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangCourse} from "./components/YuketangCourseDetailPanel";
 import {UpdatePanel} from "./components/UpdatePanel";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
@@ -91,6 +91,9 @@ export default function App(){
   const [autoVerify,setAutoVerify]=useState<{
     courseId:string;enabled:boolean;preferences:Record<string,boolean>;
   }>({courseId:"",enabled:false,preferences:{}});
+  const [yuketangAutoVerify,setYuketangAutoVerify]=useState<{
+    courseId:string;enabled:boolean;preferences:Record<string,boolean>;
+  }>({courseId:"",enabled:false,preferences:{}});
   const [notice,setNotice]=useState("");
   const [scopeDirty,setScopeDirty]=useState(false);
   const [hasYuketangSession,setHasYuketangSession]=useState(false);
@@ -163,6 +166,29 @@ export default function App(){
     }))
   });
 
+  // The read-only Rain Classroom timer lives above the course detail component.
+  // Only the last selected classroom is watched until the app closes or it is disabled.
+  useEffect(()=>{
+    if(!desktop||!consentAccepted||platforms.yuketang.status!=="connected"||
+      scopeDirty||!yuketangAutoVerify.enabled||!yuketangAutoVerify.courseId)return;
+    const courseId=yuketangAutoVerify.courseId;
+    const check=()=>{void verifyYuketangCourse(courseId,{
+      desktop:true,connected:true,scopeDirty:false
+    });};
+    check();
+    const timer=window.setInterval(check,120_000);
+    window.addEventListener("focus",check);
+    return ()=>{window.clearInterval(timer);window.removeEventListener("focus",check);};
+  },[desktop,consentAccepted,platforms.yuketang.status,scopeDirty,
+      yuketangAutoVerify.courseId,yuketangAutoVerify.enabled]);
+
+  function configureYuketangAutoVerify(courseId:string,enabled:boolean){
+    if(!courseId)return;
+    setYuketangAutoVerify(previous=>({
+      courseId,enabled,preferences:{...previous.preferences,[courseId]:enabled}
+    }));
+  }
+
   function configureAutoVerify(courseId:string,enabled:boolean){
     if(!courseId)return;
     setAutoVerify(previous=>({
@@ -194,6 +220,7 @@ export default function App(){
       for(const status of statuses){
         if(platformInfo(status.platform)&&status.status!=="connected"){
           invalidateCourseSync(syncCheckpoints.current[status.platform]);
+          if(status.platform==="yuketang")resetYuketangVerification();
         }
       }
       setSyncFeedback(previous=>{
@@ -353,6 +380,7 @@ export default function App(){
   }
 
   function updateConfiguration(field:keyof Config,value:string){
+    resetYuketangVerification();
     configurationRevision.current++;
     setConfig(previous=>({...previous,[field]:value}));
     if(field==="classroom_id"||field==="university_id"||field==="sign"){setVideos([]);setScopeDirty(true);}
@@ -364,6 +392,11 @@ export default function App(){
         ...previous,courseId:course.course_id,
         enabled:previous.preferences[course.course_id]??true
       });
+    }else if(course.platform==="yuketang"){
+      setYuketangAutoVerify(previous=>({
+        ...previous,courseId:course.course_id,
+        enabled:previous.preferences[course.course_id]??true
+      }));
     }
     setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
@@ -535,6 +568,7 @@ export default function App(){
 
   function invalidatePlatform(platform:Platform, resetStatus = false){
     invalidateCourseSync(syncCheckpoints.current[platform]);
+    if(platform==="yuketang")resetYuketangVerification();
     setSyncFeedback(previous=>({...previous,[platform]:{phase:"idle",error:""}}));
     setPlatforms(previous=>({...previous,[platform]:resetStatus
       ?initialPlatforms[platform]
@@ -664,7 +698,9 @@ export default function App(){
       </>:<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习进度" defaultExpanded={true}>
           <YuketangCourseDetailPanel course={course} desktop={desktop}
-            connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
+            connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}
+            autoVerifyEnabled={yuketangAutoVerify.courseId===course.course_id&&yuketangAutoVerify.enabled}
+            onAutoVerifyChange={enabled=>configureYuketangAutoVerify(course.course_id,enabled)}/>
         </CollapsibleSection>
       </>}
       <SettingsDialog open={courseLogsOpen} dark={dark} title={course.title+" · 日志与诊断"}
