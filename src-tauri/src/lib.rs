@@ -210,7 +210,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
-        | "yuketang.session.marker" => Ok(()),
+        | "yuketang.session.marker" | "xuexitong.session.clear" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -242,7 +242,17 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
-        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
+        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong")) => Ok(()),
+        "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
+            .is_some_and(|value| !value.is_empty() && value.len() <= 8192
+                && !value.contains(['\\r', '\\n'])) => Ok(()),
+        "xuexitong.chapters.list" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|value| {
+                let parts: Vec<&str> = value.split(':').collect();
+                parts.len() == 3 && parts.iter().all(|part|
+                    !part.is_empty() && part.len() <= 24
+                    && part.bytes().all(|c| c.is_ascii_digit()))
+            }) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
         "yuketang.course.detail" if request.get("course_id").and_then(|x| x.as_str())
             .is_some_and(|id| !id.is_empty() && id.len() <= 24 && id.bytes().all(|c| c.is_ascii_digit()))
