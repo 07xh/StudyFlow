@@ -48,7 +48,7 @@ jobs:
           retention-days: 7
 
   publish-candidate:
-    name: Publish verified 0.1.1-rc.5 pre-release
+    name: Publish verified 0.1.1-rc.6 pre-release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: windows-package
     runs-on: ubuntu-latest
@@ -67,11 +67,11 @@ jobs:
         run: |
           set -euo pipefail
           version=$(python -c 'import json; print(json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))["version"])')
-          if [ "$version" != "0.1.1-rc.5" ]; then
+          if [ "$version" != "0.1.1-rc.6" ]; then
             echo "This one-time candidate publisher does not apply to version $version."
             exit 0
           fi
-          if gh release view v0.1.1-rc.5 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view v0.1.1-rc.6 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Candidate already published; not replacing binaries."
             exit 0
           fi
@@ -81,9 +81,9 @@ jobs:
             echo "Expected one tested NSIS installer."
             exit 1
           fi
-          gh release create v0.1.1-rc.5 "${installers[0]}" \
+          gh release create v0.1.1-rc.6 "${installers[0]}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "学序 StudyFlow 0.1.1-rc.5" \
+            --title "学序 StudyFlow 0.1.1-rc.6" \
             --prerelease --latest=false \
-            --notes-file docs/RELEASE_CANDIDATE_0.1.1_RC5.md
+            --notes-file docs/RELEASE_CANDIDATE_0.1.1_RC6.md

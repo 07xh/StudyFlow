@@ -226,3 +226,13 @@ test("IPC rejection is not misreported as a missing Python service",()=>{
   assert.match(rust,/"zhidao\.zhs\.settings\.save"/);
   assert.match(rust,/fn zhs_task_settings_ipc_accepts_global_or_valid_course_scopes/);
 });
+
+test("ZHS exit diagnostics show only allowlisted error categories", () => {
+  const legacy=loadWithStub(async()=>{});
+  const sample={platform:"zhidao",state:"exited",exit_code:1,diagnostic_code:"NETWORK_ERROR"};
+  assert.match(legacy.zhsDiagnosticMessage(sample),/网络|连接错误/);
+  assert.match(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"Cookie: SECRET=123"}),/未提供可确认的错误分类/);
+  assert.doesNotMatch(legacy.zhsDiagnosticMessage({...sample,diagnostic_code:"Cookie: SECRET=123"}),/SECRET/);
+  assert.equal(legacy.zhsDiagnosticMessage({...sample,exit_code:0}),"");
+  assert.equal(legacy.zhsDiagnosticMessage({...sample,platform:"yuketang"}),"");
+});

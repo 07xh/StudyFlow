@@ -17,6 +17,7 @@ export type LegacyTaskStatus = {
   course_id: string | null;
   zhs_progress: ZhsLocalProgress | null;
   zhs_stale: boolean;
+  diagnostic_code?: string | null; // validated against fixed native enum, never raw CLI output
 };
 
 export type YuketangLiveProgress = {
@@ -180,6 +181,24 @@ export function legacyError(err: unknown): string {
     case "TASK_STATE_UNAVAILABLE": return "无法获取本地任务状态。";
     case "RUN_NOT_AVAILABLE": return "网页版无法运行原版任务，请启动 Windows 桌面版。";
     default: return "原版任务操作失败，请检查安装与登录状态。";
+  }
+}
+
+/** Bounded diagnostic descriptions; never render untrusted process stderr or tracebacks. */
+export function zhsDiagnosticMessage(status: LegacyTaskStatus): string {
+  if(status.platform!=="zhidao"||status.state!=="exited"||status.exit_code===0)return "";
+  switch(status.diagnostic_code){
+    case "CAPTCHA_REQUIRED": return "原版要求验证码，请使用平台官方交互完成验证后重新检查登录。";
+    case "TIME_RESTRICTED": return "平台当前限制该资源的可用时间，请查看课程开放安排。";
+    case "LOGIN_REQUIRED": return "原版登录会话失效，请在知到重新登录并同步课程。";
+    case "NETWORK_ERROR": return "原版请求遭遇网络或服务端连接错误，请检查网络与平台状态。";
+    case "LOCAL_FILE_MISSING": return "原版需要的本机文件未找到，请检查完整安装与本机数据。";
+    case "FILE_PERMISSION_DENIED": return "原版访问本机文件被拒绝，请检查文件权限或安全软件。";
+    case "INTERACTIVE_INPUT_REQUIRED": return "原版要求交互输入，无终端后台任务无法继续。";
+    case "UPSTREAM_NONZERO_EXIT": return "原版主动返回非零退出状态，尚无可确认的具体异常分类。";
+    case "EXECUTOR_EXCEPTION": return "原版执行器发生未分类异常，未记录敏感异常内容。";
+    case "WORKER_ENTRY_EXCEPTION": return "任务入口发生未分类异常，请检查会话、课程数据及安装环境。";
+    default: return "当前安装版本未提供可确认的错误分类；未保存原版隐私输出。";
   }
 }
 

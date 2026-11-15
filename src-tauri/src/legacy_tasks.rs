@@ -102,6 +102,7 @@ struct LegacyJob {
     course_id: Option<String>, // opaque course key, never a raw login credential
     monitor_token: Option<String>, // per-run nonce, kept out of frontend
     last_zhs_progress: Option<ZhsProgress>, // last real numeric observation, never server-confirmed
+    last_diagnostic_code: Option<String>, // fixed enum only; no raw child output
 }
 
 #[derive(Clone, Serialize)]
@@ -120,6 +121,7 @@ pub struct LegacyStatus {
     course_id: Option<String>,
     zhs_progress: Option<ZhsProgress>,
     zhs_stale: bool, // Last sample expired while the process is still running.
+    diagnostic_code: Option<String>, // bounded local failure category, not progress
 }
 
 fn zhs_snapshot_path(token: &str) -> Option<PathBuf> {
@@ -128,6 +130,49 @@ fn zhs_snapshot_path(token: &str) -> Option<PathBuf> {
     }
     let local = std::env::var_os("LOCALAPPDATA")?;
     Some(PathBuf::from(local).join("StudyFlow").join(format!("monitor-zhs-{token}.json")))
+}
+
+fn zhs_diagnostic_path(token: &str) -> Option<PathBuf> {
+    // Use the same strict random nonce validation as numeric progress snapshots.
+    let root = zhs_snapshot_path(token)?.parent()?.to_path_buf();
+    Some(root.join(format!("zhs-diagnostic-{token}.json")))
+}
+
+fn remove_zhs_diagnostic(token: Option<&str>) {
+    if let Some(path) = token.and_then(zhs_diagnostic_path) {
+        let _ = fs::remove_file(path);
+    }
+}
+
+/// Read only an allowlisted category. Never read or forward traceback text.
+fn parse_zhs_diagnostic(bytes: &[u8], token: &str, now: f64) -> Option<String> {
+    if bytes.len() > 512 { return None; }
+    let data: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if data.get("v")?.as_u64()? != 1 || data.get("token")?.as_str()? != token {
+        return None;
+    }
+    let at = data.get("at")?.as_f64()?;
+    if !at.is_finite() || at > now + 10.0 || now - at > 120.0 {
+        return None;
+    }
+    let code = data.get("code")?.as_str()?;
+    if !matches!(code,
+        "CAPTCHA_REQUIRED" | "TIME_RESTRICTED" | "LOGIN_REQUIRED"
+        | "NETWORK_ERROR" | "LOCAL_FILE_MISSING" | "FILE_PERMISSION_DENIED"
+        | "INTERACTIVE_INPUT_REQUIRED" | "UPSTREAM_NONZERO_EXIT"
+        | "EXECUTOR_EXCEPTION" | "WORKER_ENTRY_EXCEPTION") {
+        return None;
+    }
+    Some(code.to_owned())
+}
+
+fn read_zhs_diagnostic(token: &str) -> Option<String> {
+    let path = zhs_diagnostic_path(token)?;
+    let metadata = fs::symlink_metadata(&path).ok()?;
+    if !metadata.is_file() || metadata.len() < 2 || metadata.len() > 512 { return None; }
+    let bytes = fs::read(path).ok()?;
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs_f64();
+    parse_zhs_diagnostic(&bytes, token, now)
 }
 
 fn remove_zhs_snapshot(token: Option<&str>) {
@@ -192,9 +237,11 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
     }
     if let Some(code) = exit_status {
         task.exit_code = code.code();
+        task.last_diagnostic_code = task.monitor_token.as_deref().and_then(read_zhs_diagnostic);
         task.state = "exited".into();
         task.child = None;
         remove_zhs_snapshot(task.monitor_token.as_deref());
+        remove_zhs_diagnostic(task.monitor_token.as_deref());
     }
     // A cached final frame must not masquerade as live progress.
     let running = task.state == "running";
@@ -217,6 +264,7 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         course_id: task.course_id.clone(),
         zhs_progress,
         zhs_stale,
+        diagnostic_code: if task.state == "exited" { task.last_diagnostic_code.clone() } else { None },
     })
 }
 
@@ -243,6 +291,7 @@ impl LegacyTasks {
                     task.state = "stopped".into();
                 }
                 remove_zhs_snapshot(task.monitor_token.as_deref());
+                remove_zhs_diagnostic(task.monitor_token.as_deref());
             }
         }
     }
@@ -324,6 +373,7 @@ pub fn legacy_start(
         course_id: if platform == "zhidao" { course_id.clone() } else { None },
         monitor_token,
         last_zhs_progress: None,
+        last_diagnostic_code: None,
     });
     if wallclock_limit > 0 {
         // Dedicated timer enforces the cap even when the UI is minimized or not polling.
@@ -342,6 +392,7 @@ pub fn legacy_start(
                             task.exit_code = Some(12);
                             task.state = "exited".into();
                             remove_zhs_snapshot(task.monitor_token.as_deref());
+                            remove_zhs_diagnostic(task.monitor_token.as_deref());
                         }
                     }
                 }
@@ -351,7 +402,7 @@ pub fn legacy_start(
     Ok(LegacyStatus {
         platform: platform.clone(), state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },
-        zhs_progress: None, zhs_stale: false,
+        zhs_progress: None, zhs_stale: false, diagnostic_code: None,
     })
 }
 
@@ -363,7 +414,7 @@ pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     match guard.get_mut(&platform) {
         Some(task) => status_of(&platform, task),
-        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_stale: false}),
+        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_stale: false, diagnostic_code: None}),
     }
 }
 
@@ -382,6 +433,7 @@ pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String, expected_run
                 job.state = "stopped".into();
             }
             remove_zhs_snapshot(job.monitor_token.as_deref());
+            remove_zhs_diagnostic(job.monitor_token.as_deref());
         }
         return status_of(&platform, job);
     }
@@ -413,6 +465,7 @@ mod tests {
             child: None, state: "running".into(), exit_code: None, run_id: None,
             course_id: Some("a".repeat(64)), monitor_token: None,
             last_zhs_progress: Some(progress),
+            last_diagnostic_code: None,
         };
         let running = status_of("zhidao", &mut task).unwrap();
         assert!(running.zhs_progress.is_none());
@@ -425,6 +478,23 @@ mod tests {
         let stopped = status_of("zhidao", &mut task).unwrap();
         assert!(stopped.zhs_progress.is_none());
         assert!(!stopped.zhs_stale);
+    }
+
+    #[test]
+    fn diagnostic_parser_never_exposes_untrusted_child_text_or_other_run_ids() {
+        let nonce = "a".repeat(32);
+        let now = 1_800_000_000.0;
+        let accepted = serde_json::json!({
+            "v": 1, "token": nonce, "code": "NETWORK_ERROR", "at": now
+        }).to_string();
+        assert_eq!(parse_zhs_diagnostic(accepted.as_bytes(), &nonce, now),
+                   Some("NETWORK_ERROR".to_owned()));
+        assert!(parse_zhs_diagnostic(accepted.as_bytes(), &"b".repeat(32), now).is_none());
+        let leaked = serde_json::json!({
+            "v": 1, "token": nonce, "code": "Cookie SECRET=123", "at": now
+        }).to_string();
+        assert!(parse_zhs_diagnostic(leaked.as_bytes(), &nonce, now).is_none());
+        assert!(parse_zhs_diagnostic(accepted.as_bytes(), &nonce, now + 121.0).is_none());
     }
 
     fn valid_yuketang_options() -> OriginalYktOptions {

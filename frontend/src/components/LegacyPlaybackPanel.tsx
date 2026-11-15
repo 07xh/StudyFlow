@@ -6,7 +6,7 @@ import type {ActivityEntry,TaskRecorder} from "../activity";
 import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError,type ZhidaoProgressSnapshot} from "../bridge";
 import {
-  getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, originalYktDefaults, startLegacy, stopLegacy,
+  getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, zhsDiagnosticMessage, originalYktDefaults, startLegacy, stopLegacy,
   validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type OriginalZhsOptions, type YuketangLiveProgress
 } from "../legacyPlayback";
 
@@ -293,6 +293,11 @@ export function LegacyPlaybackPanel({
         <span>任务运行状态</span>
         <strong>{status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "检测中" : "未连接桌面端"}</strong>
         <small>约每 2 秒更新</small>
+        {status?.state==="exited"&&ownsStatus&&<div className="sf-task-context sf-zhs-exit-diagnostic" role="status" aria-live="polite">
+          <strong>{legacyExitMessage(status)}（退出码：{status.exit_code??"未知"}）</strong>
+          {status.exit_code!==0&&<small>{zhsDiagnosticMessage(status)}</small>}
+          {status.exit_code===0&&!status.zhs_progress&&<small>本次未采集到播放进度，是否完成请以服务器只读核验为准。</small>}
+        </div>}
         {platform==="zhidao"&&<div className="sf-zhs-local" aria-label="ZHS 原版本地模拟片段">
           <div className="sf-zhs-local-heading">
             <span>本地模拟片段</span>
@@ -412,10 +417,8 @@ export function LegacyPlaybackPanel({
       <span>任务所属课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
     </div>}
 
-    {status?.state==="exited"&&ownsStatus&&<p className="legacy-state-note">
+    {platform==="yuketang"&&status?.state==="exited"&&ownsStatus&&<p className="legacy-state-note">
       {legacyExitMessage(status)}（退出码：{status.exit_code ?? "未知"}）
-      {platform==="zhidao"&&status.exit_code===0&&!status.zhs_progress&&
-        <small>未采集到播放进度；请检查课程是否有可播放内容并使用服务端只读核验。</small>}
     </p>}
     {status?.run_id&&ownsStatus&&<RunParameters parameters={events.find(event=>event.runner===(platform==="zhidao"?"zhs":"yuketang")&&event.runId===status.run_id&&event.parameters)?.parameters}/>}
     {platform==="zhidao"&&ownsStatus&&verificationState!=="idle"&&

@@ -15,6 +15,7 @@ import re
 import runpy
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -208,6 +209,64 @@ class _RefreshingZhsSink:
                 self.last_publish = now
 
 
+# Per-run *bounded category*, not a traceback: ZHS CLI errors may contain
+# cookies, request URLs, headers or user details. Never persist exception text.
+_ZHS_DIAGNOSTIC_CODES = frozenset({
+    "CAPTCHA_REQUIRED", "TIME_RESTRICTED", "LOGIN_REQUIRED",
+    "NETWORK_ERROR", "LOCAL_FILE_MISSING", "FILE_PERMISSION_DENIED",
+    "INTERACTIVE_INPUT_REQUIRED", "UPSTREAM_NONZERO_EXIT",
+    "EXECUTOR_EXCEPTION", "WORKER_ENTRY_EXCEPTION",
+})
+
+
+def _classify_zhs_failure(exc: BaseException) -> str:
+    name = type(exc).__name__
+    if name == "CaptchaRequired":
+        return "CAPTCHA_REQUIRED"
+    if name == "TimeLimitExceeded":
+        return "TIME_RESTRICTED"
+    if name in ("AuthenticationError", "LoginError", "LoginExpired", "UnauthorizedError"):
+        return "LOGIN_REQUIRED"
+    if isinstance(exc, (ConnectionError, TimeoutError)) or name in (
+        "ConnectionError", "ReadTimeout", "ConnectTimeout", "HTTPError", "RequestException",
+    ):
+        return "NETWORK_ERROR"
+    if isinstance(exc, FileNotFoundError):
+        return "LOCAL_FILE_MISSING"
+    if isinstance(exc, PermissionError):
+        return "FILE_PERMISSION_DENIED"
+    if isinstance(exc, EOFError):
+        return "INTERACTIVE_INPUT_REQUIRED"
+    return "EXECUTOR_EXCEPTION"
+
+
+def _write_zhs_diagnostic(monitor_token: str | None, code: str) -> None:
+    if (monitor_token is None or MONITOR_TOKEN.fullmatch(monitor_token) is None
+            or code not in _ZHS_DIAGNOSTIC_CODES):
+        return
+    # Local per-run file is consumed and removed by the Rust supervisor on exit.
+    # Does not contain course IDs, endpoints, exception strings or credentials.
+    try:
+        root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "StudyFlow"
+        root.mkdir(parents=True, exist_ok=True)
+        destination = root / f"zhs-diagnostic-{monitor_token}.json"
+        payload = json.dumps({"v": 1, "token": monitor_token, "code": code,
+                              "at": time.time()}, separators=(",", ":"))
+        fd, temporary = tempfile.mkstemp(prefix=".zhs-diag-", suffix=".tmp", dir=root)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, destination)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
+    except OSError:
+        # Telemetry is optional. Never alter the original ZHS exit semantics.
+        pass
+
+
 def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None,
                           options: dict | None = None, is_ai: bool = False) -> int | None:
     """Run upstream ZHS 0.1.5 CLI unchanged; None means no bundled runtime."""
@@ -243,7 +302,10 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
         with scoped_upstream_play(options, is_ai):
             result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
-        return result if isinstance(result, int) else 0
+        code = result if isinstance(result, int) else 0
+        if code != 0:
+            _write_zhs_diagnostic(monitor_token, "UPSTREAM_NONZERO_EXIT")
+        return code
     except ScopeLimitReached:
         return 12
     except ScopeFailed:
@@ -251,14 +313,21 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
     except ScopeInvalid:
         return 14
     except SystemExit as exc:
-        return exc.code if isinstance(exc.code, int) else 1
+        code = exc.code if isinstance(exc.code, int) else 1
+        if code != 0:
+            _write_zhs_diagnostic(monitor_token, "UPSTREAM_NONZERO_EXIT")
+        return code
     except EOFError:
         # A hidden, noninteractive process cannot answer an upstream prompt.
+        _write_zhs_diagnostic(monitor_token, "INTERACTIVE_INPUT_REQUIRED")
         return 9
     except Exception as exc:
         # Click's Exit(code) is not SystemExit; do not mark an exit(0) as a failure.
         if type(exc).__name__ == "Exit" and isinstance(getattr(exc, "exit_code", None), int):
+            if exc.exit_code != 0:
+                _write_zhs_diagnostic(monitor_token, "UPSTREAM_NONZERO_EXIT")
             return exc.exit_code
+        _write_zhs_diagnostic(monitor_token, _classify_zhs_failure(exc))
         return 1
     finally:
         # The Rust supervisor reads the final numeric observation before
@@ -352,7 +421,14 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         else:
             options = None
-        return run_zhidao_original(args[1], args[2] if len(args) >= 3 else None, options)
+        token = args[2] if len(args) >= 3 else None
+        try:
+            return run_zhidao_original(args[1], token, options)
+        except Exception:
+            # A failure outside upstream CLI must still be visible as a safe
+            # category; never persist exception strings from account/cache code.
+            _write_zhs_diagnostic(token, "WORKER_ENTRY_EXCEPTION")
+            return 1
     return 2
 
 
