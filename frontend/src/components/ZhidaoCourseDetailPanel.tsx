@@ -2,10 +2,12 @@ import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {RefreshCw} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoCourseDetail} from "../bridge";
 import type {Course} from "../types";
+import {CourseChapterGroup,CourseRecordToolbar} from "../ui/CourseRecordViews";
 
 type Props={course:Course;desktop:boolean};
 type StatusFilter="all"|"incomplete"|"completed"|"unverified";
 type Lesson=ZhidaoCourseDetail["items"][number];
+
 function lessonStatus(item:Lesson,kind:ZhidaoCourseDetail["course_type"]){
   if(kind==="ai"){
     if(item.fully_progressed===true)return "completed";
@@ -17,14 +19,14 @@ function lessonStatus(item:Lesson,kind:ZhidaoCourseDetail["course_type"]){
   return "unverified";
 }
 function chapterOf(item:Lesson){return (item.chapter_name||item.theme||"").trim();}
-
+function groupName(item:Lesson){return chapterOf(item)||"其他内容";}
 function seconds(value:number|undefined){
   if(value===undefined||!Number.isFinite(value)||value<0)return "—";
   const n=Math.floor(value);
   return Math.floor(n/60).toString().padStart(2,"0")+":"+String(n%60).padStart(2,"0");
 }
 
-/** Course-level total progress lives in the workspace header; this panel only renders lesson items. */
+/** Real Zhidao course records; course-level metric remains in the workspace header. */
 export function ZhidaoCourseDetailPanel({course,desktop}:Props){
   const [detail,setDetail]=useState<ZhidaoCourseDetail|null>(null);
   const [busy,setBusy]=useState(false);
@@ -34,16 +36,16 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
   const [statusFilter,setStatusFilter]=useState<StatusFilter>("all");
   const [search,setSearch]=useState("");
   const [chapterFilter,setChapterFilter]=useState("");
+  const [expanded,setExpanded]=useState<Record<string,boolean>>({});
   useEffect(()=>{
-    setStatusFilter("all");setSearch("");setChapterFilter("");
+    setStatusFilter("all");setSearch("");setChapterFilter("");setExpanded({});
   },[course.course_id]);
 
   const load=useCallback(async()=>{
     if(!desktop)return;
     const current=++revision.current;
     setBusy(true);setMessage("");
-    // Preserve the previous verified chapter rows during a same-course refresh.
-    // A different course must never briefly display the old course's rows.
+    // Same course may keep visible evidence while refreshing; never cross courses.
     if(detailCourseKey.current!==course.course_id){
       detailCourseKey.current=course.course_id;
       setDetail(null);
@@ -53,29 +55,63 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
         operation:"zhidao.course.detail",course_key:course.course_id
       });
       if(current===revision.current)setDetail(result);
-    }catch(error){if(current===revision.current){
-      // An actual read failure must not leave old rows looking current.
-      setDetail(null);
-      setMessage(friendlyBridgeError(error));
-    }}
-    finally{if(current===revision.current)setBusy(false);}
+    }catch(error){
+      if(current===revision.current){
+        setDetail(null);
+        setMessage(friendlyBridgeError(error));
+      }
+    }finally{if(current===revision.current)setBusy(false);}
   },[desktop,course.course_id,course.verified_at,course.stale]);
-
   useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
 
-  // Never render a previous course's records even for one React render.
+  // Never present records belonging to a previously selected course.
   const currentDetail=detail?.course_key===course.course_id?detail:null;
   const kind:ZhidaoCourseDetail["course_type"]=currentDetail?.course_type??(course.course_type==="ai"?"ai":"shared");
   const items=currentDetail?.items??[];
   const label=kind==="ai"?"知识点":"视频";
-  const chapters=useMemo(()=>[...new Set(items.map(chapterOf).filter(Boolean))], [items]);
+  const chapters=useMemo(()=>[...new Set(items.map(chapterOf).filter(Boolean))],[items]);
   const filteredItems=useMemo(()=>items.map((item,index)=>({item,index})).filter(({item})=>{
     const key=search.trim().toLocaleLowerCase();
     return (statusFilter==="all"||lessonStatus(item,kind)===statusFilter)&&
       (!chapterFilter||chapterOf(item)===chapterFilter)&&
       (!key||[item.name,item.theme,item.chapter_name].some(value=>value?.toLocaleLowerCase().includes(key)));
   }),[items,kind,statusFilter,chapterFilter,search]);
-  return <section className="course-v2-detail sf-zhidao-course-detail" aria-label="课程章节进度">
+  const groups=useMemo(()=>{
+    const result=new Map<string,typeof filteredItems>();
+    for(const record of filteredItems){
+      const name=groupName(record.item);
+      if(!result.has(name))result.set(name,[]);
+      result.get(name)!.push(record);
+    }
+    return [...result.entries()];
+  },[filteredItems]);
+  const counts=useMemo(()=>{
+    const result={all:items.length,incomplete:0,completed:0,unverified:0};
+    for(const item of items)result[lessonStatus(item,kind)]++;
+    return result;
+  },[items,kind]);
+  const allGroups=useMemo(()=>{
+    const result=new Map<string,Lesson[]>();
+    for(const item of items){
+      const name=groupName(item);
+      if(!result.has(name))result.set(name,[]);
+      result.get(name)!.push(item);
+    }
+    return result;
+  },[items]);
+  const options=[
+    {id:"all",label:"全部",count:counts.all},
+    {id:"incomplete",label:"待完成",count:counts.incomplete},
+    {id:"completed",label:"已完成",count:counts.completed},
+    {id:"unverified",label:"未核验",count:counts.unverified},
+  ];
+  const toggleAll=(open:boolean)=>{
+    setExpanded(Object.fromEntries([...allGroups.keys()].map(name=>[name,open])));
+  };
+  const evidence=currentDetail?.stale?"历史缓存":currentDetail?.verified?"服务端记录":"未核验";
+  const completeLabel=currentDetail?.verified&&!currentDetail.stale?"服务端已完成":"记录已完成";
+  return <section className="course-v2-detail sf-zhidao-course-detail sf-unified-records"
+    aria-label="课程章节进度">
     <div className="sf-zd-detail-heading">
       <div>
         <span className="eyebrow">课程内容 / {kind==="ai"?"智慧课程":"共享课程"}</span>
@@ -87,65 +123,64 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
         </p>
       </div>
       <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void load()}>
-        <RefreshCw size={14}/>{busy?"读取中…":"刷新章节"}
+        <RefreshCw size={14}/>{busy?"核验中…":"刷新章节"}
       </button>
     </div>
-    {currentDetail&&<div className="sf-zd-detail-summary sf-zd-detail-summary-compact">
-      <div><span>已完成{label}</span><strong>{currentDetail.done} / {currentDetail.total}</strong></div>
-      <div><span>数据来源</span><strong>{currentDetail.stale?"历史缓存":currentDetail.verified?"服务端记录":"未核验"}</strong></div>
+    {currentDetail&&<div className="sf-zd-detail-summary sf-record-summary">
+      <div><span>已读取{label}</span><strong>{items.length} 条</strong></div>
+      <div><span>{completeLabel}</span><strong>{currentDetail.done} / {currentDetail.total}</strong></div>
+      <div><span>数据来源</span><strong>{evidence}</strong></div>
     </div>}
-    {items.length>0&&<div className="sf-zd-detail-filters" aria-label="章节学习记录筛选">
-      <label>搜索内容
-        <input type="search" placeholder="搜索知识点、视频或章节"
-          value={search} onChange={event=>setSearch(event.target.value)}/>
-      </label>
-      <label>学习状态
-        <select value={statusFilter} onChange={event=>setStatusFilter(event.target.value as StatusFilter)}>
-          <option value="all">全部记录</option>
-          <option value="incomplete">未完成</option>
-          <option value="completed">已完成</option>
-          <option value="unverified">未核验</option>
-        </select>
-      </label>
-      {chapters.length>0&&<label>章节 / 主题
-        <select value={chapterFilter} onChange={event=>setChapterFilter(event.target.value)}>
-          <option value="">全部章节</option>
-          {chapters.map(chapter=><option key={chapter} value={chapter}>{chapter}</option>)}
-        </select>
-      </label>}
-      <span className="sf-zd-filter-count" aria-live="polite">显示 {filteredItems.length} / {items.length} 条</span>
-    </div>}
-    <div className="sf-zd-detail-list sf-zd-detail-list-expanded">
-      {busy&&!currentDetail&&<p>正在读取课程章节记录…</p>}
+    {items.length>0&&<CourseRecordToolbar
+      filters={options} activeFilter={statusFilter} onFilter={value=>setStatusFilter(value as StatusFilter)}
+      search={search} onSearch={setSearch}
+      chapters={chapters} chapter={chapterFilter} onChapter={setChapterFilter}
+      visibleCount={filteredItems.length} totalCount={items.length} onExpandAll={toggleAll}/>}
+    <div className="sf-record-chapters">
+      {busy&&!currentDetail&&<p role="status">正在读取课程章节记录…</p>}
       {items.length===0&&currentDetail&&<p>当前没有可展示的{label}明细。</p>}
       {!currentDetail&&!busy&&!desktop&&<p>请在 Windows 桌面版中读取当前课程的真实章节记录。</p>}
       {items.length>0&&filteredItems.length===0&&<p>没有符合当前筛选条件的学习记录。</p>}
-      {filteredItems.map(({item,index})=>{
-        if(kind==="ai"){
-          const percent=Math.min(100,Math.max(0,item.progress_percent??0));
-          return <article className="sf-zd-detail-item" key={index}>
-            <div className="sf-zd-detail-item-head">
-              <strong>{item.name}</strong><span>{item.progress_percent===undefined?"未核验":percent+"%"}</span>
-            </div>
-            <small>{item.theme||"知识点"} · {item.fully_progressed?"已达满进度":"未达满进度"}</small>
-            {item.progress_percent!==undefined&&<div className="sf-zd-detail-track" role="progressbar"
-              aria-label={item.name+"知识点进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-              <span style={{width:percent+"%"}}/>
-            </div>}
-          </article>;
-        }
-        return <article className="sf-zd-detail-item" key={index}>
-          <div className="sf-zd-detail-item-head">
-            <strong>{item.name}</strong><span>{item.server_completed?"已完成":"未完成 / 未确认"}</span>
-          </div>
-          <small>已记录 {seconds(item.studied_seconds)} / 总时长 {seconds(item.duration_seconds)}</small>
-        </article>;
+      {groups.map(([chapter,records],groupIndex)=>{
+        const all=allGroups.get(chapter)??records.map(({item})=>item);
+        const completed=all.filter(item=>lessonStatus(item,kind)==="completed").length;
+        const verified=all.filter(item=>lessonStatus(item,kind)!=="unverified").length;
+        const open=expanded[chapter]??groupIndex===0;
+        return <CourseChapterGroup key={chapter} title={chapter}
+          meta={`已读取 ${all.length} · 已核验 ${verified} · 已完成 ${completed}`}
+          expanded={open}
+          onToggle={()=>setExpanded(previous=>({...previous,[chapter]:!open}))}>
+          {records.map(({item,index})=>{
+            const status=lessonStatus(item,kind);
+            const validPercent=typeof item.progress_percent==="number"&&Number.isFinite(item.progress_percent);
+            const percent=validPercent?Math.max(0,Math.min(100,item.progress_percent!)):null;
+            return <article className="sf-zd-detail-item sf-record-item" key={index}>
+              <div className="sf-zd-detail-item-head">
+                <strong>{item.name}</strong>
+                <span className={"sf-record-status is-"+status}>
+                  {kind==="ai"?(percent===null?"未核验":percent+"%")
+                    :status==="completed"?"已完成":status==="incomplete"?"未完成":"未核验"}
+                </span>
+              </div>
+              <small>{kind==="ai"
+                ?(item.theme||"知识点")+" · "+(status==="completed"?"已达到满进度":status==="unverified"?"暂无确认进度":"尚未达到满进度")
+                :"已记录 "+seconds(item.studied_seconds)+" / 总时长 "+seconds(item.duration_seconds)}
+                {currentDetail?.stale?" · 历史缓存":""}
+              </small>
+              {kind==="ai"&&percent!==null&&
+                <div className="sf-zd-detail-track" role="progressbar"
+                  aria-label={item.name+"知识点进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+                  <span style={{width:percent+"%"}}/>
+                </div>}
+            </article>;
+          })}
+        </CourseChapterGroup>;
       })}
     </div>
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     <details className="sf-technical-note"><summary>数据口径</summary><p className="sf-zd-progress-note">
-      {kind==="ai"?"知识点进度来自服务器记录；":"视频完成状态来自服务器记录；"}
-      不把本机播放位置换算成服务端进度，也不提交学习记录。
+      智慧课程知识点的满进度与课程总体进度是不同指标；共享课按服务端视频记录显示。
+      未核验不等于未完成，历史缓存不等于当前服务器核验，不提交学习记录。
     </p></details>
   </section>;
 }
