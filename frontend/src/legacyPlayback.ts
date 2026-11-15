@@ -18,6 +18,8 @@ export type LegacyTaskStatus = {
   run_id?: string | null;
   course_id: string | null;
   zhs_progress: ZhsLocalProgress | null;
+  /** Metadata only; when telemetry is stale no old numeric progress is reused. */
+  zhs_last_resource?: Omit<ZhsLocalProgress,"video_segment_percent"> | null;
   zhs_stale: boolean;
   diagnostic_code?: string | null; // validated against fixed native enum, never raw CLI output
 };

@@ -2360,3 +2360,38 @@
   .sf-shell .sf-workspace-progress-layout .sf-header-course-picker{font-size:10px}
   .sf-shell .sf-workspace-progress-layout .sf-header-course-picker select{padding:5px 8px;font-size:11px}
 }
+
+/* ZHS: show the current resource and its own observation ahead of diagnostics. */
+.sf-shell .sf-zhs-now-playing{gap:8px;padding:16px;min-width:0}
+.sf-shell .sf-zhs-now-heading,.sf-shell .sf-zhs-now-progress-row{
+  width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.sf-shell .sf-zhs-now-heading>span:first-child{font-size:12px;color:var(--muted);font-weight:600}
+.sf-shell .sf-zhs-now-state{
+  flex:none;padding:4px 9px;border-radius:99px;font-size:11px;
+  background:var(--subtle);color:var(--muted);font-weight:600;
+}
+.sf-shell .sf-zhs-now-state.active{background:var(--success-bg);color:var(--success)}
+.sf-shell .sf-zhs-now-title{
+  width:100%;min-width:0;margin:3px 0 0;color:var(--text);font-size:16px;
+  line-height:1.5;font-weight:700;overflow-wrap:anywhere;
+}
+.sf-shell .sf-zhs-now-meta{display:flex;flex-wrap:wrap;gap:6px 12px;color:var(--muted);font-size:11px}
+.sf-shell .sf-zhs-now-progress-row{margin-top:10px;font-size:12px;color:var(--muted)}
+.sf-shell .sf-zhs-now-progress-row strong{
+  font-size:16px;color:var(--text);font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-zhs-progress-track{width:100%;height:10px;position:relative}
+.sf-shell .sf-zhs-progress-track.is-indeterminate::after{
+  content:"";position:absolute;top:0;bottom:0;width:30%;left:-30%;border-radius:99px;
+  background:var(--accent);opacity:.50;animation:sf-zhs-progress-wait 1.8s ease-in-out infinite;
+}
+@keyframes sf-zhs-progress-wait{from{left:-30%}to{left:100%}}
+@media(prefers-reduced-motion:reduce){.sf-shell .sf-zhs-progress-track.is-indeterminate::after{animation:none;left:0;opacity:.24}}
+.sf-shell .sf-zhs-now-playing .sf-zhs-now-footnote{font-size:11px;color:var(--muted);line-height:1.45}
+.sf-shell .sf-zhs-diagnostics{
+  width:100%;border-top:1px solid var(--line);padding-top:9px;margin-top:5px;
+}
+.sf-shell .sf-zhs-diagnostics summary{cursor:pointer;color:var(--muted);font-size:11px}
+.sf-shell .sf-zhs-diagnostics>div{display:flex;flex-direction:column;gap:6px;padding:9px 0 0}
+.sf-shell .sf-zhs-diagnostics small{font-size:11px;line-height:1.45;color:var(--muted)}

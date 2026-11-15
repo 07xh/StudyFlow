@@ -53,12 +53,20 @@ test('switching courses cancels a late terminal verification result and hides it
   assert.doesNotMatch(words(view.root),/已读取当前课程的服务器学习记录|正在只读核验/);
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
-test('expired ZHS telemetry shows waiting evidence without a percentage track',async()=>{
- const env=setup({getLegacyStatus:async()=>({...running,zhs_stale:true,zhs_progress:null})});let view;
+test('expired ZHS telemetry retains last resource identity but no stale percentage',async()=>{
+ const env=setup({getLegacyStatus:async()=>({...running,zhs_stale:true,zhs_progress:null,
+  zhs_last_resource:{resource_kind:'video',resource_name:'第 3 讲',resource_index:2,resource_total:5}
+ })});let view;
  try{
   await act(async()=>{view=create(React.createElement(env.Panel,props));});
   assert.match(words(view.root),/本地进度输出已过期/);
-  assert.equal(view.root.findAllByProps({role:'progressbar'}).length,0);
+  assert.match(words(view.root),/第 3 讲/);
+  assert.match(words(view.root),/上次识别 · 视频/);
+  assert.doesNotMatch(words(view.root),/48.5%/);
+  const tracks=view.root.findAllByProps({role:'progressbar'});
+  assert.equal(tracks.length,1);
+  assert.equal(tracks[0].props['aria-valuenow'],undefined);
+  assert.match(tracks[0].props.className,/is-indeterminate/);
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
 test('a poll issued before starting cannot overwrite the new run, while the event retains run ownership',async()=>{

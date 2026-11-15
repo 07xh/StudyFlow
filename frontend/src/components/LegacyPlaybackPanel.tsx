@@ -82,7 +82,12 @@ export function LegacyPlaybackPanel({
   const ownsStatus=platform!=="zhidao"||Boolean(status?.course_id&&status.course_id===selection);
   const liveZhs = !statusReadFailed && platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
-  const zhsKind=liveZhs?.resource_kind;
+  // An expired local observation can supply only a clearly labelled last-known
+  // resource identity; the numeric progress always comes from fresh telemetry.
+  const zhsContext=status?.state==="running"&&ownsStatus&&status.zhs_stale
+    ? status.zhs_last_resource : null;
+  const zhsContent=liveZhs??zhsContext;
+  const zhsKind=zhsContent?.resource_kind;
   const zhsKindLabel=zhsKind==="video"?"视频":zhsKind==="ppt"?"PPT":
     zhsKind==="article"?"文章":zhsKind==="other"?"其他资源":"类型待识别";
   // Previous local snapshots have no resourceKind. The upstream 'playing'
@@ -327,46 +332,57 @@ export function LegacyPlaybackPanel({
     {startUnavailableReason&&<p id={startHintId} className="sf-task-context sf-start-unavailable-reason" role="status">
       暂不能启动：{startUnavailableReason}
     </p>}
-    {platform==="zhidao"&&<div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
-      <div className="sf-live-state">
-        <span>任务运行状态</span>
-        <strong>{statusReadFailed ? "状态待核实" : status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "检测中" : "未连接桌面端"}</strong>
-        <small>约每 2 秒更新</small>
+    {platform==="zhidao"&&<div className={"sf-live-progress-summary sf-has-zhs"+(detailMode?" sf-detail-simulation-only":"")} aria-label="当前内容与播放位置">
+      <div className="sf-live-state sf-zhs-now-playing">
+        <div className="sf-zhs-now-heading">
+          <span>正在观看 / 处理</span>
+          <span className={"sf-zhs-now-state"+(status?.state==="running"&&!statusReadFailed&&ownsStatus?" active":"")}>
+            {statusReadFailed?"状态待核实":!ownsStatus&&status?.state==="running"?"其他课程运行中":
+              status?.state==="running"?(status.zhs_stale?"采样待同步":"运行中"):
+              status?.state==="exited"?"本次已结束":status?.state==="stopped"?"已停止":"未启动"}
+          </span>
+        </div>
+        <strong className="sf-zhs-now-title" title={zhsContent?.resource_name??undefined}>
+          {zhsContent?.resource_name??(status?.state==="running"&&ownsStatus
+            ?"等待识别当前内容":status?.state==="exited"?"本次任务已结束":"当前没有正在播放的内容")}
+        </strong>
+        <div className="sf-zhs-now-meta">
+          <span>{status?.zhs_stale&&zhsContext?"上次识别 · ":""}{zhsKindLabel}</span>
+          {zhsContent?.resource_index!=null&&zhsContent.resource_total!=null&&
+            <span>资源 {zhsContent.resource_index} / {zhsContent.resource_total}</span>}
+        </div>
+        <div className="sf-zhs-now-progress-row">
+          <span>{zhsKind==="ppt"||zhsKind==="article"?"当前内容处理状态":"本次视频播放位置"}</span>
+          <strong>{zhsSegment!=null?zhsSegment.toFixed(1)+"%":
+            status?.state==="running"&&ownsStatus?"待同步":"—"}</strong>
+        </div>
+        <div className={"sf-verified-track sf-zhs-progress-track"+(zhsSegment==null&&status?.state==="running"&&ownsStatus&&!statusReadFailed?" is-indeterminate":"")}
+          role="progressbar" aria-label={zhsKind==="article"||zhsKind==="ppt"?"当前内容处理进度":"当前视频片段位置"} aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={zhsSegment??undefined}
+          aria-valuetext={zhsSegment!=null?zhsSegment.toFixed(1)+"%":
+            "当前尚无可确认的播放百分比"}>
+          <span style={{width:zhsSegment!=null?zhsSegment+"%":"0%"}}/>
+        </div>
+        <small className="sf-zhs-now-footnote">
+          {zhsSegment!=null?"本地播放位置 · 切换视频后重新计数":
+            status?.state==="running"&&ownsStatus
+              ?status.zhs_stale?"运行中 · 最近采样已过期":"正在等待播放进度":
+              "本次暂无可展示的播放位置"}
+        </small>
+        <details className="sf-zhs-diagnostics">
+          <summary>采样与核验详情</summary>
+          <div>
+            <small>任务状态：{statusReadFailed?"状态待核实":status?labels[status.state]:"待确认"} · 约每 2 秒查询</small>
+            <small>当前视频片段位置不是课程进度，不代表观看倍速或服务器已确认的学习进度。</small>
+            {status?.zhs_stale&&ownsStatus&&<small role="status">本地进度输出已过期；仅保留上次识别的资源信息，未沿用旧进度值。</small>}
+            {status?.state==="exited"&&ownsStatus&&liveZhs&&<small>任务已结束 · 显示结束前最后一次真实采样</small>}
+            <small>实际课程完成情况请以服务器只读核验为准；片段进度为非服务器确认进度。</small>
+          </div>
+        </details>
         {status?.state==="exited"&&ownsStatus&&!statusReadFailed&&<div className="sf-task-context sf-zhs-exit-diagnostic" role="status" aria-live="polite">
           <strong>{legacyExitMessage(status)}（退出码：{status.exit_code??"未知"}）</strong>
           {status.exit_code!==0&&<small>{zhsDiagnosticMessage(status)}</small>}
           {status.exit_code===0&&!status.zhs_progress&&<small>本次未采集到播放进度，是否完成请以服务器只读核验为准。</small>}
-        </div>}
-        {platform==="zhidao"&&<div className="sf-zhs-local" aria-label="ZHS 原版资源及视频片段状态">
-          <div className="sf-zhs-local-heading">
-            <span>正在处理 · {zhsKindLabel}</span>
-            <strong>{status?.state==="running" ? "运行中":status?.state==="exited"?"已结束":"未运行"}</strong>
-          </div>
-          <strong className="sf-ykt-video-name" title={liveZhs?.resource_name??undefined}>
-            {liveZhs?.resource_name??"原版尚未提供当前资源名称"}
-          </strong>
-          {liveZhs?.resource_index!=null&&liveZhs.resource_total!=null&&
-            <small>知识点内第 {liveZhs.resource_index}/{liveZhs.resource_total} 项资源 · 此序号不是已完成数量</small>}
-          <div className="sf-zhs-local-heading">
-            <span>当前视频片段位置（不是课程进度）</span>
-            <strong>{zhsSegment!=null?zhsSegment.toFixed(1)+"%":"—"}</strong>
-          </div>
-          {zhsSegment!=null
-            ? <div className="sf-verified-track" role="progressbar" aria-label="当前视频片段位置"
-                aria-valuemin={0} aria-valuemax={100} aria-valuenow={zhsSegment}>
-                <span style={{width:zhsSegment+"%"}}/>
-              </div>
-            : <small>{status?.state==="running"
-                ? status.course_id===selection
-                  ? status.zhs_stale ? "本地进度输出已过期" : "当前不是已识别的视频片段，或原版尚未输出数字"
-                  : "请选择正在运行的课程"
-                : liveZhs ? "上次运行的最终采样" : "未获取到进度记录"}</small>}
-          {status?.state==="running"&&status.course_id===selection&&status.zhs_stale&&
-            <small role="status">任务进程仍在运行，但最近的本地采样已过期。</small>}
-          {status?.state === "exited" && liveZhs &&
-            <small>任务已结束 · 显示结束前最后一次真实采样</small>}
-          <small>切换视频会重新从 0% 计数；片段数字不代表观看倍速或服务器学习进度。</small>
-          <small>仅原版本地输出，非服务器确认进度</small>
         </div>}
       </div>
     </div>}
