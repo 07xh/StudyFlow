@@ -19,6 +19,11 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/page==="platform-zhidao"&&renderPlatformDetail\("zhidao"\)/);
  assert.match(app,/page==="platform-yuketang"&&renderPlatformDetail\("yuketang"\)/);
  assert.match(app,/renderPlatformLogin\(platform\)/);
+ const settings=app.slice(app.indexOf('const renderPlatformSettings='),app.indexOf('const renderPlatformDetail='));
+ const landing=app.slice(app.indexOf('const renderPlatformDetail='),app.indexOf('async function configureFromPanel'));
+ assert.match(settings,/<PlatformCard/);
+ assert.doesNotMatch(landing,/<PlatformCard|<YuketangContentPanel|<RuntimeTaskList/);
+ assert.match(landing,/renderCourses\(platform\)/);
  assert.match(app,/platformLoginExpanded/);
  assert.match(app,/Record<Platform,boolean>/);
  assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
