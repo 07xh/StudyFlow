@@ -29,6 +29,9 @@ function component(request){
   Panel.verify=mod.exports.verifyYuketangCourse;
   Panel.verifyPlayed=mod.exports.verifyYuketangPlayedVideo;
   Panel.reset=mod.exports.resetYuketangVerification;
+  Panel.summary=mod.exports.getYuketangVideoSummary;
+  Panel.subscribeOverview=mod.exports.subscribeYuketangVerification;
+  Panel.overviewRevision=mod.exports.getYuketangVerificationRevision;
   return Panel;
 }
 const course={platform:"yuketang",course_id:"123",title:"课程"};
@@ -366,4 +369,32 @@ test("changed account/scope invalidates both the snapshot and late server respon
   }));});
   assert.doesNotMatch(JSON.stringify(view.toJSON()),/旧章节/);
   act(()=>view.unmount());
+});
+
+test("Rain Classroom overview reuses the real verification snapshot and receives targeted updates",async()=>{
+  const calls=[];
+  const Panel=component(async req=>{
+    calls.push({offset:req.offset,limit:req.limit});
+    if(req.limit===1)return page([video("b","章节",100)],1,2,null);
+    return page([video("a","章节",100),video("b","章节",50)],0,2,null);
+  });
+  let changes=0;
+  const unsubscribe=Panel.subscribeOverview(()=>{changes++;});
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const first=Panel.summary("123");
+  assert.equal(first.complete,true);
+  assert.equal(first.verified,2);
+  assert.equal(first.completed,1);
+  assert.equal(calls.length,1);
+  const revision=Panel.overviewRevision();
+  await act(async()=>{view.unmount();});
+  await act(async()=>{assert.equal(await Panel.verifyPlayed("123","视频b",
+    {desktop:true,connected:true,scopeDirty:false},true),true);});
+  assert.equal(Panel.summary("123").completed,2);
+  assert.equal(calls.length,2,"single-video verification must not rescan the course");
+  assert.deepEqual(calls[1],{offset:1,limit:1});
+  assert.ok(Panel.overviewRevision()>revision);
+  assert.ok(changes>=3,"first scan and targeted follow-up notify the platform overview");
+  unsubscribe();
 });
