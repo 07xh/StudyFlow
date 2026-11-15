@@ -23,6 +23,7 @@ export function useRuntimeTasks(desktop:boolean){
    const result=results[index];
    if(result.status!=='fulfilled')continue;
    const state=result.value;
+   if(!('run_id' in state)||!('exit_code' in state))continue;
    if(state.state!=='exited'||state.exit_code!==0||!state.run_id)continue;
    const platform=index===1?'zhidao':'yuketang';
    if(readTaskRecovery().some(r=>r.platform===platform&&r.runId===state.run_id))
