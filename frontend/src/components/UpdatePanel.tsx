@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from "react";
 import {getVersion} from "@tauri-apps/api/app";
 import {invoke} from "@tauri-apps/api/core";
 import {Download,FolderOpen,RefreshCw} from "lucide-react";
-import {request,type AvailableUpdate,type UpdateSettings} from "../bridge";
+import {friendlyUpdateError,request,type AvailableUpdate,type UpdateSettings} from "../bridge";
 
 export function UpdatePanel({desktop,visible,onDownloaded}:{
   desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;
@@ -46,7 +46,7 @@ export function UpdatePanel({desktop,visible,onDownloaded}:{
         if(!active)return;
         setCurrent(version);setSettings(preference);setLoaded(true);
         await check(version,preference);
-      }).catch(()=>{if(active)setMessage("更新检查未完成，请检查网络后重试。");})
+      }).catch(error=>{if(active)setMessage(friendlyUpdateError(error));})
       .finally(()=>{if(active)setBusy(false);});
     return ()=>{active=false;};
   },[desktop]);
@@ -63,7 +63,7 @@ export function UpdatePanel({desktop,visible,onDownloaded}:{
   async function perform(action:()=>Promise<void>){
     setBusy(true);
     try{await action();}
-    catch{setMessage("更新操作未完成，请检查网络、发布文件和校验信息后重试。");}
+    catch(error){setMessage(friendlyUpdateError(error));}
     finally{setBusy(false);}
   }
 
