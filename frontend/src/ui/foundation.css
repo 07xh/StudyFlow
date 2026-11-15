@@ -1986,3 +1986,70 @@
   .sf-shell .sf-course-playback-heading h2{font-size:17px}
   .sf-shell .sf-course-top-actions .secondary{font-size:11px}
 }
+
+
+/* Rain Classroom chapter progress: reuse Zhidao lesson cards and compact hierarchy. */
+.sf-shell .sf-ykt-course-chapters{display:block;padding:17px 18px}
+.sf-shell .sf-ykt-course-chapters .sf-zd-detail-summary{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.sf-shell .sf-ykt-course-chapters .sf-ykt-videos{
+  display:grid;gap:10px;grid-column:auto;margin-top:12px;padding-top:0;border-top:0;
+}
+.sf-shell .sf-ykt-progress-toolbar{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:10px;margin-top:14px;
+}
+.sf-shell .sf-ykt-progress-filters{
+  display:flex;flex-wrap:wrap;align-items:center;gap:3px;min-width:0;
+  padding:3px;border:1px solid var(--line);border-radius:11px;
+  background:rgba(255,255,255,.025);
+}
+.sf-shell .sf-ykt-progress-filters button{
+  display:inline-flex;align-items:center;gap:7px;min-height:32px;
+  padding:6px 10px;border:0;border-radius:8px;
+  background:transparent;color:var(--muted);font-size:11px;cursor:pointer;
+}
+.sf-shell .sf-ykt-progress-filters button.active{
+  background:var(--soft-accent);color:var(--accent-text);font-weight:700;
+}
+.sf-shell .sf-ykt-progress-filters button:hover:not(.active){
+  color:var(--text);background:rgba(127,127,127,.08);
+}
+.sf-shell .sf-ykt-progress-filters button span{font-variant-numeric:tabular-nums}
+.sf-shell .sf-ykt-expand-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.sf-shell .sf-ykt-expand-actions .secondary{min-height:32px;padding:6px 9px}
+.sf-shell .sf-ykt-course-chapters .sf-ykt-chapter-group{
+  min-width:0;padding-top:8px;border-top:1px solid var(--line);
+}
+.sf-shell .sf-ykt-chapter-toggle{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+  min-height:40px;width:100%;padding:8px 10px;
+  border:0;border-radius:9px;background:transparent;color:var(--text);
+  text-align:left;cursor:pointer;
+}
+.sf-shell .sf-ykt-chapter-toggle:hover{background:var(--soft-accent)}
+.sf-shell .sf-ykt-chapter-toggle:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+.sf-shell .sf-ykt-chapter-name{
+  display:inline-flex;align-items:center;gap:9px;min-width:0;
+  font-size:12px;line-height:1.45;
+}
+.sf-shell .sf-ykt-chapter-name svg{flex:none;color:var(--accent-text)}
+.sf-shell .sf-ykt-chapter-name strong{min-width:0;overflow-wrap:anywhere}
+.sf-shell .sf-ykt-chapter-stats{
+  font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-ykt-course-chapters .sf-ykt-chapter-group .sf-zd-detail-list{
+  margin-top:7px;
+}
+.sf-shell .sf-ykt-page-actions{margin-top:13px}
+.sf-shell .sf-ykt-course-chapters .sf-technical-note{margin-top:14px}
+@media(max-width:650px){
+  .sf-shell .sf-ykt-course-chapters .sf-zd-detail-summary{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .sf-shell .sf-ykt-chapter-toggle{align-items:flex-start;flex-direction:column}
+  .sf-shell .sf-ykt-progress-toolbar{align-items:flex-start}
+}
