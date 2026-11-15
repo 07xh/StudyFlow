@@ -4,13 +4,16 @@ const fs=require("node:fs");
 const path=require("node:path");
 const source=p=>fs.readFileSync(path.join(__dirname,"..","src",p),"utf8");
 
-test("Zhidao progress uses read-only bridge operations and keeps timed verification opt-in",()=>{
+test("Zhidao progress uses read-only bridge operations and defaults to live course verification",()=>{
  const panel=source("components/ZhidaoProgressPanel.tsx");
  const bridge=source("bridge.ts");
  assert.match(panel,/zhidao\.progress\.sync/);
  assert.match(panel,/zhidao\.progress\.verify/);
  assert.match(panel,/120000/);
- assert.match(panel,/useState\(false\)/);
+ assert.match(panel,/useState\(detailMode\)/);
+ assert.match(panel,/lastAutomaticCheck/);
+ assert.match(panel,/window\.addEventListener\?\.\("focus",check\)/);
+ assert.match(panel,/服务器进度暂未更新/);
  assert.match(bridge,/course_key: string/);
 });
 
