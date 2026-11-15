@@ -13,7 +13,7 @@ function setup(overrides={},bridge={}){
   'legacyPlayback.ts':{getLegacyStatus:async()=>running,legacyError:String,legacyExitMessage:()=>'',originalYktDefaults:{},...overrides},
   // Isolate task-state assertions from settings child while preserving a loaded default.
   'components/ZhsTaskSettingsPanel.tsx':{ZhsTaskSettingsPanel:({onReady})=>{
-    React.useEffect(()=>{onReady?.({speed:1.5,limit_minutes:0,learn_optional:false});},[onReady]);
+    React.useEffect(()=>{onReady?.({speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,max_videos:0,stop_on_error:false,scope_mode:"all",selected_ids:[]});},[onReady]);
     return null;
   }}
  }).LegacyPlaybackPanel;

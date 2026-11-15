@@ -10,8 +10,8 @@ type Item={id:number;name:string;group:string;completed:boolean};
 function itemId(detail:ZhidaoCourseDetail,item:ZhidaoCourseDetail["items"][number]){
   return detail.course_type==="ai"?item.knowledge_id:item.video_id;
 }
-function safeItems(detail:ZhidaoCourseDetail|null):Item[]{
-  if(!detail?.verified||detail.stale)return [];
+function safeItems(detail:ZhidaoCourseDetail|null,courseId:string):Item[]{
+  if(!detail?.verified||detail.stale||detail.course_key!==courseId)return [];
   return detail.items.flatMap(item=>{
     const id=itemId(detail,item);
     if(typeof id!=="number"||!Number.isSafeInteger(id)||id<=0)return [];
@@ -32,10 +32,11 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
   const [scopeMode,setScopeMode]=useState<ScopeMode>("all");
   const [selectedIds,setSelectedIds]=useState<number[]>([]);
   const revision=useRef(0);
+  const detailRevision=useRef(0);
   const readyRef=useRef(onReady);
   readyRef.current=onReady;
   const scopeKey="studyflow.zhs.task.scope."+courseId;
-  const items=useMemo(()=>safeItems(detail),[detail]);
+  const items=useMemo(()=>safeItems(detail,courseId),[detail,courseId]);
   const idsAvailable=useMemo(()=>new Set(items.map(item=>item.id)),[items]);
   const dirty=saved!==null&&JSON.stringify(options)!==JSON.stringify(saved);
   const valid=validateZhsStoredOptions(options);
@@ -75,13 +76,15 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
   },[scopeKey,courseId]);
   const fetchDetail=useCallback(async()=>{
     if(!desktop||!courseId)return;
-    const key=courseId;
+    const key=courseId,seq=++detailRevision.current;
     try{
       const value=await request<ZhidaoCourseDetail>({operation:"zhidao.course.detail",course_key:key});
-      if(value.course_key===key)setDetail(value);
-    }catch(error){setMessage(friendlyBridgeError(error));}
+      if(seq===detailRevision.current&&value.course_key===key)setDetail(value);
+    }catch(error){
+      if(seq===detailRevision.current)setMessage(friendlyBridgeError(error));
+    }
   },[desktop,courseId]);
-  useEffect(()=>{void fetchDetail();},[fetchDetail]);
+  useEffect(()=>{void fetchDetail();return ()=>{detailRevision.current++;};},[fetchDetail]);
 
   function persistScope(mode:ScopeMode,ids:number[]){
     setScopeMode(mode);setSelectedIds(ids);
