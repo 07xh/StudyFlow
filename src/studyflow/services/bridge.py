@@ -162,12 +162,12 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "COURSE_ROUTE_UNAVAILABLE"}
     if operation == "zhidao.zhs.settings.get":
         try:
-            return {"id": request_id, "ok": True, "data": read_zhs_settings()}
+            return {"id": request_id, "ok": True, "data": read_zhs_settings(request.get("course_key"))}
         except Exception:
             return {"id": request_id, "ok": False, "error": "ZHS_SETTINGS_UNAVAILABLE"}
     if operation == "zhidao.zhs.settings.save":
         try:
-            return {"id": request_id, "ok": True, "data": save_zhs_settings(request.get("settings"))}
+            return {"id": request_id, "ok": True, "data": save_zhs_settings(request.get("settings"), request.get("course_key"))}
         except ValueError:
             return {"id": request_id, "ok": False, "error": "INVALID_ZHS_SETTINGS"}
         except Exception:

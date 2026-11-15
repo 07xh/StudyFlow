@@ -15,7 +15,7 @@
 | AI 选学资源 | 官方 `--learn-optional` | 仅 AI |
 | 心跳发送频率/并发 | ZHS 0.1.5 无独立公开可调入口 | 本次不提供无效设置 |
 
-配置保存在 `%LOCALAPPDATA%/StudyFlow/zhidao/zhs-task-settings.json`；旧三字段配置按原值迁移，扩展字段取默认值。课程范围偏好按课程 ID 保存到学序 UI 本地存储，不含 Cookie。
+每门课的配置独立保存在 `%LOCALAPPDATA%/StudyFlow/zhidao/zhs-course-settings/<课程哈希>.json`；未设置时继承全局 `%LOCALAPPDATA%/StudyFlow/zhidao/zhs-task-settings.json`。旧三字段配置按原值迁移。课程范围偏好按课程 ID 保存到学序 UI 本地存储，不含 Cookie。
 
 任务目标来自现有只读服务器核验快照的真实 `videoId`、`knowledgeId`；运行前在原版的最新课程上下文中验证 ID。一旦旧范围不能对应新的课程结构，拒绝任务，不降级为全课程操作。
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from pathlib import Path
 import tempfile
 
@@ -49,13 +50,18 @@ def validate_settings(value: object) -> dict:
             "max_videos": maximum, "stop_on_error": stop}
 
 
-def _path() -> Path:
+def _path(course_key: str | None = None) -> Path:
     root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
-    return root / "StudyFlow" / "zhidao" / "zhs-task-settings.json"
+    folder = root / "StudyFlow" / "zhidao"
+    if course_key is None:
+        return folder / "zhs-task-settings.json"
+    if not isinstance(course_key, str) or re.fullmatch(r"[a-f0-9]{64}", course_key) is None:
+        raise ValueError("INVALID_COURSE")
+    return folder / "zhs-course-settings" / (course_key + ".json")
 
 
-def read_settings() -> dict:
-    path = _path()
+def read_settings(course_key: str | None = None) -> dict:
+    path = _path(course_key)
     if path.is_symlink():
         raise OSError("ZHS_SETTINGS_UNAVAILABLE")
     try:
@@ -67,12 +73,12 @@ def read_settings() -> dict:
             raw = {**DEFAULTS, **raw}
         return validate_settings(raw)
     except FileNotFoundError:
-        return dict(DEFAULTS)
+        return read_settings() if course_key is not None else dict(DEFAULTS)
 
 
-def save_settings(value: object) -> dict:
+def save_settings(value: object, course_key: str | None = None) -> dict:
     settings = validate_settings(value)
-    path = _path()
+    path = _path(course_key)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
         raise OSError("ZHS_SETTINGS_UNAVAILABLE")

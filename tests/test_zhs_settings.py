@@ -60,3 +60,16 @@ def test_scope_contract_rejects_unknown_and_duplicate_ids():
     ):
         with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
             zhs_settings.validate_run_settings(altered)
+
+
+
+def test_course_options_are_independent_and_reuse_global_fallback(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    first, second = "a" * 64, "b" * 64
+    assert zhs_settings.read_settings(first) == zhs_settings.DEFAULTS
+    course_setting = {**zhs_settings.DEFAULTS, "max_videos": 3, "stop_on_error": True}
+    zhs_settings.save_settings(course_setting, first)
+    assert zhs_settings.read_settings(first) == course_setting
+    assert zhs_settings.read_settings(second) == zhs_settings.DEFAULTS
+    with pytest.raises(ValueError, match="INVALID_COURSE"):
+        zhs_settings.save_settings(course_setting, "../bad")

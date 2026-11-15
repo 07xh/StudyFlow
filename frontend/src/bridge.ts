@@ -20,8 +20,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.clear"}
   | {id: string; version: 1; operation: "yuketang.settings.get"}
   | {id: string; version: 1; operation: "yuketang.settings.save"; settings: OriginalYktOptions}
-  | {id: string; version: 1; operation: "zhidao.zhs.settings.get"}
-  | {id: string; version: 1; operation: "zhidao.zhs.settings.save"; settings: ZhsStoredOptions}
+  | {id: string; version: 1; operation: "zhidao.zhs.settings.get"; course_key?:string}
+  | {id: string; version: 1; operation: "zhidao.zhs.settings.save"; course_key?:string; settings: ZhsStoredOptions}
   | {id: string; version: 1; operation: "zhidao.cookie.import"; content: string; mode: "file" | "text"}
   | {id: string; version: 1; operation: "yuketang.progress"; run_id: string}
   | {id: string; version: 1; operation: "zhidao.progress.sync"}

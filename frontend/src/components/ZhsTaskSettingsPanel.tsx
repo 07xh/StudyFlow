@@ -25,6 +25,7 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
 }){
   const [options,setOptions]=useState<ZhsStoredOptions>({...originalZhsDefaults});
   const [saved,setSaved]=useState<ZhsStoredOptions|null>(null);
+  const [loadedFor,setLoadedFor]=useState("");
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [opened,setOpened]=useState(false);
@@ -42,26 +43,26 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
   const valid=validateZhsStoredOptions(options);
 
   const ready=useMemo<OriginalZhsOptions|null>(()=>{
-    if(!saved||busy||dirty||!valid||!courseId)return null;
+    if(!saved||busy||dirty||!valid||!courseId||loadedFor!==courseId)return null;
     if(scopeMode==="selected" && (!items.length||!selectedIds.every(id=>idsAvailable.has(id))))return null;
     const result:OriginalZhsOptions={...saved,scope_mode:scopeMode,
       selected_ids:scopeMode==="selected"?selectedIds:[]};
     return validateZhsOptions(result)?result:null;
-  },[saved,busy,dirty,valid,courseId,scopeMode,selectedIds,items,idsAvailable]);
+  },[saved,busy,dirty,valid,courseId,loadedFor,scopeMode,selectedIds,items,idsAvailable]);
   useEffect(()=>{readyRef.current?.(ready);},[ready]);
 
   const load=useCallback(async()=>{
     if(!desktop)return;
     const current=++revision.current;
-    setBusy(true);setMessage("");
+    setBusy(true);setMessage("");setLoadedFor("");
     try{
-      const value=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.get"});
+      const value=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.get",course_key:courseId||undefined});
       if(!validateZhsStoredOptions(value))throw new Error("INVALID_ZHS_SETTINGS");
-      if(current===revision.current){setOptions(value);setSaved(value);}
+      if(current===revision.current){setOptions(value);setSaved(value);setLoadedFor(courseId);}
     }catch(error){
-      if(current===revision.current){setSaved(null);setMessage(friendlyBridgeError(error));}
+      if(current===revision.current){setSaved(null);setLoadedFor("");setMessage(friendlyBridgeError(error));}
     }finally{if(current===revision.current)setBusy(false);}
-  },[desktop]);
+  },[desktop,courseId]);
   useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
   useEffect(()=>{
     setDetail(null);setScopeMode("all");setSelectedIds([]);
@@ -97,9 +98,9 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
     if(!desktop||busy||!valid||!dirty)return;
     setBusy(true);setMessage("");
     try{
-      const result=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.save",settings:options});
+      const result=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.save",course_key:courseId||undefined,settings:options});
       if(!validateZhsStoredOptions(result))throw new Error("INVALID_ZHS_SETTINGS");
-      setOptions(result);setSaved(result);setMessage("ZHS 参数已保存，下次启动任务时生效。");
+      setOptions(result);setSaved(result);setLoadedFor(courseId);setMessage("当前课程 ZHS 参数已保存，下次启动任务时生效。");
       onEvent?.("保存 ZHS 参数","success","学序本机设置已保存");
     }catch(error){setMessage(friendlyBridgeError(error));onEvent?.("保存 ZHS 参数","warning","保存失败");}
     finally{setBusy(false);}
@@ -157,6 +158,15 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
             <div className="legacy-options">
               {groups.map(([group,children])=><details key={group} className="sf-ykt-advanced-options">
                 <summary>{group} · {children.length} 项</summary>
+                <div className="actions"><button className="secondary" type="button" disabled={!desktop||busy}
+                  onClick={()=>{
+                    const groupIds=children.filter(item=>!item.completed).map(item=>item.id);
+                    const all=groupIds.every(id=>selectedIds.includes(id));
+                    const next=all?selectedIds.filter(id=>!groupIds.includes(id)):
+                      [...new Set([...selectedIds,...groupIds])];
+                    if(next.length<=256)persistScope("selected",next);
+                    else setMessage("选择数量不得超过 256 项。");
+                  }}>切换本组未完成项目</button></div>
                 <div className="legacy-flags">{children.map(item=><label key={item.id}>
                   <input type="checkbox" checked={selectedIds.includes(item.id)} disabled={!desktop||busy}
                     onChange={e=>{
