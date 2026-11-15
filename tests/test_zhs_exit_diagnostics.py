@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import json
 import sys
+from enum import Enum
 from types import ModuleType
+
+import pytest
 
 from studyflow.services import legacy_playback as legacy
 
@@ -105,3 +108,63 @@ def test_zhs_course_url_failure_gets_distinct_exit_stage_without_raw_error(monke
     assert data["code"] == "ZHS_COURSE_URL_FAILED"
     assert "SECRET" not in json.dumps(data)
     assert upstream._dispatch_play_url is dispatcher
+
+
+@pytest.mark.parametrize(
+    ("restore_success", "server_state", "expected"),
+    [
+        (False, "OK", "ZHS_COOKIE_RESTORE_FAILED"),
+        (True, "EXPIRED", "ZHS_SESSION_EXPIRED"),
+        (True, "UNAVAILABLE", "ZHS_SESSION_UNAVAILABLE"),
+    ],
+)
+def test_zhs_upstream_preflight_stage_observer_preserves_original_behavior(
+    monkeypatch, tmp_path, restore_success, server_state, expected
+):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    _fake_cli(monkeypatch, None)
+    upstream = sys.modules["zhs.__main__"]
+    bootstrap = ModuleType("zhs.cli.bootstrap")
+
+    class SessionStatus(Enum):
+        OK = 0
+        EXPIRED = 1
+        UNAVAILABLE = 2
+
+    calls = []
+
+    def restore(*args, **kwargs):
+        calls.append("restore")
+        return restore_success
+
+    def verify(*args, **kwargs):
+        calls.append("verify")
+        return SessionStatus[server_state]
+
+    bootstrap.try_restore_cookies = restore
+    bootstrap.verify_session = verify
+    monkeypatch.setitem(sys.modules, "zhs.cli.bootstrap", bootstrap)
+
+    def load_config(*args, **kwargs):
+        if not bootstrap.try_restore_cookies(None, None):
+            return None
+        if bootstrap.verify_session(None) is not SessionStatus.OK:
+            return None
+        return object()
+
+    def cli(*, args, standalone_mode):
+        assert standalone_mode is False
+        assert upstream._load_config_and_session(False, False, None) is None
+        raise SystemExit(1)
+
+    upstream._load_config_and_session = load_config
+    upstream.app = cli
+    token = "3" * 32
+    assert legacy._run_bundled_zhs_args(["play", "-c", "20:30", "--type", "ai"], token) == 1
+    data = json.loads((tmp_path / "StudyFlow" / f"zhs-diagnostic-{token}.json").read_text())
+    assert data["code"] == expected
+    assert set(data) == {"v", "code", "token", "at"}
+    assert bootstrap.try_restore_cookies is restore
+    assert bootstrap.verify_session is verify
+    assert upstream._load_config_and_session is load_config
+    assert calls == (["restore"] if not restore_success else ["restore", "verify"])

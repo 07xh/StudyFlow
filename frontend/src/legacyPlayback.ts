@@ -199,7 +199,10 @@ export function zhsDiagnosticMessage(status: LegacyTaskStatus): string {
     case "LOCAL_FILE_MISSING": return "原版需要的本机文件未找到，请检查完整安装与本机数据。";
     case "FILE_PERMISSION_DENIED": return "原版访问本机文件被拒绝，请检查文件权限或安全软件。";
     case "INTERACTIVE_INPUT_REQUIRED": return "原版要求交互输入，无终端后台任务无法继续。";
-    case "ZHS_SESSION_PREFLIGHT_FAILED": return "ZHS 原版在会话预检阶段退出：可能未能恢复登录信息、会话校验未通过，或验证接口暂时不可用。课程进度能读取不代表该预检通过。";
+    case "ZHS_SESSION_PREFLIGHT_FAILED": return "ZHS 会话预检未通过，请重新检查当前账号的登录状态。";
+    case "ZHS_COOKIE_RESTORE_FAILED": return "ZHS 无法恢复本机登录凭证。请在学序完成知到扫码登录；检查用户目录下的 .zhs 配置与凭证是否可读取，无需先清除 Cookie。";
+    case "ZHS_SESSION_EXPIRED": return "知到服务器判定当前 ZHS 会话已过期，请在学序重新扫码登录后再试。";
+    case "ZHS_SESSION_UNAVAILABLE": return "知到服务器暂时无法完成会话核验，请检查网络或平台状态后重试；无需先删除登录数据。";
     case "ZHS_COURSE_URL_FAILED": return "ZHS 原版在课程链接处理阶段退出：请检查课程入口及课程类型是否与当前平台匹配。";
     case "UPSTREAM_NONZERO_EXIT": return "原版命令退出码非零，尚未识别出失败阶段；不能据此判断课程已开始播放。";
     case "EXECUTOR_EXCEPTION": return "原版执行器发生未分类异常，未记录敏感异常内容。";

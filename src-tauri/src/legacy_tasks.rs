@@ -161,7 +161,9 @@ fn parse_zhs_diagnostic(bytes: &[u8], token: &str, now: f64) -> Option<String> {
         | "NETWORK_ERROR" | "LOCAL_FILE_MISSING" | "FILE_PERMISSION_DENIED"
         | "INTERACTIVE_INPUT_REQUIRED" | "UPSTREAM_NONZERO_EXIT"
         | "EXECUTOR_EXCEPTION" | "WORKER_ENTRY_EXCEPTION"
-        | "ZHS_SESSION_PREFLIGHT_FAILED" | "ZHS_COURSE_URL_FAILED") {
+        | "ZHS_SESSION_PREFLIGHT_FAILED" | "ZHS_COURSE_URL_FAILED"
+        | "ZHS_COOKIE_RESTORE_FAILED" | "ZHS_SESSION_EXPIRED"
+        | "ZHS_SESSION_UNAVAILABLE") {
         return None;
     }
     Some(code.to_owned())
@@ -534,7 +536,8 @@ mod tests {
         }).to_string();
         assert!(parse_zhs_diagnostic(leaked.as_bytes(), &nonce, now).is_none());
         assert!(parse_zhs_diagnostic(accepted.as_bytes(), &nonce, now + 121.0).is_none());
-        for stage in ["ZHS_SESSION_PREFLIGHT_FAILED", "ZHS_COURSE_URL_FAILED"] {
+        for stage in ["ZHS_SESSION_PREFLIGHT_FAILED", "ZHS_COURSE_URL_FAILED",
+                      "ZHS_COOKIE_RESTORE_FAILED", "ZHS_SESSION_EXPIRED", "ZHS_SESSION_UNAVAILABLE"] {
             let payload = serde_json::json!({
                 "v": 1, "token": nonce, "code": stage, "at": now
             }).to_string();
