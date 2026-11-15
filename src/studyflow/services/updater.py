@@ -87,6 +87,65 @@ def release_info(current_version: str, channel: str = "stable", timeout: int = 1
     return None
 
 
+
+def release_notes(current_version: str, previous_version: str | None = None,
+                  history: bool = False, timeout: int = 10) -> list[dict]:
+    """Read real published release notes, never an unverified future changelog.
+
+    Startup returns the installed version (or published versions after the
+    previously seen version); history shows up to 12 recent published versions.
+    """
+    if (not isinstance(current_version, str) or len(current_version) > 80
+            or not VERSION_PATTERN.fullmatch(current_version)):
+        raise ValueError("Invalid release version")
+    if (previous_version is not None and
+            (not isinstance(previous_version, str) or len(previous_version) > 80
+             or not VERSION_PATTERN.fullmatch(previous_version))):
+        raise ValueError("Invalid previous release version")
+    if not isinstance(history, bool):
+        raise ValueError("Invalid release history mode")
+    req = Request(API + "?per_page=30",
+                  headers={"Accept": "application/vnd.github+json", "User-Agent": "StudyFlow-Updater"})
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            data = json.load(response)
+    except HTTPError as exc:
+        if exc.code == 404:
+            return []
+        code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_NETWORK_FAILED"
+        raise UpdateError(code, "GitHub changelog lookup failed") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise UpdateError("UPDATE_NETWORK_FAILED", "GitHub changelog lookup failed") from exc
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid changelog metadata") from exc
+    if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+        raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid changelog metadata")
+    entries = []
+    for release in data:
+        if release.get("draft"):
+            continue
+        tag = release.get("tag_name")
+        if not isinstance(tag, str) or len(tag) > 80 or not VERSION_PATTERN.fullmatch(tag):
+            continue
+        if is_newer(tag, current_version):
+            continue  # Do not claim changes from a version that is not installed.
+        if previous_version is not None and not is_newer(tag, previous_version):
+            continue
+        if previous_version is None and not history and is_newer(current_version, tag):
+            continue  # First migration: only the matching installed release.
+        title = release.get("name")
+        notes = release.get("body")
+        published = release.get("published_at")
+        entries.append({
+            "version": tag,
+            "title": title[:160] if isinstance(title, str) else "",
+            "notes": notes[:16000] if isinstance(notes, str) else "",
+            "published_at": published[:48] if isinstance(published, str) else "",
+        })
+        if len(entries) >= (12 if history else 15):
+            break
+    return entries
+
 def verified_download(url: str, sha256: str, destination: Path, timeout: int = 60) -> Path:
     """Download to a temporary file, verify digest, then atomically publish the file.
 

@@ -212,6 +212,11 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
+        "updates.changelog" if request.get("current_version")
+            .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 80)
+            && request.get("previous_version").map_or(true, |v| v.as_str()
+                .is_some_and(|s| !s.is_empty() && s.len() <= 80))
+            && request.get("history").is_some_and(|v| v.is_boolean()) => Ok(()),
         "updates.check" | "updates.download" if request.get("current_version")
             .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 80)
             && (operation != "updates.download" || request.get("release_version")
