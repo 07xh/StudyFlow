@@ -6,6 +6,16 @@ const ts=require("typescript");
 const React=require("react");
 const {create,act}=require("react-test-renderer");
 
+function sharedViews(){
+  const source=fs.readFileSync(path.join(__dirname,"../src/ui/CourseRecordViews.tsx"),"utf8");
+  const code=ts.transpileModule(source,{fileName:"CourseRecordViews.tsx",compilerOptions:{
+    module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020
+  }}).outputText;
+  const mod={exports:{}};
+  new Function("module","exports","require",code)(mod,mod.exports,require);
+  return mod.exports;
+}
+
 function component(request){
   const source=fs.readFileSync(path.join(__dirname,"../src/components/YuketangCourseDetailPanel.tsx"),"utf8");
   const code=ts.transpileModule(source,{fileName:"YuketangCourseDetailPanel.tsx",compilerOptions:{
@@ -13,7 +23,8 @@ function component(request){
   }}).outputText;
   const mod={exports:{}};
   new Function("module","exports","require",code)(mod,mod.exports,name=>
-    name==="../bridge"?{request,friendlyBridgeError:()=> "读取失败"}:require(name));
+    name==="../bridge"?{request,friendlyBridgeError:()=> "读取失败"}:
+    name==="../ui/CourseRecordViews"?sharedViews():require(name));
   return mod.exports.YuketangCourseDetailPanel;
 }
 const course={platform:"yuketang",course_id:"123",title:"课程"};
@@ -195,5 +206,32 @@ test("Rain Classroom filters only fetched verified states and supports chapter e
   const expand=view.root.findAllByType("button").find(button=>button.props.children==="展开全部");
   await act(async()=>{expand.props.onClick();});
   assert.match(JSON.stringify(view.toJSON()),/视频done/);
+  act(()=>view.unmount());
+});
+
+test("Rain Classroom shares search and chapter controls with Zhidao",async()=>{
+  const Panel=component(async()=>page([
+    video("a","章节A",80),video("b","章节B",100),
+  ]));
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const findButton=label=>view.root.findAllByType("button")
+    .find(button=>button.props["aria-label"]===label);
+  await act(async()=>{findButton("搜索学习记录").props.onClick();});
+  const input=view.root.findByType("input");
+  await act(async()=>{input.props.onChange({target:{value:"视频b"}});});
+  let out=JSON.stringify(view.toJSON());
+  assert.doesNotMatch(out,/视频a/);
+  const folded=view.root.findAllByType("button")
+    .find(button=>button.props["aria-expanded"]===false);
+  await act(async()=>{folded.props.onClick();});
+  out=JSON.stringify(view.toJSON());
+  assert.match(out,/视频b/);
+  await act(async()=>{input.props.onChange({target:{value:""}});});
+  const select=view.root.findByType("select");
+  await act(async()=>{select.props.onChange({target:{value:"章节A"}});});
+  out=JSON.stringify(view.toJSON());
+  assert.match(out,/章节A/);
+  assert.doesNotMatch(out,/视频b/);
   act(()=>view.unmount());
 });
