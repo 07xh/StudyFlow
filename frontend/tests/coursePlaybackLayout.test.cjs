@@ -12,7 +12,7 @@ test("course detail opens on playback controls without a fold gate",()=>{
   assert.doesNotMatch(part,/id=\{scope\+"runtime"\}/,"running player must not be hidden behind a fold");
   assert.match(part,/view="player" detailMode/,"Rain Classroom platform options should not repeat in the course player");
   assert.match(part,/title="章节与视频" defaultExpanded=\{true\}/);
-  assert.match(part,/title="操作记录与诊断" defaultExpanded=\{false\}/);
+  assert.match(part,/<SettingsDialog open=\{courseLogsOpen\}/);
 });
 
 test("platform-wide Rain Classroom executor is not presented as a selected-course player",()=>{
@@ -20,13 +20,13 @@ test("platform-wide Rain Classroom executor is not presented as a selected-cours
   const part=app.slice(app.indexOf("const renderCourseWorkspace="),app.indexOf("const activeSelectedCourse="));
   assert.match(part,/雨课堂原版目前按已保存的课堂范围运行批量任务/);
   assert.match(part,/并非只针对/);
-  assert.match(part,/setPlatformSettingsOpen\(course\.platform\)/);
+  assert.match(part,/openPlatformSettings\(course\.platform,"parameters"\)/);
 });
 
 test("platform management toolbar is hidden only while viewing a selected course",()=>{
   const app=read("App.tsx");
   const css=read("ui/foundation.css");
-  assert.match(app,/\(!selected\|\|platformSettingsOpen===platform\)&&<div className="sf-platform-toolbar actions"/);
+  assert.match(app,/!selected&&<div className="sf-platform-toolbar actions"/);
   assert.match(css,/\.sf-shell \.sf-course-playback-stage\{/);
   assert.match(css,/\.sf-shell \.sf-course-playback-stage \.legacy-playback-panel\{/);
 });

@@ -23,7 +23,8 @@ test('classroom scope saves in its own section without resending credentials or 
   'components/StudyFlowConsentGate.tsx':{StudyFlowConsentGate:props=>{React.useEffect(()=>props.onAccepted(),[]);return null;}},
   'components/UpdatePanel.tsx':{UpdatePanel:Null},
   'components/ZhidaoPlayerMonitor.tsx':{ZhidaoPlayerMonitor:Null},
-  'components/YuketangTaskArea.tsx':{YuketangTaskArea:Null}
+  'components/YuketangTaskArea.tsx':{YuketangTaskArea:Null},
+  'ui/SettingsDialog.tsx':{SettingsDialog:({open,children})=>open?children:null}
  }).default;
  try{
   await act(async()=>{view=create(React.createElement(App));});
@@ -33,6 +34,9 @@ test('classroom scope saves in its own section without resending credentials or 
   const settingsAction=view.root.findAllByType('button').find(n=>words(n)==='参数设置');
   assert.ok(settingsAction,'Platform settings must remain directly accessible');
   act(()=>settingsAction.props.onClick());
+  const advanced=view.root.findAllByType('button').find(n=>words(n)==='高级管理');
+  assert.ok(advanced);
+  act(()=>advanced.props.onClick());
   assert.equal(view.root.findAllByType('input').find(n=>n.props.value==='11').props.type,'text');
   act(()=>view.root.findAllByType('input').find(n=>n.props.value==='11').props.onChange({target:{value:'33'}}));
   const button=label=>view.root.findAllByType('button').find(n=>words(n)===label);
