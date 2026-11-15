@@ -5,7 +5,7 @@ import {friendlyBridgeError,request,type ZhidaoDiagnostic,type ZhidaoDocument} f
 import {ConfirmDialog} from "../ui/ConfirmDialog";
 
 type Action="session"|"cache"|"web"|"none";
-type Props={desktop:boolean;dark:boolean;onDataChanged?:()=>void};
+type Props={desktop:boolean;dark:boolean;onDataChanged?:()=>void;view?:"account"|"data"|"about"};
 const details={
   session:{
     title:"退出知到登录？",
@@ -28,7 +28,7 @@ const docs=[{id:"terms" as const,label:"使用条款与第三方声明",icon:Fil
   {id:"license" as const,label:"GNU GPL v3 开源许可",icon:BookOpen},
   {id:"source" as const,label:"原版源码与来源",icon:Database}];
 
-export function ZhidaoAccountTools({desktop,dark,onDataChanged}:Props){
+export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:Props){
   const [action,setAction]=useState<Action>("none");
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
@@ -91,42 +91,26 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged}:Props){
   const selected=action==="none"?null:details[action];
   return <>
     <section className="settings-card sf-zhidao-account-tools">
-      <div className="section-head"><h3><KeyRound size={17}/> 知到账号与本地数据</h3></div>
-      <div className="sf-zd-account-actions">
-        <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void diagnose()}>
-          <ShieldCheck size={15}/>连接诊断
-        </button>
-        <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void openFolder()}>
-          <FolderOpen size={15}/>打开数据目录
-        </button>
-        <button className="secondary" type="button" disabled={!desktop||busy}
-          onClick={()=>void invoke("zhidao_open_official_site")}>
-          <ExternalLink size={15}/>打开知到官网
-        </button>
-        <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>setAction("session")}>
-          <KeyRound size={15}/>退出登录
-        </button>
-        <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>setAction("cache")}>
-          <Trash2 size={15}/>清理课程缓存
-        </button>
-        <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>setAction("web")}>
-          <Database size={15}/>清除网页登录数据
-        </button>
-      </div>
-      <div className="sf-zd-legal-actions">
-        {docs.map(item=><button key={item.id} type="button" className="text-button"
-          disabled={!desktop||documentBusy} onClick={()=>void openDocument(item.id)}>
-          <item.icon size={14}/>{item.label}
-        </button>)}
-      </div>
-      {diagnostic&&<div className="sf-zd-diagnostic">
+      {view!=="account"&&<div className="section-head"><h3>{view==="about"?"关于与开源说明":"知到本地数据"}</h3></div>}
+      {view==="account"&&<div className="sf-zd-account-actions">
+        <button className="secondary" disabled={!desktop||busy} onClick={()=>void diagnose()}>连接诊断</button>
+        <button className="secondary" disabled={!desktop||busy} onClick={()=>void invoke("zhidao_open_official_site")}>打开知到官网</button>
+        <button className="secondary sf-destructive-action" disabled={!desktop||busy} onClick={()=>setAction("session")}>退出知到登录</button>
+      </div>}
+      {view==="data"&&<div className="sf-zd-account-actions">
+        <button className="secondary" disabled={!desktop||busy} onClick={()=>void openFolder()}>打开数据目录</button>
+        <button className="secondary sf-destructive-action" disabled={!desktop||busy} onClick={()=>setAction("cache")}>清理课程缓存</button>
+        <button className="secondary sf-destructive-action" disabled={!desktop||busy} onClick={()=>setAction("web")}>清除官方网页登录数据</button>
+      </div>}
+      {view==="about"&&<div className="sf-zd-legal-actions">{docs.map(item=><button key={item.id} className="text-button" disabled={!desktop||documentBusy} onClick={()=>void openDocument(item.id)}><item.icon size={14}/>{item.label}</button>)}</div>}
+      {view==="account"&&diagnostic&&<div className="sf-zd-diagnostic">
         <strong>最近一次连接诊断</strong>
         {diagnostic.lines.length>0
           ?<ul>{diagnostic.lines.map((line,index)=><li key={index}>{line}</li>)}</ul>
           :<small>诊断没有返回可展示的服务器状态信息。</small>}
       </div>}
       {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
-      <p className="sf-zd-progress-note">登录凭据、课程缓存和官方 WebView2 网页会话分开管理。所有清理操作只处理对应的明确文件或目录，不执行整目录删除。</p>
+      {view==="data"&&<p className="sf-zd-progress-note">课程缓存与官方网页会话分别清理，不影响官方服务器记录。</p>}
     </section>
     {selected&&<ConfirmDialog open={true} dark={dark} danger busy={busy}
       title={selected.title} description={selected.description} warning={selected.warning}

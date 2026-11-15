@@ -4,6 +4,7 @@ import type {OriginalYktOptions} from "./legacyPlayback";
 
 export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
+export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
 export type BridgeRequest =
   | {id: string; version: 1; operation: "updates.settings.get"}
   | {id: string; version: 1; operation: "updates.settings.save"; settings: UpdateSettings}
@@ -14,6 +15,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
+  | {id: string; version: 1; operation: "yuketang.scope.get"}
+  | {id: string; version: 1; operation: "yuketang.scope.save"; scope: {classroom_id:string;university_id:string;sign?:string}}
   | {id: string; version: 1; operation: "yuketang.clear"}
   | {id: string; version: 1; operation: "yuketang.settings.get"}
   | {id: string; version: 1; operation: "yuketang.settings.save"; settings: OriginalYktOptions}

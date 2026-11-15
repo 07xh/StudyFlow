@@ -1,7 +1,12 @@
-import {useCallback,useEffect,useMemo,useRef,useState,type ReactNode} from "react";
+import {cleanContext,courseEvents,executionEvents,storedActivity,type ActivityEntry,type EventContext,type EventResult} from "./activity";
+import {useRuntimeTasks} from "./runtimeTasks";
+import {RuntimeTaskList} from "./components/RuntimeTaskList";
+import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
+import {YuketangContentPanel} from "./components/YuketangContentPanel";
+import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
-  History,ListChecks,RefreshCw,Search,ChevronDown
+  History,ListChecks,RefreshCw,Search
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
@@ -20,10 +25,11 @@ import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
   fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,request
 } from "./bridge";
-import type {Config,Video,ZhidaoPlayerSettings} from "./bridge";
+import type {Config,Video,ZhidaoPlayerSettings,YuketangScope} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
-import {presentCourse,platformNames,selectedSessionCourse} from "./presentation";
+import {CollapsibleSection} from "./ui/CollapsibleSection";
+import {presentCourse,courseMetric,platformNames,selectedSessionCourse} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo,platformRegistry} from "./ui/registry";
@@ -34,58 +40,24 @@ import {EmptyState} from "./ui/EmptyState";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
-type EventResult="success"|"warning"|"info";
-type ActivityEntry={id:string;at:string;platform:string;action:string;result:EventResult;detail:string};
 const ACTIVITY_KEY="studyflow.activity.v1";
+const PLATFORM_LOGIN_EXPANDED_KEY="studyflow.platform-login.expanded.v1";
+function readPlatformLoginExpanded():Record<Platform,boolean>{
+  try{
+    const saved=JSON.parse(window.localStorage.getItem(PLATFORM_LOGIN_EXPANDED_KEY)||"{}");
+    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true};
+  }catch{return {zhidao:false,yuketang:false};}
+}
 
 function readActivity():ActivityEntry[]{
   try{
     const value=JSON.parse(window.localStorage.getItem(ACTIVITY_KEY)||"[]");
-    if(!Array.isArray(value))return [];
-    return value.filter((item):item is ActivityEntry=>Boolean(item)&&
-      typeof item.id==="string"&&typeof item.at==="string"&&
-      typeof item.platform==="string"&&typeof item.action==="string"&&
-      (item.result==="success"||item.result==="warning"||item.result==="info")&&
-      typeof item.detail==="string").slice(0,100);
+    return storedActivity(value);
   }catch{return [];}
-}
-
-
-function WorkspaceSection({
-  storageKey,title,initiallyOpen=true,children
-}:{storageKey:string;title:string;initiallyOpen?:boolean;children:ReactNode}){
-  const [open,setOpen]=useState(()=>{
-    try{
-      const stored=window.localStorage.getItem(storageKey);
-      return stored===null?initiallyOpen:stored==="true";
-    }catch{return initiallyOpen;}
-  });
-  useEffect(()=>{
-    try{window.localStorage.setItem(storageKey,String(open));}catch{/* Keep session preference. */}
-  },[storageKey,open]);
-  return <section className={"sf-workspace-fold"+(open?" is-open":"")}>
-    <button type="button" className="sf-workspace-fold__toggle" aria-expanded={open}
-      onClick={()=>setOpen(previous=>!previous)}>
-      <strong>{title}</strong><ChevronDown size={16} aria-hidden="true"/>
-    </button>
-    {open&&<div className="sf-workspace-fold__body">{children}</div>}
-  </section>;
 }
 
 export default function App(){
   const [page,setPage]=useState<Page>("home");
-  const [lastPlatform,setLastPlatform]=useState<Platform|null>(()=>{
-    try{
-      const saved=window.localStorage.getItem("studyflow.last-platform");
-      return saved==="zhidao"||saved==="yuketang"?saved:null;
-    }catch{return null;}
-  });
-  useEffect(()=>{
-    try{
-      if(lastPlatform)window.localStorage.setItem("studyflow.last-platform",lastPlatform);
-      else window.localStorage.removeItem("studyflow.last-platform");
-    }catch{/* Preserve the current selection for this session. */}
-  },[lastPlatform]);
   const {dark,mode,setMode,toggleTheme}=useAppearance();
   const [compactCards,setCompactCards]=useState(()=>{
     try{return window.localStorage.getItem("studyflow.cards.compact")==="true";}
@@ -100,6 +72,12 @@ export default function App(){
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   const [notice,setNotice]=useState("");
+  const [scopeDirty,setScopeDirty]=useState(false);
+  const [hasYuketangSession,setHasYuketangSession]=useState(false);
+  const [hasYuketangSign,setHasYuketangSign]=useState(false);
+  const [signDirty,setSignDirty]=useState(false);
+  const configurationRevision=useRef(0);
+  const [courseModes,setCourseModes]=useState<Record<string,"official"|"zhs-original">>({});
   const [clearDialogOpen,setClearDialogOpen]=useState(false);
   const [qrOpen,setQrOpen]=useState(false);
   const [videos,setVideos]=useState<Video[]>([]);
@@ -108,10 +86,15 @@ export default function App(){
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
-  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>({zhidao:false,yuketang:false});
+  const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
+  useEffect(()=>{
+    try{window.localStorage.setItem(PLATFORM_LOGIN_EXPANDED_KEY,JSON.stringify(platformLoginExpanded));}
+    catch{/* Local visual preference only. */}
+  },[platformLoginExpanded]);
   const initialized=useRef(false);
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
+  const runtime=useRuntimeTasks(desktop&&consentAccepted);
   useEffect(()=>{
     if(!desktop)return;
     let live=true;
@@ -133,10 +116,10 @@ export default function App(){
     }
   }
 
-  const recordEvent=useCallback((platform:string,action:string,result:EventResult,detail:string)=>{
+  const recordEvent=useCallback((platform:string,action:string,result:EventResult,detail:string,context:EventContext={})=>{
     const item:ActivityEntry={
       id:Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7),
-      at:new Date().toISOString(),platform,action,result,detail
+      at:new Date().toISOString(),platform,action,result,detail,...cleanContext(context)
     };
     setActivity(previous=>{
       const next=[item,...previous].slice(0,100);
@@ -164,12 +147,10 @@ export default function App(){
     course.progress_percent!==null&&course.progress_percent>0&&course.progress_percent<100).length;
   const completedCount=verifiedCourses.filter(course=>
     course.progress_percent!==null&&course.progress_percent>=100).length;
-  const averageProgress=verifiedCourses.length
-    ?verifiedCourses.reduce((sum,course)=>sum+(course.progress_percent??0),0)/verifiedCourses.length
-    :null;
+
 
   const refresh=useCallback(async()=>{
-    if(!desktop){setNotice("浏览器仅提供界面预览；请使用 Windows 桌面版连接真实平台。");return;}
+    if(!desktop)return;
     setBusy("status");setNotice("");
     try{
       const statuses=await fetchStatuses();
@@ -192,6 +173,14 @@ export default function App(){
     if(!consentAccepted||initialized.current)return;
     initialized.current=true;
     void refresh();
+    if(desktop){
+      const revision=configurationRevision.current;
+      void request<YuketangScope>({operation:"yuketang.scope.get"}).then(scope=>{
+        if(revision!==configurationRevision.current||typeof scope.classroom_id!=="string"||typeof scope.university_id!=="string")return;
+        setConfig(previous=>({...previous,classroom_id:scope.classroom_id,university_id:scope.university_id}));
+        setHasYuketangSession(scope.has_session===true);setHasYuketangSign(scope.has_sign===true);
+      }).catch(()=>{});
+    }
   },[refresh,consentAccepted]);
 
   function updateVerifiedZhidaoCourse(course:Course) {
@@ -226,7 +215,8 @@ export default function App(){
     try{
       await request<{cleared:boolean}>({operation:"yuketang.clear"});
       invalidatePlatform("yuketang",true);
-      setConfig(emptyConfiguration);setClearDialogOpen(false);
+      configurationRevision.current++;
+      setConfig(emptyConfiguration);setScopeDirty(false);setSignDirty(false);setHasYuketangSession(false);setHasYuketangSign(false);setClearDialogOpen(false);
       await refresh();
       setNotice("已清除学序保存的雨课堂凭据；原版客户端不受影响。");
       recordEvent("雨课堂","退出并清除凭据","success","已清除学序凭据");
@@ -250,27 +240,37 @@ export default function App(){
   }
 
   function enterCourses(platform:Platform){
-    setLastPlatform(platform);
+
     setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
   }
 
   function goPlatform(platform:Platform,openLogin=false){
-    setLastPlatform(platform);
-    setSelectedCourse(null);
-    setPlatformLoginExpanded(previous=>({
-      ...previous,[platform]:openLogin||platforms[platform].status!=="connected"
-    }));
+
+    if(openLogin)setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
 
+  function updateConfiguration(field:keyof Config,value:string){
+    configurationRevision.current++;
+    setConfig(previous=>({...previous,[field]:value}));
+    if(field==="classroom_id"||field==="university_id"||field==="sign"){setVideos([]);setScopeDirty(true);}
+    if(field==="sign")setSignDirty(true);
+  }
+  function inspectCourse(course:Course){
+    setSelectedCourse(course);setCoursePlatform(course.platform);setPage("courses");
+  }
+  function courseMode(course:Course):"official"|"zhs-original"{
+    const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
+    return active?.runner==="official"?"official":active?.runner==="zhs"?"zhs-original":courseModes[course.course_id]??zhidaoPlaybackMode;
+  }
   function renderPlatformLogin(platform:Platform){
-    if(platform==="zhidao")return <ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
+    if(platform==="zhidao")return <><ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
       onOpenNative={()=>setQrOpen(true)}
-      onImported={()=>{invalidatePlatform("zhidao");recordEvent("知到","导入 Cookie","success","服务器已确认会话");void refresh();}}/>;
+      onImported={()=>{invalidatePlatform("zhidao");recordEvent("知到","导入 Cookie","success","服务器已确认会话");void refresh();}}/><ZhidaoAccountTools desktop={desktop} dark={dark} onDataChanged={()=>{invalidatePlatform("zhidao",true);void refresh();}}/></>;
     if(platform==="yuketang")return <YuketangLoginPanel config={config}
       desktop={desktop} busy={Boolean(busy)}
       connected={platforms.yuketang.status==="connected"} videos={videos}
-      onChange={(field,value)=>setConfig(previous=>({...previous,[field]:value}))}
+      onChange={updateConfiguration}
       onSubmit={()=>void configureFromPanel()} onClear={()=>setClearDialogOpen(true)}
       onShowVideos={()=>void showVideos()}/>;
     return null;
@@ -294,74 +294,93 @@ export default function App(){
     </div>
   </section>;
 
-
-  function renderZhidaoModeSwitch(){
-    return <div className="sf-course-mode-bar" aria-label="知到运行方式">
-      <strong>运行方式</strong>
-      <div className="sf-zd-mode-options">
-        <button type="button" aria-pressed={zhidaoPlaybackMode==="official"}
-          className={zhidaoPlaybackMode==="official"?"active":""}
-          onClick={()=>void changeZhidaoPlaybackMode("official")}>官方 WebView2</button>
-        <button type="button" aria-pressed={zhidaoPlaybackMode==="zhs-original"}
-          className={zhidaoPlaybackMode==="zhs-original"?"active":""}
-          onClick={()=>void changeZhidaoPlaybackMode("zhs-original")}>ZHS 原版</button>
-      </div>
-    </div>;
-  }
-
+  const renderZhidaoModeSwitch=(course?:Course)=>{
+    const mode=course?courseMode(course):zhidaoPlaybackMode;
+    const active=course&&runtime.tasks.some(task=>task.courseId===course.course_id&&task.platform==="zhidao"&&task.state==="running");
+    const choose=(next:"official"|"zhs-original")=>course?setCourseModes(previous=>({...previous,[course.course_id]:next})):void changeZhidaoPlaybackMode(next);
+    return <section className="sf-course-mode-bar" aria-label="知到运行方式">
+      <strong>{course?(active?"本次运行方式":"本次启动方式"):"平台默认运行方式"}</strong>
+      <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
+    </section>;
+  };
   const renderPlatformDetail=(platform:Platform)=>{
     const definition=platformInfo(platform);
     if(!definition)return null;
-    return <>
-      <section className="sf-platform-section sf-platform-detail">
-        <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop}
-          busy={Boolean(busy)} expanded={platformLoginExpanded[platform]}
-          onSync={()=>void sync(platform)}
-          onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}
-          onEnterCourses={()=>enterCourses(platform)}>
-          {renderPlatformLogin(platform)}
-        </PlatformCard>
-      </section>
-      {platform==="zhidao"&&renderZhidaoModeSwitch()}
-      <section className="sf-platform-task-section">
-        {platform==="zhidao"
-          ?zhidaoPlaybackMode==="official"
-            ?<ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
-              onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
-              onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-            :<LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
-              desktop={desktop} connected={platforms.zhidao.status==="connected"}
-              onCourseVerified={updateVerifiedZhidaoCourse}
-              onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-          :<YuketangTaskArea courses={platforms.yuketang.courses}
-            desktop={desktop} connected={platforms.yuketang.status==="connected"}
-            onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>}
-      </section>
-      {platform==="zhidao"&&<>
-        <ZhidaoProgressPanel courses={platforms.zhidao.courses}
-          desktop={desktop} connected={platforms.zhidao.status==="connected"}
-          onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
-          onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-        <ZhidaoAccountTools desktop={desktop} dark={dark}
-          onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
-        <ZhidaoActivityPanel events={activity.filter(item=>item.platform==="知到")}/>
+    return <div className="sf-platform-workspace">
+      <div className="sf-platform-toolbar actions">
+        <button className={platforms[platform].status==="connected"?"primary":"secondary"} onClick={()=>enterCourses(platform)}>打开课程列表</button>
+        <button className="secondary" disabled={!desktop||!!busy||platforms[platform].status!=="connected"} onClick={()=>void sync(platform)}>同步课程列表</button>
+      </div>
+      <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop} busy={Boolean(busy)} variant="account"
+        expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform)} onEnterCourses={()=>enterCourses(platform)}
+        onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
+        {renderPlatformLogin(platform)}
+      </PlatformCard>
+      {platform==="zhidao"?<>
+        <CollapsibleSection id="platform:zhidao:tasks" title="平台运行概览">
+          <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} platform="zhidao" desktop={desktop} compact onRefresh={runtime.refresh} onInspect={inspectCourse}/>
+          <button className="text-button" onClick={()=>setPage("tasks")}>管理全部运行任务</button>
+        </CollapsibleSection>
+        <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
+          {renderZhidaoModeSwitch()}
+          <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+        </CollapsibleSection>
+        <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
+          <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
+            onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+            onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+        </CollapsibleSection>
+        <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
+          <ZhidaoAccountTools desktop={desktop} dark={dark} view="data" onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
+        </CollapsibleSection>
+      </>:<>
+        <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容">
+          <YuketangContentPanel config={config} videos={videos} desktop={desktop} busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"} dirty={scopeDirty} hasSession={hasYuketangSession} hasSign={hasYuketangSign} onChange={updateConfiguration} onSave={()=>void saveYuketangScope()} onShowVideos={()=>void showVideos()}/>
+        </CollapsibleSection>
+        <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务与默认参数">
+          <p className={scopeDirty?"sf-task-context":"sf-muted"}>启动和停止作用于雨课堂已保存的课堂范围，不限定为当前浏览的单门课程。{scopeDirty&&" 新编辑的课堂范围尚未保存。"}</p>
+          <YuketangTaskArea courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
+            onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
+        </CollapsibleSection>
       </>}
-    </>;
+    </div>;
   };
 
   async function configureFromPanel(){
+    if(!config.classroom_id.trim()||!config.university_id.trim()){
+      setNotice("请先在课堂范围与内容中填写课堂 ID 和学校 ID，再保存会话。");return;
+    }
     setBusy("configure");setNotice("");
     try{
       await request<{saved:boolean}>({operation:"yuketang.configure",configuration:config});
       invalidatePlatform("yuketang");
+      configurationRevision.current++;
+      setHasYuketangSession(true);setHasYuketangSign(Boolean(config.sign));setSignDirty(false);
       setConfig(previous=>({...previous,session_id:"",csrf_token:"",sign:""}));
       recordEvent("雨课堂","保存登录会话","success","凭据已写入 Windows 凭据管理器");
+      setScopeDirty(false);
       await refresh();
       setNotice("雨课堂会话已保存，请确认连接状态后同步课程。");
     }catch(error){
       const message=friendlyBridgeError(error);
       setNotice(message);recordEvent("雨课堂","保存登录会话","warning",message);
     }finally{setBusy("");}
+  }
+
+  async function saveYuketangScope(){
+    setBusy("scope");setNotice("");
+    try{
+      const saved=await request<YuketangScope>({operation:"yuketang.scope.save",scope:{
+        classroom_id:config.classroom_id,university_id:config.university_id,...(signDirty?{sign:config.sign}:{})
+      }});
+      configurationRevision.current++;
+      invalidatePlatform("yuketang",true);
+      setConfig(previous=>({...previous,classroom_id:saved.classroom_id,university_id:saved.university_id,sign:""}));
+      setHasYuketangSession(saved.has_session);setHasYuketangSign(saved.has_sign);setSignDirty(false);setScopeDirty(false);
+      recordEvent("雨课堂","保存课堂范围","success","已保存课堂范围并保留登录凭据");
+      await refresh();setNotice("课堂范围已保存，请同步当前课堂或读取章节视频。");
+    }catch(error){setNotice(friendlyBridgeError(error));}
+    finally{setBusy("");}
   }
 
   function invalidatePlatform(platform:Platform, resetStatus = false){
@@ -379,21 +398,15 @@ export default function App(){
     </article>
     <article className="sf-metric-card">
       <span className="sf-metric-icon play"><ListChecks size={21}/></span>
-      <div><small>学习中</small><strong>{learningCount}<em>门</em></strong>
+      <div><small>部分内容已完成</small><strong>{learningCount}<em>门</em></strong>
 </div>
     </article>
     <article className="sf-metric-card">
       <span className="sf-metric-icon done"><CheckCircle2 size={21}/></span>
-      <div><small>已完成</small><strong>{completedCount}<em>门</em></strong>
+      <div><small>内容全部完成</small><strong>{completedCount}<em>门</em></strong>
 </div>
     </article>
-    <article className="sf-metric-card">
-      <span className="sf-metric-icon progress"><CircleGauge size={21}/></span>
-      <div><small>总进度</small><strong>{averageProgress===null?"—":Math.round(averageProgress)+"%"}</strong>
-
-        {averageProgress!==null&&<div className="sf-total-progress"><span style={{width:averageProgress+"%"}}/></div>}
-      </div>
-    </article>
+    <article className="sf-metric-card"><span className="sf-metric-icon progress"><CircleGauge size={21}/></span><div><small>待核验课程</small><strong>{courses.length-verifiedCourses.length}<em>门</em></strong></div></article>
   </section>;
 
   const renderRecentCourses=()=> <section className="sf-recent-section">
@@ -418,10 +431,10 @@ export default function App(){
               <div className="sf-recent-title-line">
                 <span className={"sf-course-platform-tag "+course.platform}>{platformNames[course.platform]}</span>
                 <strong title={course.title}>{course.title}</strong>
-                {data.percent===100&&<span className="sf-completed-tag">已完成</span>}
+                {data.percent===100&&<span className="sf-completed-tag">内容全部完成</span>}
               </div>
               <div className="sf-recent-progress-label">
-                <span>{data.percent===null?"学习进度：暂无平台确认数据":"学习进度："+data.percent.toFixed(1)+"%"}</span>
+                <span>{data.percent===null?"暂无平台核验记录":courseMetric(course).label+"："+data.percent.toFixed(1)+"%"}</span>
                 {course.stale&&<span>数据可能已过期</span>}
               </div>
               {data.percent!==null&&<div className="sf-recent-track" role="progressbar"
@@ -429,7 +442,7 @@ export default function App(){
                 aria-valuenow={data.percent}><span style={{width:data.percent+"%"}}/></div>}
             </div>
             <button className="secondary sf-recent-detail" type="button"
-              onClick={()=>{setSelectedCourse(course);setLastPlatform(course.platform);setCoursePlatform(course.platform);setPage("courses");}}>
+              onClick={()=>{setSelectedCourse(course);setCoursePlatform(course.platform);setPage("courses");}}>
               课程详情
             </button>
           </article>;
@@ -437,67 +450,48 @@ export default function App(){
       </div>}
   </section>;
 
-
   const renderCourseWorkspace=(course:Course)=>{
-    const definition=platformInfo(course.platform);
-    const progress=presentCourse(course);
-    const verifiedAt=course.verified_at?new Date(course.verified_at).toLocaleString():"尚未核验";
-    const updateCourses=(list:Course[])=>setPlatforms(previous=>({
-      ...previous,[course.platform]:{...previous[course.platform],courses:list}
-    }));
-    const scope="studyflow.workspace."+course.platform+".";
+    const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{...previous[course.platform],courses:list}}));
+    const scope="course:"+course.platform+":"+course.course_id+":";
+    const mode=courseMode(course);
     return <section className="sf-course-workspace">
       <div className="sf-course-detail-topline">
-        <button className="secondary" type="button" onClick={()=>setSelectedCourse(null)}>
-          <ArrowLeft size={15}/>返回课程列表
-        </button>
+        <button className="secondary" onClick={()=>setSelectedCourse(null)}><ArrowLeft size={15}/>返回课程列表</button>
+        <button className="secondary" onClick={()=>setPage("tasks")}>查看运行任务</button>
       </div>
-      <div className="sf-course-identity">
-        <div>
-          <span className="eyebrow">{definition?.name??platformNames[course.platform]} / {course.course_type==="ai"?"智慧课程":course.course_type==="shared"?"共享课程":"课程"}</span>
-          <h2>{course.title}</h2>
-        </div>
-        <span className="sf-course-identity-evidence" title={progress.detail}>{progress.label} · {verifiedAt}</span>
-      </div>
-      {course.platform==="zhidao"&&renderZhidaoModeSwitch()}
-      <WorkspaceSection storageKey={scope+"task"} title="任务运行" initiallyOpen>
-        {course.platform==="zhidao"
-          ?zhidaoPlaybackMode==="official"
-            ?<ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} desktop={desktop}
-              courseId={course.course_id} detailMode onCoursesUpdated={updateCourses}
-              onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-            :<LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses}
-              desktop={desktop} connected={platforms.zhidao.status==="connected"}
-              courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse}
-              onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>
-          :<YuketangTaskArea courses={[course]} desktop={desktop}
-            connected={platforms.yuketang.status==="connected"} detailMode
-            onEvent={(action,result,detail)=>recordEvent("雨课堂",action,result,detail)}/>}
-      </WorkspaceSection>
-      <WorkspaceSection storageKey={scope+"chapters"} title="章节进度"
-        initiallyOpen={course.platform==="zhidao"}>
-        {course.platform==="zhidao"
-          ?<ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
-          :<div className="sf-course-chapter-note">
-            <p>当前接口尚未返回这门课程可核验的章节进度明细。</p>
-          </div>}
-      </WorkspaceSection>
-      {course.platform==="zhidao"&&
-        <WorkspaceSection storageKey={scope+"verified"} title="服务器进度核验" initiallyOpen={false}>
-          <ZhidaoProgressPanel courses={platforms.zhidao.courses}
-            desktop={desktop} connected={platforms.zhidao.status==="connected"}
-            onCoursesUpdated={updateCourses}
-            onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}
-            courseId={course.course_id} courseTitle={course.title} detailMode/>
-        </WorkspaceSection>}
-      <WorkspaceSection storageKey={scope+"logs"} title="运行日志" initiallyOpen={false}>
-        <ZhidaoActivityPanel embedded events={activity.filter(item=>
-          item.platform===(course.platform==="zhidao"?"知到":"雨课堂"))}/>
-      </WorkspaceSection>
+      {course.platform==="zhidao"?<>
+        {renderZhidaoModeSwitch(course)}
+        <CollapsibleSection id={scope+"runtime"} title="当前课程任务">
+          <div className="sf-runtime-mode" hidden={mode!=="official"}>
+            <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")} onCoursesUpdated={updateCourses}
+              onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+          </div>
+          <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
+            <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
+              onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+          </div>
+        </CollapsibleSection>
+        <CollapsibleSection id={scope+"chapters"} title="章节进度" defaultExpanded={false}><ZhidaoCourseDetailPanel course={course} desktop={desktop}/></CollapsibleSection>
+        <CollapsibleSection id={scope+"server"} title="当前课程进度核验" defaultExpanded={false}>
+          <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
+            onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+        </CollapsibleSection>
+      </>:<section className="sf-course-chapter-note">
+        <h3>课程内容与任务范围</h3><p>当前接口尚未提供可归属于这门课程的章节进度。雨课堂原版执行器按平台已配置范围批量运行。</p>
+        <button className="secondary" onClick={()=>goPlatform("yuketang")}>管理雨课堂课堂范围与批量任务</button>
+      </section>}
+      <CollapsibleSection id={scope+"logs"} title="当前课程操作记录" defaultExpanded={false}>
+        <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>
+        <button className="text-button" onClick={()=>setPage("logs")}>查看平台与历史未归属记录</button>
+      </CollapsibleSection>
     </section>;
   };
 
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
+  const workspaceCourse=page==="courses"?activeSelectedCourse:null;
+  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":workspaceCourse?.platform??(page==="courses"&&coursePlatform!=="all"?coursePlatform as Platform:null);
+  const activeMetric=workspaceCourse?courseMetric(workspaceCourse):null;
+  const activeCourseProgress=activeMetric?.percent??null;
 
   const renderCourses=()=> activeSelectedCourse
     ?renderCourseWorkspace(activeSelectedCourse)
@@ -522,39 +516,22 @@ export default function App(){
       </div>
       {filtered.length>0
         ?<div className="course-grid">{filtered.map(course=>
-          <CourseCard course={course} onInspect={item=>{setSelectedCourse(item);setLastPlatform(item.platform);}} key={course.platform+":"+course.course_id}/>)}</div>
+          <CourseCard course={course} onInspect={course=>{setSelectedCourse(course);}} key={course.platform+":"+course.course_id}/>)}</div>
         :<EmptyState icon={BookOpen} title={courses.length>0?"未找到匹配课程":"暂无真实课程数据"}
           description={courses.length>0?"可以更换搜索词或平台筛选。":"在平台卡片中完成登录并同步后，真实课程会显示在这里。"}
           action={courses.length===0?<button className="secondary" type="button" onClick={()=>setPage("platforms")}>前往平台登录</button>:undefined}/>}
     </section>;
 
-  const renderTasks=()=> <section className="sf-section">
-    <div className="section-head"><h3>学习任务</h3></div>
-    <div className="sf-task-grid sf-task-shortcuts">
-      {platformRegistry.map(definition=><article className="sf-task-shortcut" key={definition.id}>
-        <div className="sf-task-shortcut-head">
-          <span className={"platform-logo sf-provider-"+definition.color}>{definition.mark}</span>
-          <div><strong>{definition.name}</strong>
-            <small>{platforms[definition.id].status==="connected"?"已连接":"未连接"}</small>
-          </div>
-        </div>
-        <button type="button" className="secondary" onClick={()=>goPlatform(definition.id)}>
-          <Activity size={15}/>查看任务与参数<ChevronRight size={15}/>
-        </button>
-      </article>)}
-    </div>
+  const renderTasks=()=> <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} desktop={desktop} onRefresh={runtime.refresh} onInspect={inspectCourse}
+    onEvent={(action,result,detail,context)=>recordEvent(context?.runner==="yuketang"?"雨课堂":"知到",action,result,detail,context)}/>;
+  const renderRecords=()=> <section className="sf-section">
+    <div className="section-head"><h3>执行与核验记录</h3></div>
+    <p className="sf-muted">本机最近记录，进程结束不代表平台确认完成。</p>
+    {executionEvents(activity).length===0?<EmptyState icon={History} title="暂无执行或核验记录" description="实际启动、停止和核验后会在这里留下记录。"/>:<div className="sf-history-list">{executionEvents(activity).map(event=>{
+      const course=event.courseId?courses.find(course=>platformNames[course.platform]===event.platform&&course.course_id===event.courseId&&!course.stale):undefined;
+      return <article key={event.id}><time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time><div><strong>{event.action}</strong><span>{event.platform}{course?" · "+course.title:event.courseId?" · 历史课程":" · 平台记录"}</span><p>{event.detail}</p></div>{course&&<button className="secondary" onClick={()=>inspectCourse(course)}>查看课程</button>}</article>;
+    })}</div>}
   </section>;
-
-  const renderRecords=()=> activeSelectedCourse
-    ?renderCourseWorkspace(activeSelectedCourse)
-    :<section>
-      <div className="section-head"><h3>已核验学习记录</h3></div>
-      {verifiedCourses.length>0
-        ?<div className="course-grid">{verifiedCourses.map(course=>
-          <CourseCard course={course} onInspect={item=>{setSelectedCourse(item);setLastPlatform(item.platform);}} key={course.platform+":"+course.course_id}/>)}</div>
-        :<EmptyState icon={History} title="暂无已核验学习记录"
-          description="当前课程接口没有返回可验证的学习进度，不会用本地播放计数代替平台记录。"/>}
-    </section>;
 
   const renderLogs=()=> <section>
     <div className="section-head"><h3>本机操作记录</h3>
@@ -573,29 +550,20 @@ export default function App(){
       </article>)}</div>}
   </section>;
 
-  const contextPlatform:Platform|null=(
-    page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":
-    activeSelectedCourse?.platform??
-    (page==="courses"&&coursePlatform!=="all"?coursePlatform as Platform:lastPlatform)
-  );
-  const sidebarProgress=activeSelectedCourse?presentCourse(activeSelectedCourse):null;
   return <>
     <AppShell page={page} onNavigate={next=>{
       setPage(next);
-      if(next==="platform-zhidao")setLastPlatform("zhidao");
-      if(next==="platform-yuketang")setLastPlatform("yuketang");
     }}
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
       compact={compactCards}
-      sidebarPlatform={contextPlatform?{
-        name:platformNames[contextPlatform],connected:platforms[contextPlatform].status==="connected"
-      }:undefined}
-      sidebarCourse={activeSelectedCourse&&activeSelectedCourse.platform===contextPlatform?{
-        title:activeSelectedCourse.title,percent:sidebarProgress?.percent??null,
-        evidence:sidebarProgress?.label??"等待服务器核验"
-      }:undefined}
-      headerTitle={activeSelectedCourse&&(page==="courses"||page==="records")?platformNames[activeSelectedCourse.platform]+" / 课程详情":undefined}>
+      headerTitle={workspaceCourse?"课程详情":undefined}
+      currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
+      currentCourseTitle={workspaceCourse?.title} courseProgress={activeCourseProgress}
+      metricLabel={activeMetric?.label} courseEvidence={activeMetric?.evidenceLabel} courseVerifiedAt={activeMetric?.verifiedAt}
+      currentPlatformStatus={headerPlatform?platforms[headerPlatform].status:undefined}
+      courseOptions={headerPlatform?platforms[headerPlatform].courses.map(course=>({id:course.course_id,title:course.title})):[]}
+      onCourseSelect={id=>{const course=courses.find(course=>course.platform===headerPlatform&&course.course_id===id);if(course)inspectCourse(course);}}>
       {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
       {page==="courses"&&renderCourses()}
       {page==="tasks"&&renderTasks()}
@@ -616,13 +584,14 @@ export default function App(){
             <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
           </div>
         </section>
+        <ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>
       </>}
       <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice}/>
     </AppShell>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
-      onEvent={(action,result,detail)=>recordEvent("知到",action,result,detail)}/>}
+      onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setQrOpen(false);
         invalidatePlatform("zhidao");

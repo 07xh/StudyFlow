@@ -1,3 +1,4 @@
+import type {ConnectionStatus} from "../types";
 import {useEffect,useState,type ReactNode} from "react";
 import {
   Activity,BookOpen,ChevronDown,History,
@@ -11,9 +12,6 @@ import "./foundation.css";
 
 export type Page="home"|"courses"|"tasks"|"platforms"|"platform-zhidao"|
   "platform-yuketang"|"records"|"logs"|"settings";
-
-export type SidebarPlatform={name:string;connected:boolean};
-export type SidebarCourse={title:string;percent:number|null;evidence:string};
 const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"home",label:"首页",icon:LayoutDashboard},
   {id:"courses",label:"课程中心",icon:BookOpen},
@@ -42,12 +40,14 @@ interface Props {
   onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
   compact:boolean;children:ReactNode;
   headerTitle?:string;
-  sidebarPlatform?:SidebarPlatform;
-  sidebarCourse?:SidebarCourse;
+  currentPlatform?:string;
+  currentCourseTitle?:string;
+  courseProgress?:number|null;
+  courseOptions?:{id:string;title:string}[];onCourseSelect?:(id:string)=>void;
+  metricLabel?:string;courseEvidence?:string;courseVerifiedAt?:string|null;currentPlatformStatus?:ConnectionStatus;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,
-  sidebarPlatform,sidebarCourse
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -91,54 +91,44 @@ export function AppShell({
   </nav>;
 
   return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
-    <aside className="sf-floating-nav" aria-label="主导航">
-      <div className="sf-sidebar-context" aria-label="当前学习平台">
-        <span className="sf-sidebar-caption">当前学习平台</span>
-        <div className="sf-sidebar-platform">
-          <Layers3 size={18} aria-hidden="true"/>
-          <strong title={sidebarPlatform?.name??"未选择平台"}>{sidebarPlatform?.name??"未选择平台"}</strong>
+    <header className="sf-header sf-workspace-header">
+      <div className="sf-workspace-platform" aria-label="当前学习平台">
+        <span className="sf-workspace-platform-icon" aria-hidden="true"><Layers3 size={21}/></span>
+        <div className="sf-workspace-platform-copy">
+          <small>当前学习平台</small>
+          <strong>{currentPlatform??"全部平台"}</strong>
+          {currentPlatform&&<small className={currentPlatformStatus==="connected"?"sf-connection-confirmed":"sf-connection-pending"}>{currentPlatformStatus==="connected"?"已连接":currentPlatformStatus==="error"?"连接异常":currentPlatformStatus==="connecting"?"连接中":"未连接"}</small>}
         </div>
-        <span className={"sf-sidebar-platform-status"+(sidebarPlatform?.connected?" is-connected":"")}>
-          <span className="sf-status-dot" aria-hidden="true"/>
-          {!sidebarPlatform?"选择平台后显示状态":sidebarPlatform.connected?"已连接":"尚未连接"}
+      </div>
+      <div className="sf-workspace-progress" aria-label={currentCourseTitle?"当前课程进度":"页面上下文"}>
+        {currentCourseTitle?<>
+          <div className="sf-workspace-progress-head"><div className="sf-workspace-progress-course"><small>{metricLabel??"平台记录进度"}</small><strong title={currentCourseTitle}>{currentCourseTitle}</strong></div><strong className="sf-workspace-progress-value">{courseProgress==null?"—":courseProgress.toFixed(1)+"%"}</strong></div>
+          {courseProgress!=null&&<div className="sf-workspace-progress-track" role="progressbar" aria-label={metricLabel??"平台记录进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={courseProgress}><span style={{width:courseProgress+"%"}}/></div>}
+          <div className="sf-header-evidence"><span>{courseEvidence??"待核验"}</span><time>{courseVerifiedAt&&Number.isFinite(Date.parse(courseVerifiedAt))?new Date(courseVerifiedAt).toLocaleString():"暂无核验时间"}</time></div>
+        </>:<div className="sf-workspace-page-context">{page.startsWith("platform-")?<label className="sf-header-course-picker">选择课程<select value="" disabled={!courseOptions.length} onChange={event=>onCourseSelect?.(event.target.value)}><option value="">{courseOptions.length?"选择一门课程查看进度":"请先同步课程"}</option>{courseOptions.map(course=><option key={course.id} value={course.id}>{course.title}</option>)}</select></label>:<><strong>{titles[page]}</strong>{page==="courses"&&<small>选择课程后查看已核验进度</small>}</>}</div>}
+      </div>
+      <div className="sf-header-actions">
+        <span className="sf-mode">
+          {desktop?"Windows 桌面":"浏览器预览"}
         </span>
+        <button className="theme-button" type="button" title="检测平台连接"
+          aria-label="检测平台连接" disabled={!desktop} onClick={onRefresh}>
+          <RefreshCw size={17}/>
+        </button>
+        <button className="theme-button sf-settings-button" type="button"
+          title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
+          onClick={()=>onNavigate("settings")}><Settings size={17}/></button>
+        <button className="theme-button" type="button"
+          aria-label={dark?"切换浅色主题":"切换深色主题"}
+          onClick={onThemeToggle}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
       </div>
-      <div className="sf-sidebar-course" aria-label="当前课程总进度">
-        <span className="sf-sidebar-caption">当前课程 · 总进度</span>
-        <strong className="sf-sidebar-course-title" title={sidebarCourse?.title??"尚未选择课程"}>
-          {sidebarCourse?.title??"尚未选择课程"}
-        </strong>
-        <div className="sf-sidebar-percent">{sidebarCourse?.percent===null||!sidebarCourse?"—":sidebarCourse.percent.toFixed(1)+"%"}</div>
-        {sidebarCourse?.percent!==null&&sidebarCourse
-          ?<div className="sf-sidebar-track" role="progressbar" aria-label="课程服务器核验进度"
-            aria-valuemin={0} aria-valuemax={100} aria-valuenow={sidebarCourse.percent}>
-            <span style={{width:sidebarCourse.percent+"%"}}/>
-          </div>
-          :<div className="sf-sidebar-track is-empty" aria-hidden="true"/>}
-        <small className="sf-sidebar-evidence">{sidebarCourse?.evidence??"选择课程后显示已核验进度"}</small>
-      </div>
+    </header>
+    <aside className="sf-floating-nav" aria-label="主导航">
       <div className="sf-floating-nav__heading">功能菜单</div>
       {renderItems(workspaceNavigation)}
     </aside>
     <main className="main" id="main-content">
-      <header className="sf-header">
-        <div className="sf-page-heading"><h1>{headerTitle??titles[page]}</h1></div>
-        <div className="sf-header-actions">
-          <span className="sf-mode"><span className="sf-status-dot"/>
-            {desktop?"Windows 桌面":"浏览器预览"}
-          </span>
-          <button className="theme-button" type="button" title="刷新连接"
-            aria-label="刷新连接" disabled={!desktop} onClick={onRefresh}>
-            <RefreshCw size={17}/>
-          </button>
-          <button className="theme-button sf-settings-button" type="button"
-            title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
-            onClick={()=>onNavigate("settings")}><Settings size={17}/></button>
-          <button className="theme-button" type="button"
-            aria-label={dark?"切换浅色主题":"切换深色主题"}
-            onClick={onThemeToggle}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
-        </div>
-      </header>
+      <div className="sf-page-heading sf-sr-only"><h1>{headerTitle??titles[page]}</h1></div>
       <NoticeBanner message={notice} onDismiss={onDismissNotice}/>
       <PageSurface page={page}>{children}</PageSurface>
     </main>

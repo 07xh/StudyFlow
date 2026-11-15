@@ -81,9 +81,9 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
       })}
     </div>
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
-    <p className="sf-zd-progress-note">
+    <details className="sf-technical-note"><summary>数据口径</summary><p className="sf-zd-progress-note">
       {kind==="ai"?"知识点进度来自服务器记录；":"视频完成状态来自服务器记录；"}
       不把本机播放位置换算成服务端进度，也不提交学习记录。
-    </p>
+    </p></details>
   </section>;
 }

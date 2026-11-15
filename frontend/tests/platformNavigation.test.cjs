@@ -46,8 +46,8 @@ test("original settings and cookie import use the Python bridge instead of local
  assert.match(panel,/yuketang.settings.get/);
  assert.match(panel,/yuketang.settings.save/);
  assert.match(panel,/LegacyPlaybackPanel platform="yuketang"/);
- assert.match(panel,/localStorage\.setItem\("studyflow\.yuketang\.settings-open",String\(settingsOpen\)\)/);
- assert.doesNotMatch(panel,/localStorage\.setItem\([^\n]*(?:session_id|csrf_token|password|cookie|options)/i);
+ const stored=Array.from(panel.matchAll(/localStorage\.setItem\(([^;]+)\);/g),m=>m[1]);
+ assert.deepEqual(stored,['"studyflow.yuketang.settings-open",String(settingsOpen)']);
  assert.doesNotMatch(legacy,/localStorage/);
  assert.match(login,/zhidao.cookie.import/);
 });
@@ -85,15 +85,15 @@ test("LightC-style left rail is compact, permanent, and keeps settings in the he
  assert.match(shell,/<aside className="sf-floating-nav" aria-label="主导航">/);
  assert.match(shell,/sf-settings-button/);
  assert.match(shell,/setPlatformExpanded/);
- assert.match(css,/grid-template-columns:clamp\(166px,15vw,190px\) minmax\(0,1fr\)/);
- assert.match(css,/grid-template-columns:138px minmax\(0,1fr\)/);
+ assert.match(css,/grid-template-columns:clamp\(172px,16vw,202px\) minmax\(0,1fr\)/);
+ assert.match(css,/grid-template-columns:144px minmax\(0,1fr\)/);
  assert.match(css,/position:sticky/);
  assert.match(css,/\.sf-shell \.sf-floating-nav \.nav/);
  assert.doesNotMatch(shell,/PanelLeft|handleTriggerClick|onPointerEnter/);
  assert.doesNotMatch(css,/sf-floating-nav__trigger|sf-floating-nav__panel/);
 });
 
-test("course details render as one expanded workspace with distinct progress sources",()=>{
+test("course details use one foldable workspace and show total progress only in the header",()=>{
  const app=source("App.tsx");
  const lesson=source("components/ZhidaoCourseDetailPanel.tsx");
  const server=source("components/ZhidaoProgressPanel.tsx");
@@ -104,14 +104,11 @@ test("course details render as one expanded workspace with distinct progress sou
  const css=source("ui/foundation.css");
  assert.match(app,/renderCourseWorkspace/);
  assert.doesNotMatch(app,/sf-course-total-progress/);
- assert.match(app,/sf-course-identity/);
- assert.match(app,/sidebarCourse=\{activeSelectedCourse&&activeSelectedCourse\.platform===contextPlatform\?/);
- assert.match(app,/WorkspaceSection storageKey=\{scope\+"task"\}/);
- assert.match(app,/WorkspaceSection storageKey=\{scope\+"logs"\}/);
- assert.match(app,/headerTitle=\{activeSelectedCourse&&\(page==="courses"\|\|page==="records"\)\?platformNames/);
+ assert.match(app,/<CollapsibleSection id={scope\+"runtime"}/);
+ assert.match(app,/headerTitle=\{workspaceCourse\?"课程详情":undefined\}/);
+ assert.match(app,/courseProgress=\{activeCourseProgress\}/);
  assert.match(app,/activeSelectedCourse/);
- assert.match(app,/embedded events=/);
- assert.match(app,/zhidaoPlaybackMode==="official"/);
+ assert.match(app,/<ZhidaoActivityPanel embedded events=/);
  assert.match(app,/courseId=\{course\.course_id\}.*detailMode/s);
  assert.match(lesson,/zhidao\.course\.detail/);
  assert.match(lesson,/章节进度/);
@@ -120,15 +117,15 @@ test("course details render as one expanded workspace with distinct progress sou
  assert.match(server,/detailMode/);
  assert.match(simulation,/sf-detail-simulation-only/);
  assert.match(simulation,/courseId\?:string/);
- assert.match(player,/sf-zd-local-observations-expanded/);
+ assert.match(player,/sf-zd-local-observations/);
  assert.match(player,/detailMode/);
  assert.match(log,/expandedByDefault/);
- assert.match(yuketang,/open=\{detailMode\}/);
+ assert.doesNotMatch(yuketang,/open=\{detailMode\}/);
  assert.match(simulation,/sf-detail-live/);
  assert.match(css,/sf-ykt-live\.sf-detail-live \.sf-ykt-live-grid/);
  assert.match(css,/\.sf-course-workspace>section\{margin:0\}/);
- assert.match(css,/sf-workspace-fold/);
- assert.match(css,/sf-sidebar-course/);
+ assert.match(css,/\.sf-workspace-header/);
+ assert.match(css,/\.sf-fold-body\[hidden\]/);
  assert.match(css,/sf-zd-detail-list-expanded/);
 });
 

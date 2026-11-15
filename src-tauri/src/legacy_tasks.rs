@@ -253,7 +253,7 @@ pub fn legacy_start(
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|_| "LEGACY_LAUNCH_FAILED")?.as_micros();
         Some(format!("{}-{micros}", std::process::id()))
-    } else { None };
+    } else { Some(Uuid::new_v4().to_string()) };
     let monitor_token = if platform == "zhidao" {
         Some(Uuid::new_v4().simple().to_string())
     } else { None };
@@ -302,12 +302,14 @@ pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<
 }
 
 #[tauri::command]
-pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String) -> Result<LegacyStatus, String> {
+pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String, expected_run_id: Option<String>) -> Result<LegacyStatus, String> {
     if platform != "zhidao" && platform != "yuketang" {
         return Err("UNKNOWN_PLATFORM".into());
     }
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     if let Some(job) = guard.get_mut(&platform) {
+        crate::run_identity::verify_expected_run(expected_run_id.as_deref(), job.run_id.as_deref())
+            .map_err(|code| code.to_owned())?;
         if status_of(&platform, job)?.state == "running" {
             if let Some(mut child) = job.child.take() {
                 terminate_tree(&mut child);
@@ -317,7 +319,7 @@ pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String) -> Result<Le
         }
         return status_of(&platform, job);
     }
-    Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_stale: false})
+    Err("TASK_RUN_CHANGED".into())
 }
 
 #[cfg(test)]

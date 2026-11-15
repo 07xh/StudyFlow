@@ -39,6 +39,20 @@ jobs:
         run: npm run build
       - name: Check course evidence and IPC boundary
         run: npm test
+      - name: Install isolated browser smoke dependency
+        run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.62.1
+      - name: Prepare browser for layout checks
+        run: npx playwright install --with-deps chromium
+      - name: Verify hierarchy at desktop and minimum-window widths
+        run: node tests/browserHierarchy.cjs
+      - name: Upload empty-account UI captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: StudyFlow-UI-Hierarchy-Captures
+          path: frontend/test-artifacts/*.png
+          if-no-files-found: ignore
+          retention-days: 7
 
   windows-package:
     name: Windows NSIS + bundled Zhidao runtime

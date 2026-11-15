@@ -1,3 +1,4 @@
+mod run_identity;
 mod legacy_tasks;
 mod zhidao_player;
 
@@ -207,7 +208,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
-        | "studyflow.consent.status" | "studyflow.consent.accept" => Ok(()),
+        | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -235,6 +236,11 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && !b.is_empty() && b.len()<=20 && b.bytes().all(|ch| ch.is_ascii_digit()))
             }) => Ok(()),
         "yuketang.configure" if request.get("configuration").map_or(false, |x| x.is_object()) => Ok(()),
+        "yuketang.scope.save" if request.get("scope").and_then(|x| x.as_object()).is_some_and(|scope|
+            scope.keys().all(|key| matches!(key.as_str(), "classroom_id" | "university_id" | "sign"))
+            && ["classroom_id", "university_id"].iter().all(|key| scope.get(*key).and_then(|x| x.as_str())
+                .is_some_and(|id| !id.trim().is_empty() && id.trim().len()<=24 && id.trim().bytes().all(|ch| ch.is_ascii_digit())))
+            && scope.get("sign").map_or(true, |value| value.as_str().is_some_and(|sign| sign.len()<=2048))) => Ok(()),
         "yuketang.settings.get" => Ok(()),
         "yuketang.settings.save" if request.get("settings").map_or(false, |x| x.is_object()) => Ok(()),
         "zhidao.cookie.import"
@@ -480,5 +486,19 @@ mod ipc_validation_tests {
                     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"] {
             assert!(validate(&json!({"id":"c","version":1,"operation":"zhidao.progress.verify","course_key":key})).is_err());
         }
+    }
+
+    #[test]
+    fn classroom_scope_operations_cannot_replace_credentials() {
+        assert!(validate(&json!({"id":"scope","version":1,"operation":"yuketang.scope.get"})).is_ok());
+        let mut request=json!({"id":"scope","version":1,"operation":"yuketang.scope.save","scope":{"classroom_id":"11","university_id":"22"}});
+        assert!(validate(&request).is_ok());
+        request["scope"]["sign"]=json!("");
+        assert!(validate(&request).is_ok());
+        request["scope"]["session_id"]=json!("replacement");
+        assert!(validate(&request).is_err());
+        request["scope"].as_object_mut().unwrap().remove("session_id");
+        request["scope"]["classroom_id"]=json!("../invalid");
+        assert!(validate(&request).is_err());
     }
 }

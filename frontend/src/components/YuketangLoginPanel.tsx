@@ -5,9 +5,6 @@ import type {Config,Video} from "../bridge";
 const fields=[
   {id:"session_id",label:"Session ID",secret:true,required:true},
   {id:"csrf_token",label:"CSRF Token",secret:true,required:true},
-  {id:"classroom_id",label:"课堂 ID",secret:false,required:true},
-  {id:"university_id",label:"学校 ID",secret:false,required:true},
-  {id:"sign",label:"章节 Sign（可选）",secret:true,required:false},
 ] as const;
 
 type FieldId=keyof Config;
@@ -32,7 +29,7 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
     <div className="sf-login-panel-main">
       <div className="sf-login-panel-heading">
         <span className="sf-login-symbol"><KeyRound size={19}/></span>
-        <div><h4>雨课堂会话配置</h4>
+        <div><h4>会话凭据</h4>
           <p>凭据保存到 Windows 凭据管理器</p>
         </div>
         <span className={connected?"sf-login-state connected":"sf-login-state"}>
@@ -46,22 +43,16 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
             autoComplete="off" spellCheck={false} value={config[field.id]}
             onChange={event=>onChange(field.id,event.target.value)}/>
         </label>)}
+        {(!config.classroom_id||!config.university_id)&&<p className="sf-muted">先在 <a href="#sf-ykt-content">课堂范围与内容</a> 填写课堂 ID 和学校 ID，再保存会话。</p>}
         <div className="sf-login-actions">
           <button className="primary" type="submit" disabled={!desktop||busy}>
-            <ShieldCheck size={16}/>保存并验证
+            <ShieldCheck size={16}/>保存会话与课堂配置
           </button>
-          <button className="secondary" type="button" disabled={!desktop||busy||!connected}
-            onClick={onShowVideos}><BookOpen size={16}/>读取章节视频</button>
           <button className="secondary" type="button" disabled={!desktop||busy}
             onClick={onClear}><Trash2 size={16}/>清除学序凭据</button>
         </div>
       </form>
     </div>
-    {videos.length>0&&<div className="sf-ykt-videos">
-      <div className="sf-ykt-videos-title"><strong>章节与视频</strong><span>{videos.length} 条真实记录</span></div>
-      {videos.map((video,index)=><div className="sf-ykt-video-row" key={video.id+":"+index}>
-        <span>{video.chapter}</span><strong>{video.name}</strong><small>ID：{video.id}</small>
-      </div>)}
-    </div>}
+
   </div>;
 }

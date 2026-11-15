@@ -1,0 +1,56 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const ts=require('typescript');
+const React=require('react');
+const {create,act}=require('react-test-renderer');
+const compile=file=>ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020}}).outputText;
+function evaluate(code,resolve){const mod={exports:{}};new Function('module','exports','require',code)(mod,mod.exports,resolve);return mod.exports;}
+
+test('navigation preserves valid selection without leaking its heading to another platform, and invalidation clears it',async()=>{
+ const oldWindow=global.window;
+ const store=new Map();
+ global.window={localStorage:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)}};
+ const course={platform:'zhidao',course_id:'test-course',title:'test course',progress_percent:25,progress_evidence:'server_verified',verified_at:'2026-11-14T12:00:00Z',course_type:'shared'};
+ let shell,monitor,view;
+ const Null=()=>null;
+ const presentation=evaluate(compile('presentation.ts'),require);
+ const App=evaluate(compile('App.tsx'),name=>{
+  if(name==='./platforms')return {initialPlatforms:{zhidao:{platform:'zhidao',status:'connected',courses:[course]},yuketang:{platform:'yuketang',status:'not_connected',courses:[]}}};
+  if(name==='./presentation')return presentation;
+  if(name==='./activity')return require('./helpers/load.cjs')('activity.ts');
+  if(name==='./runtimeTasks')return require('./helpers/load.cjs')('runtimeTasks.ts');
+  if(name==='./bridge')return {isDesktop:()=>false,friendlyBridgeError:String,request:async()=>({})};
+  if(name==='./ui/registry')return {platformRegistry:[{id:'zhidao',name:'知到'},{id:'yuketang',name:'雨课堂'}],platformInfo:id=>({id,name:id==='zhidao'?'知到':'雨课堂'})};
+  if(name==='./ui/useAppearance')return {useAppearance:()=>({dark:false,mode:'light',setMode:()=>{},toggleTheme:()=>{}})};
+  if(name==='./ui/AppShell')return {AppShell:props=>{shell=props;return props.children;}};
+  if(name==='./ui/CourseCard')return {CourseCard:props=>React.createElement('button',{'data-select-course':true,onClick:()=>props.onInspect(props.course)})};
+  if(name==='./ui/CollapsibleSection')return {CollapsibleSection:props=>props.children};
+  if(name==='./components/ZhidaoPlayerMonitor')return {ZhidaoPlayerMonitor:props=>{monitor=props;return null;}};
+  if(name==='lucide-react')return new Proxy({},{get:()=>Null});
+  if(name.startsWith('./'))return new Proxy({default:Null},{get:(target,key)=>target[key]??Null});
+  return require(name);
+ }).default;
+ try{
+  await act(async()=>{view=create(React.createElement(App));});
+  act(()=>shell.onNavigate('courses'));
+  act(()=>view.root.findByProps({'data-select-course':true}).props.onClick());
+  assert.equal(shell.currentCourseTitle,'test course');
+  assert.equal(shell.courseProgress,25);
+  act(()=>shell.onNavigate('settings'));
+  assert.equal(shell.headerTitle,undefined);
+  assert.equal(shell.currentCourseTitle,undefined);
+  act(()=>shell.onNavigate('platform-yuketang'));
+  assert.equal(shell.currentPlatform,'雨课堂');
+  assert.equal(shell.currentCourseTitle,undefined);
+  act(()=>shell.onNavigate('courses'));
+  assert.equal(shell.currentCourseTitle,'test course');
+  act(()=>monitor.onCoursesUpdated([]));
+  assert.equal(shell.currentCourseTitle,undefined);
+  assert.equal(shell.courseProgress,null);
+ }finally{
+  if(view)act(()=>view.unmount());
+  if(oldWindow===undefined)delete global.window;else global.window=oldWindow;
+ }
+});

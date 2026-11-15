@@ -138,14 +138,16 @@ def test_ui_status_cannot_be_conflated_with_server_progress():
 
 def test_rust_idle_status_always_initializes_telemetry_freshness():
     rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
-    # Validate both idle return branches without relying on indentation or
-    # the position of a closing brace on the following line.
+    # Status queries return idle; stop without a recorded run rejects the
+    # request instead of manufacturing a successful idle response.
     idle_statuses = [
         line.strip() for line in rust.splitlines()
         if 'Ok(LegacyStatus {platform, state: "idle"' in line
     ]
-    assert len(idle_statuses) == 2
+    assert len(idle_statuses) == 1
     assert all("zhs_stale: false" in line for line in idle_statuses)
+    stop = rust.split("pub fn legacy_stop", 1)[1].split("#[cfg(test)]", 1)[0]
+    assert 'Err("TASK_RUN_CHANGED".into())' in stop
 
 
 def test_monitor_remains_a_read_only_observer():

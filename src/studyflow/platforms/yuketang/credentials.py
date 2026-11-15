@@ -79,3 +79,22 @@ def clear() -> None:
         keyring.delete_password(SERVICE, ACCOUNT)
     except keyring.errors.PasswordDeleteError:
         pass
+
+
+def scope_metadata(config: YuketangConfig | None) -> dict:
+    return {"classroom_id": config.classroom_id if config else "",
+            "university_id": config.university_id if config else "",
+            "has_session": config is not None, "has_sign": bool(config and config.sign)}
+
+
+def save_scope(scope: dict) -> dict:
+    current = load()
+    if current is None:
+        raise LookupError("No saved session")
+    if not isinstance(scope, dict) or not set(scope) <= {"classroom_id", "university_id", "sign"}:
+        raise ValueError("Invalid classroom scope")
+    if not {"classroom_id", "university_id"} <= set(scope):
+        raise ValueError("Missing classroom scope")
+    updated = YuketangConfig.from_dict({**current.__dict__, **scope})
+    save(updated.__dict__)
+    return scope_metadata(updated)
