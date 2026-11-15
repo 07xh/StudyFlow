@@ -24,7 +24,7 @@ type Props={
 
 export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,onEvent,courseId,courseTitle,detailMode=false,
   autoVerifyCourseId,autoVerifyEnabled,autoVerifyError="",onAutoVerifyChange}:Props){
-  const [selected,setSelected]=useState(courseId??"");
+  const [selected,setSelected]=useState(courseId??autoVerifyCourseId??"");
   const [busy,setBusy]=useState<"sync"|"verify"|null>(null);
   const [message,setMessage]=useState("");
   const [incomplete,setIncomplete]=useState(false);
@@ -48,8 +48,8 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       return;
     }
     if(!courses.some(course=>course.course_id===selected))
-      setSelected(courses[0]?.course_id??"");
-  },[courses,selected,courseId]);
+      setSelected(courses.find(course=>course.course_id===autoVerifyCourseId)?.course_id??courses[0]?.course_id??"");
+  },[courses,selected,courseId,autoVerifyCourseId]);
 
   const run=useCallback(async(kind:"sync"|"verify",quiet=false)=>{
     if(!desktop||!connected||busyRef.current||(kind==="verify"&&!selected))return;
@@ -130,7 +130,9 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       </button>}
     </div>
     {<div className="sf-zd-progress-auto">
-      <div><strong>自动只读核验</strong><small>每 2 分钟检查当前选定课程；切换页面仍继续，关闭应用即停止。至少间隔 1 分钟。</small></div>
+      <div><strong>自动只读核验</strong><small>每 2 分钟检查当前选定课程；切换页面仍继续，关闭应用即停止。至少间隔 1 分钟。</small>
+        {autoVerifyEnabled&&autoVerifyCourseId!==selected&&<small role="status">当前后台监测：{courses.find(course=>course.course_id===autoVerifyCourseId)?.title??"另一门课程"}。切换到该课程可以关闭。</small>}
+      </div>
       <Switch checked={monitor} disabled={!desktop||!connected||!selected}
         onChange={checked=>onAutoVerifyChange(selected,checked)} aria-label="开启每两分钟知到单课只读核验"/>
     </div>}
