@@ -22,7 +22,7 @@ export function RuntimeTaskList({tasks,courses,events,platform,onInspect,onRefre
     <strong>{task.runner==='yuketang'?'按雨课堂已配置的课堂范围批量运行':course?.title??'所属课程未在当前会话中确认'}</strong>
     <div className="actions">
      {course&&<button className="secondary" onClick={()=>onInspect(course)}>查看所属课程</button>}
-     {!compact&&task.state==='running'&&<button className="secondary" disabled={!desktop||!!busy||task.unavailable||!task.runId} onClick={()=>void stop(task)}>{task.runner==='yuketang'?'停止雨课堂批量任务':'停止此运行任务'}</button>}
+     {!compact&&task.state==='running'&&<button className="secondary" disabled={!desktop||!!busy||task.unavailable||!task.runId} onClick={()=>void stop(task)}>{busy===task.runner?'停止中…':task.runner==='yuketang'?'停止雨课堂批量任务':'停止此运行任务'}</button>}
     </div>
     {!compact&&<RunParameters parameters={event?.parameters}/>}
    </article>;
