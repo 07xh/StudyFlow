@@ -135,8 +135,13 @@ def _progress_percent(row: dict) -> float | None:
     return round(100.0 * done / total, 1)
 
 
-def _courses_from_current_cache() -> list[Course]:
-    rows, fingerprint = _session_course_cache()
+def _courses_from_current_cache(
+    rows: list[dict] | None = None, fingerprint: str | None = None
+) -> list[Course]:
+    # A caller performing verification must use one account fingerprint for
+    # its course directory and progress evidence, not re-read two sessions.
+    if rows is None or fingerprint is None:
+        rows, fingerprint = _session_course_cache()
     progress = _progress_cache(fingerprint)
     by_key: dict[str, dict] = {}
     seen_keys: set[str] = set()
@@ -178,9 +183,12 @@ def _courses_from_current_cache() -> list[Course]:
     return courses
 
 
-def _progress_snapshot() -> dict:
-    courses = _courses_from_current_cache()
-    _, fingerprint = _session_course_cache()
+def _progress_snapshot(
+    rows: list[dict] | None = None, fingerprint: str | None = None
+) -> dict:
+    if rows is None or fingerprint is None:
+        rows, fingerprint = _session_course_cache()
+    courses = _courses_from_current_cache(rows, fingerprint)
     progress = _progress_cache(fingerprint)
     return {
         "courses": courses,
@@ -208,7 +216,9 @@ def verify_course(course_key: str) -> dict:
     if not isinstance(course_key, str) or COURSE_KEY.fullmatch(course_key) is None:
         raise ValueError("INVALID_COURSE")
     rows, fingerprint = _session_course_cache()
-    if sum(progress_key(row) == course_key for row in rows) != 1:
+    matches = [row for row in rows if row.get("courseType") in ("ai", "shared")
+               and row.get("stale") is not True and progress_key(row) == course_key]
+    if len(matches) != 1:
         raise RuntimeError("COURSE_NOT_FOUND")
     # The old cache is historical evidence, not proof that THIS verification
     # actually consulted the platform. Save the selected course's marker first.
@@ -235,7 +245,18 @@ def verify_course(course_key: str) -> dict:
         raise RuntimeError("Zhidao single-course verification failed") from exc
     if result.returncode != 0:
         raise RuntimeError("Zhidao single-course verification failed")
-    snapshot = _progress_snapshot()
+    # The verifier is a subprocess: the user can sign out or rotate the cookie
+    # while it is running. Never attribute its result to a different session.
+    current_rows, current_fingerprint = _session_course_cache()
+    if (current_fingerprint != fingerprint
+            or sum(row.get("stale") is not True and progress_key(row) == course_key
+                   for row in current_rows) != 1):
+        raise RuntimeError("Zhidao session or course changed during verification")
+    snapshot = _progress_snapshot(current_rows, current_fingerprint)
+    # Account changes can also occur while reading the local progress cache.
+    _, final_fingerprint = _session_course_cache()
+    if final_fingerprint != fingerprint:
+        raise RuntimeError("Zhidao session changed during verification")
     target = [course for course in snapshot["courses"] if course.course_id == course_key]
     fresh_marker = _verified_instant(target[0].verified_at) if len(target) == 1 else None
     if (len(target) != 1 or target[0].progress_evidence != "server_verified"
