@@ -4,8 +4,8 @@ import {X} from "lucide-react";
 import "./settingsDialog.css";
 
 /** LightC-style second-level page; does not navigate away from the current workspace. */
-export function SettingsDialog({open,dark,title,onClose,children}:{
-  open:boolean;dark:boolean;title:string;onClose:()=>void;children:ReactNode;
+export function SettingsDialog({open,dark,title,onClose,children,footer}:{
+  open:boolean;dark:boolean;title:string;onClose:()=>void;children:ReactNode;footer?:ReactNode;
 }){
   const titleId=useId();
   const panel=useRef<HTMLElement>(null),closeButton=useRef<HTMLButtonElement>(null);
@@ -43,11 +43,12 @@ export function SettingsDialog({open,dark,title,onClose,children}:{
       <section className="sf-settings-modal" ref={panel} role="dialog" aria-modal="true"
         aria-labelledby={titleId} onKeyDown={handleKeys}>
         <header className="sf-settings-modal-heading">
-          <div><span className="sf-settings-modal-kicker">设置 / 二级页面</span><h2 id={titleId}>{title}</h2></div>
+          <div className="sf-settings-modal-title"><h2 id={titleId}>{title}</h2></div>
           <button ref={closeButton} type="button" className="sf-settings-modal-close"
             aria-label="关闭设置面板" onClick={onClose}><X size={18}/></button>
         </header>
         <div className="sf-settings-modal-body">{children}</div>
+        {footer&&<footer className="sf-settings-modal-footer">{footer}</footer>}
       </section>
     </div>,document.body);
 }
