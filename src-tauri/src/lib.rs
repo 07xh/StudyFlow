@@ -377,19 +377,38 @@ fn studyflow_exit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+fn studyflow_release_url(tag: Option<&str>) -> Result<String, String> {
+    const BASE: &str = "https://github.com/07xh/StudyFlow/releases";
+    let Some(tag) = tag else { return Ok(BASE.into()); };
+    // Native boundary never accepts arbitrary URLs from React. Validate a
+    // version-shaped tag and construct the official repository path ourselves.
+    if tag.len() > 80 || !tag.starts_with('v') ||
+       !tag.bytes().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, b'.' | b'-' | b'+')) {
+        return Err("RELEASE_TAG_INVALID".into());
+    }
+    let numbered = tag[1..].split(['-', '+']).next().unwrap_or("");
+    let segments: Vec<&str> = numbered.split('.').collect();
+    if !(2..=4).contains(&segments.len()) ||
+        !segments.iter().all(|part| !part.is_empty() && part.bytes().all(|ch| ch.is_ascii_digit())) {
+        return Err("RELEASE_TAG_INVALID".into());
+    }
+    Ok(format!("{BASE}/tag/{tag}"))
+}
+
 #[tauri::command]
-fn studyflow_open_releases() -> Result<(), String> {
-    // Only a fixed official URL: the renderer cannot choose a destination.
+fn studyflow_open_releases(tag: Option<String>) -> Result<(), String> {
+    let url = studyflow_release_url(tag.as_deref())?;
     #[cfg(windows)]
     {
         Command::new("explorer.exe")
-            .arg("https://github.com/07xh/StudyFlow/releases")
+            .arg(url)
             .spawn()
             .map_err(|_| "RELEASE_PAGE_OPEN_FAILED".to_string())?;
         Ok(())
     }
     #[cfg(not(windows))]
     {
+        let _ = url;
         Err("WINDOWS_ONLY".into())
     }
 }
@@ -470,8 +489,19 @@ pub fn run() {
 
 #[cfg(test)]
 mod ipc_validation_tests {
-    use super::{parse_jsonl_reply, validate};
+    use super::{parse_jsonl_reply, validate, studyflow_release_url};
     use serde_json::json;
+
+    #[test]
+    fn official_release_navigation_only_accepts_version_tags() {
+        assert_eq!(studyflow_release_url(None).unwrap(),
+            "https://github.com/07xh/StudyFlow/releases");
+        assert_eq!(studyflow_release_url(Some("v0.1.1-rc.25")).unwrap(),
+            "https://github.com/07xh/StudyFlow/releases/tag/v0.1.1-rc.25");
+        for unsafe_tag in ["https://evil.example", "../other", "rc.25", "v../../bad", "v1.2.3/evil", "v1.2@evil"] {
+            assert!(studyflow_release_url(Some(unsafe_tag)).is_err());
+        }
+    }
 
     #[test]
     fn accepts_one_correlated_jsonl_reply() {
