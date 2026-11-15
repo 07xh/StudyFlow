@@ -77,7 +77,10 @@ export function TaskRecoveryPanel({desktop,consentAccepted,visible,tasks,loading
   const [message,setMessage]=useState("");
   useEffect(()=>{
     const update=()=>setRecords(readTaskRecovery());
-    update();window.addEventListener(EVENT,update);window.addEventListener("storage",update);
+    update();
+    // Headless renderers and locked-down embedded shells may have no event API.
+    if(typeof window.addEventListener!=="function"||typeof window.removeEventListener!=="function")return;
+    window.addEventListener(EVENT,update);window.addEventListener("storage",update);
     return()=>{window.removeEventListener(EVENT,update);window.removeEventListener("storage",update);};
   },[]);
   if(!desktop||!consentAccepted||!visible||loading)return null;
