@@ -218,10 +218,10 @@ def verify_course(course_key: str) -> dict:
         if isinstance(row, dict) and row.get("courseType") in ("ai", "shared")
         and progress_key(row) == course_key
     ]
-    # Duplicate target records cannot establish a reliable baseline.
-    if len(previous_markers) > 1:
-        raise RuntimeError("Zhidao single-course verification has ambiguous history")
-    previous_marker = previous_markers[0] if previous_markers else None
+    # Duplicate history must not be displayed as evidence, but a fresh
+    # read-only verification should be allowed to repair it. Compare against
+    # the newest valid historical marker and require one unique fresh result.
+    previous_marker = max((stamp for stamp in previous_markers if stamp is not None), default=None)
     if getattr(sys, "frozen", False):
         arguments = [sys.executable, "--zhidao-verify-one", course_key]
     else:
