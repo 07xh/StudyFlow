@@ -42,3 +42,18 @@ test('clears a selected course when the current session no longer contains it',(
  const source=fs.readFileSync(path.join(__dirname,'../src/App.tsx'),'utf8');
  assert.match(source,/useEffect\(\(\)=>\{\s*if\(!selectedCourse\)return;\s*if\(!selectedSessionCourse\(courses,selectedCourse\)\)setSelectedCourse\(null\);\s*\},\[courses,selectedCourse\]\);/);
 });
+
+test('Zhidao full-knowledge flag is not mislabeled unverified when percent is absent',async()=>{
+ const Panel=component(async()=>({
+  course_key:course.course_id,course_type:'ai',verified:true,stale:false,done:1,total:1,
+  items:[{name:'已完成知识点',fully_progressed:true}]
+ }));
+ let view;
+ await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
+ const status=view.root.findAllByType('span').find(node=>
+  String(node.props.className||'').includes('sf-record-status'));
+ assert.ok(status);
+ assert.equal(status.props.children,'已达满进度');
+ assert.doesNotMatch(JSON.stringify(view.toJSON()),/0.0%/);
+ act(()=>view.unmount());
+});
