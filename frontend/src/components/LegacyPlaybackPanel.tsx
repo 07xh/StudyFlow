@@ -356,8 +356,8 @@ export function LegacyPlaybackPanel({
           <strong>{zhsSegment!=null?zhsSegment.toFixed(1)+"%":
             status?.state==="running"&&ownsStatus?"待同步":"—"}</strong>
         </div>
-        <div className={"sf-verified-track sf-zhs-progress-track"+(zhsSegment==null?" is-indeterminate":"")}
-          role="progressbar" aria-label="当前视频片段位置" aria-valuemin={0} aria-valuemax={100}
+        <div className={"sf-verified-track sf-zhs-progress-track"+(zhsSegment==null&&status?.state==="running"&&ownsStatus&&!statusReadFailed?" is-indeterminate":"")}
+          role="progressbar" aria-label={zhsKind==="article"||zhsKind==="ppt"?"当前内容处理进度":"当前视频片段位置"} aria-valuemin={0} aria-valuemax={100}
           aria-valuenow={zhsSegment??undefined}
           aria-valuetext={zhsSegment!=null?zhsSegment.toFixed(1)+"%":
             "当前尚无可确认的播放百分比"}>
