@@ -266,6 +266,73 @@ def test_first_run_consent_is_persisted_in_studyflow_app_data(tmp_path, monkeypa
     assert (tmp_path / "StudyFlow" / "privacy-accepted-v1.flag").is_file()
 
 
+
+def test_verification_rejects_switch_to_another_valid_login(session_cache, monkeypatch):
+    """A valid new user's cached progress must not satisfy an old run."""
+    directory, first_fp = session_cache
+    course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
+    key = legacy_runtime.progress_key(course)
+    course_path = directory / "zhidao-courses.json"
+    progress_path = directory / "zhidao-progress.json"
+
+    def save_session(fingerprint, verified_at):
+        course_path.write_text(json.dumps({
+            "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+            "incomplete": False, "courses": [course],
+        }), encoding="utf-8")
+        progress_path.write_text(json.dumps({
+            "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fingerprint,
+            "incomplete": False, "courses": [{
+                **course, "knowledgePointCount": 2, "fullProgressPoints": 2,
+                "lastVerifiedAt": verified_at,
+            }],
+        }), encoding="utf-8")
+
+    save_session(first_fp, "2026-11-13T10:00:00+00:00")
+
+    def fake_run(*_args, **_kwargs):
+        # The original user's run finishes after login is changed. The new
+        # session's cache is internally valid and appears to contain newer
+        # progress, but cannot be attributed to the previous run.
+        cookies = b"SECOND_FAKE_USER"
+        (directory / "cookies.json").write_bytes(cookies)
+        second_fp = hmac.new(b"s" * 32, cookies, hashlib.sha256).hexdigest()
+        save_session(second_fp, "2026-11-14T10:00:00+00:00")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
+    with pytest.raises(RuntimeError, match="session or course changed"):
+        legacy_runtime.verify_course(key)
+
+
+def test_progress_snapshot_reads_one_session_for_directory_and_evidence(monkeypatch):
+    """An account rotation between two cache reads must not mix their data."""
+    course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
+    seen = []
+
+    def one_session():
+        seen.append(True)
+        if len(seen) != 1:
+            raise AssertionError("Progress snapshot re-read the session")
+        return [course], "a" * 64
+
+    def progress_for_session(fingerprint):
+        assert fingerprint == "a" * 64
+        return {"incomplete": False, "fetchedAt": "2026-11-14T10:00:00+00:00",
+                "courses": [{
+                    **course, "knowledgePointCount": 3, "fullProgressPoints": 1,
+                    "lastVerifiedAt": "2026-11-14T10:00:00+00:00",
+                }]}
+
+    monkeypatch.setattr(legacy_runtime, "_session_course_cache", one_session)
+    monkeypatch.setattr(legacy_runtime, "_progress_cache", progress_for_session)
+    snapshot = legacy_runtime._progress_snapshot()
+    assert len(seen) == 1
+    assert snapshot["incomplete"] is False
+    assert snapshot["courses"][0].progress_evidence == "server_verified"
+    assert snapshot["courses"][0].progress_percent == 33.3
+
+
 @pytest.mark.parametrize("change", ["unchanged", "unrelated", "stale", "fresh"])
 def test_single_course_verification_requires_new_target_server_evidence(session_cache, monkeypatch, change):
     """Exit 0 is insufficient unless the selected course gained fresh evidence."""
@@ -311,3 +378,122 @@ def test_single_course_verification_requires_new_target_server_evidence(session_
     else:
         with pytest.raises(RuntimeError, match="no fresh evidence"):
             legacy_runtime.verify_course(key)
+
+
+@pytest.mark.parametrize("bad_evidence", ["duplicate", "naive", "nonsense", "future"])
+def test_progress_evidence_fail_closed_on_invalid_timestamp_or_duplicate(session_cache, bad_evidence):
+    directory, fp = session_cache
+    course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
+    (directory / "zhidao-courses.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4,
+        "sessionFingerprint": fp, "incomplete": False, "courses": [course],
+    }), encoding="utf-8")
+    dates = {
+        "duplicate": "2026-11-14T10:00:00+00:00",
+        "naive": "2026-11-14T10:00:00",
+        "nonsense": "not-a-date",
+        "future": "2099-11-14T10:00:00+00:00",
+    }
+    record = {**course, "knowledgePointCount": 2, "fullProgressPoints": 2,
+              "lastVerifiedAt": dates[bad_evidence]}
+    evidence = [record, dict(record)] if bad_evidence == "duplicate" else [record]
+    (directory / "zhidao-progress.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
+        "fetchedAt": "2026-11-14T10:00:00+00:00",
+        "incomplete": False, "courses": evidence,
+    }), encoding="utf-8")
+    shown = legacy_runtime._courses_from_current_cache()
+    assert len(shown) == 1
+    assert shown[0].progress_evidence is None
+    assert shown[0].progress_percent is None
+    detail = legacy_runtime.read_course_detail(shown[0].course_id)
+    assert detail["verified"] is False
+
+
+def test_verification_compares_instants_not_offset_formatted_strings(session_cache, monkeypatch):
+    directory, fp = session_cache
+    course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
+    (directory / "zhidao-courses.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
+        "incomplete": False, "courses": [course],
+    }), encoding="utf-8")
+    old = "2026-11-14T10:00:00+08:00"
+    new = "2026-11-14T02:30:00Z"  # 30 minutes newer, lexical string looks older
+    record = {**course, "knowledgePointCount": 2, "fullProgressPoints": 1,
+              "lastVerifiedAt": old}
+    path = directory / "zhidao-progress.json"
+    progress = {"source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
+                "incomplete": False, "courses": [record]}
+    path.write_text(json.dumps(progress), encoding="utf-8")
+
+    def fake_run(*args, **kwargs):
+        record["lastVerifiedAt"] = new
+        path.write_text(json.dumps(progress), encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
+    selected = legacy_runtime.progress_key(course)
+    snapshot = legacy_runtime.verify_course(selected)
+    target = next(row for row in snapshot["courses"] if row.course_id == selected)
+    assert target.verified_at == new
+    assert target.progress_evidence == "server_verified"
+
+
+@pytest.mark.parametrize("repaired", [True, False])
+def test_ambiguous_prior_evidence_can_recover_only_with_unique_fresh_record(session_cache, monkeypatch, repaired):
+    directory, fp = session_cache
+    course = {"courseType": "ai", "courseId": "11", "classId": "21", "name": "课程"}
+    (directory / "zhidao-courses.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
+        "incomplete": False, "courses": [course],
+    }), encoding="utf-8")
+    old = "2026-11-13T10:00:00+00:00"
+    new = "2026-11-14T10:00:00+00:00"
+    record = {**course, "knowledgePointCount": 1, "fullProgressPoints": 1,
+              "lastVerifiedAt": old}
+    path = directory / "zhidao-progress.json"
+    state = {"source": "zhidao", "schemaVersion": 4, "sessionFingerprint": fp,
+             "incomplete": False, "courses": [record, dict(record)]}
+    path.write_text(json.dumps(state), encoding="utf-8")
+
+    def fake_run(*args, **kwargs):
+        if repaired:
+            state["courses"] = [{**record, "lastVerifiedAt": new}]
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(legacy_runtime.subprocess, "run", fake_run)
+    key = legacy_runtime.progress_key(course)
+    if repaired:
+        result = legacy_runtime.verify_course(key)
+        chosen = next(row for row in result["courses"] if row.course_id == key)
+        assert chosen.verified_at == new and chosen.progress_evidence == "server_verified"
+    else:
+        with pytest.raises(RuntimeError, match="no fresh evidence"):
+            legacy_runtime.verify_course(key)
+
+@pytest.mark.parametrize("condition,expected", [
+    ("fresh", 0), ("stale", 2), ("incomplete", 4), ("rotated", 4),
+])
+def test_direct_verifier_entry_rejects_stale_and_other_session_courses(session_cache, monkeypatch, condition, expected):
+    from studyflow.platforms.zhidao import verify_entry, upstream
+
+    directory, fp = session_cache
+    course = {"courseType": "ai", "courseId": "11", "classId": "21",
+              "name": "课程", "stale": condition == "stale"}
+    (directory / "zhidao-courses.json").write_text(json.dumps({
+        "source": "zhidao", "schemaVersion": 4,
+        "sessionFingerprint": "f" * 64 if condition == "rotated" else fp,
+        "incomplete": condition == "incomplete", "courses": [course],
+    }), encoding="utf-8")
+    calls = []
+    # Linux offline CI intentionally does not install the external zhs package.
+    # Gate-test only the dispatcher, not the upstream read-only transport.
+    fake_upstream = SimpleNamespace(verify_one=lambda *args: (calls.append(args) or 0))
+    monkeypatch.setattr(upstream, "zhidao_only", fake_upstream, raising=False)
+    result = verify_entry.main([legacy_runtime.progress_key(course)])
+    assert result == expected
+    if condition == "fresh":
+        assert calls == [("ai", "11", "21")]
+    else:
+        assert not calls

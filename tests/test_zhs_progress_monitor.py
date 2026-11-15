@@ -6,6 +6,8 @@ import io
 import json
 import runpy
 import sys
+import threading
+import time
 from pathlib import Path
 from types import ModuleType
 
@@ -110,6 +112,79 @@ def test_repeated_original_progress_output_refreshes_local_observation(monkeypat
     clock[0] = 106.0
     sink.receive("playing [====] 50.0%")
     assert json.loads(raw.path.read_text(encoding="utf-8"))["at"] == 106.0
+
+
+def test_numeric_observer_fails_open_for_original_cli_on_snapshot_io_error(monkeypatch, tmp_path):
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    raw = vendor["NumericTelemetry"]("f" * 32, directory=tmp_path)
+    calls = []
+
+    def blocked_write():
+        calls.append(True)
+        raise OSError("mock filesystem denied")
+
+    monkeypatch.setattr(raw, "publish", blocked_write)
+    wrapped = legacy._RefreshingZhsSink(raw)
+    destination = io.StringIO()
+    tee = vendor["StdoutObserver"](destination, wrapped)
+
+    assert tee.write("playing [======] 60.0%") > 0
+    assert "60.0%" in destination.getvalue()
+    assert wrapped.disabled is True
+    assert len(calls) == 1
+    assert not raw.path.exists()
+
+    # Further CLI writes must still pass through without repeated file IO.
+    tee.write("\nplaying [=======] 70.0%")
+    assert "70.0%" in destination.getvalue()
+    assert len(calls) == 1
+    assert raw.last_snapshot is None
+
+
+
+def test_shared_zhs_observer_serializes_stdout_stderr():
+    """A single telemetry sink is shared by both streams and may be called concurrently."""
+    entered = threading.Event()
+    release = threading.Event()
+    attempted = threading.Event()
+    calls = []
+
+    class BlockingNumericSink:
+        last_snapshot = None
+
+        def receive(self, chunk: str) -> None:
+            calls.append(chunk)
+            if chunk == "stderr":
+                entered.set()
+                if not release.wait(timeout=3):
+                    raise AssertionError("first observer call timed out")
+            self.last_snapshot = (chunk,)
+
+    observer = legacy._RefreshingZhsSink(BlockingNumericSink())
+    first = threading.Thread(target=observer.receive, args=("stderr",), daemon=True)
+
+    def second_stream():
+        attempted.set()
+        observer.receive("stdout")
+
+    second = threading.Thread(target=second_stream, daemon=True)
+    first.start()
+    try:
+        assert entered.wait(timeout=2)
+        second.start()
+        assert attempted.wait(timeout=2)
+        # The second stream must not enter the same mutable sink while the
+        # first is still processing; otherwise snapshots can race.
+        time.sleep(0.03)
+        assert calls == ["stderr"]
+    finally:
+        release.set()
+        first.join(timeout=2)
+        if second.ident is not None:
+            second.join(timeout=2)
+    assert not first.is_alive() and not second.is_alive()
+    assert calls == ["stderr", "stdout"]
+    assert observer.disabled is False
 
 
 def test_invalid_monitor_token_does_not_start_legacy_task(monkeypatch):
