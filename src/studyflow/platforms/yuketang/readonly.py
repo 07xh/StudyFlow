@@ -52,6 +52,11 @@ class YuketangReadOnly:
 
     def video_metadata(self, classroom_id: str, *, sign: str | None = None,
                        uv_id: str = "") -> list[dict[str, str]]:
+        """Read real video leaves from both nested and direct chapter layouts.
+
+        Never infer an ID from leafinfo_id or a generic section: only leaves
+        explicitly typed as video are returned. No completion is fabricated.
+        """
         response = self.chapters(classroom_id, sign=sign, uv_id=uv_id)
         if response.get("success") is not True:
             raise RuntimeError("Rain Classroom chapters unavailable")
@@ -59,24 +64,47 @@ class YuketangReadOnly:
         chapters = data.get("course_chapter") if isinstance(data, dict) else None
         if not isinstance(chapters, list):
             raise ValueError("Invalid chapter list")
+
         videos: list[dict[str, str]] = []
+        seen: set[str] = set()
+
+        def add_video(leaf: dict[str, Any], chapter_name: str,
+                      fallback_name: str) -> None:
+            kind = leaf.get("leaf_type")
+            if type(kind) is not int and kind != "0":
+                return
+            if kind not in (0, "0"):
+                return
+            identifier = leaf.get("id")
+            if isinstance(identifier, bool) or not isinstance(identifier, (int, str)):
+                return
+            leaf_id = str(identifier).strip()
+            if not leaf_id or leaf_id in seen:
+                return
+            seen.add(leaf_id)
+            videos.append({
+                "id": leaf_id,
+                "name": str(leaf.get("name") or fallback_name or "视频")[:200],
+                "chapter": chapter_name[:160],
+            })
+
         for chapter in chapters:
             if not isinstance(chapter, dict):
                 continue
+            chapter_name = str(chapter.get("name") or "未命名章节")
             sections = chapter.get("section_leaf_list")
             if not isinstance(sections, list):
                 continue
             for section in sections:
                 if not isinstance(section, dict):
                     continue
+                section_name = str(section.get("name") or "视频")
                 leaves = section.get("leaf_list")
-                if not isinstance(leaves, list):
-                    continue
-                for leaf in leaves:
-                    if isinstance(leaf, dict) and leaf.get("leaf_type") == 0 and leaf.get("id") is not None:
-                        videos.append({
-                            "id": str(leaf["id"]),
-                            "name": str(leaf.get("name") or section.get("name") or "视频"),
-                            "chapter": str(chapter.get("name") or ""),
-                        })
+                if isinstance(leaves, list) and leaves:
+                    for leaf in leaves:
+                        if isinstance(leaf, dict):
+                            add_video(leaf, chapter_name, section_name)
+                else:
+                    # Some classroom versions put a video directly in a section.
+                    add_video(section, chapter_name, section_name)
         return videos

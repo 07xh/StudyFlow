@@ -13,7 +13,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
-  | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"}
+  | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"; course_id?: string}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
   | {id: string; version: 1; operation: "yuketang.scope.get"}
   | {id: string; version: 1; operation: "yuketang.scope.save"; scope: {classroom_id:string;university_id:string;sign?:string}}

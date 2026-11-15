@@ -58,9 +58,13 @@ class YuketangAdapter:
         return [Course(platform=Platform.YUKETANG, course_id=config.classroom_id,
                        title=title, progress_percent=None)]
 
-    def list_videos(self) -> list[dict[str, str]]:
+    def list_videos(self, course_id: str | None = None) -> list[dict[str, str]]:
         config = load()
         if config is None:
             raise RuntimeError("Rain Classroom session is missing")
+        # The selected course must match the currently authenticated classroom.
+        # A stale UI selection must never receive another classroom's chapters.
+        if course_id is not None and course_id != config.classroom_id:
+            raise LookupError("Selected course is not the configured classroom")
         return make_reader(config).video_metadata(config.classroom_id, sign=config.sign,
                                                   uv_id=config.university_id)

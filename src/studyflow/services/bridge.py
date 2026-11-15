@@ -210,8 +210,18 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if operation == "videos.list":
         if request.get("platform") != "yuketang":
             return {"id": request_id, "ok": False, "error": "UNKNOWN_PLATFORM"}
+        course_id = request.get("course_id")
+        if course_id is not None and (
+            not isinstance(course_id, str) or not course_id.isdecimal()
+            or not 1 <= len(course_id) <= 24
+        ):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
         try:
-            return {"id": request_id, "ok": True, "data": ADAPTERS["yuketang"].list_videos()}
+            adapter = ADAPTERS["yuketang"]
+            videos = adapter.list_videos(course_id=course_id) if course_id is not None else adapter.list_videos()
+            return {"id": request_id, "ok": True, "data": videos}
+        except LookupError:
+            return {"id": request_id, "ok": False, "error": "COURSE_NOT_FOUND"}
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
     if operation == "yuketang.settings.get":
