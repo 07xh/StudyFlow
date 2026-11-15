@@ -31,6 +31,23 @@ WORKER_MAX = re.compile(r"开始并发观看视频.*?(?:最大并发数|并发�
 WORKER_START = re.compile(r"\[Worker-(\d{1,6})\]\s*开始处理视频")
 WORKER_WATCHING = re.compile(r"\[Worker-(\d{1,6})\].*?开始观看视频")
 WORKER_END = re.compile(r"\[Worker-(\d{1,6})\].*?(配置视频参数失败|视频已完成|视频观看完成|已停止|视频观看失败|处理视频时发生异常)")
+# Supplemental numeric-only log annotations; each carries its actual worker identity.
+# Never distribute untagged heartbeat lines across concurrently running videos.
+TAGGED_LOCAL = re.compile(
+    r"\[StudyFlow-Worker-(\d{1,6})\]\s+LOCAL\s+position=" + FLOAT
+    + r"\s+duration=" + FLOAT + r"\s+percent=" + FLOAT
+)
+TAGGED_SERVER = re.compile(
+    r"\[StudyFlow-Worker-(\d{1,6})\]\s+SERVER\s+source=(initial|periodic|final)"
+    + r"\s+percent=" + FLOAT + r"\s+position=" + FLOAT
+)
+TAGGED_DURATION = re.compile(
+    r"\[StudyFlow-Worker-(\d{1,6})\]\s+DURATION\s+seconds=" + FLOAT
+)
+WORKER_NAME = re.compile(r"\[Worker-(\d{1,6})\]\s*开始处理视频:\s*(.*?)\s*\(ID:\s*[0-9]{1,20}\)")
+WORKER_NAME_FALLBACK = re.compile(r"\[Worker-(\d{1,6})\]\s*开始处理视频:\s*(.+)$")
+WORKER_SKIPPED_RATE = re.compile(r"\[Worker-(\d{1,6})\].*?视频已完成\s*\(" + FLOAT + r"%\)")
+MAX_VIDEO_ROWS = 256
 WORKER_RESULT = {
     "配置视频参数失败": "failed",
     "视频已完成": "skipped",
@@ -59,6 +76,7 @@ def empty_progress(available: bool = False) -> dict:
         "stopped": 0,
         "concurrent": None,
         "worker_slots": [],
+        "video_tasks": [],
         "rich_total": None,
         "rich_current": None,
         "rich_processed": 0,
@@ -82,6 +100,27 @@ def parse_original_log(text: str) -> dict:
     video_summary = False
     worker_slots: list[dict] = []
     active_workers: dict[int, int] = {}
+    tasks: dict[int, dict] = {}
+
+    def video_task(index: int) -> dict | None:
+        if index < 1 or index > 100_000:
+            return None
+        if index not in tasks:
+            if len(tasks) >= MAX_VIDEO_ROWS:
+                # Keep the most recently queued videos while retaining any
+                # genuinely active worker, even when the original log is long.
+                candidates = sorted(i for i in tasks if i not in active_workers)
+                if not candidates or (index < candidates[0] and index not in active_workers):
+                    return None
+                tasks.pop(candidates[0])
+            tasks[index] = {
+                "video_index": index, "name": None, "state": "preparing",
+                "simulation_percent": None, "simulation_position": None,
+                "simulation_duration": None, "server_percent": None,
+                "server_position": None, "server_source": None,
+            }
+        return tasks[index]
+
     for raw in text.splitlines():
         line = raw.strip()
         if "开始并发观看视频" in line:
@@ -94,7 +133,18 @@ def parse_original_log(text: str) -> dict:
                     for index in range(1, count + 1)
                 ]
             active_workers.clear()
+            tasks.clear()
         match = WORKER_START.search(line)
+        if match:
+            named = WORKER_NAME.search(line) or WORKER_NAME_FALLBACK.search(line)
+            detail = video_task(int(match.group(1)))
+            if detail is not None:
+                detail["state"] = "preparing"
+                if named:
+                    name = re.sub(r"[\x00-\x1f\x7f]", "", named.group(2)).strip()
+                    # Even fallback worker lines must never expose raw video IDs.
+                    name = re.sub(r"\s*\(ID:\s*[^)]{0,60}\)\s*$", "", name).strip()
+                    detail["name"] = name[:120] if name else None
         if match and worker_slots:
             video_index = int(match.group(1))
             if video_index not in active_workers:
@@ -110,15 +160,59 @@ def parse_original_log(text: str) -> dict:
                     }
         match = WORKER_WATCHING.search(line)
         if match:
+            detail = video_task(int(match.group(1)))
+            if detail is not None:
+                detail["state"] = "watching"
             slot_index = active_workers.get(int(match.group(1)))
             if slot_index is not None:
                 worker_slots[slot_index]["state"] = "watching"
         match = WORKER_END.search(line)
         if match:
             video_index = int(match.group(1))
+            detail = video_task(video_index)
+            if detail is not None:
+                detail["state"] = WORKER_RESULT[match.group(2)]
+                skipped = WORKER_SKIPPED_RATE.search(line)
+                if skipped:
+                    rate = _number(skipped.group(2), 100)
+                    if rate is not None:
+                        detail["server_percent"] = rate
+                        detail["server_source"] = "initial"
+
             slot_index = active_workers.pop(video_index, None)
             if slot_index is not None:
                 worker_slots[slot_index]["state"] = WORKER_RESULT[match.group(2)]
+        # Only the supplemental numeric lines with an actual Worker ID may
+        # populate a video's percent; the original global values stay separate.
+        tagged = TAGGED_LOCAL.search(line)
+        if tagged:
+            index = int(tagged.group(1))
+            detail = video_task(index)
+            if detail is not None:
+                position, duration, rate = (_number(x) for x in tagged.groups()[1:])
+                if (position is not None and duration is not None and duration > 0
+                        and rate is not None and rate <= 100 and position <= duration + 1):
+                    detail["simulation_position"] = position
+                    detail["simulation_duration"] = duration
+                    detail["simulation_percent"] = rate
+        tagged = TAGGED_SERVER.search(line)
+        if tagged:
+            index = int(tagged.group(1))
+            detail = video_task(index)
+            if detail is not None:
+                source, percent_text, position_text = tagged.groups()[1:]
+                rate, pos = _number(percent_text, 100), _number(position_text)
+                if rate is not None and pos is not None:
+                    detail["server_percent"] = rate
+                    detail["server_position"] = pos
+                    detail["server_source"] = source
+        tagged = TAGGED_DURATION.search(line)
+        if tagged:
+            detail = video_task(int(tagged.group(1)))
+            if detail is not None:
+                duration = _number(tagged.group(2))
+                if duration is not None and duration > 0:
+                    detail["simulation_duration"] = duration
         if "开始批量浏览图文内容" in line:
             rich_summary = False
         if "图文批量浏览完成" in line:
@@ -244,9 +338,13 @@ def parse_original_log(text: str) -> dict:
         result["processed"] = min(result["processed"], result["total"])
     # A truncated log can lose a worker's ending line. Never say it completed.
     if video_summary:
-        for index in active_workers.values():
-            worker_slots[index]["state"] = "unknown"
+        for video_index, slot_index in active_workers.items():
+            worker_slots[slot_index]["state"] = "unknown"
+            detail = tasks.get(video_index)
+            if detail is not None and detail["state"] in ("preparing", "watching"):
+                detail["state"] = "unknown"
     result["worker_slots"] = worker_slots
+    result["video_tasks"] = [tasks[index] for index in sorted(tasks)]
     return result
 
 

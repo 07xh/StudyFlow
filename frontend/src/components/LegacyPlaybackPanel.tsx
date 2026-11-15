@@ -10,6 +10,31 @@ import {
   validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type OriginalZhsOptions, type YuketangLiveProgress
 } from "../legacyPlayback";
 
+type YktVideoTask = YuketangLiveProgress["video_tasks"][number];
+
+function YktVideoEvidence({video}:{video?:YktVideoTask}) {
+  const local = video?.simulation_percent;
+  const remote = video?.server_percent;
+  const localLabel=local!=null ? local.toFixed(1)+"%" : "—";
+  const remoteLabel=remote!=null ? remote.toFixed(1)+"%" : "—";
+  return <div className="sf-ykt-video-evidence">
+    <div><small>本地事件</small><strong>{localLabel}</strong>
+      {local!=null&&<div className="sf-ykt-live-track" role="progressbar" aria-label="此视频本地事件位置"
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={local}><span style={{width:local+"%"}}/></div>}
+      <small>{video?.simulation_position!=null&&video.simulation_duration!=null
+        ?video.simulation_position.toFixed(1)+" / "+video.simulation_duration.toFixed(1)+" 秒"
+        :video?.simulation_duration!=null?"视频时长 "+video.simulation_duration.toFixed(1)+" 秒":"尚无可归属的位置"}</small>
+    </div>
+    <div><small>服务器返回</small><strong>{remoteLabel}</strong>
+      {remote!=null&&<div className="sf-ykt-live-track" role="progressbar" aria-label="此视频日志记录的服务器进度"
+        aria-valuemin={0} aria-valuemax={100} aria-valuenow={remote}><span style={{width:remote+"%"}}/></div>}
+      <small>{remote==null?"尚未获得可归属的响应":
+        (video?.server_source==="final"?"最终查询":video?.server_source==="periodic"?"定期查询":"开始前查询")+
+        (video?.server_position!=null?" · "+video.server_position.toFixed(1)+" 秒":"")}</small>
+    </div>
+  </div>;
+}
+
 const labels: Record<LegacyTaskStatus["state"], string> = {
   idle: "未启动", running: "原版进程运行中",
   exited: "原版进程已退出", stopped: "已终止"
@@ -58,6 +83,8 @@ export function LegacyPlaybackPanel({
     ?(yktProgress?.concurrent===false?1:
       yktProgress?.worker_slots?.length||(options.use_concurrent?options.max_concurrent_videos:1))
     :0;
+  const videoTasks=yktProgress?.video_tasks??[];
+  const videoByIndex=new Map<number,YktVideoTask>(videoTasks.map(video=>[video.video_index,video]));
   const workerSlots=Array.from({length:Math.max(0,Math.min(32,workerCount))},(_,index)=>{
     const observed=yktProgress?.worker_slots?.[index];
     const slot=observed??{slot:index+1,video_index:null,
@@ -281,15 +308,37 @@ export function LegacyPlaybackPanel({
       <div className="sf-ykt-live-title"><strong>并发任务进度</strong>
         <small>{yktProgress?.available ? "本次任务日志 · 每 2 秒读取" : "本次任务尚无进度记录"}</small></div>
       <div className="sf-ykt-worker-grid" aria-label="并发任务独立状态">
-        {status?.run_id&&status.state!=="idle"?workerSlots.map(slot=><article className="sf-ykt-worker" key={slot.slot}>
-          <div className="sf-ykt-worker-heading">
-            <strong>{yktProgress?.concurrent===false?"视频任务":"并发槽位 "+slot.slot}</strong>
-            <span>{workerStateLabels[slot.state]??"状态待核实"}</span>
-          </div>
-          <small>{slot.video_index==null?(slot.state==="waiting"?"尚未分配视频":"视频归属待核实"):"视频任务 #"+slot.video_index}</small>
-          <small>暂无可归属于此视频的百分比</small>
-        </article>):<p className="sf-muted">启动批量任务后显示实际并发状态。</p>}
+        {status?.run_id&&status.state!=="idle"?workerSlots.map(slot=>{
+          const video=slot.video_index!=null?videoByIndex.get(slot.video_index):undefined;
+          return <article className="sf-ykt-worker" key={slot.slot}>
+            <div className="sf-ykt-worker-heading">
+              <strong>{yktProgress?.concurrent===false?"视频任务":"并发槽位 "+slot.slot}</strong>
+              <span>{workerStateLabels[slot.state]??"状态待核实"}</span>
+            </div>
+            <small>{slot.video_index==null?(slot.state==="waiting"?"尚未分配视频":"视频归属待核实"):"视频任务 #"+slot.video_index}</small>
+            {video?.name&&<strong className="sf-ykt-video-name" title={video.name}>{video.name}</strong>}
+            <YktVideoEvidence video={video}/>
+          </article>;
+        }):<p className="sf-muted">启动批量任务后显示实际并发状态。</p>}
       </div>
+      {videoTasks.length>0&&<details className="sf-ykt-video-details">
+        <summary>逐视频详情 · 已识别 {videoTasks.length} 个视频任务</summary>
+        <div className="sf-ykt-video-list">
+          {videoTasks.map(video=>{
+            const state=status?.state==="stopped"&&["watching","preparing"].includes(video.state)
+              ?"stopped":status?.state==="exited"&&["watching","preparing"].includes(video.state)
+              ?"unknown":video.state;
+            return <article className="sf-ykt-video-row" key={video.video_index}>
+              <div className="sf-ykt-worker-heading">
+                <strong>#{video.video_index} · {video.name||"视频名称尚未采集"}</strong>
+                <span>{workerStateLabels[state]??"状态待核实"}</span>
+              </div>
+              <YktVideoEvidence video={video}/>
+            </article>;
+          })}
+        </div>
+        <small className="sf-ykt-live-note">最多显示本次日志中最近识别的 256 条视频任务；旧日志若没有 Worker 归属标记，不推测其百分比。</small>
+      </details>}
       <details className="sf-ykt-diagnostics">
         <summary>运行诊断 · 最近一次响应</summary>
         <div className="sf-ykt-live-grid">
@@ -332,7 +381,7 @@ export function LegacyPlaybackPanel({
           {yktProgress.rich_current != null && <small>处理到第 {yktProgress.rich_current} 篇图文</small>}
         </div>}
       </div>
-      <small className="sf-ykt-live-note">并发模式下，各槽位状态来自原版 Worker 日志。心跳无法对应到单个视频，百分比保持空白；诊断区的最近值也不代表课程总进度。</small>
+      <small className="sf-ykt-live-note">并发模式下，按原版 Worker 实际调用归属记录本地事件及服务器响应；未能归属的进度仍留空。日志记录的服务器响应不等于课程最终完成，诊断区最近值也不代表课程总进度。</small>
       </details>
     </div>}
     {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
