@@ -304,6 +304,7 @@ export default function App(){
   }
 
   function openPlatformSettings(platform:Platform,section:PlatformSettingsSection="parameters"){
+    setCourseLogsOpen(false);
     setPlatformSettingsSection(section);
     setPlatformSettingsOpen(platform);
   }
@@ -582,7 +583,7 @@ export default function App(){
     return <section className="sf-course-workspace">
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
-        <button className="secondary sf-course-logs-action" type="button" onClick={()=>setCourseLogsOpen(true)}>日志与诊断</button>
+        <button className="secondary sf-course-logs-action" type="button" onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
         <button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>查看运行任务</button>
       </div>
       {course.platform==="zhidao"?<>

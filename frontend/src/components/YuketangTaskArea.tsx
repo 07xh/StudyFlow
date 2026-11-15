@@ -41,6 +41,11 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   },[desktop]);
 
   useEffect(()=>{void load();},[load]);
+  // Settings are also editable in the platform modal while a course task stays mounted.
+  // Re-read persisted options after a successful save so the next launch cannot use stale values.
+  const latestSettingsSave=events.find(entry=>entry.platform==="雨课堂"&&
+    entry.action==="保存原版参数"&&entry.result==="success")?.id;
+  useEffect(()=>{if(latestSettingsSave)void load();},[latestSettingsSave,load]);
 
   function update<K extends keyof OriginalYktOptions>(key:K,value:OriginalYktOptions[K]){
     setOptions(previous=>({...previous,[key]:value}));
