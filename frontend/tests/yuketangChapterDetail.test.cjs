@@ -314,6 +314,10 @@ test("playback verified video updates only one server row, no full-course rechec
     }),true);
   });
   assert.deepEqual(queries,[[0,8],[1,1]]);
+  const chapter=view.root.findAllByType("button").find(node=>
+    String(node.props.className||"").includes("sf-ykt-chapter-toggle")&&node.props["aria-expanded"]===false);
+  assert.ok(chapter);
+  await act(async()=>{chapter.props.onClick();});
   assert.match(JSON.stringify(view.toJSON()),/85.0%/);
   assert.match(JSON.stringify(view.toJSON()),/最近播放视频复核/);
   act(()=>view.unmount());
