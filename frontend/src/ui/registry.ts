@@ -18,6 +18,8 @@ export const platformRegistry:readonly PlatformDefinition[] = [
    capabilities:{legacyLogin:true,videoList:false,sessionConfiguration:false}},
   {id:"yuketang",name:"雨课堂",mark:"雨",summary:"课程、章节与视频信息",color:"rose",
    capabilities:{legacyLogin:false,videoList:true,sessionConfiguration:true}},
+  {id:"xuexitong",name:"学习通",mark:"学",summary:"课程与章节任务",color:"violet",
+   capabilities:{legacyLogin:false,videoList:false,sessionConfiguration:true}},
 ];
 
 export function platformInfo(id:Platform):PlatformDefinition|undefined {
