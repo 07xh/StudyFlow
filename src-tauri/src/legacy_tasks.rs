@@ -223,11 +223,13 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
 fn terminate_tree(child: &mut Child) {
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
         let pid = child.id().to_string();
         // The original .cmd script can create a child ZHS Python process.
         // Stop the entire task tree, never an unrelated process.
         let _ = Command::new("taskkill")
             .args(["/PID", &pid, "/T", "/F"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .stdout(Stdio::null()).stderr(Stdio::null()).status();
     }
     let _ = child.kill();
