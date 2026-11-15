@@ -4,13 +4,17 @@ import {X} from "lucide-react";
 import "./settingsDialog.css";
 
 /** LightC-style second-level page; does not navigate away from the current workspace. */
-export function SettingsDialog({open,dark,title,onClose,children,kicker="设置 / 二级页面",compact=false}:{
+export function SettingsDialog({open,dark,title,onClose,children,kicker="设置",compact=false,navigation,contentKey}:{
   open:boolean;dark:boolean;title:string;onClose:()=>void;children:ReactNode;
-  kicker?:string;compact?:boolean;
+  kicker?:string;compact?:boolean;navigation?:ReactNode;contentKey?:string;
 }){
   const titleId=useId();
   const panel=useRef<HTMLElement>(null),closeButton=useRef<HTMLButtonElement>(null);
   const lastFocus=useRef<HTMLElement|null>(null);
+  const body=useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    if(open&&body.current)body.current.scrollTop=0;
+  },[open,contentKey]);
   useEffect(()=>{
     if(!open)return;
     lastFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
@@ -48,7 +52,8 @@ export function SettingsDialog({open,dark,title,onClose,children,kicker="设置 
           <button ref={closeButton} type="button" className="sf-settings-modal-close"
             aria-label="关闭设置面板" onClick={onClose}><X size={18}/></button>
         </header>
-        <div className="sf-settings-modal-body">{children}</div>
+        {navigation&&<div className="sf-settings-modal-navigation">{navigation}</div>}
+        <div className="sf-settings-modal-body" ref={body}>{children}</div>
       </section>
     </div>,document.body);
 }
