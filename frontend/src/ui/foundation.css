@@ -2169,3 +2169,26 @@
     grid-template-columns:minmax(0,1fr);
   }
 }
+
+
+/* Keep background verification controls compact at desktop and narrow widths. */
+.sf-shell .sf-ykt-course-chapters .sf-zd-detail-heading > .sf-ykt-verify-actions{
+  flex:0 1 auto;min-width:0;display:flex;align-items:center;
+  justify-content:flex-end;gap:10px;flex-wrap:wrap;
+}
+.sf-shell .sf-ykt-course-chapters .sf-ykt-auto-verify{
+  display:inline-flex;align-items:center;gap:7px;
+  color:var(--muted);font-size:12px;line-height:1.4;
+  cursor:pointer;
+}
+.sf-shell .sf-ykt-course-chapters .sf-ykt-auto-verify input{
+  accent-color:var(--accent);width:15px;height:15px;cursor:pointer;
+}
+.sf-shell .sf-ykt-course-chapters .sf-ykt-verify-actions > button{
+  min-height:36px;margin:0;white-space:nowrap;
+}
+@media(max-width:650px){
+  .sf-shell .sf-ykt-course-chapters .sf-zd-detail-heading > .sf-ykt-verify-actions{
+    width:100%;justify-content:space-between;
+  }
+}
