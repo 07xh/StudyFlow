@@ -8,8 +8,8 @@ const {create,act}=require("react-test-renderer");
 
 function component(request){
   const source=fs.readFileSync(path.join(__dirname,"../src/components/YuketangCourseDetailPanel.tsx"),"utf8");
-  const code=ts.transpileModule(source,{compilerOptions:{
-    module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJS,target:ts.ScriptTarget.ES2020
+  const code=ts.transpileModule(source,{fileName:"YuketangCourseDetailPanel.tsx",compilerOptions:{
+    module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2020
   }}).outputText;
   const mod={exports:{}};
   new Function("module","exports","require",code)(mod,mod.exports,name=>
