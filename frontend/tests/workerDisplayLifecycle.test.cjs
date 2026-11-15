@@ -59,7 +59,8 @@ test('process exit clears executing labels while retaining confirmed terminal wo
  ]});
  assert.match(cards[0],/状态待核实/);
  assert.doesNotMatch(cards[0],/执行中/);
- assert.match(cards[1],/已完成/);
+ assert.match(cards[1],/本轮处理结束 · 待平台核验/);
+ assert.doesNotMatch(cards[1],/服务器已确认完成/);
 });
 
 
