@@ -344,7 +344,7 @@ pub fn legacy_start(
                         }
                     }
                 }
-            }
+            };
         });
     }
     Ok(LegacyStatus {
