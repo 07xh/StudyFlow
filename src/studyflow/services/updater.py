@@ -8,11 +8,17 @@ from pathlib import Path
 import re
 import tempfile
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 OWNER = "07xh"
 REPO = "StudyFlow"
 API = f"https://api.github.com/repos/{OWNER}/{REPO}/releases"
+
+class UpdateError(ValueError):
+    """Public error code with no server response, path, or URL disclosure."""
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
 VERSION_PATTERN = re.compile(r"^v?(\d+(?:\.\d+){1,3})(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
 
@@ -49,8 +55,15 @@ def release_info(current_version: str, channel: str = "stable", timeout: int = 1
     except HTTPError as exc:
         if exc.code == 404:
             return None
-        raise
+        code = "UPDATE_RATE_LIMITED" if exc.code in (403, 429) else "UPDATE_NETWORK_FAILED"
+        raise UpdateError(code, "GitHub release lookup failed") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise UpdateError("UPDATE_NETWORK_FAILED", "GitHub release lookup failed") from exc
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid release metadata") from exc
     releases = [data] if isinstance(data, dict) else data
+    if not isinstance(releases, list) or any(not isinstance(row, dict) for row in releases):
+        raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid release metadata")
     for release in releases:
         if release.get("draft") or (channel == "stable" and release.get("prerelease")):
             continue
@@ -87,13 +100,20 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
         with urlopen(req, timeout=timeout) as response, temp.open("wb") as output:
             final = urlparse(response.geturl())
             if final.scheme != "https" or final.hostname not in ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"):
-                raise ValueError("Untrusted redirect")
+                raise UpdateError("UPDATE_REDIRECT_REJECTED", "Untrusted redirect")
             while chunk := response.read(1024 * 1024):
                 digest.update(chunk)
                 output.write(chunk)
         if digest.hexdigest().lower() != sha256.lower():
-            raise ValueError("Download checksum mismatch")
+            raise UpdateError("UPDATE_CHECKSUM_FAILED", "Download checksum mismatch")
         os.replace(temp, destination)
         return destination
+    except HTTPError as exc:
+        code = "UPDATE_RATE_LIMITED" if exc.code in (403, 429) else "UPDATE_DOWNLOAD_FAILED"
+        raise UpdateError(code, "GitHub release download failed") from exc
+    except (URLError, TimeoutError) as exc:
+        raise UpdateError("UPDATE_DOWNLOAD_FAILED", "GitHub release download failed") from exc
+    except OSError as exc:
+        raise UpdateError("UPDATE_STORAGE_FAILED", "Cannot save update file") from exc
     finally:
         temp.unlink(missing_ok=True)
