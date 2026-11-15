@@ -69,19 +69,20 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     let loadedInThisRun=0;
     try{
       while(true){
+        const pageOffset=cursor;
         const result=await request<YuketangCourseProgress>({
           operation:"yuketang.course.detail",course_id:course.course_id,
-          offset:cursor,limit:PAGE_SIZE
+          offset:pageOffset,limit:PAGE_SIZE
         });
         if(current!==revision.current)return;
-        if(!validPage(result,course.course_id,cursor)||
+        if(!validPage(result,course.course_id,pageOffset)||
           (expectedTotal!==null&&result.total!==expectedTotal)||
           (result.next_offset!==null&&result.items.length===0))
           throw new Error("INVALID_IPC_RESPONSE");
         expectedTotal=result.total;
         // Only append validated server evidence; a failed later page must not
         // erase successfully checked earlier pages or imply completion.
-        setVideos(previous=>reset&&cursor===offset?result.items:[...previous,...result.items]);
+        setVideos(previous=>reset&&pageOffset===offset?result.items:[...previous,...result.items]);
         loadedInThisRun+=result.items.length;
         setTotal(result.total);
         setNextOffset(result.next_offset);
