@@ -4,9 +4,9 @@ import {X} from "lucide-react";
 import "./settingsDialog.css";
 
 /** LightC-style second-level page; does not navigate away from the current workspace. */
-export function SettingsDialog({open,dark,title,onClose,children,kicker="设置",compact=false,navigation,contentKey}:{
+export function SettingsDialog({open,dark,title,onClose,children,kicker="设置",compact=false,navigation,contentKey,footer}:{
   open:boolean;dark:boolean;title:string;onClose:()=>void;children:ReactNode;
-  kicker?:string;compact?:boolean;navigation?:ReactNode;contentKey?:string;
+  kicker?:string;compact?:boolean;navigation?:ReactNode;contentKey?:string;footer?:ReactNode;
 }){
   const titleId=useId();
   const panel=useRef<HTMLElement>(null),closeButton=useRef<HTMLButtonElement>(null);
@@ -54,6 +54,7 @@ export function SettingsDialog({open,dark,title,onClose,children,kicker="设置"
         </header>
         {navigation&&<div className="sf-settings-modal-navigation">{navigation}</div>}
         <div className="sf-settings-modal-body" ref={body}>{children}</div>
+        {footer&&<footer className="sf-settings-modal-footer">{footer}</footer>}
       </section>
     </div>,document.body);
 }
