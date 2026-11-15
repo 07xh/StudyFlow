@@ -121,13 +121,23 @@ try {
     Start-Sleep -Seconds 5
     $app.Refresh()
     if ($app.HasExited) { throw "Installed desktop app exited early: $($app.ExitCode)" }
-    Stop-Process -Id $app.Id -Force
-    Wait-Process -Id $app.Id -ErrorAction SilentlyContinue
+    # A forced kill bypasses Tauri's on_window_event shutdown and can orphan
+    # this app's QR/JSONL bridge. Exercise the real user close path before
+    # asserting that the installer can safely remove the bundled executable.
+    if (-not $app.CloseMainWindow()) {
+        throw 'Windows smoke could not request a normal desktop window close'
+    }
+    if (-not $app.WaitForExit(15000)) {
+        throw 'Desktop app did not exit within 15 seconds after a normal window close'
+    }
+    if ($app.ExitCode -ne 0) { throw "Desktop app closed with code $($app.ExitCode)" }
     $app = $null
     $uninstaller = Join-Path $root 'uninstall.exe'
     if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'NSIS uninstaller missing' }
     $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "_?=$root") -Wait -PassThru
-    if ($remove.ExitCode -ne 0) { throw 'NSIS uninstall failed' }
+    if ($remove.ExitCode -ne 0) {
+        throw "NSIS uninstall failed with exit code $($remove.ExitCode); verify no smoke-owned bridge remains"
+    }
     if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Uninstall changed StudyFlow user data' }
     if ([IO.File]::ReadAllText($legacyInstallMarker) -cne 'preserve-original-zhs-install' -or
         [IO.File]::ReadAllText($legacyDataMarker) -cne 'preserve-original-zhs-data') {
