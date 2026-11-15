@@ -450,7 +450,8 @@ def read_course_detail(course_key: str) -> dict:
     ]
     snapshot = matches_progress[0] if len(matches_progress) == 1 else None
     stale = course.get("stale") is True or (snapshot is not None and snapshot.get("stale") is True)
-    verified_at = snapshot.get("lastVerifiedAt") if snapshot and isinstance(snapshot.get("lastVerifiedAt"), str) else None
+    raw_verified_at = snapshot.get("lastVerifiedAt") if snapshot else None
+    verified_at = raw_verified_at if _verified_instant(raw_verified_at) else None
     course_type = course.get("courseType")
     items: list[dict] = []
     done = total = 0
