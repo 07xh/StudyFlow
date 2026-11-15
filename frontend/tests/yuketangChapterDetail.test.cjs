@@ -222,9 +222,13 @@ test("Rain Classroom shares search and chapter controls with Zhidao",async()=>{
   await act(async()=>{input.props.onChange({target:{value:"视频b"}});});
   let out=JSON.stringify(view.toJSON());
   assert.doesNotMatch(out,/视频a/);
-  const folded=view.root.findAllByType("button")
-    .find(button=>button.props["aria-expanded"]===false);
-  await act(async()=>{folded.props.onClick();});
+  const collapse=view.root.findAllByType("button")
+    .find(button=>button.props.children==="收起全部");
+  await act(async()=>{collapse.props.onClick();});
+  assert.doesNotMatch(JSON.stringify(view.toJSON()),/视频b/);
+  const expand=view.root.findAllByType("button")
+    .find(button=>button.props.children==="展开全部");
+  await act(async()=>{expand.props.onClick();});
   out=JSON.stringify(view.toJSON());
   assert.match(out,/视频b/);
   await act(async()=>{input.props.onChange({target:{value:""}});});
