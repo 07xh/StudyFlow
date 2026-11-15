@@ -129,12 +129,12 @@ class XuexitongAdapter:
             }, timeout=(5, 12), allow_redirects=False)
             return _checked(response)
 
-    def list_courses(self) -> list[Course]:
-        html = self._course_html()
+    @staticmethod
+    def _parse_courses(html: str, seen: set[str]) -> list[Course]:
+        """Parse only server-returned courses; deduplicate across folders."""
         soup = BeautifulSoup(html, "html.parser")
         courses: list[Course] = []
-        seen = set()
-        for item in soup.select("div.course")[:500]:
+        for item in soup.select("div.course"):
             if item.select_one("a.not-open-tip,div.not-open-tip"):
                 continue
             course_id = item.select_one("input.courseId")
@@ -143,7 +143,7 @@ class XuexitongAdapter:
             link = item.select_one("a[href]")
             if not all((course_id, clazz_id, course_name, link)):
                 continue
-            cpi_match = re.search(r"(?:[?&])cpi=([0-9]+)", link.get("href", ""))
+            cpi_match = re.search(r"(?:[?&])cpi=([0-9]+)(?:&|$)", link.get("href", ""))
             if not cpi_match:
                 continue
             cid = course_id.get("value", "")
@@ -159,6 +159,36 @@ class XuexitongAdapter:
                 continue
             seen.add(key)
             courses.append(Course(platform=Platform.XUEXITONG, course_id=key, title=title))
+        return courses
+
+    def list_courses(self) -> list[Course]:
+        """Include course-folder contents, not only the default root listing.
+
+        A failed folder read is reported as an error instead of presenting an
+        incomplete root-only list as a successful full course synchronization.
+        """
+        html = self._course_html()
+        seen: set[str] = set()
+        courses = self._parse_courses(html, seen)
+        soup = BeautifulSoup(html, "html.parser")
+        folder_ids: list[str] = []
+        for item in soup.select("ul.file-list > li[fileid]"):
+            folder_id = str(item.get("fileid", "")).strip()
+            if (folder_id.isascii() and folder_id.isdecimal()
+                    and 1 <= len(folder_id) <= 24 and folder_id not in folder_ids):
+                folder_ids.append(folder_id)
+        if len(folder_ids) > 50:
+            raise RuntimeError("XUEXITONG_TOO_MANY_FOLDERS")
+        if folder_ids:
+            with _session() as session:
+                for folder_id in folder_ids:
+                    response = session.post(
+                        COURSES_URL,
+                        data={"courseType": 1, "courseFolderId": folder_id,
+                              "query": "", "superstarClass": 0},
+                        timeout=(5, 12), allow_redirects=False,
+                    )
+                    courses.extend(self._parse_courses(_checked(response), seen))
         return courses
 
     def list_chapters(self, course_key: str, *, session: requests.Session | None = None) -> list[dict[str, Any]]:
