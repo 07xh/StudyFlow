@@ -7,7 +7,7 @@ name = "studyflow"
 version = "0.1.1rc26"
 description = "学序：知到与雨课堂统一学习助手"
 requires-python = ">=3.10"
-dependencies = ["requests>=2.31,<3", "python-dotenv>=1,<2"]
+dependencies = ["requests>=2.31,<3", "python-dotenv>=1,<2", "beautifulsoup4>=4.12,<5"]
 
 [project.optional-dependencies]
 desktop = ["keyring>=25,<27", "zhs==0.1.5"]
