@@ -98,7 +98,7 @@ test('failed terminal verification can retry without replaying or resending hear
 test('start is visibly pending and rapid repeated clicks launch only one run',async()=>{
  const launch=deferred();let calls=0;let view;
  const idle={...running,state:'idle',run_id:null,zhs_progress:null};
- const env=setup({getLegacyStatus:async()=>idle,startLegacy:async()=>{calls++;return launch.promise;}});
+ const env=setup({getLegacyStatus:async()=>calls?running:idle,startLegacy:async()=>{calls++;return launch.promise;}});
  try{
   await act(async()=>{view=create(React.createElement(env.Panel,props));});
   const button=view.root.findAllByType('button').find(n=>words(n).includes('启动原版任务'));
@@ -113,7 +113,7 @@ test('start is visibly pending and rapid repeated clicks launch only one run',as
 
 test('stop shows pending state without treating an unfinished kill as success',async()=>{
  const termination=deferred();let stopCalls=0;let view;
- const env=setup({getLegacyStatus:async()=>running,stopLegacy:async()=>{stopCalls++;return termination.promise;}});
+ const env=setup({getLegacyStatus:async()=>running,stopLegacy:async()=>{stopCalls++;return termination.promise;}},{request:async()=>({courses:[]})});
  try{
   await act(async()=>{view=create(React.createElement(env.Panel,props));});
   const stop=view.root.findAllByType('button').find(n=>words(n)===' 停止');
