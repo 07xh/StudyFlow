@@ -6,7 +6,7 @@ import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
-  History,ListChecks,RefreshCw,Search
+  History,ListChecks,RefreshCw,Search,SlidersHorizontal
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
@@ -86,6 +86,7 @@ export default function App(){
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
+  const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
   const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
   useEffect(()=>{
     try{window.localStorage.setItem(PLATFORM_LOGIN_EXPANDED_KEY,JSON.stringify(platformLoginExpanded));}
@@ -241,11 +242,12 @@ export default function App(){
 
   function enterCourses(platform:Platform){
 
-    setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
+    setPlatformSettingsOpen(null);setCoursePlatform(platform);setSelectedCourse(null);setPage("courses");
   }
 
   function goPlatform(platform:Platform,openLogin=false){
 
+    setPlatformSettingsOpen(null);
     if(openLogin)setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
     setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
   }
@@ -303,14 +305,46 @@ export default function App(){
       <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
     </section>;
   };
+  const renderPlatformSettings=(platform:Platform)=> <section className="sf-platform-settings-view" aria-label={platformNames[platform]+"参数设置"}>
+    <div className="sf-platform-settings-heading">
+      <h3>{platformNames[platform]} · 参数设置</h3>
+      <p>平台配置与维护集中管理，保存后按各项设置的生效规则执行。</p>
+    </div>
+    {platform==="zhidao"?<>
+      <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
+      {renderZhidaoModeSwitch()}
+      <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+      <p className="sf-muted">ZHS 原版观看参数请在课程详情的「当前课程任务」中展开设置；与官方播放器设置独立。</p>
+      </CollapsibleSection>
+      <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
+      <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
+      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+      onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+      </CollapsibleSection>
+      <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
+      <ZhidaoAccountTools desktop={desktop} dark={dark} view="data" onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
+      </CollapsibleSection>
+    </>:<YuketangTaskArea view="settings" courses={platforms.yuketang.courses}
+      desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
+      events={activity} onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>}
+  </section>;
+
   const renderPlatformDetail=(platform:Platform)=>{
     const definition=platformInfo(platform);
     if(!definition)return null;
     return <div className="sf-platform-workspace">
-      <div className="sf-platform-toolbar actions">
-        <button className={platforms[platform].status==="connected"?"primary":"secondary"} onClick={()=>enterCourses(platform)}>打开课程列表</button>
-        <button className="secondary" disabled={!desktop||!!busy||platforms[platform].status!=="connected"} onClick={()=>void sync(platform)}>同步课程列表</button>
+      <div className="sf-platform-toolbar actions" role="group" aria-label="平台操作">
+        <button type="button" className={"secondary sf-platform-settings-action"+(platformSettingsOpen===platform?" is-active":"")}
+          aria-pressed={platformSettingsOpen===platform}
+          onClick={()=>setPlatformSettingsOpen(previous=>previous===platform?null:platform)}>
+          <SlidersHorizontal size={15}/>{platformSettingsOpen===platform?"返回平台":"参数设置"}
+        </button>
+        <button type="button" className={platforms[platform].status==="connected"?"primary":"secondary"}
+          onClick={()=>enterCourses(platform)}>打开课程列表</button>
+        <button type="button" className="secondary" disabled={!desktop||!!busy||platforms[platform].status!=="connected"}
+          onClick={()=>void sync(platform)}>同步课程列表</button>
       </div>
+      {platformSettingsOpen===platform?renderPlatformSettings(platform):<>
       <PlatformCard definition={definition} state={platforms[platform]} desktop={desktop} busy={Boolean(busy)} variant="account"
         expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform)} onEnterCourses={()=>enterCourses(platform)}
         onToggleLogin={()=>setPlatformLoginExpanded(previous=>({...previous,[platform]:!previous[platform]}))}>
@@ -321,19 +355,6 @@ export default function App(){
           <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} platform="zhidao" desktop={desktop} compact onRefresh={runtime.refresh} onInspect={inspectCourse}/>
           <button className="text-button" onClick={()=>setPage("tasks")}>管理全部运行任务</button>
         </CollapsibleSection>
-        <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
-          {renderZhidaoModeSwitch()}
-          <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-          <p className="sf-muted">ZHS 原版观看参数请在课程详情的「当前课程任务」中展开设置；与官方播放器设置独立。</p>
-        </CollapsibleSection>
-        <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
-          <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
-            onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
-            onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-        </CollapsibleSection>
-        <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
-          <ZhidaoAccountTools desktop={desktop} dark={dark} view="data" onDataChanged={()=>{invalidatePlatform("zhidao");void refresh();}}/>
-        </CollapsibleSection>
       </>:<>
         <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容">
           <YuketangContentPanel config={config} videos={videos} desktop={desktop} busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"} dirty={scopeDirty} hasSession={hasYuketangSession} hasSign={hasYuketangSign} onChange={updateConfiguration} onSave={()=>void saveYuketangScope()} onShowVideos={()=>void showVideos()}/>
@@ -343,6 +364,7 @@ export default function App(){
           <YuketangTaskArea courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
         </CollapsibleSection>
+      </>}
       </>}
     </div>;
   };
@@ -553,6 +575,7 @@ export default function App(){
 
   return <>
     <AppShell page={page} onNavigate={next=>{
+      setPlatformSettingsOpen(null);
       setPage(next);
     }}
       dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
