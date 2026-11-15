@@ -61,7 +61,8 @@ jobs:
     # The main-branch push has its own package workflow. Keep this full
     # installer check on PRs and manual runs without building it twice.
     if: github.event_name != 'push'
-    runs-on: windows-2022
+    # Match the main release workflow runner so installer regressions are caught before merge.
+    runs-on: windows-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4

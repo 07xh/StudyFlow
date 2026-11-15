@@ -121,13 +121,35 @@ try {
     Start-Sleep -Seconds 5
     $app.Refresh()
     if ($app.HasExited) { throw "Installed desktop app exited early: $($app.ExitCode)" }
-    Stop-Process -Id $app.Id -Force
-    Wait-Process -Id $app.Id -ErrorAction SilentlyContinue
+    # Exercise normal user exit, not a hard kill. Hard-killing the desktop
+    # bypasses Tauri window-destroyed cleanup and can orphan its Python bridge.
+    if (-not $app.CloseMainWindow()) {
+        throw 'Could not request graceful StudyFlow window shutdown'
+    }
+    if (-not $app.WaitForExit(15000)) {
+        throw 'StudyFlow did not exit gracefully within 15 seconds'
+    }
     $app = $null
+
+    # The installer refuses to overwrite/delete the bridge while it is running.
+    # Verify normal exit releases the exact packaged EXE before uninstall.
+    $bridgeReleased = $false
+    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+        try {
+            $probe = [IO.File]::Open($bridge, [IO.FileMode]::Open, [IO.FileAccess]::Write, [IO.FileShare]::Read)
+            $probe.Dispose()
+            $bridgeReleased = $true
+            break
+        } catch [IO.IOException] {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    if (-not $bridgeReleased) { throw 'StudyFlow background bridge was not released after normal exit' }
+
     $uninstaller = Join-Path $root 'uninstall.exe'
     if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'NSIS uninstaller missing' }
     $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "_?=$root") -Wait -PassThru
-    if ($remove.ExitCode -ne 0) { throw 'NSIS uninstall failed' }
+    if ($remove.ExitCode -ne 0) { throw "NSIS uninstall failed: exit code $($remove.ExitCode)" }
     if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Uninstall changed StudyFlow user data' }
     if ([IO.File]::ReadAllText($legacyInstallMarker) -cne 'preserve-original-zhs-install' -or
         [IO.File]::ReadAllText($legacyDataMarker) -cne 'preserve-original-zhs-data') {
