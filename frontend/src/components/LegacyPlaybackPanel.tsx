@@ -106,7 +106,7 @@ export function LegacyPlaybackPanel({
   }, [desktop, platform]);
 
   useEffect(() => {
-    if(courseId)setSelection(courseId);
+    if(courseId){setSelection(courseId);setZhsOptions(null);}
   },[courseId]);
 
   useEffect(() => {
@@ -227,24 +227,41 @@ export function LegacyPlaybackPanel({
 
   return <section className="legacy-playback-panel">
     <div className="section-head">
-      <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到原版任务" : "运行任务"}</h3>
+      <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到 · ZHS 原版任务" : "运行任务"}</h3>
       </div>
       <span className={status?.state === "running" ? "legacy-run-state active" : "legacy-run-state"}>
         {status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
     </div>
     {!ownsStatus&&status?.state==="running"&&<p className="sf-task-context">另一门课程的 ZHS 任务正在运行。{onOpenTasks&&<button className="text-button" onClick={onOpenTasks}>查看运行任务</button>}</p>}
+    {platform==="zhidao"&&<p className="sf-muted">ZHS 原版任务直接使用学序内置 Python 服务，无需打开 WebView2；本地任务状态不等于服务器学习进度。</p>}
+    {platform === "zhidao"&&!detailMode&&<div className="legacy-field sf-zhs-course-selector">
+      <label htmlFor="legacy-zhidao-course">选择已同步的知到课程</label>
+      <select id="legacy-zhidao-course" value={selection} onChange={e=>{setSelection(e.target.value);setZhsOptions(null);}}>
+        <option value="">请选择课程</option>
+        {playableCourses.map(c=><option value={c.course_id} key={c.course_id}>{c.title}</option>)}
+      </select>
+    </div>}
+    {platform === "zhidao"&&detailMode&&ownsStatus&&<div className="legacy-field sf-legacy-course-context">
+      <span>任务所属课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
+    </div>}
     <div className="actions legacy-actions">
       <button className="primary" type="button" disabled={!desktop||!connected||busy||
         status?.state==="running"||
         (platform==="zhidao" && (!zhsOptions || !playableCourses.some(c=>c.course_id===selection)))||
         (platform==="yuketang" && (!settingsReady || !validateOriginalOptions(options)))}
-        onClick={()=>void start()}><Play size={16}/> {platform==="yuketang"?"启动平台批量任务":"启动原版任务"}</button>
+        onClick={()=>void start()}><Play size={16}/> {platform==="yuketang"?"启动平台批量任务":"开始 ZHS 任务"}</button>
       <button className="secondary" type="button" disabled={!desktop||busy||!ownsStatus||!status?.run_id||status?.state!=="running"}
-        onClick={()=>void stop()}><Square size={16}/> 停止</button>
+        onClick={()=>void stop()}><Square size={16}/> {platform==="zhidao"?"停止 ZHS 任务":"停止"}</button>
       <button className="secondary" type="button" disabled={!desktop||busy}
         onClick={()=>void updateStatus()}><RefreshCw size={16}/> 查询运行状态</button>
     </div>
+    {platform==="zhidao"&&!desktop&&<p className="sf-task-context">仅 Windows 桌面版支持启动原版任务。</p>}
+    {platform==="zhidao"&&desktop&&!connected&&<p className="sf-task-context">请先在知到平台完成登录和连接核验。</p>}
+    {platform==="zhidao"&&desktop&&connected&&playableCourses.length===0&&<p className="sf-task-context">暂无可执行的当前课程，请先同步真实课程列表。</p>}
+    {platform==="zhidao"&&desktop&&connected&&playableCourses.length>0&&!selection&&<p className="sf-task-context">请先选择需要运行的课程。</p>}
+    {platform==="zhidao"&&desktop&&connected&&selection&&!zhsOptions&&<p className="sf-task-context">ZHS 参数尚未就绪；若持续不可启动，请展开下方参数检查保存状态。</p>}
+    {platform==="zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
     {platform==="zhidao"&&<div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
@@ -334,17 +351,6 @@ export function LegacyPlaybackPanel({
       </div>
       <small className="sf-ykt-live-note">并发模式下，各槽位状态来自原版 Worker 日志。心跳无法对应到单个视频，百分比保持空白；诊断区的最近值也不代表课程总进度。</small>
       </details>
-    </div>}
-    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
-    {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
-      <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>
-      <select id="legacy-zhidao-course" value={selection} onChange={e=>setSelection(e.target.value)}>
-        <option value="">选择已同步的知到课程</option>
-        {playableCourses.map(c=><option value={c.course_id} key={c.course_id}>{c.title}</option>)}
-      </select>
-    </div>}
-    {platform === "zhidao"&&detailMode&&ownsStatus&&<div className="legacy-field sf-legacy-course-context">
-      <span>任务所属课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
     </div>}
 
     {status?.state==="exited"&&ownsStatus&&<p className="legacy-state-note">
