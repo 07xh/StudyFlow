@@ -85,7 +85,7 @@ export default function App(){
   const [query,setQuery]=useState("");
   const [coursePlatform,setCoursePlatform]=useState("all");
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
-  const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
+  const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("zhs-original");
   const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
   useEffect(()=>{
     try{window.localStorage.setItem(PLATFORM_LOGIN_EXPANDED_KEY,JSON.stringify(platformLoginExpanded));}
@@ -317,14 +317,21 @@ export default function App(){
         {renderPlatformLogin(platform)}
       </PlatformCard>
       {platform==="zhidao"?<>
-        <CollapsibleSection id="platform:zhidao:tasks" title="平台运行概览">
+        <div className="sf-zhidao-direct-task" aria-label="知到 ZHS 原版任务控制">
+          <LegacyPlaybackPanel platform="zhidao" courses={platforms.zhidao.courses} desktop={desktop}
+            connected={platforms.zhidao.status==="connected"} onCourseVerified={updateVerifiedZhidaoCourse}
+            events={activity} onOpenTasks={()=>setPage("tasks")}
+            onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+        </div>
+        <CollapsibleSection id="platform:zhidao:tasks" title="平台运行概览" defaultExpanded={false}>
           <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} platform="zhidao" desktop={desktop} compact onRefresh={runtime.refresh} onInspect={inspectCourse}/>
           <button className="text-button" onClick={()=>setPage("tasks")}>管理全部运行任务</button>
         </CollapsibleSection>
-        <CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
+        <CollapsibleSection id="platform:zhidao:defaults" title="运行方式与官方播放器设置（可选）" defaultExpanded={false}>
           {renderZhidaoModeSwitch()}
-          <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-          <p className="sf-muted">ZHS 原版观看参数请在课程详情的「当前课程任务」中展开设置；与官方播放器设置独立。</p>
+          {zhidaoPlaybackMode==="official"&&<ZhidaoPlayerSettingsPanel desktop={desktop}
+            onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}
+          <p className="sf-muted">上方 ZHS 原版任务直接使用 Python 执行链路，无需 WebView2。ZHS 参数在任务面板内设置；只有选中官方播放器时才显示其环境与播放参数。</p>
         </CollapsibleSection>
         <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
