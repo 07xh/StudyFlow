@@ -160,7 +160,8 @@ fn parse_zhs_diagnostic(bytes: &[u8], token: &str, now: f64) -> Option<String> {
         "CAPTCHA_REQUIRED" | "TIME_RESTRICTED" | "LOGIN_REQUIRED"
         | "NETWORK_ERROR" | "LOCAL_FILE_MISSING" | "FILE_PERMISSION_DENIED"
         | "INTERACTIVE_INPUT_REQUIRED" | "UPSTREAM_NONZERO_EXIT"
-        | "EXECUTOR_EXCEPTION" | "WORKER_ENTRY_EXCEPTION") {
+        | "EXECUTOR_EXCEPTION" | "WORKER_ENTRY_EXCEPTION"
+        | "ZHS_SESSION_PREFLIGHT_FAILED" | "ZHS_COURSE_URL_FAILED") {
         return None;
     }
     Some(code.to_owned())
@@ -299,6 +300,12 @@ impl LegacyTasks {
     }
 }
 
+/// ZHS 0.1.5 resolves .zhs/ relative to the child working directory.
+/// Use the same home path as existing read-only Zhidao workers.
+fn configure_zhidao_workdir(command: &mut Command, user_home: &std::path::Path) {
+    command.current_dir(user_home);
+}
+
 fn valid_course_key(key: &str) -> bool {
     key.len() == 64 && key.as_bytes().iter().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
@@ -358,6 +365,8 @@ fn legacy_start_blocking(
         Some(Uuid::new_v4().simple().to_string())
     } else { None };
     if platform == "zhidao" {
+        let home = app.path().home_dir().map_err(|_| "LEGACY_LAUNCH_FAILED")?;
+        configure_zhidao_workdir(&mut command, &home);
         command.arg("--legacy-zhidao")
             .arg(course_id.as_deref().unwrap_or(""))
             .arg(monitor_token.as_deref().unwrap_or(""));
@@ -525,6 +534,21 @@ mod tests {
         }).to_string();
         assert!(parse_zhs_diagnostic(leaked.as_bytes(), &nonce, now).is_none());
         assert!(parse_zhs_diagnostic(accepted.as_bytes(), &nonce, now + 121.0).is_none());
+        for stage in ["ZHS_SESSION_PREFLIGHT_FAILED", "ZHS_COURSE_URL_FAILED"] {
+            let payload = serde_json::json!({
+                "v": 1, "token": nonce, "code": stage, "at": now
+            }).to_string();
+            assert_eq!(parse_zhs_diagnostic(payload.as_bytes(), &nonce, now),
+                       Some(stage.to_owned()));
+        }
+    }
+
+    #[test]
+    fn zhs_command_workdir_uses_user_home_instead_of_inherited_cwd() {
+        let home = PathBuf::from("test-profile-home");
+        let mut command = Command::new("studyflow-bridge.exe");
+        configure_zhidao_workdir(&mut command, &home);
+        assert_eq!(command.get_current_dir(), Some(home.as_path()));
     }
 
     fn valid_yuketang_options() -> OriginalYktOptions {

@@ -199,7 +199,9 @@ export function zhsDiagnosticMessage(status: LegacyTaskStatus): string {
     case "LOCAL_FILE_MISSING": return "原版需要的本机文件未找到，请检查完整安装与本机数据。";
     case "FILE_PERMISSION_DENIED": return "原版访问本机文件被拒绝，请检查文件权限或安全软件。";
     case "INTERACTIVE_INPUT_REQUIRED": return "原版要求交互输入，无终端后台任务无法继续。";
-    case "UPSTREAM_NONZERO_EXIT": return "原版主动返回非零退出状态，尚无可确认的具体异常分类。";
+    case "ZHS_SESSION_PREFLIGHT_FAILED": return "ZHS 原版在会话预检阶段退出：可能未能恢复登录信息、会话校验未通过，或验证接口暂时不可用。课程进度能读取不代表该预检通过。";
+    case "ZHS_COURSE_URL_FAILED": return "ZHS 原版在课程链接处理阶段退出：请检查课程入口及课程类型是否与当前平台匹配。";
+    case "UPSTREAM_NONZERO_EXIT": return "原版命令退出码非零，尚未识别出失败阶段；不能据此判断课程已开始播放。";
     case "EXECUTOR_EXCEPTION": return "原版执行器发生未分类异常，未记录敏感异常内容。";
     case "WORKER_ENTRY_EXCEPTION": return "任务入口发生未分类异常，请检查会话、课程数据及安装环境。";
     default: return "当前安装版本未提供可确认的错误分类；未保存原版隐私输出。";

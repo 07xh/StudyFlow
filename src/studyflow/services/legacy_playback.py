@@ -16,6 +16,7 @@ import runpy
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 import threading
 import time
 
@@ -216,6 +217,7 @@ _ZHS_DIAGNOSTIC_CODES = frozenset({
     "NETWORK_ERROR", "LOCAL_FILE_MISSING", "FILE_PERMISSION_DENIED",
     "INTERACTIVE_INPUT_REQUIRED", "UPSTREAM_NONZERO_EXIT",
     "EXECUTOR_EXCEPTION", "WORKER_ENTRY_EXCEPTION",
+    "ZHS_SESSION_PREFLIGHT_FAILED", "ZHS_COURSE_URL_FAILED",
 })
 
 
@@ -267,6 +269,46 @@ def _write_zhs_diagnostic(monitor_token: str | None, code: str) -> None:
         pass
 
 
+@contextmanager
+def _observe_zhs_cli_stages():
+    """Read-only markers around ZHS 0.1.5's existing CLI stages.
+
+    Upstream `play()` can intentionally raise typer.Exit(1) when the
+    session preflight returns None or the URL dispatcher raises. Such exits
+    carry no exception for the outer supervisor to classify. Wrap only these
+    entry points for the lifetime of this dedicated worker invocation; never
+    change their arguments, return values, exceptions or network behavior.
+    """
+    upstream = sys.modules.get("zhs.__main__")
+    markers = {"failure": None}
+    originals = {}
+    if upstream is not None:
+        original_load = getattr(upstream, "_load_config_and_session", None)
+        if callable(original_load):
+            def checked_load(*args, **kwargs):
+                result = original_load(*args, **kwargs)
+                if result is None:
+                    markers["failure"] = "ZHS_SESSION_PREFLIGHT_FAILED"
+                return result
+            originals["_load_config_and_session"] = original_load
+            setattr(upstream, "_load_config_and_session", checked_load)
+        original_url = getattr(upstream, "_dispatch_play_url", None)
+        if callable(original_url):
+            def checked_url(*args, **kwargs):
+                try:
+                    return original_url(*args, **kwargs)
+                except Exception:
+                    markers["failure"] = "ZHS_COURSE_URL_FAILED"
+                    raise
+            originals["_dispatch_play_url"] = original_url
+            setattr(upstream, "_dispatch_play_url", checked_url)
+    try:
+        yield markers
+    finally:
+        for name, original in originals.items():
+            setattr(upstream, name, original)
+
+
 def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None,
                           options: dict | None = None, is_ai: bool = False) -> int | None:
     """Run upstream ZHS 0.1.5 CLI unchanged; None means no bundled runtime."""
@@ -280,6 +322,7 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
     original_stdout = sys.stdout
     original_stderr = sys.stderr
     sink = None
+    stage = {"failure": None}
     try:
         if monitor_token:
             try:
@@ -299,12 +342,13 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                 sys.stdout = original_stdout
                 sys.stderr = original_stderr
         # Per-run scope only controls the original traversal; not heartbeat sender.
-        with scoped_upstream_play(options, is_ai):
-            result = zhs_app(args=arguments, standalone_mode=False)
+        with _observe_zhs_cli_stages() as stage:
+            with scoped_upstream_play(options, is_ai):
+                result = zhs_app(args=arguments, standalone_mode=False)
         # Click/Typer may return an exit code when standalone_mode is false.
         code = result if isinstance(result, int) else 0
         if code != 0:
-            _write_zhs_diagnostic(monitor_token, "UPSTREAM_NONZERO_EXIT")
+            _write_zhs_diagnostic(monitor_token, stage["failure"] or "UPSTREAM_NONZERO_EXIT")
         return code
     except ScopeLimitReached:
         return 12
@@ -315,7 +359,7 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else 1
         if code != 0:
-            _write_zhs_diagnostic(monitor_token, "UPSTREAM_NONZERO_EXIT")
+            _write_zhs_diagnostic(monitor_token, stage["failure"] or "UPSTREAM_NONZERO_EXIT")
         return code
     except EOFError:
         # A hidden, noninteractive process cannot answer an upstream prompt.
@@ -325,7 +369,7 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
         # Click's Exit(code) is not SystemExit; do not mark an exit(0) as a failure.
         if type(exc).__name__ == "Exit" and isinstance(getattr(exc, "exit_code", None), int):
             if exc.exit_code != 0:
-                _write_zhs_diagnostic(monitor_token, "UPSTREAM_NONZERO_EXIT")
+                _write_zhs_diagnostic(monitor_token, stage["failure"] or "UPSTREAM_NONZERO_EXIT")
             return exc.exit_code
         _write_zhs_diagnostic(monitor_token, _classify_zhs_failure(exc))
         return 1
