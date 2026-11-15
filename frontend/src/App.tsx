@@ -6,7 +6,7 @@ import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
-import {XuexitongLoginPanel,XuexitongCourseDetailPanel} from "./components/XuexitongPanels";
+import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -553,7 +553,7 @@ export default function App(){
 
       </>}
     </>:platform==="xuexitong"?<>
-      {platformSettingsSection==="parameters"&&<p className="sf-muted">学习通模块已接入真实课程目录读取。执行与心跳控制尚未上线。</p>}
+      {platformSettingsSection==="parameters"&&<XuexitongSettingsPanel desktop={desktop}/>}
       {platformSettingsSection==="advanced"&&<p className="sf-muted">已保存的登录会话使用 Windows 凭据管理器；可在「账号与连接」清除。</p>}
     </>:<>
       {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings"
