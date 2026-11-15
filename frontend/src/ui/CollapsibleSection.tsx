@@ -7,6 +7,8 @@ interface Props{
   title:string;
   children:ReactNode;
   defaultExpanded?:boolean;
+  /** Positive request counter opens this section even if previously collapsed. */
+  expandRequest?:number;
 }
 
 const STORAGE_PREFIX="studyflow.section.expanded.v1.";
@@ -24,7 +26,7 @@ function initialExpanded(id:string,fallback:boolean):boolean{
  * Keeps children mounted while folded, so active playback and progress
  * monitors are not restarted or silently cancelled by visual preferences.
  */
-export function CollapsibleSection({id,title,children,defaultExpanded=true}:Props){
+export function CollapsibleSection({id,title,children,defaultExpanded=true,expandRequest=0}:Props){
   const controlsId=useId();
   const [expanded,setExpanded]=useState(()=>initialExpanded(id,defaultExpanded));
 
@@ -32,6 +34,10 @@ export function CollapsibleSection({id,title,children,defaultExpanded=true}:Prop
     // The section can be reused for another course without leaking its state.
     setExpanded(initialExpanded(id,defaultExpanded));
   },[id,defaultExpanded]);
+
+  useEffect(()=>{
+    if(expandRequest>0)setExpanded(true);
+  },[expandRequest]);
 
   function toggle(){
     setExpanded(previous=>{

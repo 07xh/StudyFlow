@@ -1,6 +1,7 @@
-import type {FormEvent} from "react";
+import {useState,type FormEvent} from "react";
 import {BookOpen,KeyRound,RefreshCw,ShieldCheck,Trash2} from "lucide-react";
 import type {Config,Video} from "../bridge";
+import {yuketangScopeIssues} from "../yuketangScopeValidation";
 
 const fields=[
   {id:"session_id",label:"Session ID",secret:true,required:true},
@@ -16,13 +17,21 @@ type Props={
   videos:Video[];
   onChange:(field:FieldId,value:string)=>void;
   onSubmit:()=>void;
+  onOpenScope:()=>void;
   onClear:()=>void;
   onShowVideos:()=>void;
 };
 
-export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChange,onSubmit,onClear,onShowVideos}:Props){
+export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChange,onSubmit,onOpenScope,onClear,onShowVideos}:Props){
+  const [attempted,setAttempted]=useState(false);
+  const issues=yuketangScopeIssues(config);
   function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
+    if(issues.length){
+      setAttempted(true);
+      return;
+    }
+    setAttempted(false);
     onSubmit();
   }
   return <div className="sf-platform-login">
@@ -43,7 +52,13 @@ export function YuketangLoginPanel({config,desktop,busy,connected,videos,onChang
             autoComplete="off" spellCheck={false} value={config[field.id]}
             onChange={event=>onChange(field.id,event.target.value)}/>
         </label>)}
-        {(!config.classroom_id||!config.university_id)&&<p className="sf-muted">先在 <a href="#sf-ykt-content">课堂范围与内容</a> 填写课堂 ID 和学校 ID，再保存会话。</p>}
+        {issues.length>0&&<div className={"sf-ykt-scope-prerequisite"+(attempted?" is-invalid":"")}
+          role={attempted?"alert":"status"}>
+          <strong>{attempted?"尚未保存：课堂信息不完整":"保存前需要补齐课堂信息"}</strong>
+          <p>{issues.join("；")}。当前输入的 Session ID 和 CSRF Token 会保留。</p>
+          <button className="secondary" type="button" disabled={!desktop||busy}
+            onClick={onOpenScope}>前往填写课堂 ID、学校 ID</button>
+        </div>}
         <div className="sf-login-actions">
           <button className="primary" type="submit" disabled={!desktop||busy}>
             <ShieldCheck size={16}/>保存会话与课堂配置

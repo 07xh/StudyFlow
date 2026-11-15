@@ -305,6 +305,9 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         try:
             credentials.save(request.get("configuration"))
             return {"id": request_id, "ok": True, "data": {"saved": True}}
+        except ValueError:
+            # Malformed classroom/session inputs are not credential-store failures.
+            return {"id": request_id, "ok": False, "error": "INVALID_YUKETANG_CONFIGURATION"}
         except Exception:
             return {"id": request_id, "ok": False, "error": "CREDENTIAL_STORAGE_FAILED"}
     if operation == "yuketang.clear":
