@@ -74,6 +74,44 @@ def _course_ids(course_key: str) -> tuple[str, str, str]:
     return tuple(course_key.split(":"))
 
 
+def _embedded_marg(text: str) -> dict[str, Any] | None:
+    """Decode a JSON object assigned to mArg without truncating nested braces.
+
+    The source page can contain quoted closing braces and escaped quotes.
+    A shallow regular expression would silently discard those task cards.
+    """
+    match = re.search(r"\\bmArg\\s*=\\s*\\{", text)
+    if not match:
+        return None
+    start = match.end() - 1
+    depth = 0
+    quote_char = ""
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if quote_char:
+            if escaped:
+                escaped = False
+            elif char == "\\\\":
+                escaped = True
+            elif char == quote_char:
+                quote_char = ""
+            continue
+        if char == '"':
+            quote_char = char
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    result = json.loads(text[start:index + 1])
+                except (ValueError, TypeError):
+                    return None
+                return result if isinstance(result, dict) else None
+    return None
+
+
 class XuexitongAdapter:
     def connection_info(self) -> ConnectionInfo:
         if credentials.load() is None:
@@ -149,6 +187,68 @@ class XuexitongAdapter:
         finally:
             if owned:
                 session.close()
+
+    def list_chapter_tasks(self, course_key: str, chapter_id: str) -> list[dict[str, Any]]:
+        """Read one real chapter's task cards without requesting media tokens.
+
+        This is a bounded, course-scoped metadata operation. It neither
+        starts playback nor sends learning-progress reports.
+        """
+        course_id, clazz_id, cpi = _course_ids(course_key)
+        if not isinstance(chapter_id, str) or not re.fullmatch(r"[0-9]{1,24}", chapter_id):
+            raise ValueError("INVALID_XUEXITONG_CHAPTER")
+        with _session() as session:
+            chapters = self.list_chapters(course_key, session=session)
+            target = next((item for item in chapters if item["id"] == chapter_id), None)
+            if target is None:
+                raise LookupError("XUEXITONG_CHAPTER_NOT_FOUND")
+            if target["locked"]:
+                return []
+            result: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for card_num in range(7):
+                response = session.get(
+                    CARDS_URL,
+                    params={
+                        "clazzid": clazz_id, "courseid": course_id, "knowledgeid": chapter_id,
+                        "ut": "s", "cpi": cpi, "v": "2025-0424-1038-3",
+                        "mooc2": 1, "num": card_num,
+                    },
+                    timeout=(5, 12), allow_redirects=False,
+                )
+                if response.status_code != 200 or response.is_redirect:
+                    raise RuntimeError("XUEXITONG_CARDS_UNAVAILABLE")
+                data = _embedded_marg(_checked(response))
+                if not data:
+                    continue
+                attachments = data.get("attachments", [])
+                if not isinstance(attachments, list):
+                    continue
+                for index, card in enumerate(attachments):
+                    if not isinstance(card, dict):
+                        continue
+                    kind = str(card.get("type") or "").lower()
+                    if kind not in {"video", "audio", "document", "workid", "read", "live"}:
+                        continue
+                    prop = card.get("property")
+                    if not isinstance(prop, dict):
+                        prop = {}
+                    identifier = str(card.get("jobid") or prop.get("jobid") or
+                                     card.get("objectId") or f"{card_num}-{index}")[:160]
+                    key = kind + ":" + identifier
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    name = str(prop.get("name") or prop.get("title") or card.get("name")
+                               or kind)[:180]
+                    result.append({
+                        "id": key,
+                        "type": kind,
+                        "title": name,
+                        "chapter_id": chapter_id,
+                        "completed": card.get("isPassed") is True,
+                    })
+            return result
 
     def list_video_tasks(self, course_key: str) -> list[VideoTask]:
         course_id, clazz_id, cpi = _course_ids(course_key)
