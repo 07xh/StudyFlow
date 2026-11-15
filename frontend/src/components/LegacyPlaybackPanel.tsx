@@ -381,7 +381,7 @@ export function LegacyPlaybackPanel({
           {yktProgress.rich_current != null && <small>处理到第 {yktProgress.rich_current} 篇图文</small>}
         </div>}
       </div>
-      <small className="sf-ykt-live-note">按原版 Worker 实际调用归属记录本地事件及服务器响应；未能归属的进度仍留空。日志记录的服务器响应不等于课程最终完成，诊断区最近值也不代表课程总进度。</small>
+      <small className="sf-ykt-live-note">并发模式下，按原版 Worker 实际调用归属记录本地事件及服务器响应；未能归属的进度仍留空。日志记录的服务器响应不等于课程最终完成，诊断区最近值也不代表课程总进度。</small>
       </details>
     </div>}
     {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
