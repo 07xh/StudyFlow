@@ -94,3 +94,17 @@ def test_player_settings_migrate_readonly_without_writing_old_install(monkeypatc
     assert saved["speed"] == "1.25"
     assert old.read_text(encoding="utf-8") == original
     assert (tmp_path / "StudyFlow" / "zhidao" / "official-player-settings.json").is_file()
+
+
+def test_zhidao_defaults_to_zhs_without_saved_preference(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    assert legacy_runtime.get_player_settings()["mode"] == "zhs-original"
+
+
+def test_zhidao_respects_explicit_official_player_preference(monkeypatch, tmp_path):
+    import json
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    saved = tmp_path / "StudyFlow" / "zhidao" / "official-player-settings.json"
+    saved.parent.mkdir(parents=True)
+    saved.write_text(json.dumps({"mode": "official"}), encoding="utf-8")
+    assert legacy_runtime.get_player_settings()["mode"] == "official"
