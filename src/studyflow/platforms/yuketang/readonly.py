@@ -192,6 +192,9 @@ class YuketangReadOnly:
             if number is not None and number > 0:
                 duration = number
                 break
-        return {"progress_percent": round(rate * 100, 1),
+        percent = round(rate * 100, 1)
+        if rate < 1.0 and percent >= 100.0:
+            percent = 99.9
+        return {"progress_percent": percent, "server_completed": rate == 1.0,
                 "last_point_seconds": last_position,
                 "duration_seconds": duration}
