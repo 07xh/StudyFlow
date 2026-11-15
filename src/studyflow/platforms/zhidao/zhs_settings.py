@@ -11,6 +11,8 @@ import tempfile
 DEFAULTS = {
     "speed": 1.5, "speed_cap": 2.0, "limit_minutes": 0,
     "learn_optional": False, "max_videos": 0, "stop_on_error": False,
+    # None follows the original ZHS course-type default; overrides are course-scoped.
+    "completion_threshold": None,
 }
 MAX_SELECTED = 256
 
@@ -41,6 +43,7 @@ def validate_settings(value: object) -> dict:
         raise ValueError("INVALID_ZHS_SETTINGS")
     speed, minutes, optional = value["speed"], value["limit_minutes"], value["learn_optional"]
     cap, maximum, stop = value["speed_cap"], value["max_videos"], value["stop_on_error"]
+    threshold = value["completion_threshold"]
     if (isinstance(speed, bool) or not isinstance(speed, (float, int))
             or not math.isfinite(speed) or not 1.0 <= speed <= 2.0):
         raise ValueError("INVALID_ZHS_SETTINGS")
@@ -50,9 +53,12 @@ def validate_settings(value: object) -> dict:
             or type(maximum) is not int or not 0 <= maximum <= 1000
             or type(stop) is not bool or not isinstance(optional, bool)):
         raise ValueError("INVALID_ZHS_SETTINGS")
+    if threshold is not None and (type(threshold) is not int or not 1 <= threshold <= 100):
+        raise ValueError("INVALID_ZHS_SETTINGS")
     return {"speed": float(speed), "speed_cap": float(cap),
             "limit_minutes": minutes, "learn_optional": optional,
-            "max_videos": maximum, "stop_on_error": stop}
+            "max_videos": maximum, "stop_on_error": stop,
+            "completion_threshold": threshold}
 
 
 def _path(course_key: str | None = None) -> Path:
@@ -73,8 +79,8 @@ def read_settings(course_key: str | None = None) -> dict:
         if path.stat().st_size > 4096:
             raise OSError("ZHS_SETTINGS_UNAVAILABLE")
         raw = json.loads(path.read_text(encoding="utf-8"))
-        # Migrate PR #64's three-property local draft without deleting preferences.
-        if isinstance(raw, dict) and set(raw) == {"speed", "limit_minutes", "learn_optional"}:
+        # Migrate older complete and three-property settings in place. Reject unknown keys.
+        if isinstance(raw, dict) and set(raw).issubset(DEFAULTS):
             raw = {**DEFAULTS, **raw}
         return validate_settings(raw)
     except FileNotFoundError:

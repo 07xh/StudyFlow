@@ -67,6 +67,8 @@ export async function getYuketangLiveProgress(runId: string): Promise<YuketangLi
 export type ZhsStoredOptions = {
   speed:number;speed_cap:number;limit_minutes:number;learn_optional:boolean;
   max_videos:number;stop_on_error:boolean;
+  /** null = inherit original ZHS default for the current course type. */
+  completion_threshold:number|null;
 };
 export type OriginalZhsOptions = ZhsStoredOptions & {
   scope_mode:"all"|"selected";selected_ids:number[];
@@ -74,14 +76,17 @@ export type OriginalZhsOptions = ZhsStoredOptions & {
 };
 export const originalZhsDefaults:Readonly<ZhsStoredOptions> = Object.freeze({
   speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,
-  max_videos:0,stop_on_error:false
+  max_videos:0,stop_on_error:false,completion_threshold:null
 });
 export function validateZhsStoredOptions(value:ZhsStoredOptions):boolean {
   return !!value && Number.isFinite(value.speed) && value.speed>=1 && value.speed<=2 &&
     Number.isFinite(value.speed_cap) && value.speed_cap>=1 && value.speed_cap<=2 &&
     Number.isInteger(value.limit_minutes) && value.limit_minutes>=0 && value.limit_minutes<=1440 &&
     Number.isInteger(value.max_videos) && value.max_videos>=0 && value.max_videos<=1000 &&
-    typeof value.learn_optional==="boolean" && typeof value.stop_on_error==="boolean";
+    typeof value.learn_optional==="boolean" && typeof value.stop_on_error==="boolean" &&
+    (value.completion_threshold===null ||
+      (Number.isInteger(value.completion_threshold) &&
+       value.completion_threshold>=1 && value.completion_threshold<=100));
 }
 export function validateZhsOptions(value:OriginalZhsOptions):boolean {
   const ids=value?.selected_ids;

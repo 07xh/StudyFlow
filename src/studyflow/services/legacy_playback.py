@@ -286,7 +286,7 @@ def _write_zhs_diagnostic(monitor_token: str | None, code: str) -> None:
 
 
 @contextmanager
-def _observe_zhs_cli_stages():
+def _observe_zhs_cli_stages(completion_threshold: int | None = None, is_ai: bool = False):
     """Read-only markers around ZHS 0.1.5's existing CLI stages.
 
     Upstream `play()` can intentionally raise typer.Exit(1) when the
@@ -331,6 +331,16 @@ def _observe_zhs_cli_stages():
                         setattr(bootstrap, "verify_session", observed_verify)
                 try:
                     result = original_load(*args, **kwargs)
+                    # Per-course local execution target only. The platform's
+                    # server completion status is still verified independently.
+                    # Adjust in-memory settings after upstream session preflight;
+                    # never write or patch ~/.zhs/config.toml or heartbeat payloads.
+                    if result is not None and completion_threshold is not None:
+                        config, _session = result
+                        if is_ai:
+                            config.video.ai_threshold = completion_threshold
+                        else:
+                            config.threshold = completion_threshold / 100.0
                 finally:
                     if bootstrap is not None:
                         for name, original in restored.items():
@@ -392,7 +402,9 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
                 sys.stdout = original_stdout
                 sys.stderr = original_stderr
         # Per-run scope only controls the original traversal; not heartbeat sender.
-        with _observe_zhs_cli_stages() as stage:
+        with _observe_zhs_cli_stages(
+            options.get("completion_threshold") if options is not None else None, is_ai
+        ) as stage:
             with scoped_upstream_play(
                 options, is_ai,
                 on_resource=sink.mark_resource if sink is not None else None,
