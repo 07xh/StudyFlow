@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use serde::Serialize;
-use tauri::{AppHandle, State, Manager};
+use tauri::{AppHandle, Manager};
 
 #[derive(serde::Deserialize)]
 pub struct OriginalYktOptions {
@@ -274,8 +274,10 @@ fn terminate_tree(child: &mut Child) {
         let pid = child.id().to_string();
         // The original .cmd script can create a child ZHS Python process.
         // Stop the entire task tree, never an unrelated process.
+        use std::os::windows::process::CommandExt;
         let _ = Command::new("taskkill")
             .args(["/PID", &pid, "/T", "/F"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .stdout(Stdio::null()).stderr(Stdio::null()).status();
     }
     let _ = child.kill();
@@ -301,9 +303,21 @@ fn valid_course_key(key: &str) -> bool {
     key.len() == 64 && key.as_bytes().iter().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 
+// Windows process creation is blocking: always run it off the Tauri IPC thread.
 #[tauri::command]
-pub fn legacy_start(
-    app: AppHandle, state: State<'_, LegacyTasks>,
+pub async fn legacy_start(
+    app: AppHandle,
+    platform: String, course_id: Option<String>, options: Option<OriginalYktOptions>,
+    zhs_options: Option<ZhsOptions>
+) -> Result<LegacyStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<LegacyTasks>();
+        legacy_start_blocking(&app, state.inner(), platform, course_id, options, zhs_options)
+    }).await.map_err(|_| "TASK_START_FAILED".to_string())?
+}
+
+fn legacy_start_blocking(
+    app: &AppHandle, state: &LegacyTasks,
     platform: String, course_id: Option<String>, options: Option<OriginalYktOptions>,
     zhs_options: Option<ZhsOptions>
 ) -> Result<LegacyStatus, String> {
@@ -332,7 +346,7 @@ pub fn legacy_start(
             return Err("TASK_ALREADY_RUNNING".into());
         }
     }
-    let binary = crate::bridge_binary(&app).map_err(|_| "LEGACY_NOT_INSTALLED")?;
+    let binary = crate::bridge_binary(app).map_err(|_| "LEGACY_NOT_INSTALLED")?;
     let mut command = Command::new(binary);
     let run_id = if platform == "yuketang" {
         let micros = std::time::SystemTime::now()
@@ -406,8 +420,16 @@ pub fn legacy_start(
     })
 }
 
+// Status polling may contend with Windows process termination; do not stall IPC.
 #[tauri::command]
-pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<LegacyStatus, String> {
+pub async fn legacy_status(app: AppHandle, platform: String) -> Result<LegacyStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<LegacyTasks>();
+        legacy_status_blocking(state.inner(), platform)
+    }).await.map_err(|_| "TASK_STATUS_FAILED".to_string())?
+}
+
+fn legacy_status_blocking(state: &LegacyTasks, platform: String) -> Result<LegacyStatus, String> {
     if platform != "zhidao" && platform != "yuketang" {
         return Err("UNKNOWN_PLATFORM".into());
     }
@@ -418,8 +440,16 @@ pub fn legacy_status(state: State<'_, LegacyTasks>, platform: String) -> Result<
     }
 }
 
+// Stop keeps the original run-id validation and process-tree termination, off IPC.
 #[tauri::command]
-pub fn legacy_stop(state: State<'_, LegacyTasks>, platform: String, expected_run_id: Option<String>) -> Result<LegacyStatus, String> {
+pub async fn legacy_stop(app: AppHandle, platform: String, expected_run_id: Option<String>) -> Result<LegacyStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<LegacyTasks>();
+        legacy_stop_blocking(state.inner(), platform, expected_run_id)
+    }).await.map_err(|_| "TASK_STOP_FAILED".to_string())?
+}
+
+fn legacy_stop_blocking(state: &LegacyTasks, platform: String, expected_run_id: Option<String>) -> Result<LegacyStatus, String> {
     if platform != "zhidao" && platform != "yuketang" {
         return Err("UNKNOWN_PLATFORM".into());
     }
