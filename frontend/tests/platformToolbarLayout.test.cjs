@@ -12,7 +12,7 @@ test("platform toolbar keeps settings, course list and sync in one ordered row",
   const settings=block.indexOf("参数设置"),courses=block.indexOf("打开课程列表"),sync=block.indexOf("同步课程列表");
   assert.ok(settings>=0&&courses>settings&&sync>courses,"buttons must stay in the intended order");
   assert.match(block,/role="group" aria-label="平台操作"/);
-  assert.match(block,/<SlidersHorizontal size={15}\/>/);
+  assert.ok(block.includes("<SlidersHorizontal size={15}/>"));
   assert.match(css,/\.sf-shell \.sf-platform-toolbar\.actions\{[\s\S]*?flex-wrap:nowrap/);
   assert.match(css,/\.sf-shell \.sf-platform-toolbar\.actions>button\{[\s\S]*?white-space:nowrap/);
   assert.match(css,/\.sf-shell \.sf-platform-toolbar\.actions>button:first-child\{margin-left:auto\}/);
