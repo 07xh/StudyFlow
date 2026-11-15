@@ -205,7 +205,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     }
     let operation = request.get("operation").and_then(|v| v.as_str()).unwrap_or("");
     match operation {
-        "ping" | "platform.status" | "yuketang.clear" | "updates.settings.get"
+        "ping" | "platform.status" | "yuketang.clear" | "updates.settings.get" | "updates.latest"
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
