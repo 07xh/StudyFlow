@@ -199,7 +199,7 @@ def test_ui_status_cannot_be_conflated_with_server_progress():
     rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
     assert "zhs_progress: ZhsLocalProgress | null" in legacy_types
     assert 'status?.course_id === selection' in panel
-    assert "本地模拟片段" in panel and "非服务器确认进度" in panel
+    assert "当前视频片段位置" in panel and "非服务器确认进度" in panel
     assert 'now - observed > 18.0' in rust
     assert "remove_zhs_snapshot(job.monitor_token.as_deref())" in rust
     assert "last_zhs_progress" in rust

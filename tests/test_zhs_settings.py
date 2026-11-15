@@ -36,7 +36,7 @@ def test_zhs_cli_options_are_passed_to_original_typer(monkeypatch):
                "scope_mode": "all", "selected_ids": []}
     assert legacy.run_zhidao_original("a" * 64, "b" * 32, options) == 0
     assert seen == [(["play", "-c", "11:22", "--type", "ai",
-                     "--speed", "1.25", "--limit", "30", "--learn-optional"], "b" * 32, options, True)]
+                     "--speed", "1.25", "--limit", "30", "--learn-optional"], "b" * 32, {**options, "resource_mode": "all"}, True)]
 
 
 def test_zhs_refuses_invalid_worker_settings(monkeypatch):
@@ -73,3 +73,13 @@ def test_course_options_are_independent_and_reuse_global_fallback(tmp_path, monk
     assert zhs_settings.read_settings(second) == zhs_settings.DEFAULTS
     with pytest.raises(ValueError, match="INVALID_COURSE"):
         zhs_settings.save_settings(course_setting, "../bad")
+
+
+def test_resource_type_setting_is_per_run_and_fails_closed():
+    original = {**zhs_settings.DEFAULTS, "scope_mode": "all", "selected_ids": []}
+    assert zhs_settings.validate_run_settings(original)["resource_mode"] == "all"
+    for mode in ("all", "video", "reading"):
+        assert zhs_settings.validate_run_settings({**original, "resource_mode": mode})["resource_mode"] == mode
+    for mode in ("videos", "ppt-only", True, None):
+        with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
+            zhs_settings.validate_run_settings({**original, "resource_mode": mode})
