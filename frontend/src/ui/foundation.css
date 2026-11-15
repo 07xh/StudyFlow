@@ -1960,3 +1960,19 @@
   .sf-shell .sf-workspace-empty-progress{flex-wrap:wrap;gap:4px}
   .sf-shell .sf-workspace-empty-progress .sf-header-course-picker{max-width:none}
 }
+
+/* A blocked launch must never retain the green "ready" treatment. */
+.sf-shell .legacy-actions .primary:disabled{
+  color:var(--muted);
+  background:var(--panel-raised);
+  border-color:var(--line);
+  box-shadow:none;
+  opacity:1;
+}
+.sf-shell .sf-start-unavailable-reason{
+  margin:8px 0 12px;
+  border-left-color:var(--warning);
+  background:var(--warning-bg);
+  color:var(--text);
+  overflow-wrap:anywhere;
+}
