@@ -16,6 +16,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
+  | {id: string; version: 1; operation: "xuexitong.session.configure"; cookie: string}
+  | {id: string; version: 1; operation: "xuexitong.session.clear"}
+  | {id: string; version: 1; operation: "xuexitong.chapters.list"; course_id: string}
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"; course_id?: string}
   | {id: string; version: 1; operation: "yuketang.course.detail"; course_id: string; offset: number; limit: number}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
@@ -115,7 +118,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
     throw new Error("INVALID_IPC_RESPONSE");
   }
   if (!result.ok) {
-    const allowed = new Set(["INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
+    const allowed = new Set(["INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
                              "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
@@ -137,7 +140,7 @@ export async function request<T>(message: WithoutEnvelope<BridgeRequest>): Promi
 }
 
 function validPlatform(value: unknown): value is Platform {
-  return value === "zhidao" || value === "yuketang";
+  return value === "zhidao" || value === "yuketang" || value === "xuexitong";
 }
 
 /** Can be unit-tested with a fake transport; production uses the real Tauri bridge. */
@@ -156,8 +159,8 @@ export async function fetchPlatformStatuses(transport: StudyFlowTransport): Prom
       courses: [],
     });
   }
-  if (result.size !== 2) throw new Error("INVALID_IPC_RESPONSE");
-  return ["zhidao", "yuketang"].map(p => result.get(p as Platform)!);
+  if (result.size !== 3) throw new Error("INVALID_IPC_RESPONSE");
+  return ["zhidao", "yuketang", "xuexitong"].map(p => result.get(p as Platform)!);
 }
 
 export async function fetchStatuses(): Promise<PlatformState[]> {
@@ -238,6 +241,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "INVALID_XUEXITONG_COOKIE": return "学习通登录会话格式不正确，请确认包含有效的 _uid/UID。";
+    case "XUEXITONG_CREDENTIAL_STORAGE_FAILED": return "学习通登录会话未能写入 Windows 凭据管理器。";
     case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
     case "PLATFORM_NOT_READY": return "真实平台课程读取失败；请检查账号、网络和原版运行时。";
     case "CREDENTIAL_STORAGE_FAILED": return "Windows 凭据管理器保存失败。";
