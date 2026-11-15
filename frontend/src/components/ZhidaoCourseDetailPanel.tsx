@@ -158,7 +158,8 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
               <div className="sf-zd-detail-item-head">
                 <strong>{item.name}</strong>
                 <span className={"sf-record-status is-"+status}>
-                  {kind==="ai"?(percent===null?"未核验":percent+"%")
+                  {kind==="ai"?(status==="completed"&&percent===null?"已达满进度":
+                    percent===null?"未核验":percent+"%")
                     :status==="completed"?"已完成":status==="incomplete"?"未完成":"未核验"}
                 </span>
               </div>
