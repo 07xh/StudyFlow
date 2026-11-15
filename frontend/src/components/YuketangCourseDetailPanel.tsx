@@ -176,7 +176,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
       本次已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}
     </p>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
-    {videos.length>0&&<CourseRecordToolbar
+    {videos.length>0&&<CourseRecordToolbar key={course.course_id}
       filters={filters} activeFilter={filter} onFilter={value=>setFilter(value as ProgressFilter)}
       search={search} onSearch={setSearch}
       chapters={chapters.map(([name])=>name)} chapter={chapterFilter} onChapter={setChapterFilter}
