@@ -16,11 +16,18 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const revision=useRef(0);
+  const detailCourseKey=useRef(course.course_id);
 
   const load=useCallback(async()=>{
     if(!desktop)return;
     const current=++revision.current;
-    setBusy(true);setMessage("");setDetail(null);
+    setBusy(true);setMessage("");
+    // Preserve the previous verified chapter rows during a same-course refresh.
+    // A different course must never briefly display the old course's rows.
+    if(detailCourseKey.current!==course.course_id){
+      detailCourseKey.current=course.course_id;
+      setDetail(null);
+    }
     try{
       const result=await request<ZhidaoCourseDetail>({
         operation:"zhidao.course.detail",course_key:course.course_id
