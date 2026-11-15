@@ -42,13 +42,17 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByRole('button',{name:'打开课程列表',exact:true}).count(),0);
    assert.equal(await row.evaluate(element=>getComputedStyle(element).flexWrap),'nowrap');
    await page.getByRole('button',{name:'参数设置',exact:true}).click();
-   assert.equal(await page.locator('.sf-platform-settings-view').count(),1);
-   assert.equal(await page.locator('.sf-platform-card').count(),1,'Account management belongs only to platform settings');
-   await page.getByRole('button',{name:'平台批量任务与默认参数，展开'}).click();
-   await page.getByRole('button',{name:'平台默认参数（下次启动生效）'}).click();
+   assert.equal(await page.getByRole('dialog',{name:'雨课堂 · 设置'}).count(),1,
+     'Platform settings open in a modal rather than replacing the course page');
+   assert.equal(await page.locator('.sf-platform-courses').count(),1,
+     'Course list stays mounted behind the modal');
+   assert.equal(await page.locator('.sf-platform-card').count(),0,
+     'Account management should not crowd the playback-parameter category');
    assert.equal(await page.getByText('雨课堂默认参数',{exact:true}).count(),1,
-     'The original parameters remain accessible under the platform settings view');
-   await page.getByRole('button',{name:'返回课程列表',exact:true}).click();
+     'Original playback parameters are visible inside the parameter category');
+   await page.getByRole('button',{name:'高级管理',exact:true}).click();
+   assert.equal(await page.getByRole('button',{name:'课堂范围与章节内容，展开'}).count(),1);
+   await page.getByRole('button',{name:'关闭设置面板'}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),0);
    assert.equal(await page.locator('.sf-platform-courses').count(),1,'Returning from settings must restore the platform course list');
 
@@ -62,10 +66,11 @@ const server=http.createServer((req,res)=>{
    await page.mouse.move(0,0);
    await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
    await page.getByRole('button',{name:'账号与连接',exact:true}).click();
-   assert.equal(await page.locator('.sf-platform-settings-view').count(),1);
+   assert.equal(await page.getByRole('dialog',{name:'雨课堂 · 设置'}).count(),1);
    assert.equal(await page.locator('.sf-platform-login').getByLabel('Session ID',{exact:true}).count(),1);
    assert.equal(await page.locator('.sf-platform-login').getByLabel('课堂 ID',{exact:true}).count(),0);
    assert.equal(await page.locator('.sf-platform-login').getByText('读取章节视频',{exact:true}).count(),0);
+   await page.getByRole('button',{name:'高级管理',exact:true}).click();
    await page.getByRole('button',{name:'课堂范围与章节内容，展开'}).click();
    assert.equal(await page.getByLabel('课堂 ID',{exact:true}).count(),1);
    assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),1,
@@ -74,6 +79,9 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Page cannot overflow horizontally');
    await page.mouse.move(0,0);
    await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-'+width+'.png'),fullPage:true});
+   await page.keyboard.press('Escape');
+   assert.equal(await page.getByRole('dialog',{name:'雨课堂 · 设置'}).count(),0,
+     'Escape closes the second-level settings dialog');
    await page.getByRole('button',{name:'学习任务',exact:true}).click();
    assert.equal(await page.locator('.sf-task-shortcuts,.sf-runtime-task').count(),0);
    await page.getByRole('button',{name:'设置',exact:true}).click();
