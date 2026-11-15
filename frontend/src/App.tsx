@@ -361,7 +361,7 @@ export default function App(){
         </CollapsibleSection>
         <CollapsibleSection id="platform:yuketang:tasks" title="平台批量任务">
           <p className={scopeDirty?"sf-task-context":"sf-muted"}>启动和停止作用于雨课堂已保存的课堂范围，不限定为当前浏览的单门课程。{scopeDirty&&" 新编辑的课堂范围尚未保存。"}</p>
-          <YuketangTaskArea view="player" courses={platforms.yuketang.courses} desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
+          <YuketangTaskArea courses={platforms.yuketang.courses} view="player" desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty} events={activity}
             onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>
         </CollapsibleSection>
       </>}
