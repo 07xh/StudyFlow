@@ -54,6 +54,8 @@ export function LegacyPlaybackPanel({
   onOpenTasks?:()=>void;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
+  // Retain run ID after a failed status poll; never show cached telemetry as live.
+  const [statusReadFailed, setStatusReadFailed] = useState(false);
   const [verificationState, setVerificationState] = useState<"idle"|"checking"|"verified"|"unknown">("idle");
   const verifiedRunRef = useRef<string | null>(null);
   const [verificationRetry, setVerificationRetry] = useState(0);
@@ -76,7 +78,7 @@ export function LegacyPlaybackPanel({
   const options = yuketangOptions ?? {...originalYktDefaults};
   const playableCourses = courses.filter(c => c.platform === "zhidao" && (c.course_type === "ai" || c.course_type === "shared") && !c.stale);
   const ownsStatus=platform!=="zhidao"||Boolean(status?.course_id&&status.course_id===selection);
-  const liveZhs = platform === "zhidao" && status?.course_id === selection
+  const liveZhs = !statusReadFailed && platform === "zhidao" && status?.course_id === selection
     ? status.zhs_progress : null;
   const selectedCourse=courses.find(course=>course.platform==="zhidao"&&course.course_id===selection)??null;
   const startHintId=useId();
@@ -84,6 +86,7 @@ export function LegacyPlaybackPanel({
   const startUnavailableReason=!desktop?"仅 Windows 桌面版支持运行任务。":
     !connected?"当前学习平台尚未确认连接；请先在平台页面检查登录状态。":
     busy?"任务操作正在进行，请等待当前操作结束。":
+    statusReadFailed?"当前无法确认任务状态；请先查询运行状态。":
     status?.state==="running"?(ownsStatus?"当前任务已在运行，可以查询状态或停止任务。":"已有另一门课程的原版任务在运行，请在学习任务中管理。"):
     platform==="zhidao"?
       !selection?"尚未选择知到课程；请先从已同步课程列表进入课程详情。":
@@ -125,10 +128,8 @@ export function LegacyPlaybackPanel({
         setSelection(previous => previous || next.course_id || "");
       }
       setStatus(next);
-      setMessage(previous => previous === "无法读取本地任务状态；请重试。" ? "" : previous);
-      if (next.state === "exited") {
-        setMessage("");
-      }
+      setStatusReadFailed(false);
+      setMessage(previous => previous.startsWith("无法读取本地任务状态；") ? "" : previous);
       if (platform === "yuketang" && next.run_id) {
         try {
           const progress = await getYuketangLiveProgress(next.run_id);
@@ -139,8 +140,9 @@ export function LegacyPlaybackPanel({
       } else setYktProgress(null);
     } catch {
       if (requestId !== latestStatusRequest.current || taskActionInFlight.current || currentPlatform.current !== platform) return;
-      setStatus(null);setYktProgress(null);
-      setMessage("无法读取本地任务状态；请重试。");
+      // The prior run ID can still be stopped after verifying it again.
+      setStatusReadFailed(true);setYktProgress(null);
+      setMessage("无法读取本地任务状态；显示的是上次记录，请重新查询。可尝试停止当前任务，停止前会核对运行标识。");
     } finally {
       if (statusPollInFlight.current === platform) statusPollInFlight.current = null;
     }
@@ -152,6 +154,7 @@ export function LegacyPlaybackPanel({
 
   useEffect(() => {
     setStatus(null);
+    setStatusReadFailed(false);
     setYktProgress(null);
     setMessage("");
     setVerificationRetry(0);
@@ -223,7 +226,9 @@ export function LegacyPlaybackPanel({
       if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined, platform === "zhidao" ? zhsOptions ?? undefined : undefined);
-      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
+      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) {
+        setStatus(next);setStatusReadFailed(false);
+      }
       if (currentPlatform.current === platform) setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
       onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:zhsOptions?{...zhsOptions,selected_ids:zhsOptions.selected_ids?.length??0}:undefined});
     } catch (error) {
@@ -247,12 +252,14 @@ export function LegacyPlaybackPanel({
       const latest=await getLegacyStatus(platform);
       if(latest.state!=="running"||latest.run_id!==status.run_id||latest.course_id!==status.course_id){
         if (requestId === latestStatusRequest.current && currentPlatform.current === platform) {
-          setStatus(latest);setMessage("运行任务已变化，请查看学习任务。");
+          setStatus(latest);setStatusReadFailed(false);setMessage("运行任务已变化，请查看学习任务。");
         }
         return;
       }
       const next = await stopLegacy(platform,status.run_id);
-      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
+      if (requestId === latestStatusRequest.current && currentPlatform.current === platform) {
+        setStatus(next);setStatusReadFailed(false);
+      }
       if (currentPlatform.current === platform) setMessage("已终止由学序启动的原版任务；请重新查询服务器学习记录。");
       onEvent?.("停止原版任务","success","已停止学序托管的原版进程",{courseId:status.course_id??undefined,runId:status.run_id,runner:platform==="zhidao"?"zhs":"yuketang"});
     } catch(error) {
@@ -271,7 +278,7 @@ export function LegacyPlaybackPanel({
       <div><h3><Activity size={17}/> {platform === "zhidao" ? "知到原版任务" : "运行任务"}</h3>
       </div>
       <span className={status?.state === "running" ? "legacy-run-state active" : "legacy-run-state"}>
-        {status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "状态未确认" : "仅 Windows 可运行"}
+        {statusReadFailed ? "状态待核实" : status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "状态未确认" : "仅 Windows 可运行"}
       </span>
     </div>
     {!ownsStatus&&status?.state==="running"&&<p className="sf-task-context">另一门课程的 ZHS 任务正在运行。{onOpenTasks&&<button className="text-button" onClick={onOpenTasks}>查看运行任务</button>}</p>}
@@ -291,9 +298,9 @@ export function LegacyPlaybackPanel({
     {platform==="zhidao"&&<div className={"sf-live-progress-summary"+(platform==="zhidao"?" sf-has-zhs":"")+(detailMode?" sf-detail-simulation-only":"")} aria-label="运行状态、本地模拟片段和平台学习进度">
       <div className="sf-live-state">
         <span>任务运行状态</span>
-        <strong>{status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "检测中" : "未连接桌面端"}</strong>
+        <strong>{statusReadFailed ? "状态待核实" : status ? (!ownsStatus&&status.state==="running"?"其他课程任务运行中":labels[status.state]) : desktop ? "检测中" : "未连接桌面端"}</strong>
         <small>约每 2 秒更新</small>
-        {status?.state==="exited"&&ownsStatus&&<div className="sf-task-context sf-zhs-exit-diagnostic" role="status" aria-live="polite">
+        {status?.state==="exited"&&ownsStatus&&!statusReadFailed&&<div className="sf-task-context sf-zhs-exit-diagnostic" role="status" aria-live="polite">
           <strong>{legacyExitMessage(status)}（退出码：{status.exit_code??"未知"}）</strong>
           {status.exit_code!==0&&<small>{zhsDiagnosticMessage(status)}</small>}
           {status.exit_code===0&&!status.zhs_progress&&<small>本次未采集到播放进度，是否完成请以服务器只读核验为准。</small>}
@@ -417,7 +424,7 @@ export function LegacyPlaybackPanel({
       <span>任务所属课程</span><strong>{selectedCourse?.title??"课程未同步"}</strong>
     </div>}
 
-    {platform==="yuketang"&&status?.state==="exited"&&ownsStatus&&<p className="legacy-state-note">
+    {platform==="yuketang"&&status?.state==="exited"&&ownsStatus&&!statusReadFailed&&<p className="legacy-state-note">
       {legacyExitMessage(status)}（退出码：{status.exit_code ?? "未知"}）
     </p>}
     {status?.run_id&&ownsStatus&&<RunParameters parameters={events.find(event=>event.runner===(platform==="zhidao"?"zhs":"yuketang")&&event.runId===status.run_id&&event.parameters)?.parameters}/>}

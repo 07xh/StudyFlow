@@ -28,25 +28,28 @@ ORIGINAL_BLOBS = {
 
 
 def _blob_sha(path):
-    # Windows checkout may translate LF to CRLF, but the Git *blob* is
-    # unchanged. Compare canonical stored bytes rather than checkout bytes.
+    """Verify original source in both a Git checkout and portable source ZIP."""
     import subprocess
-    assert (ROOT / path).is_file()
-    result = subprocess.run(
-        ["git", "rev-parse", f"HEAD:{path}"],
-        cwd=ROOT, check=True, capture_output=True, text=True, timeout=10,
-    )
-    # Detect uncommitted source edits without falsely rejecting CRLF checkout.
-    subprocess.run(
-        ["git", "diff", "--exit-code", "--quiet", "HEAD", "--", path],
-        cwd=ROOT, check=True, capture_output=True, timeout=10,
-    )
-    return result.stdout.strip()
-
+    source = ROOT / path
+    assert source.is_file()
+    if (ROOT / ".git").exists():
+        result = subprocess.run(
+            ["git", "rev-parse", f"HEAD:{path}"], cwd=ROOT,
+            check=True, capture_output=True, text=True, timeout=10,
+        )
+        subprocess.run(
+            ["git", "diff", "--exit-code", "--quiet", "HEAD", "--", path],
+            cwd=ROOT, check=True, capture_output=True, text=True, timeout=10,
+        )
+        return {result.stdout.strip()}
+    data = source.read_bytes()
+    def git_blob(content: bytes) -> str:
+        return hashlib.sha1(b"blob " + str(len(content)).encode() + bytes([0]) + content).hexdigest()
+    return {git_blob(data), git_blob(data.replace(bytes([13, 10]), bytes([10])))}
 
 @pytest.mark.parametrize("filename,expected", list(ORIGINAL_BLOBS.items()))
 def test_source_is_byte_for_byte_original(filename, expected):
-    assert _blob_sha(filename) == expected
+    assert expected in _blob_sha(filename)
 
 
 def test_original_ykt_launcher_config_and_no_import_side_effects(monkeypatch, tmp_path):
