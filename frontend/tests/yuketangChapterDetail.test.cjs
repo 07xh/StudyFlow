@@ -14,7 +14,10 @@ function component(request){
   const mod={exports:{}};
   new Function("module","exports","require",code)(mod,mod.exports,name=>
     name==="../bridge"?{request,friendlyBridgeError:()=> "读取失败"}:require(name));
-  return mod.exports.YuketangCourseDetailPanel;
+  const Panel=mod.exports.YuketangCourseDetailPanel;
+  Panel.verify=mod.exports.verifyYuketangCourse;
+  Panel.reset=mod.exports.resetYuketangVerification;
+  return Panel;
 }
 const course={platform:"yuketang",course_id:"123",title:"课程"};
 const props={course,desktop:true,connected:true,scopeDirty:false};
@@ -65,7 +68,7 @@ test("unsaved classroom scope blocks progress reads and clears previous course c
   act(()=>view.unmount());
 });
 
-test("failed refresh does not retain stale per-video percentages",async()=>{
+test("failed background recheck preserves the last authentic evidence and reports its error",async()=>{
   let calls=0;
   const Panel=component(async()=>{
     calls++;
@@ -76,8 +79,9 @@ test("failed refresh does not retain stale per-video percentages",async()=>{
   await act(async()=>{view=create(React.createElement(Panel,props));});
   const button=view.root.findAllByType("button")[0];
   await act(async()=>{button.props.onClick();});
-  assert.match(JSON.stringify(view.toJSON()),/读取失败/);
-  assert.doesNotMatch(JSON.stringify(view.toJSON()),/视频12/);
+  assert.match(JSON.stringify(view.toJSON()),/后台复核失败/);
+  assert.match(JSON.stringify(view.toJSON()),/视频12/);
+  assert.match(JSON.stringify(view.toJSON()),/50.0%/);
   act(()=>view.unmount());
 });
 
@@ -195,5 +199,71 @@ test("Rain Classroom filters only fetched verified states and supports chapter e
   const expand=view.root.findAllByType("button").find(button=>button.props.children==="展开全部");
   await act(async()=>{expand.props.onClick();});
   assert.match(JSON.stringify(view.toJSON()),/视频done/);
+  act(()=>view.unmount());
+});
+
+test("leaving and reentering a verified course does not immediately verify again",async()=>{
+  let calls=0;
+  const Panel=component(async()=>{calls++;return page([video("12","第一章",45)]);});
+  let first;
+  await act(async()=>{first=create(React.createElement(Panel,props));});
+  assert.equal(calls,1);
+  act(()=>first.unmount());
+  let second;
+  await act(async()=>{second=create(React.createElement(Panel,props));});
+  assert.equal(calls,1);
+  assert.match(JSON.stringify(second.toJSON()),/45.0%/);
+  assert.match(JSON.stringify(second.toJSON()),/上次完整服务器核验/);
+  act(()=>second.unmount());
+});
+
+test("background verification continues without a mounted course page",async()=>{
+  let percent=15;
+  let calls=0;
+  const Panel=component(async()=>{calls++;return page([video("12","第一章",percent)]);});
+  let first;
+  await act(async()=>{first=create(React.createElement(Panel,props));});
+  act(()=>first.unmount());
+  percent=90;
+  await act(async()=>{
+    await Panel.verify("123",{desktop:true,connected:true,scopeDirty:false},{force:true});
+  });
+  let second;
+  await act(async()=>{second=create(React.createElement(Panel,props));});
+  assert.equal(calls,2);
+  assert.match(JSON.stringify(second.toJSON()),/90.0%/);
+  assert.doesNotMatch(JSON.stringify(second.toJSON()),/15.0%/);
+  act(()=>second.unmount());
+});
+
+test("explicitly disabled automatic verification leaves manual refresh available",async()=>{
+  let calls=0;
+  const Panel=component(async()=>{calls++;return page([video("12","第一章",30)]);});
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,{
+    ...props,autoVerifyEnabled:false,onAutoVerifyChange:()=>{}
+  }));});
+  assert.equal(calls,0);
+  const button=view.root.findAllByType("button").find(node=>
+    JSON.stringify(node.props.children).includes("重新核验全课"));
+  assert.ok(button);
+  await act(async()=>{button.props.onClick();});
+  assert.equal(calls,1);
+  assert.match(JSON.stringify(view.toJSON()),/30.0%/);
+  act(()=>view.unmount());
+});
+
+test("reset invalidates in-flight server results from an earlier login or classroom",async()=>{
+  let reply;
+  const Panel=component(()=>new Promise(resolve=>{reply=resolve;}));
+  const pending=Panel.verify("123",{desktop:true,connected:true,scopeDirty:false});
+  Panel.reset();
+  reply(page([video("12","第一章",88)]));
+  await pending;
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,{
+    ...props,autoVerifyEnabled:false
+  }));});
+  assert.doesNotMatch(JSON.stringify(view.toJSON()),/视频12/);
   act(()=>view.unmount());
 });
