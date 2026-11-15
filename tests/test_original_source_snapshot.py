@@ -33,8 +33,8 @@ def test_original_git_blobs_remain_identical(path: str, sha: str):
         # Validate the same Git blob hash when supplied as a ZIP without .git.
         data = source.read_bytes()
         def git_blob(content: bytes) -> str:
-            return hashlib.sha1(b"blob " + str(len(content)).encode() + b"\\x00" + content).hexdigest()
-        assert sha in {git_blob(data), git_blob(data.replace(b"\\r\\n", b"\\n"))}, path
+            return hashlib.sha1(b"blob " + str(len(content)).encode() + bytes([0]) + content).hexdigest()
+        assert sha in {git_blob(data), git_blob(data.replace(bytes([13, 10]), bytes([10])))}, path
 
 
 def test_snapshot_has_both_original_repositories():
