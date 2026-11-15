@@ -117,3 +117,27 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
   outline:3px solid #82aef0;outline-offset:2px
 }
 @media(max-width:700px) {.legacy-playback-panel{padding:15px}}
+
+/* Platform actions: three compact buttons form a single right-aligned row. */
+.sf-shell .sf-platform-toolbar.actions{
+  display:flex;flex-wrap:nowrap;align-items:center;justify-content:flex-start;
+  min-width:0;max-width:100%;gap:8px;overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:thin;
+}
+.sf-shell .sf-platform-toolbar.actions>button{
+  flex:0 0 auto;white-space:nowrap;min-height:36px;
+}
+.sf-shell .sf-platform-toolbar.actions>button:first-child{margin-left:auto}
+.sf-shell .sf-platform-settings-action.is-active{
+  color:var(--accent-text);border-color:var(--accent);background:var(--soft-accent);
+}
+.sf-shell .sf-platform-settings-view{
+  display:flex;flex-direction:column;gap:11px;min-width:0;
+}
+.sf-shell .sf-platform-settings-view>.sf-fold{margin:0}
+.sf-shell .sf-platform-settings-heading{padding:3px 2px 6px}
+.sf-shell .sf-platform-settings-heading h3{font-size:15px;margin:0}
+.sf-shell .sf-platform-settings-heading p{
+  margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.5;
+}
+.sf-shell .sf-platform-settings-view .sf-inline-settings{min-width:0}

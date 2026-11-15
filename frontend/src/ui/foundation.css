@@ -1877,3 +1877,86 @@
 .sf-shell .sf-ykt-video-row .sf-ykt-worker-heading strong{font-size:12px;min-width:0;overflow-wrap:anywhere}
 .sf-shell .sf-ykt-video-details>.sf-ykt-live-note{display:block;margin-top:8px}
 @media(max-width:600px){.sf-shell .sf-ykt-video-evidence{grid-template-columns:1fr;gap:9px}}
+
+/* LightC desktop frame: titlebar first, persistent platform/progress strip second.
+   Only workspace content scrolls; the status strip never jumps on navigation. */
+.app.sf-shell{
+  height:100vh;min-height:100vh;overflow:hidden;
+  grid-template-rows:34px auto minmax(0,1fr);
+  align-items:stretch;
+}
+.sf-shell .sf-window-titlebar{
+  grid-column:1/-1;grid-row:1;
+  display:flex;align-items:center;justify-content:space-between;
+  min-width:0;height:34px;padding:0 4px 0 10px;
+  border:1px solid var(--line);border-radius:12px;
+  background:var(--side);color:var(--text);user-select:none;
+}
+.sf-shell .sf-window-titlebar-brand{
+  display:flex;align-items:center;gap:8px;
+  min-width:0;flex:1;height:100%;
+  font-size:11px;font-weight:700;
+}
+.sf-shell .sf-window-titlebar-brand span{
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.sf-shell .sf-window-titlebar-brand svg{flex:none;color:var(--accent-text)}
+.sf-shell .sf-window-titlebar-actions{
+  display:flex;align-items:center;align-self:stretch;flex:none;gap:2px;
+}
+.sf-shell .sf-window-control{
+  display:grid;place-items:center;align-self:center;
+  flex:none;width:35px;height:29px;padding:0;
+  background:transparent;border:0;border-radius:7px;
+  color:var(--muted);cursor:pointer;
+}
+.sf-shell .sf-window-control:hover:not(:disabled){
+  background:var(--soft-accent);color:var(--text);
+}
+.sf-shell .sf-window-control:disabled{opacity:.45;cursor:default}
+.sf-shell .sf-window-close:hover:not(:disabled){
+  background:#c94a43;color:#fff;
+}
+.sf-shell .sf-window-control-separator{
+  height:17px;width:1px;margin:0 5px;background:var(--line);
+}
+.sf-shell .sf-workspace-header{
+  grid-column:1/-1;grid-row:2;
+  position:relative;z-index:1;
+  margin:0;min-width:0;align-self:stretch;
+}
+.sf-shell .sf-floating-nav{
+  grid-column:1;grid-row:3;top:auto;
+  min-height:0;height:100%;max-height:100%;overflow-y:auto;
+}
+.sf-shell .main{
+  grid-column:2;grid-row:3;min-height:0;height:100%;max-height:100%;
+  overflow-y:auto;overscroll-behavior:contain;
+}
+.sf-shell .sf-workspace-empty-progress{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  min-width:0;width:100%;
+}
+.sf-shell .sf-workspace-empty-progress>div{
+  display:flex;flex-direction:column;gap:4px;min-width:0;
+}
+.sf-shell .sf-workspace-empty-progress small,.sf-shell .sf-header-no-course{
+  color:var(--muted);font-size:10px;
+}
+.sf-shell .sf-workspace-empty-progress strong{
+  font-size:18px;font-weight:740;color:var(--muted);
+}
+.sf-shell .sf-workspace-empty-progress .sf-header-course-picker{
+  flex:1;min-width:0;max-width:320px;
+}
+@media(max-width:720px){
+  .app.sf-shell{grid-template-rows:32px auto minmax(0,1fr)}
+  .sf-shell .sf-window-titlebar{height:32px;padding-left:8px}
+  .sf-shell .sf-window-control{width:31px;height:27px}
+  .sf-shell .main{min-height:0;height:100%;max-height:100%}
+  .sf-shell .sf-floating-nav{min-height:0;height:100%;max-height:100%}
+}
+@media(max-width:600px){
+  .sf-shell .sf-workspace-empty-progress{flex-wrap:wrap;gap:4px}
+  .sf-shell .sf-workspace-empty-progress .sf-header-course-picker{max-width:none}
+}

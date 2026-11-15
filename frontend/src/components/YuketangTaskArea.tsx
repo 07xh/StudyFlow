@@ -15,8 +15,9 @@ type Props={
   onEvent?:TaskRecorder;
   detailMode?:boolean;
   events?:ActivityEntry[];
+  view?:"both"|"player"|"settings";
 };
-export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=false,events=[]}:Props){
+export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=false,events=[],view="both"}:Props){
   const [options,setOptions]=useState<OriginalYktOptions>({...originalYktDefaults});
   const [loaded,setLoaded]=useState(false);
   const [busy,setBusy]=useState<"load"|"save"|null>(null);
@@ -68,16 +69,16 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   }
 
   return <>
-    <LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
+    {view!=="settings"&&<LegacyPlaybackPanel platform="yuketang" courses={courses} desktop={desktop}
       connected={connected} yuketangOptions={options} settingsReady={loaded}
-      detailMode={detailMode} onEvent={onEvent} events={events}/>
-    <div className="sf-inline-settings">
-      <button type="button" className="sf-inline-settings__toggle"
+      detailMode={detailMode} onEvent={onEvent} events={events}/>}
+    {view!=="player"&&<div className="sf-inline-settings">
+      {view!=="settings"&&<button type="button" className="sf-inline-settings__toggle"
         aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(previous=>!previous)}>
         <SlidersHorizontal size={16}/><strong>平台默认参数（下次启动生效）</strong>
         <ChevronDown size={16} className={settingsOpen?"is-open":""}/>
-      </button>
-      {settingsOpen&&<section className="legacy-playback-panel sf-yuketang-settings-panel">
+      </button>}
+      {(view==="settings"||settingsOpen)&&<section className="legacy-playback-panel sf-yuketang-settings-panel">
       <div className="section-head">
         <div><h3><SlidersHorizontal size={17}/>雨课堂默认参数</h3></div>
         <span className="legacy-run-state">{loaded?"已读取本机配置":"等待读取配置"}</span>
@@ -146,6 +147,6 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
       <p className="legacy-disclaimer">设置单独保存在雨课堂平台配置中；启动任务时由学序透传给原版执行器，不修改原版心跳逻辑。</p>
       </section>}
-    </div>
+    </div>}
   </>;
 }

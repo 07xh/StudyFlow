@@ -2,10 +2,11 @@ import type {ConnectionStatus} from "../types";
 import {useEffect,useState,type ReactNode} from "react";
 import {
   Activity,BookOpen,ChevronDown,History,
-  LayoutDashboard,Layers3,ListChecks,Moon,
+  LayoutDashboard,Layers3,ListChecks,Moon,Minus,Maximize2,X,
   RefreshCw,Settings,Sun
 } from "lucide-react";
 import type {LucideIcon} from "lucide-react";
+import {getCurrentWindow} from "@tauri-apps/api/window";
 import {NoticeBanner} from "./NoticeBanner";
 import {PageSurface} from "./PageSurface";
 import "./foundation.css";
@@ -91,6 +92,27 @@ export function AppShell({
   </nav>;
 
   return <div className={["app","sf-shell",dark?"dark":"",compact?"sf-compact":""].filter(Boolean).join(" ")}>
+    <div className="sf-window-titlebar" data-tauri-drag-region aria-label="窗口标题栏">
+      <div className="sf-window-titlebar-brand" data-tauri-drag-region>
+        <Layers3 size={15} aria-hidden="true"/>
+        <span data-tauri-drag-region>学序 · StudyFlow</span>
+      </div>
+      <div className="sf-window-titlebar-actions">
+        <button className="sf-window-control sf-settings-button" type="button"
+          title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
+          onClick={()=>onNavigate("settings")}><Settings size={15}/></button>
+        <span className="sf-window-control-separator" aria-hidden="true"/>
+        <button className="sf-window-control" type="button" disabled={!desktop}
+          title="最小化" aria-label="最小化窗口"
+          onClick={()=>{if(desktop)void getCurrentWindow().minimize();}}><Minus size={15}/></button>
+        <button className="sf-window-control" type="button" disabled={!desktop}
+          title="最大化或还原" aria-label="最大化或还原窗口"
+          onClick={()=>{if(desktop)void getCurrentWindow().toggleMaximize();}}><Maximize2 size={14}/></button>
+        <button className="sf-window-control sf-window-close" type="button" disabled={!desktop}
+          title="关闭" aria-label="关闭窗口"
+          onClick={()=>{if(desktop)void getCurrentWindow().close();}}><X size={17}/></button>
+      </div>
+    </div>
     <header className="sf-header sf-workspace-header">
       <div className="sf-workspace-platform" aria-label="当前学习平台">
         <span className="sf-workspace-platform-icon" aria-hidden="true"><Layers3 size={21}/></span>
@@ -105,7 +127,11 @@ export function AppShell({
           <div className="sf-workspace-progress-head"><div className="sf-workspace-progress-course"><small>{metricLabel??"平台记录进度"}</small><strong title={currentCourseTitle}>{currentCourseTitle}</strong></div><strong className="sf-workspace-progress-value">{courseProgress==null?"—":courseProgress.toFixed(1)+"%"}</strong></div>
           {courseProgress!=null&&<div className="sf-workspace-progress-track" role="progressbar" aria-label={metricLabel??"平台记录进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={courseProgress}><span style={{width:courseProgress+"%"}}/></div>}
           <div className="sf-header-evidence"><span>{courseEvidence??"待核验"}</span><time>{courseVerifiedAt&&Number.isFinite(Date.parse(courseVerifiedAt))?new Date(courseVerifiedAt).toLocaleString():"暂无核验时间"}</time></div>
-        </>:<div className="sf-workspace-page-context">{page.startsWith("platform-")?<label className="sf-header-course-picker">选择课程<select value="" disabled={!courseOptions.length} onChange={event=>onCourseSelect?.(event.target.value)}><option value="">{courseOptions.length?"选择一门课程查看进度":"请先同步课程"}</option>{courseOptions.map(course=><option key={course.id} value={course.id}>{course.title}</option>)}</select></label>:<><strong>{titles[page]}</strong>{page==="courses"&&<small>选择课程后查看已核验进度</small>}</>}</div>}
+        </>:<div className="sf-workspace-empty-progress">
+          <div><small>当前课程总进度</small><strong>—</strong></div>
+          {page.startsWith("platform-")?<label className="sf-header-course-picker">选择课程<select value="" disabled={!courseOptions.length} onChange={event=>onCourseSelect?.(event.target.value)}><option value="">{courseOptions.length?"选择一门课程查看进度":"请先同步课程"}</option>{courseOptions.map(course=><option key={course.id} value={course.id}>{course.title}</option>)}</select></label>
+          :<span className="sf-header-no-course">尚未选择课程</span>}
+        </div>}
       </div>
       <div className="sf-header-actions">
         <span className="sf-mode">
@@ -115,9 +141,6 @@ export function AppShell({
           aria-label="检测平台连接" disabled={!desktop} onClick={onRefresh}>
           <RefreshCw size={17}/>
         </button>
-        <button className="theme-button sf-settings-button" type="button"
-          title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
-          onClick={()=>onNavigate("settings")}><Settings size={17}/></button>
         <button className="theme-button" type="button"
           aria-label={dark?"切换浅色主题":"切换深色主题"}
           onClick={onThemeToggle}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button>
