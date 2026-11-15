@@ -2,6 +2,7 @@ import {cleanContext,courseEvents,executionEvents,storedActivity,type ActivityEn
 import {useRuntimeTasks} from "./runtimeTasks";
 import {TaskRecoveryPanel} from "./taskRecovery";
 import {getYuketangLiveProgress} from "./legacyPlayback";
+import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
@@ -113,6 +114,7 @@ export default function App(){
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
   const [platformSettingsSection,setPlatformSettingsSection]=useState<PlatformSettingsSection>("parameters");
+  const [yuketangScopeJumpRequest,setYuketangScopeJumpRequest]=useState(0);
   const [courseLogsOpen,setCourseLogsOpen]=useState(false);
   const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
   useEffect(()=>{
@@ -414,9 +416,16 @@ export default function App(){
   }
 
   function openPlatformSettings(platform:Platform,section:PlatformSettingsSection="parameters"){
+    setYuketangScopeJumpRequest(0);
     setCourseLogsOpen(false);
     setPlatformSettingsSection(section);
     setPlatformSettingsOpen(platform);
+  }
+  function openYuketangScopeFields(){
+    // Preserve the in-memory session fields while navigating inside the modal.
+    setPlatformSettingsOpen("yuketang");
+    setPlatformSettingsSection("advanced");
+    setYuketangScopeJumpRequest(previous=>previous+1);
   }
   function enterCourses(platform:Platform){
     setCourseLogsOpen(false);
@@ -462,7 +471,8 @@ export default function App(){
       desktop={desktop} busy={Boolean(busy)}
       connected={platforms.yuketang.status==="connected"} videos={videos}
       onChange={updateConfiguration}
-      onSubmit={()=>void configureFromPanel()} onClear={()=>setClearDialogOpen(true)}
+      onSubmit={()=>void configureFromPanel()} onOpenScope={openYuketangScopeFields}
+      onClear={()=>setClearDialogOpen(true)}
       onShowVideos={()=>void showVideos()}/>;
     return null;
   }
@@ -498,7 +508,7 @@ export default function App(){
     <nav className="sf-settings-menu" aria-label="平台设置分类">
       {([["account","账号与连接"],["parameters","播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
-          onClick={()=>setPlatformSettingsSection(section)}>{label}</button>)}
+          onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
     </nav>
     <div className="sf-platform-settings-heading">
       <h3>{platformNames[platform]} · {platformSettingsSection==="account"?"账号与连接":platformSettingsSection==="parameters"?"播放参数":"高级管理"}</h3>
@@ -535,7 +545,8 @@ export default function App(){
         desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
         events={activity} onEvent={(action,result,detail,context)=>recordEvent("雨课堂",action,result,detail,context)}/>}
       {platformSettingsSection==="advanced"&&<>
-      <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容" defaultExpanded={false}>
+      <CollapsibleSection id="platform:yuketang:content" title="课堂范围与章节内容" defaultExpanded={false}
+        expandRequest={yuketangScopeJumpRequest}>
         <YuketangContentPanel config={config} videos={videos} desktop={desktop}
           busy={Boolean(busy)} connected={platforms.yuketang.status==="connected"}
           dirty={scopeDirty} hasSession={hasYuketangSession} hasSign={hasYuketangSign}
@@ -580,8 +591,9 @@ export default function App(){
   };
 
   async function configureFromPanel(){
-    if(!config.classroom_id.trim()||!config.university_id.trim()){
-      setNotice("请先在课堂范围与内容中填写课堂 ID 和学校 ID，再保存会话。");return;
+    const issues=yuketangScopeIssues(config);
+    if(issues.length){
+      setNotice("雨课堂会话尚未保存："+issues.join("；")+"。请先打开高级管理中的课堂范围与章节内容。");return;
     }
     setBusy("configure");setNotice("");
     try{
