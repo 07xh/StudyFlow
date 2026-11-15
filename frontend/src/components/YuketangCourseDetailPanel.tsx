@@ -155,7 +155,7 @@ export function verifyYuketangCourse(
         message:hadComplete
           ?"后台复核失败，继续显示上次真实服务器核验结果："+reason
           :working.length>0
-            ?"部分视频已读取并保留真实服务器记录；后续批次失败："+reason+"。可从中断位置继续核验。"
+            ?"部分视频已读取并保留真实服务器记录；后续批次失败："+reason+(entry.pending?"。可从中断位置继续核验。":"。请重新核验全课。")
             :reason,
         scanningCount:0,scanningTotal:null,
         resumeOffset:entry.pending?.cursor??null
@@ -321,11 +321,11 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty,
             </div>;
           })}
     </div>}
-    {(nextOffset!==null||resumeOffset!==null)&&state==="error"&&<div className="actions sf-ykt-page-actions">
+    {resumeOffset!==null&&state==="error"&&<div className="actions sf-ykt-page-actions">
       <button type="button" className="secondary"
         disabled={!connected||scopeDirty}
         onClick={resume}>
-        {"继续核验剩余视频（剩余 "+Math.max(0,total-videos.length)+" 节）"}
+        {"继续核验剩余视频（剩余 "+Math.max(0,total-resumeOffset)+" 节）"}
       </button>
     </div>}
     <details className="sf-technical-note">
