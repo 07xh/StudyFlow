@@ -163,8 +163,14 @@ class _RefreshingZhsSink:
     def __init__(self, sink):
         self.sink = sink
         self.last_publish = time.monotonic()
+        self.disabled = False
 
     def receive(self, chunk: str) -> None:
+        # Monitoring is strictly optional. Once its filesystem fails, disable
+        # telemetry for this run rather than retrying failed writes on every
+        # CLI output chunk. Do not change the original executor's result.
+        if self.disabled:
+            return
         previous = self.sink.last_snapshot
         now = time.monotonic()
         refresh_due = previous is not None and now - self.last_publish >= 5.0
@@ -173,10 +179,11 @@ class _RefreshingZhsSink:
         try:
             self.sink.receive(chunk)
         except Exception:
-            # The observer is optional. Never corrupt its deduplication state
-            # when an observation or an atomic snapshot write fails.
+            # Original StdoutObserver already isolates observer errors; keep
+            # this wrapper best-effort too and stop repeated expensive retries.
             self.sink.last_snapshot = previous
-            raise
+            self.disabled = True
+            return
         current = self.sink.last_snapshot
         if current is None:
             # No valid numeric output: unrelated CLI chatter must not reset
