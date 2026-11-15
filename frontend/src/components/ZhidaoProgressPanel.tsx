@@ -95,7 +95,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
     const timer=window.setInterval(check,120000);
     window.addEventListener?.("focus",check);
     return ()=>{window.clearInterval(timer);window.removeEventListener?.("focus",check);};
-  },[desktop,monitor,connected,selected,run]);
+  },[desktop,monitor,connected,selected,run,busy]);
 
   const label=current?.course_type==="ai"?"满进度知识点占比":current?.course_type==="shared"?"已完成视频占比":"服务器核验比例";
   const timestamp=current?.verified_at
@@ -142,7 +142,7 @@ export function ZhidaoProgressPanel({courses,desktop,connected,onCoursesUpdated,
       <div><strong>自动只读核验</strong><small>进入课程详情默认开启；每 2 分钟或返回窗口时检查，至少间隔 1 分钟。</small></div>
       <Switch checked={monitor} onChange={setMonitor} aria-label="开启每两分钟知到单课只读核验"/>
     </div>}
-    {lastError&&<p className="sf-zd-progress-message" role="alert">服务器进度暂未更新：{lastError}；已保留上次有效核验记录。</p>}
+    {lastError&&<p className="sf-zd-progress-message" role="alert">服务器进度暂未更新：{lastError}；{view?.status==="verified"?"已保留上次有效核验记录。":"当前没有可确认的服务器记录。"}</p>}
     {message&&!lastError&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     <details className="sf-technical-note"><summary>核验说明</summary><p className="sf-zd-progress-note">
       {incomplete?"本次同步存在未完成项。":"只读取平台已有记录，不提交学习进度。"}
