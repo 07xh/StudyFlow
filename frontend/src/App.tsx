@@ -851,7 +851,10 @@ export default function App(){
       headerTitle={workspaceCourse?"课程详情":undefined}
       currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
       currentCourseTitle={workspaceCourse?.title} courseProgress={activeCourseProgress} platformOverview={platformOverview}
-      metricLabel={activeMetric?.label} courseEvidence={activeMetric?.evidenceLabel} courseVerifiedAt={activeMetric?.verifiedAt}
+      metricLabel={activeMetric?.label}
+      courseEvidence={workspaceCourse?.platform==="yuketang"&&activeMetric
+        ?activeMetric.evidenceLabel+" · "+activeMetric.detail:activeMetric?.evidenceLabel}
+      courseVerifiedAt={activeMetric?.verifiedAt}
       currentPlatformStatus={headerPlatform?platforms[headerPlatform].status:undefined}
       selectedCourseId={workspaceCourse?.course_id??""}
       courseOptions={headerPlatform?platforms[headerPlatform].courses.filter(course=>!course.stale).map(course=>({id:course.course_id,title:course.title})):[]}
