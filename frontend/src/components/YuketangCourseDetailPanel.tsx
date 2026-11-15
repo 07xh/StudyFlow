@@ -30,7 +30,7 @@ function validPage(data:YuketangCourseProgress,courseId:string,offset:number){
       Number.isFinite(item.progress_percent)&&item.progress_percent>=0&&item.progress_percent<=100)&&
     (item.verified_at===null||typeof item.verified_at==="string")&&
     (item.server_completed===null||typeof item.server_completed==="boolean")&&
-    (item.progress_percent!==null||item.server_completed===null)&&
+    (item.progress_percent===null?item.server_completed===null:typeof item.server_completed==="boolean")&&
     (item.progress_percent===null||item.verified_at!==null)
   );
 }
