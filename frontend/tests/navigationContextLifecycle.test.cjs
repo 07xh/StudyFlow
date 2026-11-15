@@ -25,6 +25,7 @@ test('navigation preserves valid selection without leaking its heading to anothe
   if(name==='./bridge')return {isDesktop:()=>false,friendlyBridgeError:String,request:async()=>({})};
   if(name==='./ui/registry')return {platformRegistry:[{id:'zhidao',name:'知到'},{id:'yuketang',name:'雨课堂'}],platformInfo:id=>({id,name:id==='zhidao'?'知到':'雨课堂'})};
   if(name==='./ui/useAppearance')return {useAppearance:()=>({dark:false,mode:'light',setMode:()=>{},toggleTheme:()=>{}})};
+  if(name==='./useReleaseChangelog')return {useReleaseChangelog:()=>({dialog:null,close:()=>{},openHistory:()=>{}})};
   if(name==='./ui/AppShell')return {AppShell:props=>{shell=props;return props.children;}};
   if(name==='./ui/CourseCard')return {CourseCard:props=>React.createElement('button',{'data-select-course':true,'data-course-id':props.course.course_id,onClick:()=>props.onInspect(props.course)})};
   if(name==='./ui/CollapsibleSection')return {CollapsibleSection:props=>props.children};
