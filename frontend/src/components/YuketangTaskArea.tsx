@@ -1,11 +1,11 @@
 import type {ActivityEntry,TaskRecorder} from "../activity";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {RefreshCw,Save,SlidersHorizontal} from "lucide-react";
-import {friendlyBridgeError,request} from "../bridge";
+import {friendlyBridgeError,request,type YuketangScope} from "../bridge";
 import type {Course} from "../types";
 import {LegacyPlaybackPanel} from "./LegacyPlaybackPanel";
 import {
-  originalYktDefaults,validateOriginalOptions,type OriginalYktOptions
+  originalYktDefaults,validateOriginalOptions,readYuketangCourseThreshold,saveYuketangCourseThreshold,type OriginalYktOptions
 } from "../legacyPlayback";
 
 type Props={
@@ -22,6 +22,8 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
   const [loaded,setLoaded]=useState(false);
   const [busy,setBusy]=useState<"load"|"save"|null>(null);
   const [message,setMessage]=useState("");
+  const [scope,setScope]=useState<YuketangScope|null>(null);
+  const [thresholdOverride,setThresholdOverride]=useState<number|null>(null);
   const onEventRef=useRef(onEvent);
   useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
 
@@ -31,37 +33,59 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
     try{
       const saved=await request<OriginalYktOptions>({operation:"yuketang.settings.get"});
       if(!validateOriginalOptions(saved))throw new Error("INVALID_YUKETANG_SETTINGS");
-      // Old installs may retain the upstream 90% local finish threshold.
-      // The runner now requires 100%; reflect that effective setting in the UI.
+      // Old global values never propagate between independently configured classrooms.
       setOptions({...saved,completion_threshold:100});setLoaded(true);
       if(saved.completion_threshold!==100)
-        setMessage("检测到旧版本地完成阈值 "+saved.completion_threshold+"%；已将本次执行阈值设为 100%，下次启动任务或保存参数时同步写入本机配置。");
+        setMessage("旧版全局阈值已设为保守默认 100%；可以在下方为当前课堂独立指定。");
     }catch(error){
       setLoaded(false);setMessage(friendlyBridgeError(error));
     }finally{setBusy(null);}
   },[desktop]);
 
   useEffect(()=>{void load();},[load]);
+  const loadScope=useCallback(async()=>{
+    if(!desktop)return;
+    try {
+      const current=await request<YuketangScope>({operation:"yuketang.scope.get"});
+      if(!current.has_session||!/^[0-9]{1,24}$/.test(current.classroom_id)||
+        !/^[0-9]{1,24}$/.test(current.university_id)){
+        setScope(null);setThresholdOverride(null);return;
+      }
+      setScope(current);
+      setThresholdOverride(readYuketangCourseThreshold(current.classroom_id,current.university_id));
+    }catch{setScope(null);setThresholdOverride(null);}
+  },[desktop]);
+  const courseScopeSignature=courses.map(c=>c.course_id).join("|");
+  useEffect(()=>{void loadScope();},[loadScope,courseScopeSignature]);
   // Settings are also editable in the platform modal while a course task stays mounted.
   // Re-read persisted options after a successful save so the next launch cannot use stale values.
   const latestSettingsSave=events.find(entry=>entry.platform==="雨课堂"&&
     entry.action==="保存原版参数"&&entry.result==="success")?.id;
-  useEffect(()=>{if(latestSettingsSave)void load();},[latestSettingsSave,load]);
+  useEffect(()=>{if(latestSettingsSave){void load();void loadScope();}},[latestSettingsSave,load,loadScope]);
 
   function update<K extends keyof OriginalYktOptions>(key:K,value:OriginalYktOptions[K]){
     setOptions(previous=>({...previous,[key]:value}));
   }
 
   async function save(){
-    if(!desktop||!validateOriginalOptions(options))return;
+    if(!desktop||!validateOriginalOptions(options)||!(thresholdOverride===null||
+      (Number.isInteger(thresholdOverride)&&thresholdOverride>=1&&thresholdOverride<=100)))return;
     setBusy("save");setMessage("");
     try{
+      // A user may change classrooms while this settings dialog is open.
+      // Never persist a per-classroom threshold under a stale classroom ID.
+      const current=await request<YuketangScope>({operation:"yuketang.scope.get"});
+      if(scope && (!current.has_session||current.classroom_id!==scope.classroom_id||
+        current.university_id!==scope.university_id))
+        throw new Error("YUKETANG_SCOPE_CHANGED");
+      if(thresholdOverride!==null&&!scope)throw new Error("YUKETANG_SCOPE_UNAVAILABLE");
       const saved=await request<OriginalYktOptions>({
-        operation:"yuketang.settings.save",settings:options
+        operation:"yuketang.settings.save",settings:{...options,completion_threshold:100}
       });
       if(!validateOriginalOptions(saved))throw new Error("INVALID_YUKETANG_SETTINGS");
-      setOptions(saved);setLoaded(true);
-      setMessage("雨课堂原版参数已保存到学序本机配置，并将在下次启动时透传给原版执行器。");
+      if(scope)saveYuketangCourseThreshold(scope.classroom_id,scope.university_id,thresholdOverride);
+      setOptions({...saved,completion_threshold:100});setLoaded(true);
+      setMessage("参数已保存；当前课堂执行阈值与平台确认完成状态分别判断。");
       onEventRef.current?.("保存原版参数","success","参数已保存至学序本机配置");
     }catch(error){
       const detail=friendlyBridgeError(error);setMessage(detail);
@@ -84,16 +108,27 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
             ["video_speed","视频倍速",0.1,4,0.1],
             ["heartbeat_interval","心跳间隔（秒）",1,120,1],
             ["max_concurrent_videos","并发数量",1,32,1],
-            ["completion_threshold","执行完成阈值（固定100%）",100,100,1],
             ["test_video_count","测试视频数量",1,10000,1],
           ] as const).map(([id,label,min,max,step])=><label key={id}>
             <span>{label}</span>
             <input type="number" min={min} max={max} step={step}
-              value={options[id]} disabled={!desktop||busy!==null||id==="completion_threshold"}
+              value={options[id]} disabled={!desktop||busy!==null}
               onChange={event=>update(id,Number(event.target.value))}/>
           </label>)}
         </div>
-        <p className="sf-ykt-advanced-note">学序执行时固定使用 100% 服务器观看率作为原版任务的结束阈值，防止旧版 90% 阈值提前跳过视频。最终是否属于平台已完成，仍以单节只读核验返回的完成标志为准。</p>
+        <div className="legacy-option-grid">
+          <label><span>当前课堂执行阈值</span>
+            <select value={thresholdOverride===null?"auto":"custom"} disabled={!desktop||busy!==null||!scope}
+              onChange={e=>setThresholdOverride(e.target.value==="auto"?null:100)}>
+              <option value="auto">自动 · 保守默认 100%</option>
+              <option value="custom">自定义当前课堂阈值</option>
+            </select></label>
+          {thresholdOverride!==null&&<label><span>执行目标（1–100%）</span>
+            <input type="number" min={1} max={100} step={1} value={thresholdOverride}
+              disabled={!desktop||busy!==null||!scope}
+              onChange={e=>setThresholdOverride(Number(e.target.value))}/></label>}
+        </div>
+        <p className="sf-ykt-advanced-note">{scope?"当前课堂："+scope.classroom_id+"。":""}不同课堂可能要求不同进度。自动模式采用保守的 100% 本地执行目标；知道本课堂规则时可自定义。该数值只控制本地执行与跳过，不能替代平台实际完成状态；最终以服务器只读核验标志为准。{!scope?"请先连接课堂。":""}</p>
         <div className="legacy-flags">
           {([
             ["skip_completed","跳过已完成"],
@@ -135,9 +170,10 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
         </p>}
         <div className="actions">
           <button className="secondary" type="button" disabled={!desktop||busy!==null}
-            onClick={()=>void load()}><RefreshCw size={15}/>{busy==="load"?"读取中…":"重新读取"}</button>
-          <button className="primary" type="button" disabled={!desktop||!loaded||busy!==null||!validateOriginalOptions(options)}
-            onClick={()=>void save()}><Save size={15}/>{busy==="save"?"保存中…":"保存默认参数"}</button>
+            onClick={()=>{void load();void loadScope();}}><RefreshCw size={15}/>{busy==="load"?"读取中…":"重新读取"}</button>
+          <button className="primary" type="button" disabled={!desktop||!loaded||busy!==null||!validateOriginalOptions(options)||!(thresholdOverride===null||
+              (Number.isInteger(thresholdOverride)&&thresholdOverride>=1&&thresholdOverride<=100))}
+            onClick={()=>void save()}><Save size={15}/>{busy==="save"?"保存中…":"保存参数与课堂阈值"}</button>
         </div>
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}

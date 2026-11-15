@@ -18,6 +18,7 @@ async function renderStatus(state,progress){
   if(name==='../taskRecovery')return {rememberTaskRecovery:()=>true,discardTaskRecovery:()=>{}};
   if(name==='./RunParameters')return require('./helpers/load.cjs')('components/RunParameters.tsx');
    if(name==='./ZhsTaskSettingsPanel')return {ZhsTaskSettingsPanel:()=>null};
+  if(name==='./ZhsQueuePanel')return {ZhsQueuePanel:()=>null};
   if(name==='../bridge')return {request:async()=>({}),friendlyBridgeError:String};
   if(name==='lucide-react')return new Proxy({},{get:()=>()=>null});
   return require(name);

@@ -29,7 +29,7 @@ test('recovery refuses current running jobs and verifies platform state',()=>{
 test('both executors persist after launch and explicit stops discard correct run ID',()=>{
   assert.match(panel,/rememberTaskRecovery\(\{version:1,platform:"zhidao"/);
   assert.match(panel,/rememberTaskRecovery\(\{version:1,platform:"yuketang"/);
-  assert.match(panel,/sessionMarker,yuketangOptions:options/);
+  assert.match(panel,/sessionMarker,yuketangOptions:launchOptions/);
   assert.match(panel,/discardTaskRecovery\(platform,status\.run_id\)/);
   assert.match(tasks,/discardTaskRecovery\(task\.platform,task\.runId\)/);
   assert.match(app,/<TaskRecoveryPanel/);

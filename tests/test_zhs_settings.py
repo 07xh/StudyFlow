@@ -83,3 +83,40 @@ def test_resource_type_setting_is_per_run_and_fails_closed():
     for mode in ("videos", "ppt-only", True, None):
         with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
             zhs_settings.validate_run_settings({**original, "resource_mode": mode})
+
+
+def test_zhs_threshold_is_course_specific_and_migrates_old_settings(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    first, second = "a" * 64, "b" * 64
+    assert zhs_settings.read_settings(first)["completion_threshold"] is None
+    custom = {**zhs_settings.DEFAULTS, "completion_threshold": 85}
+    assert zhs_settings.save_settings(custom, first)["completion_threshold"] == 85
+    assert zhs_settings.read_settings(second)["completion_threshold"] is None
+    for value in (True, -1, 0, 101, 90.5, "90"):
+        with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
+            zhs_settings.save_settings({**custom, "completion_threshold": value}, first)
+    old = {key: value for key, value in custom.items() if key != "completion_threshold"}
+    root = tmp_path / "StudyFlow" / "zhidao"
+    (root / "zhs-task-settings.json").write_text(json.dumps(old), encoding="utf-8")
+    assert zhs_settings.read_settings()["completion_threshold"] is None
+
+
+def test_zhs_runtime_applies_local_target_only_after_valid_session(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    upstream = SimpleNamespace()
+    config = SimpleNamespace(threshold=0.91, video=SimpleNamespace(ai_threshold=90))
+    observed = []
+    upstream._load_config_and_session = lambda *args, **kwargs: (config, object())
+    monkeypatch.setitem(sys.modules, "zhs.__main__", upstream)
+    with legacy._observe_zhs_cli_stages(80, is_ai=False):
+        observed.append(upstream._load_config_and_session()[0].threshold)
+    assert observed == [0.8]
+    assert upstream._load_config_and_session()[0] is config
+    assert config.video.ai_threshold == 90
+    upstream._load_config_and_session = lambda *args, **kwargs: (config, object())
+    with legacy._observe_zhs_cli_stages(95, is_ai=True):
+        upstream._load_config_and_session()
+    assert config.video.ai_threshold == 95
+    assert config.threshold == 0.8

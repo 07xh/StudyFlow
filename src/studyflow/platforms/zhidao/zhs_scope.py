@@ -21,7 +21,7 @@ class ScopeInvalid(BaseException):
 
 
 @contextmanager
-def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
+def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None, target_resource=None):
     if options is None:
         yield
         return
@@ -41,6 +41,7 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
         original_targets = AiCourseManager._iter_targets
         original_video = AiVideoPlayer.play_video
         original_resource = getattr(AiCourseManager, "_process_resource", None)
+        original_list = getattr(AiCourseManager, "list_knowledge_resources", None)
         count = 0
 
         def resource_kind(item):
@@ -56,6 +57,10 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
             return "other"
 
         def process_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs):
+            if target_resource is not None and (
+                knowledge_id, getattr(getattr(item, "resources_detail", None), "resources_uid", None)
+            ) != target_resource:
+                return None
             kind = resource_kind(item)
             if resource_mode == "video" and kind != "video":
                 return None
@@ -75,6 +80,13 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
                     # UI-only callbacks must not change original ZHS flow.
                     pass
             return original_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs)
+
+        def list_resources(manager, course_id, class_id, knowledge_id):
+            resources = original_list(manager, course_id, class_id, knowledge_id)
+            if target_resource is not None and knowledge_id == target_resource[0]:
+                if not any(r.resources_detail.resources_uid == target_resource[1] for r in resources):
+                    raise ScopeInvalid()
+            return resources
 
 
         def targets(manager, course_info):
@@ -107,6 +119,8 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
         AiVideoPlayer.play_video = video
         if callable(original_resource):
             AiCourseManager._process_resource = process_resource
+        if target_resource is not None and callable(original_list):
+            AiCourseManager.list_knowledge_resources = list_resources
         try:
             yield
         finally:
@@ -114,6 +128,8 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
             AiVideoPlayer.play_video = original_video
             if callable(original_resource):
                 AiCourseManager._process_resource = original_resource
+            if target_resource is not None and callable(original_list):
+                AiCourseManager.list_knowledge_resources = original_list
     else:
         from zhs.zhidao.video import ZhidaoVideoPlayer
         from zhs.exceptions import CaptchaRequired, TimeLimitExceeded
@@ -176,7 +192,11 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
                     pass
             try:
                 return original_video(player, *args, **kwargs)
-            except (CaptchaRequired, TimeLimitExceeded):
+            except (CaptchaRequired, TimeLimitExceeded) as exc:
+                if target_resource is not None:
+                    # The upstream course loop converts these to a normal
+                    # return. A queue must observe the fatal condition instead.
+                    raise ScopeFailed() from exc
                 raise
             except Exception as exc:
                 if stop_on_error:

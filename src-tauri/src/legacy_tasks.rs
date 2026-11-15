@@ -58,7 +58,7 @@ impl OriginalYktOptions {
     }
 }
 
-// ZHS 0.1.5 supports these CLI flags; heartbeat timing and concurrency are not configurable.
+// CLI playback options plus StudyFlow's isolated per-video process scheduler.
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct ZhsOptions {
     speed: f64,
@@ -67,17 +67,25 @@ pub struct ZhsOptions {
     learn_optional: bool,
     max_videos: u16,
     stop_on_error: bool,
+    // Per-course local target. None preserves ZHS's course-type default.
+    #[serde(default)]
+    completion_threshold: Option<u8>,
     scope_mode: String,
     selected_ids: Vec<u64>,
     #[serde(default = "default_zhs_resource_mode")]
     resource_mode: String,
+    #[serde(default = "default_zhs_concurrency")]
+    concurrency: u8,
 }
 fn default_zhs_resource_mode() -> String { "all".into() }
+fn default_zhs_concurrency() -> u8 { 1 }
 impl ZhsOptions {
     fn validate(&self) -> Result<(), String> {
         if !self.speed.is_finite() || self.speed < 1.0 || self.speed > 2.0
             || !self.speed_cap.is_finite() || self.speed_cap < 1.0 || self.speed_cap > 2.0
             || self.limit_minutes > 1440 || self.max_videos > 1000
+            || !(1..=3).contains(&self.concurrency)
+            || self.completion_threshold.is_some_and(|value| value == 0 || value > 100)
             || !matches!(self.resource_mode.as_str(), "all" | "video" | "reading")
             || (self.scope_mode != "all" && self.scope_mode != "selected")
             || self.selected_ids.len() > 256
@@ -107,6 +115,7 @@ struct LegacyJob {
     monitor_token: Option<String>, // per-run nonce, kept out of frontend
     last_zhs_progress: Option<ZhsProgress>, // last real numeric observation, never server-confirmed
     last_diagnostic_code: Option<String>, // fixed enum only; no raw child output
+    last_zhs_queue: Option<crate::zhs_queue::QueueSnapshot>,
 }
 
 #[derive(Clone, Serialize)]
@@ -137,6 +146,7 @@ pub struct LegacyStatus {
     zhs_last_resource: Option<ZhsResourceContext>,
     zhs_stale: bool, // Last sample expired while the process is still running.
     diagnostic_code: Option<String>, // bounded local failure category, not progress
+    zhs_queue: Option<crate::zhs_queue::QueueSnapshot>,
 }
 
 fn zhs_snapshot_path(token: &str) -> Option<PathBuf> {
@@ -274,6 +284,13 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
     };
     let mut fresh_zhs_progress = None;
     if platform == "zhidao" && task.state == "running" {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
+        if let Some(queue) = task.monitor_token.as_deref().and_then(|token| crate::zhs_queue::read(token, now)) {
+            task.last_zhs_queue = Some(queue);
+        } else if let Some(queue) = task.last_zhs_queue.as_mut() {
+            queue.stale = true;
+            for row in &mut queue.tasks { row.stale = true; row.percent = None; }
+        }
         fresh_zhs_progress = task.monitor_token.as_deref().and_then(read_zhs_snapshot);
         if let Some(observation) = fresh_zhs_progress.as_ref() {
             task.last_zhs_progress = Some(observation.clone());
@@ -286,6 +303,7 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         task.child = None;
         remove_zhs_snapshot(task.monitor_token.as_deref());
         remove_zhs_diagnostic(task.monitor_token.as_deref());
+        if let Some(token) = task.monitor_token.as_deref() { crate::zhs_queue::cleanup(token); }
     }
     // A cached final frame must not masquerade as live progress.
     let running = task.state == "running";
@@ -320,6 +338,18 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         zhs_last_resource,
         zhs_stale,
         diagnostic_code: if task.state == "exited" { task.last_diagnostic_code.clone() } else { None },
+        zhs_queue: task.last_zhs_queue.clone().map(|mut queue| {
+            if task.state != "running" {
+                queue.state = task.state.clone();
+                for row in &mut queue.tasks {
+                    if matches!(row.state.as_str(), "queued" | "running") {
+                        row.state = if task.state == "stopped" { "stopped" } else { "unknown" }.into();
+                        row.percent = None;
+                    }
+                }
+            }
+            queue
+        }),
     })
 }
 
@@ -349,6 +379,7 @@ impl LegacyTasks {
                 }
                 remove_zhs_snapshot(task.monitor_token.as_deref());
                 remove_zhs_diagnostic(task.monitor_token.as_deref());
+                if let Some(token) = task.monitor_token.as_deref() { crate::zhs_queue::cleanup(token); }
             }
         }
     }
@@ -433,13 +464,11 @@ fn legacy_start_blocking(
         if let Some(settings) = &options {
             settings.apply(&mut command);
         }
-        // The preserved Rain Classroom executor otherwise treats a configurable
-        // local 90% threshold as task success/skip even if the platform still
-        // considers the video unfinished. Require full server rate for execution
-        // decisions; the separate read-only verifier can recognize an explicit
-        // platform completion flag below 100%.
-        // Also applies when IPC options are absent or an old .env stores 90.
-        command.env("COMPLETION_THRESHOLD", "100");
+        // Validated per-classroom IPC values win. Without IPC options, old
+        // persisted global 90% must not silently skip an incomplete video.
+        if options.is_none() {
+            command.env("COMPLETION_THRESHOLD", "100");
+        }
     }
     command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)]
@@ -458,6 +487,7 @@ fn legacy_start_blocking(
         monitor_token,
         last_zhs_progress: None,
         last_diagnostic_code: None,
+        last_zhs_queue: None,
     });
     if wallclock_limit > 0 {
         // Dedicated timer enforces the cap even when the UI is minimized or not polling.
@@ -486,7 +516,7 @@ fn legacy_start_blocking(
     Ok(LegacyStatus {
         platform: platform.clone(), state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },
-        zhs_progress: None, zhs_last_resource: None, zhs_stale: false, diagnostic_code: None,
+        zhs_progress: None, zhs_last_resource: None, zhs_stale: false, diagnostic_code: None, zhs_queue: None,
     })
 }
 
@@ -506,7 +536,7 @@ fn legacy_status_blocking(state: &LegacyTasks, platform: String) -> Result<Legac
     let mut guard = state.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
     match guard.get_mut(&platform) {
         Some(task) => status_of(&platform, task),
-        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_last_resource: None, zhs_stale: false, diagnostic_code: None}),
+        None => Ok(LegacyStatus {platform, state: "idle".into(), exit_code: None, run_id: None, course_id: None, zhs_progress: None, zhs_last_resource: None, zhs_stale: false, diagnostic_code: None, zhs_queue: None}),
     }
 }
 
@@ -534,10 +564,31 @@ fn legacy_stop_blocking(state: &LegacyTasks, platform: String, expected_run_id: 
             }
             remove_zhs_snapshot(job.monitor_token.as_deref());
             remove_zhs_diagnostic(job.monitor_token.as_deref());
+            if let Some(token) = job.monitor_token.as_deref() { crate::zhs_queue::cleanup(token); }
         }
         return status_of(&platform, job);
     }
     Err("TASK_RUN_CHANGED".into())
+}
+
+#[tauri::command]
+pub async fn zhs_queue_stop_video(app: AppHandle, expected_run_id: String, task_id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let managed = app.state::<LegacyTasks>();
+        let mut guard = managed.jobs.lock().map_err(|_| "TASK_STATE_UNAVAILABLE")?;
+        let job = guard.get_mut("zhidao").ok_or("TASK_RUN_CHANGED")?;
+        crate::run_identity::verify_expected_run(Some(&expected_run_id), job.run_id.as_deref())
+            .map_err(str::to_owned)?;
+        let status = status_of("zhidao", job)?;
+        if status.state != "running" { return Err("TASK_RUN_CHANGED".into()); }
+        let queue = status.zhs_queue.ok_or("TASK_STATE_UNAVAILABLE")?;
+        if queue.stale || !queue.tasks.iter().any(|row| row.task_id == task_id && matches!(row.state.as_str(), "queued" | "running")) {
+            return Err("TASK_RUN_CHANGED".into());
+        }
+        let token = job.monitor_token.as_deref().ok_or("TASK_RUN_CHANGED")?;
+        let path = crate::zhs_queue::path(token).ok_or("TASK_STATE_UNAVAILABLE")?;
+        crate::zhs_queue::write_stop(path.parent().ok_or("TASK_STATE_UNAVAILABLE")?, token, &task_id)
+    }).await.map_err(|_| "TASK_STOP_FAILED".to_owned())?
 }
 
 #[cfg(test)]
@@ -567,6 +618,7 @@ mod tests {
             course_id: Some("a".repeat(64)), monitor_token: None,
             last_zhs_progress: Some(progress),
             last_diagnostic_code: None,
+            last_zhs_queue: None,
         };
         let running = status_of("zhidao", &mut task).unwrap();
         assert!(running.zhs_progress.is_none());
@@ -631,6 +683,30 @@ mod tests {
             debug: false,
             richtext_stay_seconds: 3,
             richtext_skip_delay: 1.0,
+        }
+    }
+
+    #[test]
+    fn zhs_threshold_is_optional_and_rejects_out_of_range_values() {
+        let raw = serde_json::json!({
+            "speed":1.5,"speed_cap":2.0,"limit_minutes":0,"learn_optional":false,
+            "max_videos":0,"stop_on_error":false,"scope_mode":"all",
+            "selected_ids":[],"resource_mode":"all"
+        });
+        let options: ZhsOptions = serde_json::from_value(raw.clone()).unwrap();
+        assert!(options.completion_threshold.is_none());
+        assert!(options.validate().is_ok());
+        for valid in [1u8, 90, 100] {
+            let mut with_threshold=raw.clone();
+            with_threshold["completion_threshold"]=serde_json::json!(valid);
+            let options: ZhsOptions=serde_json::from_value(with_threshold).unwrap();
+            assert!(options.validate().is_ok());
+        }
+        for invalid in [0u8, 101] {
+            let mut with_threshold=raw.clone();
+            with_threshold["completion_threshold"]=serde_json::json!(invalid);
+            let options: ZhsOptions=serde_json::from_value(with_threshold).unwrap();
+            assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
         }
     }
 
