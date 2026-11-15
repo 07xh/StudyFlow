@@ -242,3 +242,16 @@ test("Rain Classroom shares search and chapter controls with Zhidao",async()=>{
   assert.doesNotMatch(out,/视频b/);
   act(()=>view.unmount());
 });
+
+test("99.999% verified video cannot be displayed as server-completed 100%",async()=>{
+  const Panel=component(async()=>page([{
+    ...video("near","第一章",99.999),server_completed:false
+  }]));
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const out=JSON.stringify(view.toJSON());
+  assert.match(out,/99.9%/);
+  assert.match(out,/服务器已核验 · 尚未完成/);
+  assert.doesNotMatch(out,/100.0%/);
+  act(()=>view.unmount());
+});
