@@ -42,7 +42,10 @@ test("Rain Classroom per-lesson server progress groups chapters and never invent
   assert.match(output,/第二章/);
   assert.match(output,/视频12/);
   assert.match(output,/42.5%/);
-  assert.match(output,/服务器未返回可确认的进度/);
+  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  assert.ok(secondChapter);
+  await act(async()=>{secondChapter.props.onClick();});
+  assert.match(JSON.stringify(view.toJSON()),/服务器未返回可确认的进度/);
   assert.match(output,/已确认完成/);
   assert.doesNotMatch(output,/0.0%/);
   assert.equal(seen.length,1);
@@ -90,10 +93,13 @@ test("progress batches remain ordered and new page cannot overwrite server evide
   await act(async()=>{view=create(React.createElement(Panel,props));});
   assert.match(JSON.stringify(view.toJSON()),/剩余 2 节/);
   const buttons=view.root.findAllByType("button");
-  assert.equal(buttons.length,2);
-  const more=buttons[buttons.length-1];
+  const more=buttons.find(button=>String(button.props.children).includes("继续核验后续视频"));
+  assert.ok(more);
   await act(async()=>{more.props.onClick();});
   assert.deepEqual(seen,[0,8]);
+  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  assert.ok(secondChapter);
+  await act(async()=>{secondChapter.props.onClick();});
   const out=JSON.stringify(view.toJSON());
   assert.match(out,/视频10/);
   assert.match(out,/60.0%/);
@@ -111,5 +117,36 @@ test("malformed or unverified server progress responses cannot be shown as verif
   const out=JSON.stringify(view.toJSON());
   assert.match(out,/读取失败/);
   assert.doesNotMatch(out,/视频12/);
+  act(()=>view.unmount());
+});
+
+
+test("Rain Classroom filters only fetched verified states and supports chapter expansion",async()=>{
+  const Panel=component(async()=>page([
+    video("done","第一章",100),video("pending","第一章",60),video("unknown","第二章",null)
+  ]));
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const pick=label=>view.root.findAllByType("button").find(button=>
+    button.props["aria-pressed"]!==undefined&&
+    String(button.props.children[0]).trim()===label);
+  assert.match(JSON.stringify(view.toJSON()),/视频done/);
+  await act(async()=>{pick("待完成").props.onClick();});
+  let out=JSON.stringify(view.toJSON());
+  assert.match(out,/视频pending/);
+  assert.doesNotMatch(out,/视频done/);
+  assert.doesNotMatch(out,/视频unknown/);
+  await act(async()=>{pick("未核验").props.onClick();});
+  out=JSON.stringify(view.toJSON());
+  assert.match(out,/视频unknown/);
+  assert.doesNotMatch(out,/0.0%/);
+  await act(async()=>{pick("已完成").props.onClick();});
+  assert.match(JSON.stringify(view.toJSON()),/视频done/);
+  const collapse=view.root.findAllByType("button").find(button=>button.props.children==="收起全部");
+  await act(async()=>{collapse.props.onClick();});
+  assert.doesNotMatch(JSON.stringify(view.toJSON()),/视频done/);
+  const expand=view.root.findAllByType("button").find(button=>button.props.children==="展开全部");
+  await act(async()=>{expand.props.onClick();});
+  assert.match(JSON.stringify(view.toJSON()),/视频done/);
   act(()=>view.unmount());
 });
