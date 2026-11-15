@@ -363,6 +363,23 @@ fn studyflow_exit(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
+fn studyflow_open_releases() -> Result<(), String> {
+    // Only a fixed official URL: the renderer cannot choose a destination.
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg("https://github.com/07xh/StudyFlow/releases")
+            .spawn()
+            .map_err(|_| "RELEASE_PAGE_OPEN_FAILED".to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
+#[tauri::command]
 fn updates_open_folder() -> Result<(), String> {
     let local = std::env::var_os("LOCALAPPDATA").ok_or("WINDOWS_APPDATA_UNAVAILABLE")?;
     let folder = PathBuf::from(local).join("StudyFlow").join("updates");
@@ -417,7 +434,7 @@ pub fn run() {
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit, updates_open_folder,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit, updates_open_folder, studyflow_open_releases,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,

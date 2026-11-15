@@ -16,3 +16,18 @@ test("updater keeps verified downloaded installer visible on check failure", () 
 test("new installations use beta channel while published builds are candidates", () => {
   assert.ok(code.includes('useState<UpdateSettings>({channel:"beta",mode:"download"})'));
 });
+
+test("settings and new-version dialog both open official releases in the system browser",()=>{
+  const nav=fs.readFileSync(path.join(__dirname,"../src/releaseNavigation.ts"),"utf8");
+  const dialog=fs.readFileSync(path.join(__dirname,"../src/ui/ReleaseNotesDialog.tsx"),"utf8");
+  const rust=fs.readFileSync(path.join(__dirname,"../../src-tauri/src/lib.rs"),"utf8");
+  assert.match(code,/onClick=\{event=>void openOfficialReleases\(event,setMessage\)\}/);
+  assert.match(dialog,/onClick=\{event=>void openOfficialReleases\(event,setBrowserError\)\}/);
+  assert.match(dialog,/browserError&&<p role="status"/);
+  assert.match(nav,/if\(!isDesktop\(\)\)return/);
+  assert.match(nav,/event.preventDefault\(\)/);
+  assert.match(nav,/invoke\("studyflow_open_releases"\)/);
+  assert.match(rust,/fn studyflow_open_releases\(\)/);
+  assert.match(rust,/Command::new\("explorer.exe"\)/);
+  assert.match(rust,/studyflow_exit, updates_open_folder, studyflow_open_releases,/);
+});

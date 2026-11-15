@@ -1,4 +1,6 @@
+import {useEffect,useState} from "react";
 import {CheckCircle2,ExternalLink,History,Sparkles} from "lucide-react";
+import {OFFICIAL_RELEASES_URL,openOfficialReleases} from "../releaseNavigation";
 import type {ReleaseChangelogEntry} from "../bridge";
 import type {NotesDialogState} from "../useReleaseChangelog";
 import {SettingsDialog} from "./SettingsDialog";
@@ -34,6 +36,8 @@ export function ReleaseNotesDialog({state,dark,onClose}:{
   state:NotesDialogState|null;dark:boolean;onClose:()=>void;
 }){
   const scope=state?.scope??"startup";
+  const [browserError,setBrowserError]=useState("");
+  useEffect(()=>{setBrowserError("");},[state?.scope,state?.version,state!==null]);
   return <SettingsDialog open={state!==null} dark={dark} compact
     kicker={scope==="startup"?"新版本 / 首次启动":"关于学序 / 版本记录"}
     title={scope==="startup"?"学序已更新":"历史更新日志"} onClose={onClose}>
@@ -52,13 +56,15 @@ export function ReleaseNotesDialog({state,dark,onClose}:{
           {state.entries.map(entry=><ReleaseCard key={entry.version} entry={entry}/>)}</>}
       </div>
       <footer className="sf-release-actions">
-        <a href="https://github.com/07xh/StudyFlow/releases" target="_blank" rel="noopener noreferrer">
+        <a href={OFFICIAL_RELEASES_URL} target="_blank" rel="noopener noreferrer"
+          onClick={event=>void openOfficialReleases(event,setBrowserError)}>
           <ExternalLink size={14}/>GitHub 完整记录
         </a>
         <button type="button" className="primary" onClick={onClose}>
           {scope==="startup"?"开始体验新版本":"关闭"}
         </button>
       </footer>
+      {browserError&&<p role="status" className="sf-release-feedback">{browserError}</p>}
     </div>}
   </SettingsDialog>;
 }

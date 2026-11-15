@@ -3,6 +3,7 @@ import {getVersion} from "@tauri-apps/api/app";
 import {invoke} from "@tauri-apps/api/core";
 import {Download,FolderOpen,History,RefreshCw} from "lucide-react";
 import {friendlyUpdateError,request,type AvailableUpdate,type UpdateSettings} from "../bridge";
+import {OFFICIAL_RELEASES_URL,openOfficialReleases} from "../releaseNavigation";
 
 export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog}:{
   desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;onOpenChangelog:()=>void;
@@ -102,7 +103,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog}:{
       <button className="secondary" type="button" disabled={!desktop||!current} onClick={onOpenChangelog}>
         <History size={15}/>历史更新日志
       </button>
-      <a href="https://github.com/07xh/StudyFlow/releases" target="_blank" rel="noopener noreferrer">GitHub 官方发布页</a>
+      <a href={OFFICIAL_RELEASES_URL} target="_blank" rel="noopener noreferrer" onClick={event=>void openOfficialReleases(event,setMessage)}>GitHub 官方发布页</a>
     </div>
     {release&&<div><strong>{release.version}</strong><p style={{whiteSpace:"pre-wrap"}}>{release.notes}</p></div>}
     {downloaded&&<p>{downloaded} · 关闭学序后运行安装包</p>}
