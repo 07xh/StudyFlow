@@ -1,6 +1,6 @@
 import {RunParameters} from "./RunParameters";
 import {rememberTaskRecovery,discardTaskRecovery} from "../taskRecovery";
-import type {YuketangScope} from "../bridge";
+import type {YuketangScope,YuketangSessionMarker} from "../bridge";
 import {ZhsTaskSettingsPanel} from "./ZhsTaskSettingsPanel";
 import {useCallback, useEffect, useId, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
@@ -233,9 +233,14 @@ export function LegacyPlaybackPanel({
     setBusy(true); setMessage("");setYktProgress(null);
     try {
       let lastScope:YuketangScope|null=null;
+      let sessionMarker:string|null=null;
       if(platform==="yuketang"){
         await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
         lastScope=await request<YuketangScope>({operation:"yuketang.scope.get"});
+        try{
+          const identity=await request<YuketangSessionMarker>({operation:"yuketang.session.marker"});
+          sessionMarker=/^[a-f0-9]{64}$/.test(identity.marker)?identity.marker:null;
+        }catch{/* Recovery metadata must not prevent the original task launching. */}
       }
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
         platform === "yuketang" ? options : undefined, platform === "zhidao" ? zhsOptions ?? undefined : undefined);
@@ -243,9 +248,10 @@ export function LegacyPlaybackPanel({
         const persisted=platform==="zhidao"&&zhsOptions
           ?rememberTaskRecovery({version:1,platform:"zhidao",runId:next.run_id,startedAt:Date.now(),
               courseId:selection,zhsOptions})
-          :platform==="yuketang"&&lastScope
+          :platform==="yuketang"&&lastScope&&sessionMarker
             ?rememberTaskRecovery({version:1,platform:"yuketang",runId:next.run_id,startedAt:Date.now(),
-                courseId:null,classroomId:lastScope.classroom_id,universityId:lastScope.university_id,yuketangOptions:options})
+                courseId:null,classroomId:lastScope.classroom_id,universityId:lastScope.university_id,
+                sessionMarker,yuketangOptions:options})
             :false;
         if(!persisted)setMessage("任务已启动，但本机恢复记录保存失败；请检查应用存储权限。");
       }

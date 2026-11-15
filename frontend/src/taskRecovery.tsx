@@ -1,6 +1,6 @@
 /** Local restart intent only. Never stores cookies, signatures, heartbeats or server-completion claims. */
 import {useEffect,useState} from "react";
-import {request,type YuketangScope,type ZhidaoProgressSnapshot} from "./bridge";
+import {request,type YuketangScope,type YuketangSessionMarker,type YuketangCourseProgress,type ZhidaoProgressSnapshot} from "./bridge";
 import {getLegacyStatus,startLegacy,validateOriginalOptions,validateZhsOptions,
   type OriginalYktOptions,type OriginalZhsOptions} from "./legacyPlayback";
 import type {Course} from "./types";
@@ -12,7 +12,7 @@ const MAX_AGE=30*24*60*60*1000;
 type RecoverablePlatform="zhidao"|"yuketang";
 export type TaskRecoveryRecord={
   version:1;platform:RecoverablePlatform;runId:string;startedAt:number;
-  courseId:string|null;classroomId?:string;universityId?:string;
+  courseId:string|null;classroomId?:string;universityId?:string;sessionMarker?:string;
   zhsOptions?:OriginalZhsOptions;yuketangOptions?:OriginalYktOptions;
 };
 function isRecord(value:unknown):value is TaskRecoveryRecord {
@@ -27,7 +27,8 @@ function isRecord(value:unknown):value is TaskRecoveryRecord {
   return v.courseId===null&&typeof v.classroomId==="string"&&v.classroomId.length>0&&
     v.classroomId.length<=100&&typeof v.universityId==="string"&&
     v.universityId.length>0&&v.universityId.length<=100&&
-    !!v.yuketangOptions&&validateOriginalOptions(v.yuketangOptions);
+    !!v.yuketangOptions&&validateOriginalOptions(v.yuketangOptions)&&
+    typeof v.sessionMarker==="string"&&/^[a-f0-9]{64}$/.test(v.sessionMarker);
 }
 export function readTaskRecovery():TaskRecoveryRecord[]{
   try {
@@ -63,6 +64,8 @@ function readableFailure(error:unknown):string{
   if(error instanceof Error&&[
     "当前登录或课程已变化，不能恢复原任务。",
     "当前课堂范围与上次不同，不能恢复原任务。",
+    "当前雨课堂登录会话与上次不同，不能恢复原任务。",
+    "当前已有任务运行，请先在学习任务中查看。",
     "服务器进度未核验成功，暂不恢复。",
     "当前课程记录显示已全部完成，无需恢复。"
   ].includes(error.message))return error.message;
@@ -113,9 +116,18 @@ export function TaskRecoveryPanel({desktop,consentAccepted,visible,tasks,loading
         if(scope.classroom_id!==record.classroomId||scope.university_id!==record.universityId||
           !scope.has_session||!scope.has_sign)
           throw Error("当前课堂范围与上次不同，不能恢复原任务。");
-        // A fresh read through the authenticated adapter, not a local progress percentage.
+        const identity=await request<YuketangSessionMarker>({operation:"yuketang.session.marker"});
+        if(!identity.marker||identity.marker!==record.sessionMarker)
+          throw Error("当前雨课堂登录会话与上次不同，不能恢复原任务。");
         const coursesNow=await request<Course[]>({operation:"courses.list",platform:"yuketang"});
-        if(!Array.isArray(coursesNow)||!coursesNow.some(c=>c.platform==="yuketang"&&!c.stale))
+        if(!Array.isArray(coursesNow)||!coursesNow.some(c=>c.platform==="yuketang"&&!c.stale&&c.course_id===record.classroomId))
+          throw Error("服务器进度未核验成功，暂不恢复。");
+        // Validate a real per-video server reading, never a simulated or cached percentage.
+        const page=await request<YuketangCourseProgress>({
+          operation:"yuketang.course.detail",course_id:record.classroomId!,offset:0,limit:8
+        });
+        if(page.course_id!==record.classroomId||page.total<1||
+          !page.items.some(item=>item.verified_at&&item.progress_percent!==null))
           throw Error("服务器进度未核验成功，暂不恢复。");
       }
       const next=await startLegacy(record.platform,
@@ -124,7 +136,7 @@ export function TaskRecoveryPanel({desktop,consentAccepted,visible,tasks,loading
         record.platform==="zhidao"?record.zhsOptions:undefined);
       if(next.state!=="running"||!next.run_id)throw Error("TASK_LAUNCH_NOT_CONFIRMED");
       const persisted=rememberTaskRecovery({...record,runId:next.run_id,startedAt:Date.now()});
-      setMessage(persisted?"已重新启动任务；实际学习进度以平台服务器记录为准。":
+      setMessage(persisted?"已发起恢复进程，正在确认执行器状态；实际进度以服务器记录为准。":
         "任务已启动，但本地恢复记录保存失败，请检查存储权限。");
       await onRefresh();
     }catch(error){setMessage(readableFailure(error));}
@@ -132,7 +144,7 @@ export function TaskRecoveryPanel({desktop,consentAccepted,visible,tasks,loading
   }
   return <section className="sf-section" aria-label="上次任务恢复">
     <div className="section-head"><h3>恢复上次学习任务</h3><span className="sf-muted">检测到未确认结束的本机记录</span></div>
-    <p className="sf-muted">软件退出时没有继续保留运行进程；恢复会先核对当前账号、课程范围及服务器进度。不会把本地播放位置当成已完成。</p>
+    <p className="sf-muted">异常退出后旧进程可能仍在运行。恢复会核对账号会话、课程范围与服务器记录；执行器互斥锁阻止重复运行。本地进度不代表服务器确认完成。</p>
     {pending.map(record=>{
       const runner=record.platform==="zhidao"?"zhs":"yuketang";
       const task=tasks.find(t=>t.runner===runner);

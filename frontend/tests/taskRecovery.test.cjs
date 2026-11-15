@@ -20,12 +20,15 @@ test('recovery refuses current running jobs and verifies platform state',()=>{
   assert.match(recovery,/operation:"zhidao\.progress\.verify"/);
   assert.match(recovery,/progress_evidence!=="server_verified"/);
   assert.match(recovery,/scope\.classroom_id!==record\.classroomId/);
+  assert.match(recovery,/identity.marker!==record.sessionMarker/);
+  assert.match(recovery,/operation:"yuketang\.course\.detail"/);
   assert.match(recovery,/operation:"courses\.list",platform:"yuketang"/);
   assert.match(recovery,/!scope\.has_session\|\|!scope\.has_sign/);
 });
 test('both executors persist after launch and explicit stops discard correct run ID',()=>{
   assert.match(panel,/rememberTaskRecovery\(\{version:1,platform:"zhidao"/);
   assert.match(panel,/rememberTaskRecovery\(\{version:1,platform:"yuketang"/);
+  assert.match(panel,/sessionMarker,yuketangOptions:options/);
   assert.match(panel,/discardTaskRecovery\(platform,status\.run_id\)/);
   assert.match(tasks,/discardTaskRecovery\(task\.platform,task\.runId\)/);
   assert.match(app,/<TaskRecoveryPanel/);
