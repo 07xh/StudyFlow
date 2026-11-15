@@ -35,8 +35,12 @@ export function useReleaseChangelog(desktop:boolean,consentAccepted:boolean){
       history:scope==="history"
     }).then(result=>{
       if(requestGeneration.current!==generation)return;
+      // Empty GitHub history can also mean that this older installed RC has no
+      // published metadata. Show verified, bundled candidate notes instead.
+      const fallback=result.entries.length?[]:bundledReleaseNotes(version,previous,scope==="history");
       setDialog(state=>state?.scope===scope?{
-        ...state,loading:false,entries:result.entries,source:"github"
+        ...state,loading:false,entries:result.entries.length?result.entries:fallback,
+        source:result.entries.length?"github":fallback.length?"bundled":undefined
       }:state);
     }).catch(()=>{
       if(requestGeneration.current!==generation)return;
