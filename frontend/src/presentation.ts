@@ -1,6 +1,6 @@
 import type {Course, Platform} from "./types";
 
-export const platformNames: Record<Platform, string> = {zhidao: "知到", yuketang: "雨课堂"};
+export const platformNames: Record<Platform, string> = {zhidao: "知到", yuketang: "雨课堂", xuexitong: "学习通"};
 
 export type CoursePresentation = {
   status: "cached" | "verified" | "unverified";
