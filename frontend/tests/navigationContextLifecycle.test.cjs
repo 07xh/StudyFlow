@@ -34,7 +34,7 @@ test('navigation preserves valid selection without leaking its heading to anothe
  }).default;
  try{
   await act(async()=>{view=create(React.createElement(App));});
-  act(()=>shell.onNavigate('courses'));
+  act(()=>shell.onNavigate('platform-zhidao'));
   act(()=>view.root.findByProps({'data-select-course':true}).props.onClick());
   assert.equal(shell.currentCourseTitle,'test course');
   assert.equal(shell.courseProgress,25);
@@ -44,7 +44,9 @@ test('navigation preserves valid selection without leaking its heading to anothe
   act(()=>shell.onNavigate('platform-yuketang'));
   assert.equal(shell.currentPlatform,'雨课堂');
   assert.equal(shell.currentCourseTitle,undefined);
-  act(()=>shell.onNavigate('courses'));
+  act(()=>shell.onNavigate('platform-zhidao'));
+  assert.equal(shell.currentCourseTitle,undefined);
+  act(()=>view.root.findByProps({'data-select-course':true}).props.onClick());
   assert.equal(shell.currentCourseTitle,'test course');
   act(()=>monitor.onCoursesUpdated([]));
   assert.equal(shell.currentCourseTitle,undefined);
