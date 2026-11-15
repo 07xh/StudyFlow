@@ -6,7 +6,7 @@ import {ZhsTaskSettingsPanel} from "./ZhsTaskSettingsPanel";
 import {useCallback, useEffect, useId, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {ActivityEntry,TaskRecorder} from "../activity";
-import type {Course, Platform} from "../types";
+import type {Course} from "../types";
 import {request,friendlyBridgeError,type ZhidaoProgressSnapshot} from "../bridge";
 import {
   getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, zhsDiagnosticMessage, originalYktDefaults, readYuketangCourseThreshold, startLegacy, stopLegacy,
@@ -46,7 +46,7 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 export function LegacyPlaybackPanel({
   platform, courses, desktop, connected, dark=true, onEvent, onCourseVerified, yuketangOptions, settingsReady=true, courseId, detailMode=false, events=[], onOpenTasks
 }: {
-  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean; dark?:boolean;
+  platform: "zhidao" | "yuketang"; courses: Course[]; desktop: boolean; connected: boolean; dark?:boolean;
   onEvent?:TaskRecorder;
   onCourseVerified?:(course:Course)=>void;
   yuketangOptions?: OriginalYktOptions;
