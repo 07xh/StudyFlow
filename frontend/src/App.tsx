@@ -516,15 +516,15 @@ export default function App(){
       <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
     </section>;
   };
-  const renderSettingsNavigation=()=>
+  const renderSettingsNavigation=(platform:Platform)=>
     <nav className="sf-settings-menu" aria-label="平台设置分类">
-      {([["account","账号与连接"],["parameters","播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
+      {([["account","账号与连接"],["parameters",platform==="xuexitong"?"运行参数预设":"播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
           onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
     </nav>;
   const renderPlatformSettings=(platform:Platform)=> <section className="sf-platform-settings-view" aria-label={platformNames[platform]+"参数设置"}>
     <div className="sf-platform-settings-heading">
-      <p>{platformSettingsSection==="account"?"管理当前平台的登录与连接。":platformSettingsSection==="parameters"?"设置后续播放使用的默认参数。":"核验平台进度，或维护本机数据。"}</p>
+      <p>{platformSettingsSection==="account"?"管理当前平台的登录与连接。":platformSettingsSection==="parameters"?(platform==="xuexitong"?"保存本机运行参数预设。":"设置后续播放使用的默认参数。"):"核验平台进度，或维护本机数据。"}</p>
     </div>
     {platformSettingsSection==="account"&&<PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
       desktop={desktop} busy={Boolean(busy)||syncFeedback[platform].phase==="syncing"} variant="account"
@@ -599,7 +599,7 @@ export default function App(){
       </div>}
       {selected?renderCourseWorkspace(selected):renderCourses(platform)}
       <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
-        navigation={renderSettingsNavigation()} contentKey={platformSettingsSection}
+        navigation={renderSettingsNavigation(platform)} contentKey={platformSettingsSection}
         title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}>
         {platformSettingsOpen===platform&&renderPlatformSettings(platform)}
       </SettingsDialog>
@@ -720,7 +720,8 @@ export default function App(){
         ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
-    return <section className="sf-course-workspace" aria-label="课程播放工作台">
+    const catalogOnly=course.platform==="xuexitong";
+    return <section className="sf-course-workspace" aria-label={catalogOnly?"课程与任务工作台":"课程播放工作台"}>
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
         <div className="sf-course-top-actions">
@@ -729,18 +730,18 @@ export default function App(){
           </button>
           <button className="secondary sf-course-logs-action" type="button"
             onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
-          <button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>运行任务</button>
+          {!catalogOnly&&<button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>运行任务</button>}
         </div>
       </div>
       <div className="sf-course-playback-heading">
-        <span className="eyebrow">{platformNames[course.platform]} / 播放工作台</span>
+        <span className="eyebrow">{platformNames[course.platform]} / {catalogOnly?"课程与任务":"播放工作台"}</span>
         <h2>{course.title}</h2>
-        <p>在这里管理播放与查看真实章节；平台账号、默认参数和历史记录不再占用首屏。</p>
+        <p>{catalogOnly?"查看真实章节与任务点，执行器未接入统一控制前不会显示无效按钮。":"在这里管理播放与查看真实章节；平台账号、默认参数和历史记录不再占用首屏。"}</p>
       </div>
-      <section className="sf-course-playback-stage" aria-label="播放控制">
+      <section className="sf-course-playback-stage" aria-label={catalogOnly?"任务模块状态":"播放控制"}>
         <div className="sf-course-player-heading">
-          <h3>播放控制</h3>
-          <span>运行状态与课程进度分别显示，互不替代</span>
+          <h3>{catalogOnly?"任务模块状态":"播放控制"}</h3>
+          <span>{catalogOnly?"当前仅提供真实课程与任务点读取":"运行状态与课程进度分别显示，互不替代"}</span>
         </div>
         {course.platform==="zhidao"?<>
           {renderZhidaoModeSwitch(course)}
@@ -753,7 +754,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="xuexitong"?<>
-          <p className="sf-muted">学习通真实课程及章节读取已接入；本地任务执行器尚未接入。</p>
+          <p className="sf-muted">课程与章节任务可在下方查看；本平台的任务执行控制尚未连接至统一任务中心。</p>
         </>:<>
           <p className="sf-course-scope-note">
             雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
