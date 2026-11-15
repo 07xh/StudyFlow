@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import {invalidateCourseSync,newCourseSyncCheckpoint,shouldStartCourseSync} from "./courseAutoSync";
+import {mergeZhidaoEvidence} from "./progressMerge";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
@@ -214,8 +215,8 @@ export default function App(){
     setPlatforms(previous=>({
       ...previous,zhidao:{
         ...previous.zhidao,
-        courses:previous.zhidao.courses.map(item=>
-          item.platform==="zhidao"&&item.course_id===course.course_id?course:item)
+        courses:mergeZhidaoEvidence(previous.zhidao.courses,previous.zhidao.courses.map(item=>
+          item.platform==="zhidao"&&item.course_id===course.course_id?course:item))
       }
     }));
   }
@@ -235,7 +236,8 @@ export default function App(){
       const list=await fetchCoursesFromDesktop(platform);
       if(checkpoint.epoch!==epoch||platformsRef.current[platform].status!=="connected")return;
       checkpoint.lastSuccess=Date.now();
-      setPlatforms(previous=>({...previous,[platform]:{...previous[platform],courses:list}}));
+      setPlatforms(previous=>({...previous,[platform]:{...previous[platform],
+        courses:platform==="zhidao"?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
       setSyncFeedback(previous=>({...previous,[platform]:{phase:"synced",error:""}}));
       if(manual)setNotice(name+"已同步 "+list.length+" 门真实课程");
       recordEvent(name,manual?"同步课程":"自动同步课程","success","读取到 "+list.length+" 门真实课程");
@@ -404,7 +406,7 @@ export default function App(){
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="批量进度核验" defaultExpanded={false}>
       <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
-      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:mergeZhidaoEvidence(previous.zhidao.courses,list)}}))}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
       </CollapsibleSection>
       <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
@@ -568,7 +570,9 @@ export default function App(){
   </section>;
 
   const renderCourseWorkspace=(course:Course)=>{
-    const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{...previous[course.platform],courses:list}}));
+    const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{
+      ...previous[course.platform],courses:course.platform==="zhidao"
+        ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
     return <section className="sf-course-workspace" aria-label="课程播放工作台">
