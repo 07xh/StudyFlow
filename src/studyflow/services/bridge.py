@@ -29,6 +29,7 @@ from studyflow.platforms.zhidao.legacy_runtime import (
 atexit.register(qr_runtime.cancel)
 from studyflow.platforms.xuexitong.adapter import XuexitongAdapter
 from studyflow.platforms.xuexitong import credentials as xuexitong_credentials
+from studyflow.platforms.xuexitong import settings as xuexitong_settings
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
@@ -126,6 +127,31 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
+    if operation == "xuexitong.settings.get":
+        return {"id": request_id, "ok": True, "data": xuexitong_settings.read()}
+    if operation == "xuexitong.settings.save":
+        try:
+            data = xuexitong_settings.save(request.get("settings"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_XUEXITONG_SETTINGS"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "XUEXITONG_SETTINGS_UNAVAILABLE"}
+    if operation == "xuexitong.chapter.tasks":
+        course_key = request.get("course_id")
+        chapter_id = request.get("chapter_id")
+        if (not isinstance(course_key, str) or len(course_key) > 96
+                or not isinstance(chapter_id, str) or not 1 <= len(chapter_id) <= 24):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        try:
+            data = ADAPTERS["xuexitong"].list_chapter_tasks(course_key, chapter_id)
+            return {"id": request_id, "ok": True, "data": data}
+        except (ValueError, TypeError):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except LookupError:
+            return {"id": request_id, "ok": False, "error": "COURSE_NOT_FOUND"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
     if operation == "xuexitong.session.configure":
         try:
             xuexitong_credentials.save(request.get("cookie"))
