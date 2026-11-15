@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {getLegacyStatus,stopLegacy,type LegacyTaskState} from './legacyPlayback';
-import {discardTaskRecovery} from './taskRecovery';
+import {discardTaskRecovery,readTaskRecovery} from './taskRecovery';
 import type {Platform} from './types';
 import type {Runner} from './activity';
 export type RuntimeTask={runner:Runner;platform:Platform;state:LegacyTaskState;courseId:string|null;runId:string|null;exitCode:number|null;unavailable?:boolean};
@@ -18,6 +18,16 @@ export function useRuntimeTasks(desktop:boolean){
   ]);
   if(request!==revision.current)return;
   setLoading(false);
+  // Normal process exit clears only that run's hint; an exit is not proof of course completion.
+  for(let index=1;index<=2;index++){
+   const result=results[index];
+   if(result.status!=='fulfilled')continue;
+   const state=result.value;
+   if(state.state!=='exited'||state.exit_code!==0||!state.run_id)continue;
+   const platform=index===1?'zhidao':'yuketang';
+   if(readTaskRecovery().some(r=>r.platform===platform&&r.runId===state.run_id))
+    discardTaskRecovery(platform,state.run_id);
+  }
   setTasks(previous=>results.map((result,index)=>{
    const runner:Runner=index===0?'official':index===1?'zhs':'yuketang';
    const platform:Platform=index===2?'yuketang':'zhidao';
