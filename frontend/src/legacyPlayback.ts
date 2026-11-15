@@ -51,6 +51,17 @@ export async function getYuketangLiveProgress(runId: string): Promise<YuketangLi
 }
 
 
+// ZHS 0.1.5 play flags; original heartbeat timing remains inside ZHS.
+export type OriginalZhsOptions = {speed:number;limit_minutes:number;learn_optional:boolean};
+export const originalZhsDefaults:Readonly<OriginalZhsOptions> = Object.freeze({
+  speed:1.5,limit_minutes:0,learn_optional:false
+});
+export function validateZhsOptions(value:OriginalZhsOptions):boolean {
+  return Number.isFinite(value.speed) && value.speed>=1 && value.speed<=2 &&
+    Number.isInteger(value.limit_minutes) && value.limit_minutes>=0 && value.limit_minutes<=1440 &&
+    typeof value.learn_optional==="boolean";
+}
+
 // Names and defaults are the original YKT main.py environment settings.
 // New UI only passes these parameters through. No heartbeat algorithm is copied
 // into the frontend and no browser preview can launch tasks.
@@ -107,7 +118,7 @@ export async function getLegacyStatus(platform: Platform): Promise<LegacyTaskSta
 }
 
 export async function startLegacy(
-  platform: Platform, courseId?: string, options?: OriginalYktOptions
+  platform: Platform, courseId?: string, options?: OriginalYktOptions, zhsOptions?: OriginalZhsOptions
 ): Promise<LegacyTaskStatus> {
   ensureDesktop();
   if (platform === "zhidao" && (!courseId || !/^[a-f0-9]{64}$/.test(courseId))) {
@@ -116,10 +127,14 @@ export async function startLegacy(
   if (platform === "yuketang" && options && !validateOriginalOptions(options)) {
     throw new Error("INVALID_SETTINGS");
   }
+  if (platform === "zhidao" && zhsOptions && !validateZhsOptions(zhsOptions)) {
+    throw new Error("INVALID_SETTINGS");
+  }
   return invoke<LegacyTaskStatus>("legacy_start", {
     platform,
     courseId: platform === "zhidao" ? courseId : null,
     options: platform === "yuketang" ? options ?? null : null,
+    zhsOptions: platform === "zhidao" ? zhsOptions ?? null : null,
   });
 }
 
