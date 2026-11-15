@@ -51,6 +51,10 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByText('雨课堂默认参数',{exact:true}).count(),1,
      'Original playback parameters are visible inside the parameter category');
    await page.getByRole('button',{name:'高级管理',exact:true}).click();
+   assert.equal(await page.locator('.legacy-playback-panel').count(),0,
+     'Advanced platform maintenance cannot mount a duplicate running player');
+   assert.equal(await page.getByRole('button',{name:'打开学习任务',exact:true}).count(),1,
+     'Task management is linked to the single shared task page');
    assert.equal(await page.getByRole('button',{name:'课堂范围与章节内容，展开'}).count(),1);
    await page.getByRole('button',{name:'关闭设置面板'}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),0);
