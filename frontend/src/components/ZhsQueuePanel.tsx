@@ -35,7 +35,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       setMessage(legacyError(error));
     }
   }
-  function row(task:NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number]){
+  type Row=NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number];
+  function row(task:Row){
     const inProgress=task.state==="queued"||task.state==="running";
     const pendingStop=active&&inProgress&&requested.has(task.task_id);
     const percent=!stale&&!task.stale&&task.kind==="video"&&task.state==="running"?task.percent:null;
@@ -58,19 +59,35 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         percent==null?(task.state==="queued"?"等待空闲位置":"等待进度采样"):"本地观测 · 非服务器完成进度"}</small>
     </article>;
   }
-  return <section className="sf-ykt-live sf-zhs-queue" aria-label="知到同课视频任务">
-    <div className="sf-ykt-live-title"><strong>同课视频 · {queue.concurrency} 路</strong>
+  function grouped(rows:Row[]){
+    const groups=new Map<string,{label:string;items:Row[]}>();
+    for(const item of rows){
+      const key=item.chapter_key||item.task_id;
+      const label=item.chapter_name||"未识别章节";
+      const previous=groups.get(key);
+      if(previous)previous.items.push(item);
+      else groups.set(key,{label,items:[item]});
+    }
+    return [...groups.entries()].map(([key,group])=>
+      <section className="sf-zhs-chapter-lane" key={key} aria-label={group.label}>
+        <div className="sf-zhs-chapter-heading"><strong>{group.label}</strong>
+          <small>{group.items.length} 项</small></div>
+        <div className="sf-ykt-worker-grid">{group.items.map(row)}</div>
+      </section>);
+  }
+  return <section className="sf-ykt-live sf-zhs-queue" aria-label="知到同课章节任务">
+    <div className="sf-ykt-live-title"><strong>章节并行 · {queue.concurrency} 路</strong>
       <small>{stale?"采样待同步":playing.length+" 项运行 · "+waiting.length+" 项排队"}</small></div>
-    <div className="sf-ykt-worker-grid">{playing.map(row)}</div>
+    {grouped(playing)}
     {!playing.length&&status.state==="running"&&<p className="sf-muted">正在分配资源</p>}
     {waiting.length>0&&<details className="sf-ykt-video-details"><summary>等待队列 · {waiting.length} 项</summary>
-      <div className="sf-ykt-worker-grid">{waiting.slice(0,100).map(row)}</div>
+      {grouped(waiting.slice(0,100))}
       {waiting.length>100&&<small>显示前 100 项，任务将自动补位。</small>}</details>}
     {ended.length>0&&<details className="sf-ykt-video-details"><summary>本轮记录 · {ended.length} 项</summary>
-      <div className="sf-ykt-worker-grid">{ended.slice(-100).map(row)}</div></details>}
+      {grouped(ended.slice(-100))}</details>}
     {status.state==="exited"&&<p role="status">{legacyExitMessage(status)}</p>}
     {status.state==="exited"&&status.exit_code!==0&&status.diagnostic_code&&<p role="status">{zhsDiagnosticMessage(status)}</p>}
     {message&&<p role="status">{message}</p>}
-    <small className="sf-muted">各视频独立运行，结束后自动补位。课程进度以服务器核验为准。</small>
+    <small className="sf-muted">同一章节按视频、文章和 PPT 的原顺序逐项执行，不同章节独立占用运行路数；不足多个可执行章节时不会强行凑满并发。课程进度以服务器核验为准。</small>
   </section>;
 }
