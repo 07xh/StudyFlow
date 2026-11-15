@@ -91,7 +91,7 @@ def download(current: str, version: str) -> dict:
     release = _release(current)
     asset = _installer(release) if release and release["version"] == version else None
     if asset is None:
-        raise ValueError("UPDATE_ASSET_UNAVAILABLE")
+        raise updater.UpdateError("UPDATE_ASSET_UNAVAILABLE", "Update asset unavailable")
     url, checksum = asset
     # No caller-controlled path or executable name crosses the IPC boundary.
     target = home() / ("StudyFlow-" + version.lstrip("v") + "-x64-setup.exe")
