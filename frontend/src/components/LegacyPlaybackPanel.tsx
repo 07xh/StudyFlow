@@ -42,7 +42,8 @@ export function LegacyPlaybackPanel({
   const currentPlatform = useRef(platform);
   currentPlatform.current = platform;
   const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [action, setAction] = useState<"start"|"stop"|null>(null);
+  const busy = action !== null;
   const [zhsOptions,setZhsOptions] = useState<OriginalZhsOptions|null>(null);
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState(courseId??"");
@@ -177,7 +178,7 @@ export function LegacyPlaybackPanel({
     if (taskActionInFlight.current) return;
     taskActionInFlight.current = true;
     const requestId = ++latestStatusRequest.current;
-    setBusy(true); setMessage("");setYktProgress(null);
+    setAction("start"); setMessage("");setYktProgress(null);
     try {
       if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
@@ -192,7 +193,7 @@ export function LegacyPlaybackPanel({
     }
     finally {
       taskActionInFlight.current = false;
-      setBusy(false);
+      setAction(null);
       if (currentPlatform.current === platform) void updateStatus();
     }
   }
@@ -201,7 +202,7 @@ export function LegacyPlaybackPanel({
     if (taskActionInFlight.current || !ownsStatus || !status?.run_id || status.state!=="running") return;
     taskActionInFlight.current = true;
     const requestId = ++latestStatusRequest.current;
-    setBusy(true);setMessage("");
+    setAction("stop");setMessage("");
     try {
       const latest=await getLegacyStatus(platform);
       if(latest.state!=="running"||latest.run_id!==status.run_id||latest.course_id!==status.course_id){
@@ -220,7 +221,7 @@ export function LegacyPlaybackPanel({
     }
     finally {
       taskActionInFlight.current = false;
-      setBusy(false);
+      setAction(null);
       if (currentPlatform.current === platform) void updateStatus();
     }
   }
@@ -239,9 +240,9 @@ export function LegacyPlaybackPanel({
         status?.state==="running"||
         (platform==="zhidao" && (!zhsOptions || !playableCourses.some(c=>c.course_id===selection)))||
         (platform==="yuketang" && (!settingsReady || !validateOriginalOptions(options)))}
-        onClick={()=>void start()}><Play size={16}/> {platform==="yuketang"?"启动平台批量任务":"启动原版任务"}</button>
+        onClick={()=>void start()}><Play size={16}/> {action==="start"?"启动中…":platform==="yuketang"?"启动平台批量任务":"启动原版任务"}</button>
       <button className="secondary" type="button" disabled={!desktop||busy||!ownsStatus||!status?.run_id||status?.state!=="running"}
-        onClick={()=>void stop()}><Square size={16}/> 停止</button>
+        onClick={()=>void stop()}><Square size={16}/> {action==="stop"?"停止中…":"停止"}</button>
       <button className="secondary" type="button" disabled={!desktop||busy}
         onClick={()=>void updateStatus()}><RefreshCw size={16}/> 查询运行状态</button>
     </div>
