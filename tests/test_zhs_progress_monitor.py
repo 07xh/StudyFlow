@@ -156,3 +156,9 @@ def test_monitor_remains_a_read_only_observer():
     assert 'zhs_app(args=arguments, standalone_mode=False)' in wrapper
     assert 'monitor_token' in wrapper
     assert 'sys.stdout = original_stdout' in wrapper
+
+
+def test_local_snapshot_reader_rejects_symlink_metadata():
+    rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
+    assert "fs::symlink_metadata(&path)" in rust
+    assert "if !metadata.is_file()" in rust

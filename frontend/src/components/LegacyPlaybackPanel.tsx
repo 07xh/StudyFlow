@@ -30,11 +30,14 @@ export function LegacyPlaybackPanel({
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   const [verificationState, setVerificationState] = useState<"idle"|"checking"|"verified"|"unknown">("idle");
   const verifiedRunRef = useRef<string | null>(null);
+  const [verificationRetry, setVerificationRetry] = useState(0);
   const onCourseVerifiedRef = useRef(onCourseVerified);
   const onEventRef = useRef(onEvent);
   useEffect(()=>{onCourseVerifiedRef.current=onCourseVerified;},[onCourseVerified]);
   useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
   const latestStatusRequest = useRef(0);
+  // Never start overlapping two-second polls for the same platform.
+  const statusPollInFlight = useRef<string | null>(null);
   const taskActionInFlight = useRef(false);
   const currentPlatform = useRef(platform);
   currentPlatform.current = platform;
@@ -69,7 +72,8 @@ export function LegacyPlaybackPanel({
   };
 
   const updateStatus = useCallback(async () => {
-    if (!desktop || taskActionInFlight.current) return;
+    if (!desktop || taskActionInFlight.current || statusPollInFlight.current === platform) return;
+    statusPollInFlight.current = platform;
     const requestId = ++latestStatusRequest.current;
     try {
       const next = await getLegacyStatus(platform);
@@ -78,6 +82,7 @@ export function LegacyPlaybackPanel({
         setSelection(previous => previous || next.course_id || "");
       }
       setStatus(next);
+      setMessage(previous => previous === "无法读取本地任务状态；请重试。" ? "" : previous);
       if (next.state === "exited") {
         setMessage("");
       }
@@ -92,6 +97,9 @@ export function LegacyPlaybackPanel({
     } catch {
       if (requestId !== latestStatusRequest.current || taskActionInFlight.current || currentPlatform.current !== platform) return;
       setStatus(null);setYktProgress(null);
+      setMessage("无法读取本地任务状态；请重试。");
+    } finally {
+      if (statusPollInFlight.current === platform) statusPollInFlight.current = null;
     }
   }, [desktop, platform]);
 
@@ -103,6 +111,7 @@ export function LegacyPlaybackPanel({
     setStatus(null);
     setYktProgress(null);
     setMessage("");
+    setVerificationRetry(0);
   }, [platform]);
 
   useEffect(() => {
@@ -127,7 +136,7 @@ export function LegacyPlaybackPanel({
     }
     if (!connected || !status?.course_id || !status.run_id ||
         (status.state !== "exited" && status.state !== "stopped")) return;
-    const marker = status.run_id + ":" + status.course_id + ":" + status.state;
+    const marker = status.run_id + ":" + status.course_id + ":" + status.state + ":" + verificationRetry;
     if (verifiedRunRef.current === marker) return;
     verifiedRunRef.current = marker;
     let active = true;
@@ -158,7 +167,7 @@ export function LegacyPlaybackPanel({
       // A request cancelled by unmount/status change must be retryable.
       if (verifiedRunRef.current === marker) verifiedRunRef.current = null;
     };
-  }, [desktop, platform, connected, ownsStatus, status?.state, status?.course_id, status?.run_id]);
+  }, [desktop, platform, connected, ownsStatus, status?.state, status?.course_id, status?.run_id, verificationRetry]);
 
 
 
@@ -347,6 +356,10 @@ export function LegacyPlaybackPanel({
           verificationState==="verified"?"已读取当前课程的服务器学习记录；请以核验值判断是否完成。":
           "未确认当前课程的最新服务器记录；请在进度核验区手动重试。"}
       </p>}
+    {platform==="zhidao"&&ownsStatus&&connected&&verificationState==="unknown"&&
+      <button className="secondary" type="button" onClick={()=>setVerificationRetry(previous=>previous+1)}>
+        <RefreshCw size={14}/> 重试服务器核验
+      </button>}
     {message&&<p className="legacy-state-note" role="status">{message}</p>}
     {status?.run_id&&<p className="legacy-disclaimer">平台进度以服务端核验结果为准。</p>}
   </section>;

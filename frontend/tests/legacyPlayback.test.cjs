@@ -175,3 +175,12 @@ test("original ZHS exit triggers exactly scoped read-only course reconciliation"
   // Reconcile is a read-only bridge operation, not a playback or heartbeat.
   assert.doesNotMatch(panel, /saveDatabaseIntervalTimeV2|studyRecord\/report|generateHeartbeat/);
 });
+
+test("status polling is single-flight and failed status reads remain visible", () => {
+  const panel = fs.readFileSync(path.join(__dirname,"..","src","components","LegacyPlaybackPanel.tsx"),"utf8");
+  assert.match(panel, /statusPollInFlight\.current === platform/);
+  assert.match(panel, /statusPollInFlight\.current = platform/);
+  assert.match(panel, /无法读取本地任务状态；请重试。/);
+  assert.match(panel, /verificationRetry/);
+  assert.match(panel, /重试服务器核验/);
+});
