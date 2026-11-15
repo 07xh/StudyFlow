@@ -28,6 +28,7 @@ function component(request){
   const Panel=mod.exports.YuketangCourseDetailPanel;
   Panel.verify=mod.exports.verifyYuketangCourse;
   Panel.verifyPlayed=mod.exports.verifyYuketangPlayedVideo;
+  Panel.verifyOne=mod.exports.verifyYuketangVideoAtIndex;
   Panel.reset=mod.exports.resetYuketangVerification;
   Panel.summary=mod.exports.getYuketangVideoSummary;
   Panel.subscribeOverview=mod.exports.subscribeYuketangVerification;
@@ -397,4 +398,58 @@ test("Rain Classroom overview reuses the real verification snapshot and receives
   assert.ok(Panel.overviewRevision()>revision);
   assert.ok(changes>=3,"first scan and targeted follow-up notify the platform overview");
   unsubscribe();
+});
+
+
+test("video already at its end still shows the server's 98.1% and supports only one-row recheck",async()=>{
+  const calls=[];
+  const stuck={...video("stuck","第五章",98.1),
+    name:"信息化战争的发展趋势",last_point_seconds:1179,duration_seconds:1179};
+  const Panel=component(async request=>{
+    calls.push({offset:request.offset,limit:request.limit});
+    return page([stuck],0,1,null);
+  });
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  const out=JSON.stringify(view.toJSON());
+  assert.match(out,/98.1%/);
+  assert.match(out,/播放位置已到末尾，但平台仍未确认完成/);
+  assert.match(out,/服务器已核验 · 尚未完成/);
+  assert.doesNotMatch(out,/服务器已确认完成/);
+  const target=view.root.findAllByType("button").find(button=>
+    button.props.className?.includes("sf-ykt-single-recheck"));
+  assert.ok(target);
+  await act(async()=>{target.props.onClick();});
+  assert.deepEqual(calls,[{offset:0,limit:8},{offset:0,limit:1}]);
+  assert.match(JSON.stringify(view.toJSON()),/98.1%/);
+  assert.match(JSON.stringify(view.toJSON()),/已重新读取这一节的服务器进度/);
+  act(()=>view.unmount());
+});
+
+test("single-video refresh picks the exact server ID even when chapter titles repeat",async()=>{
+  const calls=[];
+  let updated=false;
+  const rows=[
+    {...video("a","第一章",98.1),name:"同名视频"},
+    {...video("b","第二章",98.1),name:"同名视频"},
+  ];
+  const Panel=component(async request=>{
+    calls.push([request.offset,request.limit]);
+    if(request.limit===1){
+      assert.equal(request.offset,1);
+      return page([{...rows[1],progress_percent:updated?100:98.1,
+        server_completed:updated}],1,2,null);
+    }
+    return page(rows,0,2,null);
+  });
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  updated=true;
+  await act(async()=>{assert.equal(await Panel.verifyOne("123","b",1,{
+    desktop:true,connected:true,scopeDirty:false
+  }),true);});
+  assert.deepEqual(calls,[[0,8],[1,1]]);
+  assert.equal(Panel.summary("123").completed,1);
+  assert.match(JSON.stringify(view.toJSON()),/已确认完成/);
+  act(()=>view.unmount());
 });
