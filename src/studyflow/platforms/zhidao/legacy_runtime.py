@@ -49,7 +49,6 @@ def probe_login() -> bool:
         # Use the authentication-only command. The full doctor-server
         # path also queries course APIs and must not delay or redefine login state.
         result = _run_readonly("session-check", 65)
-        # A success-looking sentinel from a failed process does not prove login.
         return result.returncode == 0 and any(
             line.startswith("[SESSION_OK]") for line in (result.stdout or "").splitlines()
         )
@@ -488,7 +487,11 @@ def read_course_detail(course_key: str) -> dict:
                 percent = item.get("progressPercent")
                 if isinstance(percent, bool) or not isinstance(percent, int) or not 0 <= percent <= 100:
                     continue
+                knowledge_id = item.get("knowledgeId")
+                if type(knowledge_id) is not int or knowledge_id <= 0:
+                    knowledge_id = None
                 items.append({
+                    "knowledge_id": knowledge_id,
                     "name": str(item.get("name") or "未命名知识点")[:200],
                     "theme": str(item.get("theme") or "")[:160],
                     "progress_percent": percent,
@@ -508,7 +511,14 @@ def read_course_detail(course_key: str) -> dict:
                         or isinstance(studied, bool) or not isinstance(studied, int) or not 0 <= studied <= 864000):
                     continue
                 completed = item.get("serverCompleted") is True
+                video_id = item.get("videoId")
+                if type(video_id) is not int or video_id <= 0:
+                    video_id = None
+                chapter_id = item.get("chapterId")
                 items.append({
+                    "video_id": video_id,
+                    "chapter_id": chapter_id if type(chapter_id) is int and chapter_id > 0 else None,
+                    "chapter_name": str(item.get("chapterName") or "")[:160],
                     "name": str(item.get("name") or "未命名视频")[:200],
                     "duration_seconds": duration, "studied_seconds": studied,
                     "server_completed": completed,

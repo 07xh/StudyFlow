@@ -1,4 +1,5 @@
 import {RunParameters} from "./RunParameters";
+import {ZhsTaskSettingsPanel} from "./ZhsTaskSettingsPanel";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {ActivityEntry,TaskRecorder} from "../activity";
@@ -6,7 +7,7 @@ import type {Course, Platform} from "../types";
 import {request,friendlyBridgeError,type ZhidaoProgressSnapshot} from "../bridge";
 import {
   getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, originalYktDefaults, startLegacy, stopLegacy,
-  validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type YuketangLiveProgress
+  validateOriginalOptions, type LegacyTaskStatus, type OriginalYktOptions, type OriginalZhsOptions, type YuketangLiveProgress
 } from "../legacyPlayback";
 
 const labels: Record<LegacyTaskStatus["state"], string> = {
@@ -36,13 +37,13 @@ export function LegacyPlaybackPanel({
   useEffect(()=>{onCourseVerifiedRef.current=onCourseVerified;},[onCourseVerified]);
   useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
   const latestStatusRequest = useRef(0);
-  // Never start overlapping two-second polls for the same platform.
   const statusPollInFlight = useRef<string | null>(null);
   const taskActionInFlight = useRef(false);
   const currentPlatform = useRef(platform);
   currentPlatform.current = platform;
   const [yktProgress, setYktProgress] = useState<YuketangLiveProgress | null>(null);
   const [busy, setBusy] = useState(false);
+  const [zhsOptions,setZhsOptions] = useState<OriginalZhsOptions|null>(null);
   const [message, setMessage] = useState("");
   const [selection, setSelection] = useState(courseId??"");
   const currentSelection=useRef(selection);
@@ -180,10 +181,10 @@ export function LegacyPlaybackPanel({
     try {
       if(platform==="yuketang") await request<OriginalYktOptions>({operation:"yuketang.settings.save",settings:options});
       const next = await startLegacy(platform, platform === "zhidao" ? selection : undefined,
-        platform === "yuketang" ? options : undefined);
+        platform === "yuketang" ? options : undefined, platform === "zhidao" ? zhsOptions ?? undefined : undefined);
       if (requestId === latestStatusRequest.current && currentPlatform.current === platform) setStatus(next);
       if (currentPlatform.current === platform) setMessage("已发起原版任务，正在监测进程状态；若启动失败会显示退出原因。");
-      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:undefined});
+      onEvent?.("启动原版任务","success","原版进程已启动；服务端学习进度仍需单独核验",{courseId:platform==="zhidao"?selection:undefined,runId:next.run_id??undefined,runner:platform==="zhidao"?"zhs":"yuketang",parameters:platform==="yuketang"?{...options}:zhsOptions?{...zhsOptions,selected_ids:zhsOptions.selected_ids?.length??0}:undefined});
     } catch (error) {
       const msg=error instanceof Error&&(error.message.includes("YUKETANG")||error.message==="INVALID_IPC_RESPONSE")?friendlyBridgeError(error):legacyError(error);
       if (currentPlatform.current === platform) setMessage(msg);
@@ -236,7 +237,7 @@ export function LegacyPlaybackPanel({
     <div className="actions legacy-actions">
       <button className="primary" type="button" disabled={!desktop||!connected||busy||
         status?.state==="running"||
-        (platform==="zhidao" && !playableCourses.some(c=>c.course_id===selection))||
+        (platform==="zhidao" && (!zhsOptions || !playableCourses.some(c=>c.course_id===selection)))||
         (platform==="yuketang" && (!settingsReady || !validateOriginalOptions(options)))}
         onClick={()=>void start()}><Play size={16}/> {platform==="yuketang"?"启动平台批量任务":"启动原版任务"}</button>
       <button className="secondary" type="button" disabled={!desktop||busy||!ownsStatus||!status?.run_id||status?.state!=="running"}
@@ -334,6 +335,7 @@ export function LegacyPlaybackPanel({
       <small className="sf-ykt-live-note">并发模式下，各槽位状态来自原版 Worker 日志。心跳无法对应到单个视频，百分比保持空白；诊断区的最近值也不代表课程总进度。</small>
       </details>
     </div>}
+    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
     {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
       <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>
       <select id="legacy-zhidao-course" value={selection} onChange={e=>setSelection(e.target.value)}>

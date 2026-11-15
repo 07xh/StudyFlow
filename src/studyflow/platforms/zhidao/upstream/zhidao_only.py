@@ -352,6 +352,11 @@ def shared_course_list(manager: ZhidaoCourseManager) -> tuple[list[dict[str, Any
 def shared_progress(manager: ZhidaoCourseManager, raw: Any, row: dict[str, Any]) -> dict[str, Any]:
     ctx = manager.get_context(raw.secret, force=True)
     videos = list(ctx.videos.values())
+    # Derive real chapter labels from the same original, server-backed context.
+    chapter_labels = {v.video_id: (ch.id, ch.name)
+                      for ch in ctx.chapters
+                      for lesson in ch.video_lessons
+                      for v in lesson.video_small_lessons}
     completed = sum(v.watch_state == 1 for v in videos)
     return {
         **row,
@@ -360,6 +365,8 @@ def shared_progress(manager: ZhidaoCourseManager, raw: Any, row: dict[str, Any])
         "videos": [{
             "name": v.name,
             "videoId": v.video_id,
+            "chapterId": chapter_labels.get(v.video_id, (None, ""))[0],
+            "chapterName": chapter_labels.get(v.video_id, (None, ""))[1],
             "durationSeconds": v.video_sec,
             "studiedSeconds": v.study_total_time,
             "serverCompleted": v.watch_state == 1,

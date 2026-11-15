@@ -1,0 +1,65 @@
+"""Offline scoped traversal tests do not issue heartbeat or HTTP requests."""
+from copy import deepcopy
+import sys
+from types import ModuleType, SimpleNamespace
+
+import pytest
+from studyflow.platforms.zhidao.zhs_scope import (
+    scoped_upstream_play, ScopeLimitReached, ScopeInvalid,
+)
+
+
+def test_shared_scope_limits_selected_unfinished_video_ids(monkeypatch):
+    module = ModuleType("zhs.zhidao.video")
+    errors = ModuleType("zhs.exceptions")
+    class CaptchaRequired(Exception): pass
+    class TimeLimitExceeded(Exception): pass
+    errors.CaptchaRequired, errors.TimeLimitExceeded = CaptchaRequired, TimeLimitExceeded
+    called = []
+    class Player:
+        def play_course(self, _, ctx):
+            for ch in ctx.chapters:
+                for lesson in ch.video_lessons:
+                    for item in lesson.video_small_lessons:
+                        self.play_video("", item.video_id, ctx)
+        def play_video(self, _, identifier, ctx):
+            called.append(identifier)
+    module.ZhidaoVideoPlayer = Player
+    monkeypatch.setitem(sys.modules, "zhs.zhidao.video", module)
+    monkeypatch.setitem(sys.modules, "zhs.exceptions", errors)
+    class Context:
+        def __init__(self):
+            self.videos = {i: SimpleNamespace(video_id=i, watch_state=(1 if i == 2 else 0))
+                           for i in range(1, 6)}
+            self.chapters = [SimpleNamespace(video_lessons=[
+                SimpleNamespace(video_small_lessons=list(self.videos.values()))])]
+        def model_copy(self, deep):
+            return deepcopy(self)
+    options={"selected_ids":[1,2,3,4],"scope_mode":"selected","max_videos":2,"stop_on_error":False}
+    with pytest.raises(ScopeLimitReached):
+        with scoped_upstream_play(options,False):
+            Player().play_course("",Context())
+    assert called==[1,3]
+    with pytest.raises(ScopeInvalid):
+        with scoped_upstream_play({**options,"selected_ids":[999]},False):
+            Player().play_course("",Context())
+
+
+def test_ai_knowledge_scope_and_video_count(monkeypatch):
+    course_mod,video_mod=ModuleType("zhs.ai.course"),ModuleType("zhs.ai.video")
+    class Manager:
+        def _iter_targets(self,_info):
+            return iter([SimpleNamespace(knowledge=SimpleNamespace(knowledge_id=i))
+                         for i in (1,2,3)])
+    class Player:
+        def play_video(self,*args,**kwargs):
+            return None
+    course_mod.AiCourseManager,video_mod.AiVideoPlayer=Manager,Player
+    monkeypatch.setitem(sys.modules,"zhs.ai.course",course_mod)
+    monkeypatch.setitem(sys.modules,"zhs.ai.video",video_mod)
+    opts={"scope_mode":"selected","selected_ids":[2],"max_videos":1,"stop_on_error":True}
+    with scoped_upstream_play(opts,True):
+        assert [t.knowledge.knowledge_id for t in Manager()._iter_targets(None)]==[2]
+        with pytest.raises(ScopeLimitReached):
+            Player().play_video(schedule=0,threshold=90)
+    assert [t.knowledge.knowledge_id for t in Manager()._iter_targets(None)]==[1,2,3]

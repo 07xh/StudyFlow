@@ -12,6 +12,7 @@ from contextlib import redirect_stdout
 from typing import Any
 
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
+from studyflow.platforms.zhidao.zhs_settings import read_settings as read_zhs_settings, save_settings as save_zhs_settings
 from studyflow.platforms.zhidao import qr_runtime
 from studyflow.platforms.zhidao.cookie_import import import_cookie
 from studyflow.platforms.zhidao.legacy_runtime import (
@@ -159,6 +160,18 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": error}
         except Exception:
             return {"id": request_id, "ok": False, "error": "COURSE_ROUTE_UNAVAILABLE"}
+    if operation == "zhidao.zhs.settings.get":
+        try:
+            return {"id": request_id, "ok": True, "data": read_zhs_settings(request.get("course_key"))}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHS_SETTINGS_UNAVAILABLE"}
+    if operation == "zhidao.zhs.settings.save":
+        try:
+            return {"id": request_id, "ok": True, "data": save_zhs_settings(request.get("settings"), request.get("course_key"))}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_ZHS_SETTINGS"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHS_SETTINGS_UNAVAILABLE"}
     if operation == "zhidao.player.settings.get":
         try:
             return {"id": request_id, "ok": True, "data": get_zhidao_player_settings()}

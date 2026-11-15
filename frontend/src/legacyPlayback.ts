@@ -51,6 +51,34 @@ export async function getYuketangLiveProgress(runId: string): Promise<YuketangLi
 }
 
 
+// ZHS 0.1.5 play flags; original heartbeat timing remains inside ZHS.
+export type ZhsStoredOptions = {
+  speed:number;speed_cap:number;limit_minutes:number;learn_optional:boolean;
+  max_videos:number;stop_on_error:boolean;
+};
+export type OriginalZhsOptions = ZhsStoredOptions & {
+  scope_mode:"all"|"selected";selected_ids:number[];
+};
+export const originalZhsDefaults:Readonly<ZhsStoredOptions> = Object.freeze({
+  speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,
+  max_videos:0,stop_on_error:false
+});
+export function validateZhsStoredOptions(value:ZhsStoredOptions):boolean {
+  return !!value && Number.isFinite(value.speed) && value.speed>=1 && value.speed<=2 &&
+    Number.isFinite(value.speed_cap) && value.speed_cap>=1 && value.speed_cap<=2 &&
+    Number.isInteger(value.limit_minutes) && value.limit_minutes>=0 && value.limit_minutes<=1440 &&
+    Number.isInteger(value.max_videos) && value.max_videos>=0 && value.max_videos<=1000 &&
+    typeof value.learn_optional==="boolean" && typeof value.stop_on_error==="boolean";
+}
+export function validateZhsOptions(value:OriginalZhsOptions):boolean {
+  const ids=value?.selected_ids;
+  return validateZhsStoredOptions(value) && (value.scope_mode==="all"||value.scope_mode==="selected") &&
+    Array.isArray(ids) && ids.length<=256 &&
+    ids.every(id=>Number.isSafeInteger(id)&&id>0&&id<=Number.MAX_SAFE_INTEGER) &&
+    new Set(ids).size===ids.length &&
+    (value.scope_mode==="all"?ids.length===0:ids.length>0);
+}
+
 // Names and defaults are the original YKT main.py environment settings.
 // New UI only passes these parameters through. No heartbeat algorithm is copied
 // into the frontend and no browser preview can launch tasks.
@@ -107,7 +135,7 @@ export async function getLegacyStatus(platform: Platform): Promise<LegacyTaskSta
 }
 
 export async function startLegacy(
-  platform: Platform, courseId?: string, options?: OriginalYktOptions
+  platform: Platform, courseId?: string, options?: OriginalYktOptions, zhsOptions?: OriginalZhsOptions
 ): Promise<LegacyTaskStatus> {
   ensureDesktop();
   if (platform === "zhidao" && (!courseId || !/^[a-f0-9]{64}$/.test(courseId))) {
@@ -116,10 +144,14 @@ export async function startLegacy(
   if (platform === "yuketang" && options && !validateOriginalOptions(options)) {
     throw new Error("INVALID_SETTINGS");
   }
+  if (platform === "zhidao" && zhsOptions && !validateZhsOptions(zhsOptions)) {
+    throw new Error("INVALID_SETTINGS");
+  }
   return invoke<LegacyTaskStatus>("legacy_start", {
     platform,
     courseId: platform === "zhidao" ? courseId : null,
     options: platform === "yuketang" ? options ?? null : null,
+    zhsOptions: platform === "zhidao" ? zhsOptions ?? null : null,
   });
 }
 
@@ -158,6 +190,9 @@ export function legacyExitMessage(status: LegacyTaskStatus): string {
     case 5: return "未找到可用的 ZHS 0.1.5 运行时，请重新安装完整学序安装包。";
     case 6: return "所选课程不属于当前登录会话、已失效，或缺少有效课程路由，请重新同步课程。";
     case 9: return "原版 ZHS 要求交互输入，当前无终端模式无法继续；需在应用内处理该交互。";
+    case 12: return "已达到设置的视频数量或任务时长上限；不代表服务器确认课程完成。";
+    case 13: return "视频处理遇到错误，已按本次停止策略结束任务；请检查诊断信息。";
+    case 14: return "指定的视频或知识点已不在当前真实课程目录中，请重新同步并选择。";
     case 1: return "ZHS 已启动但原版执行失败，请检查登录、课程状态及运行环境。";
     default: return `ZHS 意外退出（代码 ${status.exit_code ?? "未知"}），尚未确认执行成功。`;
   }
