@@ -1,11 +1,11 @@
 import {useEffect,useRef,useState} from "react";
 import {getVersion} from "@tauri-apps/api/app";
 import {invoke} from "@tauri-apps/api/core";
-import {Download,FolderOpen,RefreshCw} from "lucide-react";
+import {Download,FolderOpen,History,RefreshCw} from "lucide-react";
 import {friendlyUpdateError,request,type AvailableUpdate,type UpdateSettings} from "../bridge";
 
-export function UpdatePanel({desktop,visible,onDownloaded}:{
-  desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;
+export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog}:{
+  desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;onOpenChangelog:()=>void;
 }){
   const [settings,setSettings]=useState<UpdateSettings>({channel:"beta",mode:"download"});
   const [current,setCurrent]=useState("");
@@ -98,7 +98,12 @@ export function UpdatePanel({desktop,visible,onDownloaded}:{
     </div>
     {message&&<p role="status">{message}</p>}
     <p className="muted">当前运行版本：{current||"读取中"}。自动更新只负责下载与 SHA-256 校验，不会自动安装。安装完成并重新启动后，版本号才会变化。</p>
-    <p><a href="https://github.com/07xh/StudyFlow/releases" target="_blank" rel="noopener noreferrer">查看 GitHub 官方发布页</a></p>
+    <div className="actions">
+      <button className="secondary" type="button" disabled={!desktop||!current} onClick={onOpenChangelog}>
+        <History size={15}/>历史更新日志
+      </button>
+      <a href="https://github.com/07xh/StudyFlow/releases" target="_blank" rel="noopener noreferrer">GitHub 官方发布页</a>
+    </div>
     {release&&<div><strong>{release.version}</strong><p style={{whiteSpace:"pre-wrap"}}>{release.notes}</p></div>}
     {downloaded&&<p>{downloaded} · 关闭学序后运行安装包</p>}
   </section>;
