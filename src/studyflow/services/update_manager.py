@@ -86,6 +86,22 @@ def check(current: str) -> dict:
     } if release else None}
 
 
+def latest() -> dict:
+    """Newest actually published, installable release across stable and RC channels.
+
+    GitHub's releases/latest excludes pre-releases, and its list order is not
+    version order. Never offer a draft or a release without a verifiable x64
+    installer as the desktop "GitHub latest" destination.
+    """
+    release = updater.release_info("0.0.0", channel="beta")
+    if release is None or _installer(release) is None:
+        return {"version": None}
+    version = release["version"]
+    if not isinstance(version, str) or len(version) > 80 or not updater.VERSION_PATTERN.fullmatch(version):
+        return {"version": None}
+    return {"version": version}
+
+
 def changelog(current: str, previous: str | None = None, history: bool = False) -> dict:
     return {"entries": updater.release_notes(current, previous_version=previous, history=history)}
 

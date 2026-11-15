@@ -56,7 +56,7 @@ def release_info(current_version: str, channel: str = "stable", timeout: int = 1
     """Returns a newer release's metadata, or None. Never downloads or runs binaries."""
     if channel not in ("stable", "beta"):
         raise ValueError("Unsupported update channel")
-    url = API + ("/latest" if channel == "stable" else "?per_page=20")
+    url = API + ("/latest" if channel == "stable" else "?per_page=100")
     req = Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "StudyFlow-Updater"})
     try:
         with urlopen(req, timeout=timeout) as response:

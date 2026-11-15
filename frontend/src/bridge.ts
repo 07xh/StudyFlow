@@ -7,6 +7,7 @@ export type Config = {session_id: string; csrf_token: string; classroom_id: stri
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
 export type YuketangSessionMarker = {marker:string};
 export type BridgeRequest =
+  | {id: string; version: 1; operation: "updates.latest"}
   | {id: string; version: 1; operation: "updates.settings.get"}
   | {id: string; version: 1; operation: "updates.settings.save"; settings: UpdateSettings}
   | {id: string; version: 1; operation: "updates.check"; current_version: string}
