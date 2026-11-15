@@ -125,7 +125,7 @@ class YuketangReadOnly:
         number = float(value)
         return number if math.isfinite(number) and 0 <= number <= 1_000_000 else None
 
-    def read_video_progress(self, classroom_id: str, leaf_id: str) -> dict[str, float | None]:
+    def read_video_progress(self, classroom_id: str, leaf_id: str) -> dict[str, float | bool | None]:
         """Read one original Rain Classroom video's server progress, without a heartbeat.
 
         The chapter leaf identifier is used only after leaf_info verifies the
@@ -161,6 +161,7 @@ class YuketangReadOnly:
                 "Accept": "application/json, text/plain, */*",
                 "Xt-Agent": "web", "classroom-id": classroom,
                 "X-Requested-With": "XMLHttpRequest", "X-CSRFToken": self.csrf_token,
+                "Cache-Control": "no-cache, no-store", "Pragma": "no-cache",
                 "university-id": self.university_id, "uv-id": self.university_id,
                 "xtbz": "ykt",
             },
@@ -195,6 +196,19 @@ class YuketangReadOnly:
         percent = round(rate * 100, 1)
         if rate < 1.0 and percent >= 100.0:
             percent = 99.9
-        return {"progress_percent": percent, "server_completed": rate == 1.0,
+        # Rain Classroom exposes both a playback coverage rate and an explicit
+        # server completion flag on a video's progress record. They may differ.
+        # Honor only documented 0/1-shaped values; do not guess from a timestamp
+        # or the local worker's configurable completion threshold.
+        flag = record.get("completed")
+        if flag is True or flag == 1 or flag == "1":
+            completed = True
+        elif flag is False or flag == 0 or flag == "0":
+            completed = False
+        else:
+            # Older deployments may omit the flag; retain the original strict
+            # fallback to an exact 100% server rate in that case.
+            completed = rate == 1.0
+        return {"progress_percent": percent, "server_completed": completed,
                 "last_point_seconds": last_position,
                 "duration_seconds": duration}
