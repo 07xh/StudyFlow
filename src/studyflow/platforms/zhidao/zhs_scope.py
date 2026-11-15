@@ -61,8 +61,14 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None):
                 return None
             if resource_mode == "reading" and kind not in ("ppt", "article"):
                 return None
-            if on_resource is not None:
-                detail = getattr(item, "resources_detail", None)
+            detail = getattr(item, "resources_detail", None)
+            # The upstream may skip already-completed or optional resources.
+            # Those are NOT an active video/PPT/reading item in the UI.
+            optional_enabled = args[2] if len(args) > 2 else kwargs.get("learn_optional", False)
+            active = getattr(item, "study_status", None) != 1 and (
+                getattr(detail, "resources_sync_type", 1) == 1 or optional_enabled is True
+            )
+            if active and on_resource is not None:
                 on_resource(kind, getattr(detail, "resources_name", None))
             return original_resource(manager, course_id, class_id, knowledge_id, item, *args, **kwargs)
 
