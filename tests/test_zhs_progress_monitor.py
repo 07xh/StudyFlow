@@ -221,7 +221,7 @@ def test_rust_idle_status_always_initializes_telemetry_freshness():
     ]
     assert len(idle_statuses) == 1
     assert all("zhs_stale: false" in line for line in idle_statuses)
-    stop = rust.split("pub fn legacy_stop", 1)[1].split("#[cfg(test)]", 1)[0]
+    stop = rust.split("fn legacy_stop_blocking", 1)[1].split("#[cfg(test)]", 1)[0]
     assert 'Err("TASK_RUN_CHANGED".into())' in stop
 
 
