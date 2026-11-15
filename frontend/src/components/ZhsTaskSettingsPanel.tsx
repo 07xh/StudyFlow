@@ -45,6 +45,8 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const idsAvailable=useMemo(()=>new Set(items.map(item=>item.id)),[items]);
   const dirty=saved!==null&&JSON.stringify(options)!==JSON.stringify(saved);
   const valid=validateZhsStoredOptions(options);
+  const selectedScopeUnavailable=loadState==="ready"&&scopeMode==="selected"&&
+    (!items.length||!selectedIds.length||!selectedIds.every(id=>idsAvailable.has(id)));
 
   const ready=useMemo<OriginalZhsOptions|null>(()=>{
     if(!saved||busy||dirty||!valid||!courseId||loadedFor!==courseId)return null;
@@ -155,6 +157,14 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
       <SlidersHorizontal size={16}/><strong>ZHS 原版 · 观看控制</strong>
       <span className="sf-muted">点击设置</span>
     </button>
+    {loadState==="ready"&&dirty&&<p className="sf-task-context" role="status">
+      当前课程参数已修改但尚未保存，请在设置中保存后启动。
+    </p>}
+    {selectedScopeUnavailable&&<div className="sf-task-context" role="status">
+      <span>上次选择的资源范围暂时无法在当前课程目录中核验；可刷新目录，或手动切换为整门课程。</span>
+      <button className="secondary" type="button" disabled={busy}
+        onClick={()=>persistScope("all",[])}>改为整门课程</button>
+    </div>}
     {loadState==="loading"&&<p className="sf-task-context" role="status">正在读取当前课程的本机参数…</p>}
     {loadState==="failed"&&<div className="sf-task-context" role="alert">
       <span>本课程参数读取失败。可重试；如本机设置损坏，可在下方手动恢复默认值，登录信息不会被清除。</span>
