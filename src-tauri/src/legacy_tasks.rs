@@ -67,6 +67,9 @@ pub struct ZhsOptions {
     learn_optional: bool,
     max_videos: u16,
     stop_on_error: bool,
+    // Per-course local target. None preserves ZHS's course-type default.
+    #[serde(default)]
+    completion_threshold: Option<u8>,
     scope_mode: String,
     selected_ids: Vec<u64>,
     #[serde(default = "default_zhs_resource_mode")]
@@ -78,6 +81,7 @@ impl ZhsOptions {
         if !self.speed.is_finite() || self.speed < 1.0 || self.speed > 2.0
             || !self.speed_cap.is_finite() || self.speed_cap < 1.0 || self.speed_cap > 2.0
             || self.limit_minutes > 1440 || self.max_videos > 1000
+            || self.completion_threshold.is_some_and(|value| value == 0 || value > 100)
             || !matches!(self.resource_mode.as_str(), "all" | "video" | "reading")
             || (self.scope_mode != "all" && self.scope_mode != "selected")
             || self.selected_ids.len() > 256
@@ -629,6 +633,30 @@ mod tests {
             debug: false,
             richtext_stay_seconds: 3,
             richtext_skip_delay: 1.0,
+        }
+    }
+
+    #[test]
+    fn zhs_threshold_is_optional_and_rejects_out_of_range_values() {
+        let raw = serde_json::json!({
+            "speed":1.5,"speed_cap":2.0,"limit_minutes":0,"learn_optional":false,
+            "max_videos":0,"stop_on_error":false,"scope_mode":"all",
+            "selected_ids":[],"resource_mode":"all"
+        });
+        let options: ZhsOptions = serde_json::from_value(raw.clone()).unwrap();
+        assert!(options.completion_threshold.is_none());
+        assert!(options.validate().is_ok());
+        for valid in [1u8, 90, 100] {
+            let mut with_threshold=raw.clone();
+            with_threshold["completion_threshold"]=serde_json::json!(valid);
+            let options: ZhsOptions=serde_json::from_value(with_threshold).unwrap();
+            assert!(options.validate().is_ok());
+        }
+        for invalid in [0u8, 101] {
+            let mut with_threshold=raw.clone();
+            with_threshold["completion_threshold"]=serde_json::json!(invalid);
+            let options: ZhsOptions=serde_json::from_value(with_threshold).unwrap();
+            assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
         }
     }
 
