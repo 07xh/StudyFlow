@@ -70,6 +70,14 @@ def main() -> int:
                     from zhs.cli.bootstrap import load_config_and_session  # noqa: F401
                     from zhs.zhidao.course import ZhidaoCourseManager  # noqa: F401
                     from zhs.__main__ import app  # noqa: F401
+                    from zhs.ai import video as zhs_ai_video, course as zhs_ai_course
+                    from zhs.hike import video as zhs_hike_video
+                    from zhs.zhidao import video as zhs_shared_video
+                    from studyflow.services.zhs_upstream_patch import PATCH_ID
+                    if any(getattr(module, "STUDYFLOW_ZHS_RELIABILITY_PATCH", None) != PATCH_ID for module in (
+                        zhs_ai_video, zhs_ai_course, zhs_hike_video, zhs_shared_video
+                    )):
+                        raise ImportError("ZHS sender reliability overlay is not included")
                     from studyflow.platforms.zhidao.upstream import zhidao_only  # noqa: F401
                     from studyflow.platforms.zhidao import qr_login_core, verify_entry  # noqa: F401
                     from studyflow.services.legacy_playback import _zhs_monitor_source
@@ -80,7 +88,7 @@ def main() -> int:
                     monitor = runpy.run_path(str(monitor_source), run_name="studyflow_zhs_monitor_check")
                     if not callable(monitor.get("NumericTelemetry")) or not callable(monitor.get("StdoutObserver")):
                         raise ImportError("bundled ZHS monitor entrypoints are unavailable")
-                    print("[ZHS_RUNTIME_OK] standalone ZHS 0.1.5 and original progress observer ready")
+                    print("[ZHS_RUNTIME_OK] ZHS 0.1.5 patched reliability runtime and original progress observer ready")
                     return 0
             except (ImportError, PackageNotFoundError, ValueError, OSError):
                 pass
