@@ -141,13 +141,7 @@ def transform(name: str, source: str) -> str:
         result = once(
             result,
             '    ) -> None:\n        """play 模式：只刷知识点，不查询作业"""',
-            '    ) -> bool:\n        """play 模式：只刷知识点，不查询作业"""',
-            name,
-        )
-        result = once(
-            result,
-            "            return\n\n        self._reporter.tree_print(f\"知识点: {styled(knowledge.knowledge_name, _C.WHITE)}\", depth=2, enabled=True)\n",
-            "            return True\n\n        self._reporter.tree_print(f\"知识点: {styled(knowledge.knowledge_name, _C.WHITE)}\", depth=2, enabled=True)\n",
+            '    ) -> bool | None:\n        """play 模式：只刷知识点，不查询作业"""',
             name,
         )
         result = once(
