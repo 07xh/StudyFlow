@@ -47,6 +47,8 @@ def _course_payload(course):
     # Optional marker is exposed only when provided by a verified account adapter.
     if course.session_marker is not None:
         payload["session_marker"] = course.session_marker
+    if course.progress_metric is not None:
+        payload["progress_metric"] = course.progress_metric
     return payload
 
 
