@@ -31,20 +31,21 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.locator('.sf-platform-courses').count(),1,'The selected platform opens on its course list');
    assert.equal(await page.getByRole('heading',{name:'课程列表',exact:true}).count(),1);
    assert.equal(await page.locator('.sf-filters,.sf-filter').count(),0,'The old global platform filter is removed');
-   assert.equal(await page.locator('.sf-platform-login').count(),0,'Account form starts collapsed until requested');
+   assert.equal(await page.locator('.sf-platform-card,.sf-platform-login,.sf-fold,.legacy-playback-panel').count(),0,
+     'The full platform landing contains only the course library, not account or execution panels');
    const row=page.locator('.sf-platform-toolbar');
-   const actionLabels=['参数设置','同步课程列表'];
+   const actionLabels=['账号与连接','参数设置','同步课程列表'];
    const boxes=await Promise.all(actionLabels.map(async label=>page.getByRole('button',{name:label,exact:true}).boundingBox()));
    assert.ok(boxes.every(Boolean),'All platform actions must be visible');
-   assert.ok(boxes.every(box=>Math.abs(box.y-boxes[0].y)<1.5),'Both platform actions must stay in the same row');
-   assert.ok(boxes[0].x<boxes[1].x,'Action order must remain settings / sync');
+   assert.ok(boxes.every(box=>Math.abs(box.y-boxes[0].y)<1.5),'Three platform actions must stay in the same row');
+   assert.ok(boxes[0].x<boxes[1].x&&boxes[1].x<boxes[2].x,'Action order must be account / settings / sync');
    assert.equal(await page.getByRole('button',{name:'打开课程列表',exact:true}).count(),0);
    assert.equal(await row.evaluate(element=>getComputedStyle(element).flexWrap),'nowrap');
    await page.getByRole('button',{name:'参数设置',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),1);
+   assert.equal(await page.locator('.sf-platform-card').count(),1,'Account management belongs only to platform settings');
    assert.equal(await page.getByText('雨课堂默认参数',{exact:true}).count(),1);
-   assert.equal(await page.locator('.sf-platform-card').count(),0,'Platform settings must not duplicate account workspace');
-   await page.getByRole('button',{name:'返回平台',exact:true}).click();
+   await page.getByRole('button',{name:'返回课程列表',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-settings-view').count(),0);
    assert.equal(await page.locator('.sf-platform-courses').count(),1,'Returning from settings must restore the platform course list');
 
@@ -53,14 +54,18 @@ const server=http.createServer((req,res)=>{
    const afterScroll=await page.locator('.sf-workspace-header').boundingBox();
    assert.ok(Math.abs(beforeScroll.y-afterScroll.y)<1,'Platform status strip cannot scroll away with content');
    await page.locator('main').evaluate(element=>{element.scrollTop=0;});
-   assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),1,'Scope saving belongs beside scope inputs');
+   assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),0,
+     'Platform-wide classroom configuration must not occupy the whole course landing');
    await page.mouse.move(0,0);
    await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
-   await page.getByRole('button',{name:'登录平台',exact:true}).click();
+   await page.getByRole('button',{name:'账号与连接',exact:true}).click();
+   assert.equal(await page.locator('.sf-platform-settings-view').count(),1);
    assert.equal(await page.locator('.sf-platform-login').getByLabel('Session ID',{exact:true}).count(),1);
    assert.equal(await page.locator('.sf-platform-login').getByLabel('课堂 ID',{exact:true}).count(),0);
    assert.equal(await page.locator('.sf-platform-login').getByText('读取章节视频',{exact:true}).count(),0);
    assert.equal(await page.getByLabel('课堂 ID',{exact:true}).count(),1);
+   assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),1,
+     'Classroom scope remains available under platform management');
    assert.equal(await page.locator('.sf-ykt-worker').count(),0,'No invented worker states before launch');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Page cannot overflow horizontally');
    await page.mouse.move(0,0);
