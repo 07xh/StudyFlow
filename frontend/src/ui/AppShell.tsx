@@ -1,4 +1,5 @@
 import type {ConnectionStatus} from "../types";
+import type {PlatformProgressOverview} from "../presentation";
 import {useEffect,useState,type ReactNode} from "react";
 import {
   Activity,BookOpen,ChevronDown,History,
@@ -42,12 +43,12 @@ interface Props {
   headerTitle?:string;
   currentPlatform?:string;
   currentCourseTitle?:string;
-  courseProgress?:number|null;
+  courseProgress?:number|null;platformOverview?:PlatformProgressOverview|null;selectedCourseId?:string;
   courseOptions?:{id:string;title:string}[];onCourseSelect?:(id:string)=>void;
   metricLabel?:string;courseEvidence?:string;courseVerifiedAt?:string|null;currentPlatformStatus?:ConnectionStatus;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
+  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,platformOverview,selectedCourseId="",courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -121,15 +122,42 @@ export function AppShell({
           {currentPlatform&&<small className={currentPlatformStatus==="connected"?"sf-connection-confirmed":"sf-connection-pending"}>{currentPlatformStatus==="connected"?"已连接":currentPlatformStatus==="error"?"连接异常":currentPlatformStatus==="connecting"?"连接中":"未连接"}</small>}
         </div>
       </div>
-      <div className="sf-workspace-progress" aria-label={currentCourseTitle?"当前课程进度":"页面上下文"}>
-        {currentCourseTitle?<>
-          <div className="sf-workspace-progress-head"><div className="sf-workspace-progress-course"><small>{metricLabel??"平台记录进度"}</small><strong title={currentCourseTitle}>{currentCourseTitle}</strong></div><strong className="sf-workspace-progress-value">{courseProgress==null?"—":courseProgress.toFixed(1)+"%"}</strong></div>
-          {courseProgress!=null&&<div className="sf-workspace-progress-track" role="progressbar" aria-label={metricLabel??"平台记录进度"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={courseProgress}><span style={{width:courseProgress+"%"}}/></div>}
-          <div className="sf-header-evidence"><span>{courseEvidence??"待核验"}</span><time>{courseVerifiedAt&&Number.isFinite(Date.parse(courseVerifiedAt))?new Date(courseVerifiedAt).toLocaleString():"暂无核验时间"}</time></div>
-        </>:<div className="sf-workspace-empty-progress">
-          <div><small>当前课程总进度</small><strong>—</strong></div>
-          {page.startsWith("platform-")?<label className="sf-header-course-picker">选择课程<select value="" disabled={!courseOptions.length} onChange={event=>onCourseSelect?.(event.target.value)}><option value="">{courseOptions.length?"选择一门课程查看进度":"请先同步课程"}</option>{courseOptions.map(course=><option key={course.id} value={course.id}>{course.title}</option>)}</select></label>
-          :<span className="sf-header-no-course">尚未选择课程</span>}
+      <div className="sf-workspace-progress" aria-label={currentCourseTitle?"当前课程进度":"平台进度概览"}>
+        {page.startsWith("platform-")?<div className="sf-workspace-progress-layout">
+          <div className="sf-workspace-progress-summary">
+            <div className="sf-workspace-progress-head">
+              <div className="sf-workspace-progress-course">
+                <small>{currentCourseTitle?metricLabel??"当前课程进度":platformOverview?.label??"平台课程进度概览"}</small>
+                <strong title={currentCourseTitle??currentPlatform??""}>{currentCourseTitle??"全部课程"}</strong>
+              </div>
+              <strong className="sf-workspace-progress-value">
+                {(currentCourseTitle?courseProgress:platformOverview?.percent)==null
+                  ?"—":(currentCourseTitle?courseProgress!:platformOverview!.percent!).toFixed(1)+"%"}
+              </strong>
+            </div>
+            {(currentCourseTitle?courseProgress:platformOverview?.percent)!=null&&
+              <div className="sf-workspace-progress-track" role="progressbar"
+                aria-label={currentCourseTitle?metricLabel??"当前课程进度":platformOverview?.label??"平台课程进度"}
+                aria-valuemin={0} aria-valuemax={100}
+                aria-valuenow={(currentCourseTitle?courseProgress:platformOverview?.percent)??0}>
+                <span style={{width:((currentCourseTitle?courseProgress:platformOverview?.percent)??0)+"%"}}/>
+              </div>}
+            <div className="sf-header-evidence">
+              <span>{currentCourseTitle?courseEvidence??"待核验":platformOverview?.detail??"暂无课程进度数据"}</span>
+              {currentCourseTitle&&<time>{courseVerifiedAt&&Number.isFinite(Date.parse(courseVerifiedAt))
+                ?new Date(courseVerifiedAt).toLocaleString():"暂无核验时间"}</time>}
+            </div>
+          </div>
+          <label className="sf-header-course-picker">选择课程
+            <select aria-label="选择课程或全部课程" value={selectedCourseId}
+              disabled={!courseOptions.length} onChange={event=>onCourseSelect?.(event.target.value)}>
+              <option value="">{courseOptions.length?"全部课程":"请先同步课程"}</option>
+              {courseOptions.map(course=><option key={course.id} value={course.id}>{course.title}</option>)}
+            </select>
+          </label>
+        </div>:<div className="sf-workspace-empty-progress">
+          <div><small>课程进度</small><strong>—</strong></div>
+          <span className="sf-header-no-course">在学习平台中选择课程查看详情</span>
         </div>}
       </div>
       <div className="sf-header-actions">

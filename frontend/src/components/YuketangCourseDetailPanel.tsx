@@ -3,6 +3,7 @@ import {RefreshCw} from "lucide-react";
 import {friendlyBridgeError,request,type YuketangCourseProgress,
   type YuketangVideoProgress} from "../bridge";
 import type {Course} from "../types";
+import type {YuketangVideoSummary} from "../presentation";
 import {CourseChapterGroup,CourseRecordToolbar} from "../ui/CourseRecordViews";
 
 type Props={course:Course;desktop:boolean;connected:boolean;scopeDirty:boolean};
@@ -59,6 +60,24 @@ type Entry={
   targetRequests:Set<string>;targetAttempts:Map<string,number>;
 };
 const entries=new Map<string,Entry>();
+const summaryListeners=new Set<()=>void>();
+let summaryRevision=0;
+/** App-level subscription keeps the header and cards updated without rescanning. */
+export function subscribeYuketangVerification(listener:()=>void){
+  summaryListeners.add(listener);
+  return ()=>{summaryListeners.delete(listener);};
+}
+export function getYuketangVerificationRevision(){return summaryRevision;}
+export function getYuketangVideoSummary(courseId:string):YuketangVideoSummary|null{
+  const snapshot=entries.get(courseId)?.snapshot;
+  if(!snapshot)return null;
+  const verified=snapshot.videos.filter(item=>item.progress_percent!==null&&item.verified_at!==null);
+  const completed=verified.filter(item=>item.server_completed===true).length;
+  return {total:snapshot.total,verified:verified.length,completed,
+    complete:snapshot.checkedAt!==null&&snapshot.nextOffset===null&&
+      snapshot.total===snapshot.videos.length,
+    scanning:snapshot.state==="loading",checkedAt:snapshot.checkedAt};
+}
 const emptySnapshot=():Snapshot=>({
   videos:[],total:0,nextOffset:null,state:"idle",message:"",
   checkedAt:null,lastPlaybackAt:null,scanningCount:0,scanningTotal:null,resumeOffset:null
@@ -75,7 +94,9 @@ function getEntry(courseId:string):Entry{
 }
 function publish(entry:Entry,next:Snapshot){
   entry.snapshot=next;
+  summaryRevision++;
   for(const listener of entry.listeners)listener();
+  for(const listener of summaryListeners)listener();
 }
 
 /** Never reuse one login or classroom's evidence with a different scope. */

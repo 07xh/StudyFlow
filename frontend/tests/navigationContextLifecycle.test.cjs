@@ -28,6 +28,15 @@ test('navigation preserves valid selection without leaking its heading to anothe
   if(name==='./useReleaseChangelog')return {useReleaseChangelog:()=>({dialog:null,close:()=>{},openHistory:()=>{}})};
   if(name==='./ui/AppShell')return {AppShell:props=>{shell=props;return props.children;}};
   if(name==='./ui/CourseCard')return {CourseCard:props=>React.createElement('button',{'data-select-course':true,'data-course-id':props.course.course_id,onClick:()=>props.onInspect(props.course)})};
+  if(name==='./components/YuketangCourseDetailPanel')return {
+    YuketangCourseDetailPanel:Null,
+    resetYuketangVerification:()=>{},
+    verifyYuketangPlayedVideo:async()=>false,
+    verifyYuketangCourse:async()=>{},
+    getYuketangVideoSummary:()=>null,
+    subscribeYuketangVerification:()=>()=>{},
+    getYuketangVerificationRevision:()=>0
+  };
   if(name==='./ui/CollapsibleSection')return {CollapsibleSection:props=>props.children};
   if(name==='./components/ZhidaoPlayerMonitor')return {ZhidaoPlayerMonitor:props=>{monitor=props;return null;}};
   if(name==='lucide-react')return new Proxy({},{get:()=>Null});

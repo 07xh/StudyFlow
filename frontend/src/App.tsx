@@ -5,7 +5,7 @@ import {getYuketangLiveProgress} from "./legacyPlayback";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
-import {useCallback,useEffect,useMemo,useRef,useState} from "react";
+import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
   History,ListChecks,RefreshCw,Search,SlidersHorizontal
@@ -17,7 +17,7 @@ import {useZhidaoAutoVerify} from "./zhidaoAutoVerify";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
-import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangPlayedVideo} from "./components/YuketangCourseDetailPanel";
+import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangPlayedVideo,verifyYuketangCourse,getYuketangVideoSummary,subscribeYuketangVerification,getYuketangVerificationRevision} from "./components/YuketangCourseDetailPanel";
 import {UpdatePanel} from "./components/UpdatePanel";
 import {ReleaseNotesDialog} from "./ui/ReleaseNotesDialog";
 import {useReleaseChangelog} from "./useReleaseChangelog";
@@ -37,7 +37,7 @@ import type {Config,Video,ZhidaoPlayerSettings,YuketangScope} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {CollapsibleSection} from "./ui/CollapsibleSection";
-import {presentCourse,courseMetric,platformNames,selectedSessionCourse} from "./presentation";
+import {presentCourse,courseMetric,platformNames,selectedSessionCourse,platformProgressOverview,type YuketangVideoSummary} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo,platformRegistry} from "./ui/registry";
@@ -81,6 +81,8 @@ export default function App(){
   },[compactCards]);
 
   const [platforms,setPlatforms]=useState<Record<Platform,PlatformState>>(initialPlatforms);
+  const yuketangRevision=useSyncExternalStore(
+    subscribeYuketangVerification,getYuketangVerificationRevision,getYuketangVerificationRevision);
   const platformsRef=useRef(platforms);
   platformsRef.current=platforms;
   const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint()});
@@ -229,14 +231,35 @@ export default function App(){
   }
 
   const courses=useMemo(()=>Object.values(platforms).flatMap(item=>item.courses),[platforms]);
+  const yuketangSummaries=useMemo(()=>{
+    const results:Record<string,YuketangVideoSummary>={};
+    for(const course of platforms.yuketang.courses){
+      const summary=getYuketangVideoSummary(course.course_id);
+      if(summary)results[course.course_id]=summary;
+    }
+    return results;
+  },[platforms.yuketang.courses,yuketangRevision]);
+  // First visit verifies the real classroom videos even without selecting a course.
+  // Subsequent visits share the in-session cache rather than rescanning.
+  useEffect(()=>{
+    if(page!=="platform-yuketang"||!desktop||!consentAccepted||
+       platforms.yuketang.status!=="connected"||scopeDirty||
+       syncFeedback.yuketang.phase==="syncing")return;
+    for(const course of platforms.yuketang.courses){
+      if(!course.stale)void verifyYuketangCourse(course.course_id,{desktop,connected:true,scopeDirty:false});
+    }
+  },[page,desktop,consentAccepted,platforms.yuketang.status,
+    platforms.yuketang.courses,scopeDirty,syncFeedback.yuketang.phase]);
   useEffect(()=>{
     if(!selectedCourse)return;
     if(!selectedSessionCourse(courses,selectedCourse))setSelectedCourse(null);
   },[courses,selectedCourse]);
   const verifiedCourses=useMemo(()=>courses.filter(course=>
-    !course.stale&&course.progress_evidence==="server_verified"&&typeof course.verified_at==="string"&&
-    course.verified_at.length>0&&course.progress_percent!==null
-  ),[courses]);
+    !course.stale&&(course.platform==="yuketang"
+      ?courseMetric(course,yuketangSummaries[course.course_id]).percent!==null
+      :course.progress_evidence==="server_verified"&&typeof course.verified_at==="string"&&
+       course.verified_at.length>0&&course.progress_percent!==null)
+  ),[courses,yuketangSummaries]);
   const learningCount=verifiedCourses.filter(course=>
     course.progress_percent!==null&&course.progress_percent>0&&course.progress_percent<100).length;
   const completedCount=verifiedCourses.filter(course=>
@@ -635,7 +658,7 @@ export default function App(){
           action={<button className="secondary" type="button" onClick={()=>setPage("platforms")}>管理平台登录</button>}/>
       :<div className="sf-recent-list">
         {courses.slice(0,4).map(course=>{
-          const data=presentCourse(course);
+          const data=presentCourse(course,course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined);
           return <article className="sf-recent-row" key={course.platform+":"+course.course_id}>
             <div className={"sf-recent-thumb "+course.platform}>
               {course.platform==="zhidao"?<GraduationCap size={27}/>:<BookOpen size={27}/>}
@@ -647,7 +670,7 @@ export default function App(){
                 {data.percent===100&&<span className="sf-completed-tag">内容全部完成</span>}
               </div>
               <div className="sf-recent-progress-label">
-                <span>{data.percent===null?"暂无平台核验记录":courseMetric(course).label+"："+data.percent.toFixed(1)+"%"}</span>
+                <span>{data.percent===null?"暂无平台核验记录":courseMetric(course,course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined).label+"："+data.percent.toFixed(1)+"%"}</span>
                 {course.stale&&<span>数据可能已过期</span>}
               </div>
               {data.percent!==null&&<div className="sf-recent-track" role="progressbar"
@@ -743,8 +766,9 @@ export default function App(){
     ||page==="platform-yuketang"&&activeSelectedCourse?.platform==="yuketang")
     ?activeSelectedCourse:null;
   const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null;
-  const activeMetric=workspaceCourse?courseMetric(workspaceCourse):null;
+  const activeMetric=workspaceCourse?courseMetric(workspaceCourse,workspaceCourse.platform==="yuketang"?yuketangSummaries[workspaceCourse.course_id]:undefined):null;
   const activeCourseProgress=activeMetric?.percent??null;
+  const platformOverview=headerPlatform?platformProgressOverview(platforms[headerPlatform].courses,yuketangSummaries):null;
 
   const renderCourses=(platform:Platform)=>{
     const platformCourses=platforms[platform].courses;
@@ -767,7 +791,7 @@ export default function App(){
       </div>
       {visible.length>0
         ?<div className="course-grid">{visible.map(course=>
-          <CourseCard course={course} onInspect={inspectCourse} key={course.platform+":"+course.course_id}/>)}</div>
+          <CourseCard course={course} yuketangSummary={course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined} onInspect={inspectCourse} key={course.platform+":"+course.course_id}/>)}</div>
         :<EmptyState icon={BookOpen}
           title={platformCourses.length>0?"未找到匹配课程":"暂无真实课程数据"}
           description={platformCourses.length>0
@@ -830,11 +854,19 @@ export default function App(){
       compact={compactCards}
       headerTitle={workspaceCourse?"课程详情":undefined}
       currentPlatform={headerPlatform?platformNames[headerPlatform]:undefined}
-      currentCourseTitle={workspaceCourse?.title} courseProgress={activeCourseProgress}
-      metricLabel={activeMetric?.label} courseEvidence={activeMetric?.evidenceLabel} courseVerifiedAt={activeMetric?.verifiedAt}
+      currentCourseTitle={workspaceCourse?.title} courseProgress={activeCourseProgress} platformOverview={platformOverview}
+      metricLabel={activeMetric?.label}
+      courseEvidence={workspaceCourse?.platform==="yuketang"&&activeMetric
+        ?activeMetric.evidenceLabel+" · "+activeMetric.detail:activeMetric?.evidenceLabel}
+      courseVerifiedAt={activeMetric?.verifiedAt}
       currentPlatformStatus={headerPlatform?platforms[headerPlatform].status:undefined}
-      courseOptions={headerPlatform?platforms[headerPlatform].courses.map(course=>({id:course.course_id,title:course.title})):[]}
-      onCourseSelect={id=>{const course=courses.find(course=>course.platform===headerPlatform&&course.course_id===id);if(course)inspectCourse(course);}}>
+      selectedCourseId={workspaceCourse?.course_id??""}
+      courseOptions={headerPlatform?platforms[headerPlatform].courses.filter(course=>!course.stale).map(course=>({id:course.course_id,title:course.title})):[]}
+      onCourseSelect={id=>{
+        if(!id){setSelectedCourse(null);return;}
+        const course=courses.find(course=>course.platform===headerPlatform&&course.course_id===id&&!course.stale);
+        if(course)inspectCourse(course);
+      }}>
       <TaskRecoveryPanel desktop={desktop} consentAccepted={consentAccepted}
         visible={page==="home"||page==="tasks"} tasks={runtime.tasks} loading={runtime.loading}
         connected={{zhidao:platforms.zhidao.status==="connected",yuketang:platforms.yuketang.status==="connected"}}

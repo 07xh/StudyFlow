@@ -100,3 +100,50 @@ test("updater explains fixed backend codes without leaking raw errors", () => {
   assert.match(friendlyUpdateError(new Error("UPDATE_STORAGE_FAILED")), /磁盘/);
   assert.doesNotMatch(friendlyUpdateError(new Error("Cookie=SECRET_TOKEN")), /SECRET_TOKEN/);
 });
+
+test("Rain Classroom video completion comes only from complete server-verified scans", () => {
+  const {courseMetric,platformProgressOverview}=loadTypescript("src/presentation.ts");
+  const course={platform:"yuketang",course_id:"room-1",title:"真实课堂",progress_percent:null};
+  const partial={total:10,verified:8,completed:5,complete:true,scanning:false,checkedAt:1000};
+  const awaiting=courseMetric(course,partial);
+  assert.equal(awaiting.percent,null,"unknown videos must not become zero or completed");
+  assert.match(awaiting.detail,/已核验 8\/10/);
+  assert.equal(platformProgressOverview([course],{"room-1":partial}).percent,null);
+
+  const complete={...partial,verified:10,completed:6};
+  assert.equal(courseMetric(course,complete).percent,60);
+  assert.match(courseMetric(course,complete).label,/视频/);
+  assert.equal(platformProgressOverview([course],{"room-1":complete}).percent,60);
+  assert.equal(presentCourse({...course,stale:true},complete).percent,null);
+  assert.equal(courseMetric(course,{...complete,total:0,verified:0,completed:0}).percent,null);
+});
+
+test("platform overview weights verified Rain Classroom videos and does not claim official overall progress",()=>{
+  const {platformProgressOverview}=loadTypescript("src/presentation.ts");
+  const courses=[
+    {platform:"yuketang",course_id:"one",title:"一",progress_percent:null},
+    {platform:"yuketang",course_id:"two",title:"二",progress_percent:null}
+  ];
+  const first={total:2,verified:2,completed:1,complete:true,scanning:false,checkedAt:1000};
+  const second={total:8,verified:8,completed:6,complete:true,scanning:false,checkedAt:2000};
+  const full=platformProgressOverview(courses,{one:first,two:second});
+  assert.equal(full.percent,70,"7 confirmed completed videos out of 10, not the mean of course percentages");
+  assert.equal(full.verifiedCount,2);
+  assert.match(full.detail,/非官方总进度/);
+  const incomplete=platformProgressOverview(courses,{one:first,two:{...second,verified:7}});
+  assert.equal(incomplete.percent,null);
+  assert.equal(incomplete.verifiedCount,1);
+  assert.match(incomplete.detail,/总体进度待核验/);
+  assert.equal(platformProgressOverview([]).percent,null);
+});
+
+test("verified Zhidao courses retain labeled evidence and show a reference mean only when complete",()=>{
+  const {platformProgressOverview}=loadTypescript("src/presentation.ts");
+  const base={platform:"zhidao",progress_evidence:"server_verified",verified_at:"2026-11-15"};
+  const courses=[
+    {...base,course_id:"a",title:"A",course_type:"shared",progress_percent:30},
+    {...base,course_id:"b",title:"B",course_type:"ai",progress_percent:70}
+  ];
+  assert.equal(platformProgressOverview(courses).percent,50);
+  assert.equal(platformProgressOverview([{...courses[0],verified_at:null},courses[1]]).percent,null);
+});
