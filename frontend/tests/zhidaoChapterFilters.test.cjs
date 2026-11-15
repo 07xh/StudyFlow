@@ -140,9 +140,9 @@ test("shared-course completion, incomplete and unverified are distinct server st
   await act(async()=>{view=create(React.createElement(Panel,{course:{...baseCourse,course_type:"shared"},desktop:true}));});
   assert.deepEqual(pills(view).map(x=>x.props.children[2].props.children),[3,1,1,1]);
   await act(async()=>{pick(view,"未核验").props.onClick();});
-  assert.match(content(view),/视频未核验/);
-  assert.doesNotMatch(content(view),/视频未完成/);
-  assert.doesNotMatch(content(view),/视频完成/);
+  const titles=view.root.findAllByType("article").map(node=>
+    node.findByType("strong").props.children);
+  assert.deepEqual(titles,["视频未核验"]);
   act(()=>view.unmount());
 });
 
