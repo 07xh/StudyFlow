@@ -71,3 +71,34 @@ def test_download_rejects_external_redirect(tmp_path: Path):
         with pytest.raises(ValueError, match="redirect"):
             updater.verified_download(url, "a" * 64, target)
     assert not target.exists()
+
+
+def test_checksum_failure_has_safe_code_and_never_installs(tmp_path: Path):
+    url = "https://github.com/07xh/StudyFlow/releases/download/v1.0.0/studyflow.exe"
+    target = tmp_path / "verified.exe"
+    with patch.object(updater, "urlopen",
+                      return_value=FakeResponse(b"unexpected", "https://release-assets.githubusercontent.com/asset")):
+        with pytest.raises(updater.UpdateError) as error:
+            updater.verified_download(url, "a" * 64, target)
+    assert error.value.code == "UPDATE_CHECKSUM_FAILED"
+    assert not target.exists()
+    assert not any(tmp_path.iterdir())
+
+
+def test_update_api_network_failure_has_stable_code():
+    from urllib.error import URLError
+    with patch.object(updater, "urlopen", side_effect=URLError("Private URL detail")):
+        with pytest.raises(updater.UpdateError) as error:
+            updater.release_info("0.1.0", channel="beta")
+    assert error.value.code == "UPDATE_NETWORK_FAILED"
+
+
+def test_invalid_release_metadata_has_safe_code():
+    with patch.object(updater, "urlopen",
+                      return_value=FakeResponse(b'{"invalid": true}', updater.API)):
+        assert updater.release_info("0.1.0", channel="beta") is None
+    with patch.object(updater, "urlopen",
+                      return_value=FakeResponse(b'{"broken": ', updater.API)):
+        with pytest.raises(updater.UpdateError) as error:
+            updater.release_info("0.1.0", channel="beta")
+    assert error.value.code == "UPDATE_RELEASE_INVALID"
