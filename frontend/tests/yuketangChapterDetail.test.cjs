@@ -81,7 +81,7 @@ test("failed refresh does not retain stale per-video percentages",async()=>{
   act(()=>view.unmount());
 });
 
-test("progress batches remain ordered and new page cannot overwrite server evidence",async()=>{
+test("progress batches automatically verify all lessons without another click",async()=>{
   const seen=[];
   const first=Array.from({length:8},(_,i)=>video(String(i+1),"第一章",100));
   const second=[video("9","第二章",60),video("10","第二章",null)];
@@ -91,11 +91,6 @@ test("progress batches remain ordered and new page cannot overwrite server evide
   });
   let view;
   await act(async()=>{view=create(React.createElement(Panel,props));});
-  assert.match(JSON.stringify(view.toJSON()),/剩余 2 节/);
-  const buttons=view.root.findAllByType("button");
-  const more=buttons.find(button=>String(button.props.children).includes("继续核验后续视频"));
-  assert.ok(more);
-  await act(async()=>{more.props.onClick();});
   assert.deepEqual(seen,[0,8]);
   const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
   assert.ok(secondChapter);
@@ -103,7 +98,59 @@ test("progress batches remain ordered and new page cannot overwrite server evide
   const out=JSON.stringify(view.toJSON());
   assert.match(out,/视频10/);
   assert.match(out,/60.0%/);
-  assert.doesNotMatch(out,/剩余 2 节/);
+  assert.match(out,/本次已读取/);
+  assert.doesNotMatch(out,/继续核验剩余视频/);
+  act(()=>view.unmount());
+});
+
+test("later batch failure retains verified evidence and resumes at failed offset",async()=>{
+  const seen=[];
+  const first=Array.from({length:8},(_,i)=>video(String(i+1),"第一章",100));
+  const second=[video("9","第二章",40)];
+  let failing=true;
+  const Panel=component(async req=>{
+    seen.push(req.offset);
+    if(req.offset===0)return page(first,0,9,8);
+    if(failing)throw Error("network");
+    return page(second,8,9,null);
+  });
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  let out=JSON.stringify(view.toJSON());
+  assert.deepEqual(seen,[0,8]);
+  assert.match(out,/部分视频已读取并保留真实服务器记录/);
+  assert.match(out,/视频1/);
+  assert.doesNotMatch(out,/视频9/);
+  const retry=view.root.findAllByType("button").find(button=>
+    String(button.props.children).includes("继续核验剩余视频"));
+  assert.ok(retry);
+  failing=false;
+  await act(async()=>{retry.props.onClick();});
+  assert.deepEqual(seen,[0,8,8]);
+  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  await act(async()=>{secondChapter.props.onClick();});
+  out=JSON.stringify(view.toJSON());
+  assert.match(out,/视频9/);
+  assert.doesNotMatch(out,/继续核验剩余视频/);
+  act(()=>view.unmount());
+});
+
+test("a 63-video course is fully verified with eight bounded sequential page requests",async()=>{
+  const seen=[];
+  const all=Array.from({length:63},(_,i)=>video(String(i+1),"第"+(Math.floor(i/10)+1)+"章",i%2===0?100:null));
+  const Panel=component(async req=>{
+    seen.push(req.offset);
+    const items=all.slice(req.offset,req.offset+req.limit);
+    const end=req.offset+items.length;
+    return page(items,req.offset,all.length,end<all.length?end:null);
+  });
+  let view;
+  await act(async()=>{view=create(React.createElement(Panel,props));});
+  assert.deepEqual(seen,[0,8,16,24,32,40,48,56]);
+  const out=JSON.stringify(view.toJSON());
+  assert.match(out,/本次已读取/);
+  assert.match(out,/尚无服务器确认记录/);
+  assert.doesNotMatch(out,/继续核验剩余视频/);
   act(()=>view.unmount());
 });
 
