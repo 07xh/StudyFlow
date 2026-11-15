@@ -3,8 +3,8 @@
 ## 知到
 - 上游仓库：`07xh/zhidao-assistant`
 - 审查时上游 `main` 树 SHA：`157c48aa2c37da8d15137c94be3ef67afc2f6cb9`
-- `payload/zhidao_courses.py` → `src/studyflow/platforms/zhidao/courses.py`：仅调整 `zhidao_diagnostics` 为包内相对导入。
-- `payload/zhidao_diagnostics.py` → `src/studyflow/platforms/zhidao/diagnostics.py`：原样迁入。
+- `payload/zhidao_courses.py` → `src/studyflow/platforms/zhidao/upstream/zhidao_courses.py`：仅调整 `zhidao_diagnostics` 为包内相对导入；`courses.py` 保留为兼容导出入口。
+- `payload/zhidao_diagnostics.py` → `src/studyflow/platforms/zhidao/upstream/zhidao_diagnostics.py`：保留上游诊断实现；`diagnostics.py` 保留为兼容导出入口，与原版读取器共用异常类型。
 - 上游包含 GPL-3.0 LICENSE；正式发布前应完成整套依赖与许可证合规审查。
 
 ## 雨课堂

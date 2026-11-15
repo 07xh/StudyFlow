@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {BookOpen,Database,ExternalLink,FileText,FolderOpen,KeyRound,ShieldCheck,Trash2} from "lucide-react";
+import {BookOpen,Database,FileText,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoDiagnostic,type ZhidaoDocument} from "../bridge";
 import {ConfirmDialog} from "../ui/ConfirmDialog";
 

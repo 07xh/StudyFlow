@@ -14,7 +14,7 @@ test('viewing B never exposes A playback samples or an enabled stop for A',async
   'bridge.ts':{request:async()=>({speed:'1.5',mode:'official',autoStart:true,autoNext:true,allowMinimize:true}),friendlyBridgeError:String}
  }).ZhidaoOfficialPlayerPanel;
  try{
-  await act(async()=>{view=create(React.createElement(Panel,{courses:[a,b],courseId:b.course_id,desktop:true,detailMode:true,onCoursesUpdated:()=>{}}));});
+  await act(async()=>{view=create(React.createElement(Panel,{courses:[a,b],courseId:b.course_id,desktop:true,detailMode:true}));});
   const text=JSON.stringify(view.toJSON());
   assert.doesNotMatch(text,/00:41|A playback message/);
   assert.match(text,/Course A/);
@@ -30,7 +30,7 @@ test('switching from A to B clears the old run observation history',async()=>{
   'bridge.ts':{request:async()=>({speed:'1.5',mode:'official',autoStart:true,autoNext:true,allowMinimize:true}),friendlyBridgeError:String}
  }).ZhidaoOfficialPlayerPanel;
  try{
-  const props={courses:[a,b],desktop:true,detailMode:true,onCoursesUpdated:()=>{}};
+  const props={courses:[a,b],desktop:true,detailMode:true};
   await act(async()=>{view=create(React.createElement(Panel,{...props,courseId:a.course_id}));});
   assert.match(JSON.stringify(view.toJSON()),/00:41/);
   await act(async()=>view.update(React.createElement(Panel,{...props,courseId:b.course_id})));

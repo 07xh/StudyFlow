@@ -21,7 +21,6 @@ export type PlayerStatus={
 type Props={
   courses:Course[];
   desktop:boolean;
-  onCoursesUpdated:(courses:Course[])=>void;
   onEvent?:TaskRecorder;
   courseId?:string;
   detailMode?:boolean;
@@ -52,7 +51,7 @@ function playerError(error:unknown){
   if(code.includes("PLAYER_LAUNCH_FAILED"))return "官方播放器窗口启动失败。";
   return friendlyBridgeError(error);
 }
-export function ZhidaoOfficialPlayerPanel({courses,desktop,onCoursesUpdated,onEvent,courseId,detailMode=false,events=[],onOpenTasks}:Props){
+export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,detailMode=false,events=[],onOpenTasks}:Props){
   const [settings,setSettings]=useState<ZhidaoPlayerSettings>(defaults);
   const [selected,setSelected]=useState("");
   const [status,setStatus]=useState<PlayerStatus>(initialStatus);

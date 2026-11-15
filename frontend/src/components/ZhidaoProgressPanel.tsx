@@ -6,7 +6,6 @@ import type {Course} from "../types";
 import type {TaskRecorder} from "../activity";
 import {Switch} from "../ui/Switch";
 
-type EventResult="success"|"warning";
 type Props={
   courses:Course[];
   desktop:boolean;
