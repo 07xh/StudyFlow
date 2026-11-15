@@ -53,7 +53,8 @@ test("Rain Classroom per-lesson server progress groups chapters and never invent
   assert.match(output,/第二章/);
   assert.match(output,/视频12/);
   assert.match(output,/42.5%/);
-  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  const secondChapter=view.root.findAllByType("button").find(button=>
+    String(button.props.className||"").includes("sf-ykt-chapter-toggle")&&button.props["aria-expanded"]===false);
   assert.ok(secondChapter);
   await act(async()=>{secondChapter.props.onClick();});
   assert.match(JSON.stringify(view.toJSON()),/服务器未返回可确认的进度/);
@@ -103,7 +104,8 @@ test("progress batches automatically verify all lessons without another click",a
   let view;
   await act(async()=>{view=create(React.createElement(Panel,props));});
   assert.deepEqual(seen,[0,8]);
-  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  const secondChapter=view.root.findAllByType("button").find(button=>
+    String(button.props.className||"").includes("sf-ykt-chapter-toggle")&&button.props["aria-expanded"]===false);
   assert.ok(secondChapter);
   await act(async()=>{secondChapter.props.onClick();});
   const out=JSON.stringify(view.toJSON());
@@ -138,7 +140,8 @@ test("later batch failure retains verified evidence and resumes at failed offset
   failing=false;
   await act(async()=>{retry.props.onClick();});
   assert.deepEqual(seen,[0,8,8]);
-  const secondChapter=view.root.findAllByType("button").find(button=>button.props["aria-expanded"]===false);
+  const secondChapter=view.root.findAllByType("button").find(button=>
+    String(button.props.className||"").includes("sf-ykt-chapter-toggle")&&button.props["aria-expanded"]===false);
   await act(async()=>{secondChapter.props.onClick();});
   out=JSON.stringify(view.toJSON());
   assert.match(out,/视频9/);
@@ -225,7 +228,7 @@ test("Rain Classroom shares search and chapter controls with Zhidao",async()=>{
   const collapse=view.root.findAllByType("button")
     .find(button=>button.props.children==="收起全部");
   await act(async()=>{collapse.props.onClick();});
-  assert.doesNotMatch(JSON.stringify(view.toJSON()),/视频b/);
+  assert.equal(view.root.findAllByType("article").length,0);
   const expand=view.root.findAllByType("button")
     .find(button=>button.props.children==="展开全部");
   await act(async()=>{expand.props.onClick();});
