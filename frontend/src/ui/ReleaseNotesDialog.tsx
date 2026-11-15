@@ -73,7 +73,7 @@ export function ReleaseNotesDialog({state,dark,onClose,onOpenUpdates,onRetry}:{
           {state.error&&<button type="button" className="secondary" onClick={onRetry}>
             <RefreshCw size={14}/>重新获取
           </button>}
-          {available?<><button type="button" className="secondary" onClick={onClose}>稍后提醒</button>
+          {available?<><button type="button" className="secondary" onClick={onClose}>暂不更新</button>
             <button type="button" className="primary" onClick={onOpenUpdates}>查看更新</button></>:
             <button type="button" className="primary" onClick={onClose}>
               {startup?"开始体验新版本":"关闭"}
