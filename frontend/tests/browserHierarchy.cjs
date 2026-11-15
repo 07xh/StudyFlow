@@ -22,6 +22,20 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByRole('progressbar').count(),0,'Empty account cannot have percentage progress');
    await page.getByRole('button',{name:'雨课堂',exact:true}).click();
    assert.equal(await page.locator('.sf-platform-login').count(),0,'Account form starts collapsed until requested');
+   const row=page.locator('.sf-platform-toolbar');
+   const actionLabels=['参数设置','打开课程列表','同步课程列表'];
+   const boxes=await Promise.all(actionLabels.map(async label=>page.getByRole('button',{name:label,exact:true}).boundingBox()));
+   assert.ok(boxes.every(Boolean),'All platform actions must be visible');
+   assert.ok(boxes.every(box=>Math.abs(box.y-boxes[0].y)<1.5),'All three platform actions must stay in the same row');
+   assert.ok(boxes[0].x<boxes[1].x&&boxes[1].x<boxes[2].x,'Action order must remain settings / open / sync');
+   assert.equal(await row.evaluate(element=>getComputedStyle(element).flexWrap),'nowrap');
+   await page.getByRole('button',{name:'参数设置',exact:true}).click();
+   assert.equal(await page.locator('.sf-platform-settings-view').count(),1);
+   assert.equal(await page.getByText('雨课堂默认参数',{exact:true}).count(),1);
+   assert.equal(await page.locator('.sf-platform-card').count(),0,'Platform settings must not duplicate account workspace');
+   await page.getByRole('button',{name:'返回平台',exact:true}).click();
+   assert.equal(await page.locator('.sf-platform-settings-view').count(),0);
+
    assert.equal(await page.getByRole('button',{name:'保存课堂范围',exact:true}).count(),1,'Scope saving belongs beside scope inputs');
    await page.mouse.move(0,0);
    await page.screenshot({animations:'disabled',path:path.join(output,'yuketang-overview-'+width+'.png'),fullPage:true});
