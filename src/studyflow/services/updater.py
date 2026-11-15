@@ -73,6 +73,7 @@ def release_info(current_version: str, channel: str = "stable", timeout: int = 1
     releases = [data] if isinstance(data, dict) else data
     if not isinstance(releases, list) or any(not isinstance(row, dict) for row in releases):
         raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid release metadata")
+    best = None
     for release in releases:
         if release.get("draft") or (channel == "stable" and release.get("prerelease")):
             continue
@@ -81,10 +82,12 @@ def release_info(current_version: str, channel: str = "stable", timeout: int = 1
             newer = is_newer(tag, current_version)
         except ValueError:
             continue
-        if newer:
-            return {"version": tag, "notes": release.get("body") or "",
+        if newer and (best is None or is_newer(tag, best["version"])):
+            best = {"version": tag, "notes": release.get("body") or "",
                     "assets": release.get("assets") or [], "page": release.get("html_url")}
-    return None
+    # GitHub Release API order is not guaranteed to be semantic-version order:
+    # do not offer RC 18 if RC 19 is also published later in the response.
+    return best
 
 
 
@@ -142,9 +145,17 @@ def release_notes(current_version: str, previous_version: str | None = None,
             "notes": notes[:16000] if isinstance(notes, str) else "",
             "published_at": published[:48] if isinstance(published, str) else "",
         })
-        if len(entries) >= (12 if history else 15):
-            break
-    return entries
+    # A Release's creation timestamp can differ from publication order.
+    # Present the actual installed/previous versions newest first.
+    from functools import cmp_to_key
+    def by_version(left, right):
+        if is_newer(left["version"], right["version"]):
+            return -1
+        if is_newer(right["version"], left["version"]):
+            return 1
+        return 0
+    entries.sort(key=cmp_to_key(by_version))
+    return entries[:12 if history else 15]
 
 def verified_download(url: str, sha256: str, destination: Path, timeout: int = 60) -> Path:
     """Download to a temporary file, verify digest, then atomically publish the file.
