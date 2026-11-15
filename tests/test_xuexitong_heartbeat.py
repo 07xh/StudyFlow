@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+import random
+import re
 import sys
 import tempfile
 import threading
@@ -312,7 +315,8 @@ class TestRunner(unittest.TestCase):
                 self.assertEqual(session.calls[0]["params"]["playingTime"], expected_seconds)
 
     def test_config_validation(self) -> None:
-        for bad in (dict(speed=0.5), dict(speed=2.5),
+        # 速度范围已对齐 settings.py v1（0.25–2.0），0.5 是合法值
+        for bad in (dict(speed=0.1), dict(speed=2.5),
                     dict(heartbeat_interval_video_seconds=10),
                     dict(heartbeat_interval_video_seconds=120),
                     dict(max_workers=0), dict(dtype="Slides")):
@@ -518,6 +522,260 @@ class TestSidecarService(unittest.TestCase):
             self.assertTrue(pause["ok"] or pause["error"] == "XUEXITONG_NO_ACTIVE_TASK")
             service.handle("xuexitong.heartbeat.resume", {})
             self.assertTrue(service.wait(5), "后台队列未在 5s 内结束")
+
+
+class TestPacingAndParsing(unittest.TestCase):
+    """审计整改：统一解析、随机节奏、只读状态校准。"""
+
+    def test_marg_parser_handles_nested_json_and_quoted_brace(self) -> None:
+        from studyflow.platforms.xuexitong.taskparse import (
+            extract_marg_payload, iter_media_cards,
+        )
+        html = (
+            '<script>var mArg = {"attachments":[{"type":"video","objectId":"o1",'
+            '"jobid":"j1","property":{"name":"a};b","rt":0.9},'
+            '"otherInfo":"nodeId_1-rt_1&x=2"}],"defaults":{"k":"v"}}; </script>'
+        )
+        payload = extract_marg_payload(html)
+        self.assertIsInstance(payload, dict)
+        cards = list(iter_media_cards(payload))
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["object_id"], "o1")
+        self.assertEqual(cards[0]["title"], "a};b")
+        self.assertEqual(cards[0]["other_info"], "nodeId_1-rt_1")
+        # 旧的浅正则会在字符串里的 '};' 处截断
+        shallow = re.search(r"\bmArg\s*=\s*(\{.*?\})\s*;", html, re.S)
+        self.assertIsNotNone(shallow)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(shallow.group(1))  # type: ignore[union-attr]
+        # mArg 赋值不带分号时浅正则只能截到字符串里的 '};'，平衡解析仍读完整对象
+        no_semicolon = html.replace("}}; </script>", "}} </script>")
+        self.assertEqual(len(list(iter_media_cards(extract_marg_payload(no_semicolon)))), 1)
+        shallow2 = re.search(r"\bmArg\s*=\s*(\{.*?\})\s*;", no_semicolon, re.S)
+        self.assertIsNotNone(shallow2)
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(shallow2.group(1))  # type: ignore[union-attr]
+
+    def test_stringified_marg_and_field_aliases(self) -> None:
+        from studyflow.platforms.xuexitong.taskparse import (
+            extract_marg_payload, iter_media_cards,
+        )
+        payload = extract_marg_payload(
+            "mArg = '{\"attachments\":[{\"type\":\"Video\",\"objectid\":\"o2\","
+            "\"property\":{\"jobid\":\"j2\",\"name\":\"任务二\"},\"playTime\":30000}]}';"
+        )
+        self.assertIsInstance(payload, dict)
+        cards = list(iter_media_cards(payload))
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["object_id"], "o2")
+        self.assertEqual(cards[0]["job_id"], "j2")
+        self.assertEqual(cards[0]["play_time_ms"], 30000)
+
+    def test_random_interval_matches_upstream_range(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import PacingPolicy
+        policy = PacingPolicy(rng=random.Random(42))
+        values = [policy.next_interval() for _ in range(50)]
+        self.assertTrue(all(30.0 <= value <= 90.0 for value in values))
+        self.assertGreater(len(set(values)), 1, "每次上报必须重新抽取间隔")
+
+    def test_status_playtime_milliseconds_are_converted(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import parse_video_status
+        status = parse_video_status({
+            "status": "success", "dtoken": "d", "duration": 600,
+            "playTime": 30000, "isPassed": False,
+        }, "o1")
+        self.assertIsNotNone(status)
+        self.assertEqual(status.play_time, 30)
+        seconds = parse_video_status({
+            "status": "success", "dtoken": "d", "duration": 600,
+            "playTime": 30, "isPassed": True,
+        }, "o1")
+        self.assertEqual(seconds.play_time, 30)
+        self.assertTrue(seconds.passed)
+        self.assertIsNone(parse_video_status({"status": "failed"}, "o1"))
+
+    def test_calibrate_target_only_moves_forward(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import VideoStatus, calibrate_target
+        target = make_target(initial_seconds=10)
+        calibrated = calibrate_target(target, VideoStatus("object-001", "new-token", 600, 45, False))
+        self.assertEqual(calibrated.dtoken, "new-token")
+        self.assertEqual(calibrated.initial_seconds, 45)
+        self.assertEqual(calibrate_target(target, VideoStatus("object-001", "", 600, 5, False)), target)
+
+    def test_status_public_dict_leaks_no_token(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import VideoStatus
+        public = VideoStatus("o1", "secret-token", 600, 30, True).public_dict()
+        self.assertNotIn("secret-token", repr(public))
+        self.assertEqual(public["server_play_time"], 30)
+
+
+class TestRunnerAuditFixes(unittest.TestCase):
+    """审计整改：虚构完成包隔离、403 恢复、暂停计时、退出边界、队列取消。"""
+
+    def test_settings_contract_is_the_default(self) -> None:
+        config = RunConfig.from_settings(None)
+        self.assertEqual(config.speed, 1.0)
+        self.assertEqual(config.max_workers, 2)
+        self.assertTrue(config.randomize_interval)
+        self.assertTrue(config.skip_completed)
+        self.assertTrue(config.verify_after_run)
+
+    def test_completion_probe_does_not_pollute_local_progress(self) -> None:
+        session = FakeSession([FakeResponse(payload={"isPassed": False}) for _ in range(12)])
+        clock = FakeClock()
+        config = RunConfig(instant_complete=True, heartbeat_interval_video_seconds=30,
+                           tick_seconds=10, max_ticks=4, speed=1.0)
+        runner = HeartbeatTaskRunner(make_target(), make_sender(session, clock=clock),
+                                     config, clock=clock, sleeper=clock.sleep)
+        runner.start()
+        self.assertEqual(session.calls[0]["params"]["isdrag"], 4)
+        self.assertEqual(session.calls[0]["params"]["playingTime"], 600)
+        self.assertLess(session.calls[1]["params"]["playingTime"], 600)
+        self.assertGreater(session.calls[1]["params"]["playingTime"], 0)
+
+    def test_forbidden_refreshes_token_before_retry(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import VideoStatus
+        events: list[str] = []
+        session = FakeSession(
+            [FakeResponse(status=403, text="forbidden"),
+             FakeResponse(payload={"isPassed": False})]
+            + [FakeResponse(payload={"isPassed": False}) for _ in range(8)]
+        )
+        clock = FakeClock()
+        calls = {"n": 0}
+
+        def provider(target):
+            calls["n"] += 1
+            if calls["n"] < 2:
+                return None  # 启动前校准不可用，确保刷新确实由 403 触发
+            return VideoStatus(target.object_id, "refreshed-token", 600, 45, False)
+
+        config = RunConfig(instant_complete=True, heartbeat_interval_video_seconds=30,
+                           tick_seconds=10, max_ticks=4, speed=1.0,
+                           status_provider=provider)
+        runner = HeartbeatTaskRunner(
+            make_target(), make_sender(session, clock=clock), config,
+            clock=clock, sleeper=clock.sleep,
+            on_event=lambda name, _payload: events.append(name),
+        )
+        runner.start()
+        self.assertIn("heartbeat.recovered", events)
+        self.assertNotIn("refreshed-token", session.calls[0]["url"])
+        self.assertIn("refreshed-token", session.calls[1]["url"])
+
+    def test_paused_wall_time_is_excluded_from_timeout_budget(self) -> None:
+        clock = FakeClock()
+        config = RunConfig(instant_complete=False, tick_seconds=100, max_ticks=3,
+                           max_wall_seconds=50, heartbeat_interval_video_seconds=30)
+        runner = HeartbeatTaskRunner(make_target(), make_sender(FakeSession([]), clock=clock),
+                                     config, clock=clock, sleeper=clock.sleep)
+        runner._started = True
+        runner._paused.set()
+        self.assertFalse(runner._wait_while_paused())
+        self.assertEqual(runner._paused_wall, 200.0)
+
+    def test_unconfirmed_round_limit_ends_loop(self) -> None:
+        session = FakeSession([FakeResponse(payload={"isPassed": False}) for _ in range(20)])
+        clock = FakeClock()
+        config = RunConfig(instant_complete=False, heartbeat_interval_video_seconds=30,
+                           tick_seconds=10, max_ticks=0, max_unconfirmed_rounds=2, speed=1.0)
+        runner = HeartbeatTaskRunner(make_target(), make_sender(session, clock=clock),
+                                     config, clock=clock, sleeper=clock.sleep)
+        snapshot = runner.start()
+        self.assertEqual(snapshot.state, TaskState.INTERRUPTED.value)
+        self.assertEqual(snapshot.end_reason, "unconfirmed_limit")
+        self.assertFalse(snapshot.confirmed)
+
+    def test_stop_before_run_cancels_queued_chapters(self) -> None:
+        session = FakeSession([])
+        queue = ChapterQueue(make_sender(session), RunConfig(max_workers=1))
+        self.assertTrue(queue.submit_chapter("c1", [make_target(object_id="v1", job_id="j1")]))
+        queue.stop_all()
+        self.assertEqual(queue.run(), {})
+        self.assertEqual(session.calls, [])
+
+    def test_server_record_corrects_local_terminal_state(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import VideoStatus
+        counter = {"n": 0}
+
+        def provider(target):
+            counter["n"] += 1
+            return VideoStatus(target.object_id, "d", target.duration, 0, counter["n"] >= 2)
+
+        session = FakeSession([FakeResponse(payload={"isPassed": False}) for _ in range(8)])
+        clock = FakeClock()
+        config = RunConfig(instant_complete=False, max_ticks=2, tick_seconds=10,
+                           heartbeat_interval_video_seconds=30,
+                           status_provider=provider, verify_after_run=True,
+                           skip_completed=True)
+        runner = HeartbeatTaskRunner(make_target(), make_sender(session, clock=clock),
+                                     config, clock=clock, sleeper=clock.sleep)
+        snapshot = runner.start()
+        self.assertEqual(snapshot.state, TaskState.SUCCEEDED.value)
+        self.assertTrue(snapshot.server_confirmed)
+
+    def test_run_id_is_attached_to_snapshot(self) -> None:
+        session = FakeSession([FakeResponse(payload={"isPassed": True})])
+        clock = FakeClock()
+        config = RunConfig(run_id="run-xyz", instant_complete=True, max_ticks=2)
+        runner = HeartbeatTaskRunner(make_target(), make_sender(session, clock=clock),
+                                     config, clock=clock, sleeper=clock.sleep)
+        self.assertEqual(runner.start().run_id, "run-xyz")
+
+
+class TestSidecarContractFixes(unittest.TestCase):
+    def make_service(self, folder: str, targets: list, responses: list):
+        from studyflow.platforms.xuexitong.service import XuexitongHeartbeatService
+        session = FakeSession(responses)
+        return XuexitongHeartbeatService(
+            os.path.join(folder, "state.json"),
+            session_factory=lambda: session,
+            targets_provider=lambda _key: targets,
+            clock=FakeClock(),
+            sleeper=lambda _seconds: None,
+        )
+
+    def test_run_id_contract_and_status_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            targets = [make_target(object_id="v1", job_id="j1")]
+            service = self.make_service(
+                folder, targets,
+                [FakeResponse(payload={"isPassed": True}) for _ in range(3)],
+            )
+            started = service.handle("xuexitong.heartbeat.start", {
+                "course_key": "100001:200002:300003",
+            })
+            self.assertTrue(started["ok"])
+            run_id = started["run_id"]
+            self.assertTrue(run_id)
+            mismatch = service.handle("xuexitong.heartbeat.pause", {"run_id": "deadbeef"})
+            self.assertEqual(mismatch["error"], "XUEXITONG_RUN_ID_MISMATCH")
+            self.assertTrue(service.wait(5))
+
+            service.store.save(TaskSnapshot(
+                task_id="foreign-task", run_id="other-run",
+                course_key="100001:200002:300003",
+                state="running", sent_count=99,
+            ))
+            status = service.handle("xuexitong.heartbeat.status")
+            self.assertEqual(status["heartbeats"]["sent"], 1)
+            self.assertTrue(all(task["run_id"] == run_id for task in status["tasks"]))
+            self.assertEqual(status["run_id"], run_id)
+
+    def test_ui_settings_are_mapped_into_run_config(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            service = self.make_service(folder, [], [])
+            started = service.handle("xuexitong.heartbeat.start", {
+                "course_key": "100001:200002:300003",
+                "settings": {
+                    "playback_speed": 1.75, "concurrency": 3,
+                    "skip_completed": False, "verify_after_run": False,
+                },
+            })
+            self.assertTrue(started["ok"])
+            self.assertEqual(started["speed"], 1.75)
+            self.assertEqual(started["jobs"], 3)
+            self.assertTrue(service.wait(5))
 
 
 if __name__ == "__main__":

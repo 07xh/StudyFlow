@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 from collections import deque
 from typing import Any, Callable
 
 from . import credentials
 from .heartbeat import HeartbeatSender, RateLimiter, VideoTarget, identity_from_cookies
+from .pacing import VideoStatus, status_provider_from_session
 from .runner import ChapterQueue, RunConfig
 from .state import StateStore
 
@@ -55,18 +57,21 @@ class XuexitongHeartbeatService:
         sleeper: Callable[[float], None] = time.sleep,
         session_factory: Callable[[], Any] | None = None,
         targets_provider: Callable[[str], list[Any]] | None = None,
+        status_provider: Callable[[VideoTarget], VideoStatus | None] | None = None,
     ) -> None:
         self.store = StateStore(state_path)
         self._clock = clock
         self._sleeper = sleeper
         self._session_factory = session_factory
         self._targets_provider = targets_provider
+        self._status_provider = status_provider
         self._events: deque[dict[str, Any]] = deque(maxlen=events_limit)
         self._lock = threading.Lock()
         self._queue: ChapterQueue | None = None
         self._thread: threading.Thread | None = None
         self._config: RunConfig | None = None
         self._course_key = ""
+        self._run_id = ""
 
     def handle(self, operation: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """JSONL IPC 分发入口。由 services/bridge.py 的 operation 白名单调用。"""
@@ -77,11 +82,11 @@ class XuexitongHeartbeatService:
             if operation == "xuexitong.heartbeat.status":
                 return self.status()
             if operation == "xuexitong.heartbeat.pause":
-                return self.pause()
+                return self.pause(request.get("run_id"))
             if operation == "xuexitong.heartbeat.resume":
-                return self.resume()
+                return self.resume(request.get("run_id"))
             if operation == "xuexitong.heartbeat.stop":
-                return self.stop()
+                return self.stop(request.get("run_id"))
             if operation == "xuexitong.heartbeat.logs":
                 return self.logs(int(request.get("limit", 50)))
             raise ServiceError("XUEXITONG_UNKNOWN_OPERATION")
@@ -100,22 +105,33 @@ class XuexitongHeartbeatService:
         course_key = str(request.get("course_key") or "")
         if not course_key:
             raise ServiceError("XUEXITONG_COURSE_REQUIRED")
-        config = RunConfig(
-            speed=float(request.get("speed", 1.0)),
-            max_workers=int(request.get("jobs", 4)),
-            instant_complete=bool(request.get("instant_complete", True)),
-            heartbeat_interval_video_seconds=float(
-                request.get("heartbeat_interval_video_seconds", 60.0)
-            ),
-            dtype=str(request.get("dtype", "Video")),
-            max_ticks=int(request.get("max_ticks", 0)),
+        # 只把请求里显式给出的参数当作 override；未给出的一律沿用 settings.py
+        # 中用户保存的契约，避免「UI 保存了速度、运行器却用另一套默认值」。
+        run_id = uuid.uuid4().hex
+        overrides: dict[str, Any] = {"run_id": run_id}
+        numeric_keys = (
+            ("speed", "speed", float),
+            ("jobs", "max_workers", int),
+            ("heartbeat_interval_video_seconds", "heartbeat_interval_video_seconds", float),
+            ("max_ticks", "max_ticks", int),
+            ("max_wall_seconds", "max_wall_seconds", float),
+            ("max_unconfirmed_rounds", "max_unconfirmed_rounds", int),
+            ("completion_rounds", "completion_rounds", int),
         )
+        for request_key, config_key, caster in numeric_keys:
+            if request_key in request:
+                overrides[config_key] = caster(request[request_key])
+        if "instant_complete" in request:
+            overrides["instant_complete"] = bool(request["instant_complete"])
+        if "dtype" in request:
+            overrides["dtype"] = str(request["dtype"])
         try:
-            config.validate()
-        except ValueError as exc:
+            config = RunConfig.from_settings(request.get("settings"), **overrides)
+        except (ValueError, TypeError, KeyError) as exc:
             raise ServiceError("XUEXITONG_INVALID_PARAMETER") from exc
 
         session = self._make_session()
+        config.status_provider = self._resolve_status_provider(session)
         raw_targets = self._discover_targets(course_key)
         targets: list[VideoTarget] = []
         for item in raw_targets:
@@ -148,6 +164,7 @@ class XuexitongHeartbeatService:
             self._queue = queue
             self._config = config
             self._course_key = course_key
+            self._run_id = run_id
             self._thread = threading.Thread(target=self._run, args=(queue,), daemon=True)
             self._thread.start()
 
@@ -162,6 +179,7 @@ class XuexitongHeartbeatService:
         return {
             "ok": True,
             "started": True,
+            "run_id": run_id,
             "course_key": course_key,
             "task_count": len(targets),
             "chapter_count": len(chapters),
@@ -185,19 +203,29 @@ class XuexitongHeartbeatService:
             config = self._config
             thread = self._thread
             course_key = self._course_key
+            run_id = self._run_id
         running = bool(thread is not None and thread.is_alive())
-        snapshots = self.store.list_all()
+        # 审计 P2：统计只归属当前运行批次；无批次时按当前课程过滤，
+        # 避免不同课程、不同批次的旧状态混入任务中心。
+        if run_id:
+            snapshots = self.store.list_by_run(run_id)
+        elif course_key:
+            snapshots = self.store.list_by_course(course_key)
+        else:
+            snapshots = self.store.list_all()
         tasks = [self._public_snapshot(item) for item in snapshots]
         sent = sum(item.sent_count for item in snapshots)
         confirmed = sum(1 for item in snapshots if item.server_confirmed)
         return {
             "ok": True,
             "running": running,
+            "run_id": run_id,
             "course_key": course_key,
             "config": {
                 "speed": config.speed if config else 1.0,
-                "jobs": config.max_workers if config else 4,
+                "jobs": config.max_workers if config else 2,
                 "instant_complete": config.instant_complete if config else True,
+                "randomize_interval": config.randomize_interval if config else False,
             },
             "task_count": len(tasks),
             "tasks": tasks,
@@ -209,28 +237,44 @@ class XuexitongHeartbeatService:
             },
         }
 
-    def pause(self) -> dict[str, Any]:
-        return self._control("pause")
+    def pause(self, run_id: str | None = None) -> dict[str, Any]:
+        return self._control("pause", run_id)
 
-    def resume(self) -> dict[str, Any]:
-        return self._control("resume")
+    def resume(self, run_id: str | None = None) -> dict[str, Any]:
+        return self._control("resume", run_id)
 
-    def stop(self) -> dict[str, Any]:
-        return self._control("stop")
+    def stop(self, run_id: str | None = None) -> dict[str, Any]:
+        return self._control("stop", run_id)
 
     def logs(self, limit: int = 50) -> dict[str, Any]:
         with self._lock:
             events = list(self._events)
         return {"ok": True, "events": events[-max(0, min(limit, 500)):]}
 
-    def _control(self, action: str) -> dict[str, Any]:
+    def _control(self, action: str, run_id: str | None = None) -> dict[str, Any]:
         with self._lock:
             queue = self._queue
+            current = self._run_id
         if queue is None:
             raise ServiceError("XUEXITONG_NO_ACTIVE_TASK")
+        # runner_port.py 契约：控制操作必须校验 run_id，避免控制到已替换的批次
+        if run_id and current and str(run_id) != current:
+            raise ServiceError("XUEXITONG_RUN_ID_MISMATCH")
         getattr(queue, f"{action}_all")()
-        self._record(f"service.{action}", {})
-        return {"ok": True, "action": action}
+        self._record(f"service.{action}", {"run_id": current})
+        return {"ok": True, "action": action, "run_id": current}
+
+    def _resolve_status_provider(self, session: Any):
+        """生产路径才启用 /ananas/status 只读刷新；离线注入不额外发 GET。"""
+        if self._status_provider is not None:
+            return self._status_provider
+        if self._session_factory is not None:
+            return None
+        try:
+            _userid, fid = self._identity()
+        except Exception:
+            fid = "1024"
+        return status_provider_from_session(session, fid)
 
     def _run(self, queue: ChapterQueue) -> None:
         try:
@@ -271,6 +315,8 @@ class XuexitongHeartbeatService:
     def _public_snapshot(snapshot: Any) -> dict[str, Any]:
         return {
             "task_id": snapshot.task_id,
+            "run_id": snapshot.run_id,
+            "course_key": snapshot.course_key,
             "chapter": snapshot.chapter,
             "title": snapshot.title,
             "state": snapshot.state,
@@ -280,6 +326,8 @@ class XuexitongHeartbeatService:
             "last_send_state": snapshot.last_send_state,
             "sent_count": snapshot.sent_count,
             "server_confirmed": snapshot.server_confirmed,
+            "server_play_time": snapshot.server_play_time,
+            "end_reason": snapshot.end_reason,
             "confirmed": snapshot.confirmed,
             "resumable": snapshot.resumable,
         }

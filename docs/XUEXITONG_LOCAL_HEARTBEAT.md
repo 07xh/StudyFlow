@@ -227,12 +227,68 @@ python -m compileall -q src/studyflow/platforms/xuexitong tests/... — COMPILE_
 
 ```bash
 # 在 feat/xuexitong-unified-platform-20261116 的工作副本中执行
-cp -r src/studyflow/platforms/xuexitong/{heartbeat.py,runner.py,state.py,service.py} \
-      <REPO>/src/studyflow/platforms/xuexitong/
-cp    tests/test_xuexitong_heartbeat.py <REPO>/tests/
-cp -r docs/XUEXITONG_LOCAL_HEARTBEAT.md docs/LICENSE_PROVENANCE.addendum.md \
-      docs/licenses/GPL-3.0-Samueli924-chaoxing.txt <REPO>/docs/
-python -m unittest discover -s tests -p "test_xuexitong_heartbeat.py" -v
+cp src/studyflow/platforms/xuexitong/{heartbeat.py,runner.py,state.py,service.py,pacing.py,taskparse.py,adapter.py,settings.py} \
+   <REPO>/src/studyflow/platforms/xuexitong/
+cp src/studyflow/services/xuexitong_heartbeat_bridge.py <REPO>/src/studyflow/services/
+cp tests/test_xuexitong*.py <REPO>/tests/
+cp docs/XUEXITONG_LOCAL_HEARTBEAT.md docs/XUEXITONG_HEARTBEAT_INTEGRATION.md \
+   docs/LICENSE_PROVENANCE.addendum.md <REPO>/docs/
+cp docs/licenses/GPL-3.0-Samueli924-chaoxing.txt <REPO>/docs/licenses/
+cp integration/frontend/XuexitongHeartbeatPanel.tsx <REPO>/frontend/src/components/
+# 再按 XUEXITONG_HEARTBEAT_INTEGRATION.md 应用 bridge.py / lib.rs / bridge.ts / Panels 四处增量
+python -m unittest discover -s tests -p "test_xuexitong*.py" -v
 ```
 
-`research/upstream/` 仅保存上游源码快照用于比对，不参与打包。
+`research/upstream/` 与 `audit/remote/` 仅保存上游源码与远端快照用于比对，不参与打包。
+
+---
+
+## 十、v2 整改记录（2026-11-16）
+
+**方向不变：本模块始终是自生成虚构心跳**——`build_completion_packet()` 首包申报整段完成
+（`playingTime=duration`、`isdrag=4`），`build_packet(target, N)` 申报任意观看时长，
+两者都只生成本地数据包。**没有**改成官方网页播放器、浏览器扩展或真实观看模拟。
+
+### 借鉴上游新增的模拟策略
+
+| 上游 `Samueli924/chaoxing` | v2 落地 |
+| --- | --- |
+| `study_video()` 每次上报后重抽 `wait_time = random.uniform(30, 90)` 视频秒 | `pacing.PacingPolicy.next_interval()`，生产路径默认开启 |
+| 403 后 `_recover_after_forbidden()` → `/ananas/status` 刷新 dtoken/duration/playTime | `runner._recover_after_forbidden()` + `pacing.calibrate_target()`，再走 rt 回退重试 |
+| `_job["playTime"] // 1000`（毫秒） | `pacing._as_seconds()` 按「超过时长即降级」自适应，修掉旧的 `duration*100` 阈值误判 |
+| 首包 `_isdrag=4` 申报完成、后续 `isdrag=3` | 保持；并隔离首包对本地渐进进度的影响 |
+| `attachments[].objectId/jobid/property/otherInfo/playTime` | `taskparse.normalize_card_fields()` 统一字段别名与大小写 |
+
+### 审计问题逐条处置
+
+| 优先级 | 问题 | 处置 |
+| --- | --- | --- |
+| P0 | 一次性 Sidecar 与持续任务不兼容 | 复用既有 `QrBridgeWorker` 长驻 JSONL 通道，服务单例放进程内；补丁见 `XUEXITONG_HEARTBEAT_INTEGRATION.md` |
+| P0 | IPC 白名单、前端、服务未接通 | 给出 `bridge.py` / `lib.rs` / `bridge.ts` / Panels 四处完整增量 + 任务面板组件 |
+| P1 | 未确认完成缺少退出条件 | `max_wall_seconds` / `max_unconfirmed_rounds` / `completion_rounds` 三级边界，终态 `INTERRUPTED` 且带 `end_reason` |
+| P1 | 暂停期间时间计入进度 | `_wait_while_paused()` 持续重置 `_last_iter` 并累计 `_paused_wall`，墙钟超时预算排除暂停时长 |
+| P1 | 停止只作用于已创建运行器 | `ChapterQueue._cancelled` 队列级事件；`run()` 不再自动 clear，「启动后立即停止」生效 |
+| P1 | 任务解析方法不一致 | `adapter.py` 两处统一走 `taskparse.extract_marg_payload()` 平衡括号解析 |
+| P1 | UI 设置与运行参数不同步 | `RunConfig.from_settings()` 映射 `playback_speed` / `concurrency` / `skip_completed` / `verify_after_run` |
+| P2 | 历史状态未按课程过滤 | `status()` 按 `run_id` → `course_key` 过滤；断点恢复限制同课程 |
+| P2 | 缺少 run_id 归属 | 对齐 `runner_port.py`：`start` 返回唯一 `run_id`，控制操作校验，快照与任务面板携带 |
+
+### 契约与输出变化
+
+- `start()` 新增返回 `run_id`；`pause/resume/stop` 接受可选 `run_id`（不匹配返回 `XUEXITONG_RUN_ID_MISMATCH`）。
+- `status()` 新增 `run_id`、`config.randomize_interval`；任务项新增 `run_id` / `course_key` / `server_play_time` / `end_reason`。
+- 状态文件升到 `STATE_VERSION = 2`，`from_dict()` 兼容 v1 记录。
+- 结束时若只读 `status` 显示 `isPassed=true`，用服务端记录纠正本地终态；这**只认定该任务点**，
+  不推断整门课程完成。
+- 首包完成申报被服务端确认时把展示进度对齐到 `duration`；未确认时不再污染本地进度，
+  保证 `speed` / 心跳间隔 / 暂停计时真实生效。
+
+### 验证
+
+```text
+Ran 48 tests in 0.18s — OK（连续 3 次）
+COMPILE_OK
+```
+
+覆盖：43 项心跳模块与审计整改用例 + 5 项长驻桥接层用例；全部使用假 session / 假时钟，
+未对真实账号发包。Rust / TypeScript / NSIS 端到端仍未验证。

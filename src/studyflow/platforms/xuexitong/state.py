@@ -1,4 +1,8 @@
-"""心跳任务状态持久化：断点续跑，且不落盘任何凭据或令牌。"""
+"""心跳任务状态持久化：断点续跑，且不落盘任何凭据或令牌。
+
+v2 新增 run_id / server_play_time / end_reason，并保留 v1 记录的读取兼容。
+查询接口支持按课程与按运行过滤，避免不同课程、不同任务批次的数据混入统计。
+"""
 from __future__ import annotations
 
 import json
@@ -9,12 +13,14 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 _SNAPSHOT_FIELDS = frozenset({
-    "task_id", "course_key", "chapter_id", "chapter", "title", "object_id",
+    "task_id", "run_id", "course_key", "chapter_id", "chapter", "title", "object_id",
     "job_id", "duration", "playing_time", "speed", "state", "last_send_state",
-    "sent_count", "confirmed", "server_confirmed", "attempts", "updated_at",
+    "sent_count", "confirmed", "server_confirmed", "server_play_time", "end_reason",
+    "attempts", "updated_at",
 })
 
-STATE_VERSION = 1
+STATE_VERSION = 2
+LEGACY_STATE_VERSION = 1
 
 
 @dataclass
@@ -22,6 +28,7 @@ class TaskSnapshot:
     """可恢复的任务快照。刻意不含 dtoken / cookie / enc / userid。"""
 
     task_id: str
+    run_id: str = ""
     course_key: str = ""
     chapter_id: str = ""
     chapter: str = ""
@@ -36,6 +43,8 @@ class TaskSnapshot:
     sent_count: int = 0
     confirmed: bool = False
     server_confirmed: bool = False
+    server_play_time: int = 0
+    end_reason: str = ""
     attempts: int = 0
     updated_at: float = 0.0
 
@@ -46,7 +55,7 @@ class TaskSnapshot:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TaskSnapshot":
-        if data.get("version") != STATE_VERSION:
+        if data.get("version") not in (STATE_VERSION, LEGACY_STATE_VERSION):
             raise ValueError("UNSUPPORTED_XUEXITONG_STATE_VERSION")
         return cls(**{key: data[key] for key in _SNAPSHOT_FIELDS if key in data})
 
@@ -94,8 +103,17 @@ class StateStore:
                 continue
         return result
 
-    def list_resumable(self) -> list[TaskSnapshot]:
-        return [item for item in self.list_all() if item.resumable]
+    def list_resumable(self, *, course_key: str | None = None) -> list[TaskSnapshot]:
+        return [
+            item for item in self.list_all()
+            if item.resumable and (course_key is None or item.course_key == course_key)
+        ]
+
+    def list_by_course(self, course_key: str) -> list[TaskSnapshot]:
+        return [item for item in self.list_all() if item.course_key == course_key]
+
+    def list_by_run(self, run_id: str) -> list[TaskSnapshot]:
+        return [item for item in self.list_all() if item.run_id == run_id]
 
     def clear(self, task_id: str) -> None:
         with self._lock:
@@ -115,7 +133,10 @@ class StateStore:
 
     def _write(self, data: dict[str, Any]) -> None:
         payload = json.dumps(data, ensure_ascii=False, sort_keys=True)
-        fd, temp_path = tempfile.mkstemp(prefix="xxt-state-", suffix=".tmp", dir=os.path.dirname(os.path.abspath(self.path)))
+        fd, temp_path = tempfile.mkstemp(
+            prefix="xxt-state-", suffix=".tmp",
+            dir=os.path.dirname(os.path.abspath(self.path)),
+        )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(payload)

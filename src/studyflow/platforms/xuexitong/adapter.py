@@ -5,7 +5,6 @@ Credential Manager; video tokens are kept inside the packaged Python process.
 """
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -17,6 +16,7 @@ from bs4 import BeautifulSoup
 from studyflow.core.models import Course, Platform
 from studyflow.core.platform_api import ConnectionInfo
 from . import credentials
+from .taskparse import extract_marg_payload, iter_media_cards
 
 COURSES_URL = "https://mooc2-ans.chaoxing.com/mooc2-ans/visit/courselistdata"
 CHAPTERS_URL = "https://mooc2-ans.chaoxing.com/mooc2-ans/mycourse/studentcourse"
@@ -77,39 +77,10 @@ def _course_ids(course_key: str) -> tuple[str, str, str]:
 def _embedded_marg(text: str) -> dict[str, Any] | None:
     """Decode a JSON object assigned to mArg without truncating nested braces.
 
-    The source page can contain quoted closing braces and escaped quotes.
-    A shallow regular expression would silently discard those task cards.
+    Delegates to the shared parser so chapter cards and video tasks use the
+    exact same extraction rules (see taskparse.py).
     """
-    match = re.search(r"\bmArg\s*=\s*\{", text)
-    if not match:
-        return None
-    start = match.end() - 1
-    depth = 0
-    quote_char = ""
-    escaped = False
-    for index in range(start, len(text)):
-        char = text[index]
-        if quote_char:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote_char:
-                quote_char = ""
-            continue
-        if char == '"':
-            quote_char = char
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                try:
-                    result = json.loads(text[start:index + 1])
-                except (ValueError, TypeError):
-                    return None
-                return result if isinstance(result, dict) else None
-    return None
+    return extract_marg_payload(text)
 
 
 class XuexitongAdapter:
@@ -297,24 +268,17 @@ class XuexitongAdapter:
                     }, timeout=(5, 12), allow_redirects=False)
                     if response.status_code != 200 or response.is_redirect:
                         raise RuntimeError("XUEXITONG_CARDS_UNAVAILABLE")
-                    match = re.search(r"\bmArg\s*=\s*(\{.*?\})\s*;", response.text, re.S)
-                    if not match:
+                    # 与 list_chapter_tasks 共用平衡括号解析器，避免浅正则
+                    # 在嵌套 JSON / 字符串内 '}' 处截断导致真实任务被漏掉。
+                    payload = extract_marg_payload(response.text)
+                    if not payload:
                         continue
-                    try:
-                        payload = json.loads(match.group(1))
-                    except json.JSONDecodeError:
-                        continue
-                    defaults = payload.get("defaults") or {}
-                    for attachment in payload.get("attachments") or []:
-                        if not isinstance(attachment, dict) or attachment.get("isPassed"):
+                    for card in iter_media_cards(payload):
+                        # 音频任务需要 Audio dtype，单独分流；此处只处理视频心跳
+                        if card["type"] != "video":
                             continue
-                        if str(attachment.get("type", "")).lower() != "video":
-                            continue
-                        prop = attachment.get("property") or {}
-                        object_id = str(attachment.get("objectId") or "")
-                        job_id = str(attachment.get("jobid") or prop.get("jobid") or "")
-                        if not object_id or not job_id:
-                            continue
+                        object_id = card["object_id"]
+                        job_id = card["job_id"]
                         video_response = session.get(STATUS_URL + quote(object_id, safe=""),
                             params={"k": fid, "flag": "normal"}, timeout=(5, 12), allow_redirects=False)
                         if video_response.status_code != 200 or video_response.is_redirect:
@@ -331,14 +295,15 @@ class XuexitongAdapter:
                             continue
                         results.append(VideoTask(
                             course_key=course_key, chapter_id=chapter["id"], chapter=chapter["title"],
-                            title=str(prop.get("name") or prop.get("title") or chapter["title"])[:180],
+                            title=card["title"] or chapter["title"],
                             clazz_id=clazz_id, course_id=course_id, cpi=cpi,
                             job_id=job_id, object_id=object_id,
-                            other_info=str(attachment.get("otherInfo") or "").split("&")[0][:250],
-                            duration=int(duration), initial_seconds=max(0, int(attachment.get("playTime") or 0) // 1000),
-                            dtoken=dtoken, rt=float(prop.get("rt") or 0.9),
-                            face_enc=str(attachment.get("videoFaceCaptureEnc") or "")[:500],
-                            att_duration_enc=str(attachment.get("attDurationEnc") or "")[:500],
+                            other_info=card["other_info"],
+                            duration=int(duration),
+                            initial_seconds=min(int(duration), card["play_time_ms"] // 1000),
+                            dtoken=dtoken, rt=card["rt"],
+                            face_enc=card["face_enc"],
+                            att_duration_enc=card["att_duration_enc"],
                         ))
             return results
         finally:
