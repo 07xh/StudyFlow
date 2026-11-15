@@ -64,9 +64,11 @@ def test_real_cache_adapter_preserves_type_stale_and_identity(session_cache, mon
 def test_login_probe_requires_successful_process_and_explicit_server_confirmation(
     monkeypatch, exit_code, stdout, expected
 ):
-    monkeypatch.setattr(legacy_runtime, "_run_readonly", lambda command, timeout: (
-        SimpleNamespace(returncode=exit_code, stdout=stdout)
-    ))
+    def fake_readonly(command, timeout):
+        assert (command, timeout) == ("session-check", 65)
+        return SimpleNamespace(returncode=exit_code, stdout=stdout)
+
+    monkeypatch.setattr(legacy_runtime, "_run_readonly", fake_readonly)
     assert legacy_runtime.probe_login() is expected
 
 
