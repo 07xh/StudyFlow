@@ -31,13 +31,18 @@ def parse_cookie_header(value: str) -> dict[str, str]:
 
 
 def load() -> dict[str, str] | None:
-    value = os.environ.get("STUDYFLOW_XUEXITONG_COOKIE")
-    if not value and os.name == "nt":
+    # A packaged Windows app must only accept the user's Credential Manager
+    # entry. Otherwise a stale inherited environment variable can silently
+    # resurrect a session after the user explicitly clears their credentials.
+    if os.name == "nt":
         try:
             import keyring
             value = keyring.get_password(SERVICE, ACCOUNT)
         except Exception:
             return None
+    else:
+        # Development-only fallback for offline and non-Windows tests.
+        value = os.environ.get("STUDYFLOW_XUEXITONG_COOKIE")
     if not value:
         return None
     try:
