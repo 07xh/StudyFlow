@@ -4,7 +4,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const load=require("./helpers/load.cjs");
 
-const {compareVersions,decideLaunch,validVersion}=load("versionLaunch.ts");
+const {compareVersions,decideLaunch,validVersion,shouldPromptForRelease}=load("versionLaunch.ts");
 const read=p=>fs.readFileSync(path.join(__dirname,"../src",p),"utf8");
 
 test("initial installation has no upgrade popup; legacy desktop data migrates with one prompt",()=>{
@@ -44,4 +44,37 @@ test("changelog must be real release data and never inject remote HTML",()=>{
   assert.match(dialog,/Github/i);
   assert.match(bridge,/operation: "updates.changelog"/);
   assert.match(rust,/"updates.changelog" if request.get\("current_version"\)/);
+});
+
+test("a published GitHub Release is only prompted when newer and not dismissed",()=>{
+  assert.equal(shouldPromptForRelease("0.1.1-rc.17","v0.1.1-rc.18",null),true);
+  assert.equal(shouldPromptForRelease("0.1.1-rc.17","v0.1.1-rc.18","v0.1.1-rc.17"),true);
+  assert.equal(shouldPromptForRelease("0.1.1-rc.17","v0.1.1-rc.18","v0.1.1-rc.18"),false);
+  assert.equal(shouldPromptForRelease("0.1.1-rc.18","v0.1.1-rc.18",null),false);
+  assert.equal(shouldPromptForRelease("0.1.1-rc.18","v0.1.1-rc.17",null),false);
+  assert.equal(shouldPromptForRelease("0.1.1-rc.17","unverified",null),false);
+});
+test("running desktop checks real releases and displays their body directly",()=>{
+  const lifecycle=read("useReleaseChangelog.ts");
+  const dialog=read("ui/ReleaseNotesDialog.tsx");
+  const app=read("App.tsx");
+  assert.match(lifecycle,/operation:"updates.check",current_version:currentVersion/);
+  assert.match(lifecycle,/CHECK_INTERVAL_MS=20\*60\*1000/);
+  assert.match(lifecycle,/window.addEventListener\("focus",checkPublishedRelease\)/);
+  assert.match(lifecycle,/shouldPromptForRelease\(currentVersion,release.version,readDismissedRelease\(\)\)/);
+  assert.match(lifecycle,/notes:release.notes/);
+  assert.match(lifecycle,/markReleaseDismissed\(dialog.version\)/);
+  assert.match(dialog,/发现新版本/);
+  assert.match(dialog,/查看更新/);
+  assert.match(app,/onOpenUpdates=\{\(\)=>\{releaseChangelog.close\(\);setPage\("settings"\);\}\}/);
+});
+test("installed upgrade changelog has bundled candidate fallback and retry",()=>{
+  const lifecycle=read("useReleaseChangelog.ts");
+  const bundled=read("packagedReleaseNotes.ts");
+  const dialog=read("ui/ReleaseNotesDialog.tsx");
+  assert.match(lifecycle,/bundledReleaseNotes\(version,previous,scope==="history"\)/);
+  assert.match(bundled,/import.meta.glob<string>/);
+  assert.match(bundled,/RELEASE_CANDIDATE_/);
+  assert.match(dialog,/安装包内置的候选版更新说明/);
+  assert.match(dialog,/重新获取/);
 });
