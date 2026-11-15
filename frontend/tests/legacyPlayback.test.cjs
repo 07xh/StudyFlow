@@ -270,3 +270,12 @@ test("ZHS resource selection is local, type-checked and per course",()=>{
   assert.match(panel,/当前视频片段位置/);
   assert.doesNotMatch(panel,/当前本地模拟片段进度/);
 });
+
+
+test("ZHS completed-content skip is shown as original, fixed playback behavior",()=>{
+  const settings=fs.readFileSync(path.join(__dirname,"..","src","components","ZhsTaskSettingsPanel.tsx"),"utf8");
+  assert.match(settings,/跳过已完成/);
+  assert.match(settings,/checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/);
+  assert.match(settings,/“跳过已完成”由 ZHS 0\.1\.5 原版自动执行/);
+  assert.doesNotMatch(settings,/onChange=\{[^\n]*skip_completed/);
+});
