@@ -276,7 +276,7 @@ class XuexitongAdapter:
                         "type": kind,
                         "title": name,
                         "chapter_id": chapter_id,
-                        "completed": card.get("isPassed") is True,
+                        "completed": card.get("isPassed") if type(card.get("isPassed")) is bool else None,
                     })
             return result
 
