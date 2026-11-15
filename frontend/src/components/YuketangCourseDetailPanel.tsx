@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useId,useMemo,useRef,useState} from "react";
+import {useCallback,useEffect,useId,useMemo,useState,useSyncExternalStore} from "react";
 import {ChevronDown,ChevronRight,RefreshCw} from "lucide-react";
 import {friendlyBridgeError,request,type YuketangCourseProgress,
   type YuketangVideoProgress} from "../bridge";
@@ -36,78 +36,167 @@ function validPage(data:YuketangCourseProgress,courseId:string,offset:number){
   );
 }
 
-/** Current classroom only: real chapter/video list and independent read-only server verification. */
-export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:Props){
-  const [videos,setVideos]=useState<YuketangVideoProgress[]>([]);
-  const [total,setTotal]=useState(0);
-  const [nextOffset,setNextOffset]=useState<number|null>(null);
-  const [state,setState]=useState<LoadState>("idle");
-  const [message,setMessage]=useState("");
-  const revision=useRef(0);
-  const [filter,setFilter]=useState<ProgressFilter>("all");
-  const [expanded,setExpanded]=useState<Record<string,boolean>>({});
-  const panelId=useId();
+/** Genuine read-only progress survives page unmounts, for this app session only. */
+type Access={desktop:boolean;connected:boolean;scopeDirty:boolean};
+type ProgressSnapshot={
+  videos:YuketangVideoProgress[];total:number;nextOffset:number|null;
+  state:LoadState;message:string;checkedAt:number|null;
+  scanningCount:number;scanningTotal:number|null;resumeOffset:number|null;
+};
+type PendingBatch={videos:YuketangVideoProgress[];total:number|null;cursor:number};
+type Entry={
+  snapshot:ProgressSnapshot;listeners:Set<()=>void>;revision:number;
+  inFlight:Promise<void>|null;lastAttempt:number;pending:PendingBatch|null;
+};
+const AUTO_REFRESH_MS=120_000;
+const RETRY_COOLDOWN_MS=60_000;
+const entries=new Map<string,Entry>();
+const emptySnapshot=():ProgressSnapshot=>({
+  videos:[],total:0,nextOffset:null,state:"idle",message:"",
+  checkedAt:null,scanningCount:0,scanningTotal:null,resumeOffset:null
+});
+function getEntry(courseId:string):Entry{
+  let entry=entries.get(courseId);
+  if(!entry){
+    entry={snapshot:emptySnapshot(),listeners:new Set(),revision:0,
+      inFlight:null,lastAttempt:0,pending:null};
+    entries.set(courseId,entry);
+  }
+  return entry;
+}
+function publish(entry:Entry,next:ProgressSnapshot){
+  entry.snapshot=next;
+  for(const notify of entry.listeners)notify();
+}
 
-  // One user action verifies the whole course. Keep requests within the existing
-  // server-side limit and run them sequentially to avoid an unbounded burst.
-  const load=useCallback(async(offset:number,reset:boolean)=>{
-    const current=++revision.current;
-    if(reset){setVideos([]);setTotal(0);setNextOffset(null);}
-    setMessage("");
-    if(!desktop){
-      setState("blocked");setMessage("请使用学序 Windows 桌面版读取真实课堂进度。");return;
-    }
-    if(scopeDirty){
-      setState("blocked");setMessage("课堂范围尚未保存，请先保存课堂范围，再同步课程列表。");return;
-    }
-    if(!connected){
-      setState("blocked");setMessage("雨课堂会话未确认，请检查登录状态。");return;
-    }
-    setState("loading");
-    let cursor=offset;
-    let expectedTotal:number|null=null;
-    let loadedInThisRun=0;
+/** Sign-out/scope changes invalidate both cached evidence and in-flight replies. */
+export function resetYuketangVerification(){
+  for(const entry of entries.values()){
+    entry.revision++;
+    entry.inFlight=null;
+    entry.lastAttempt=0;
+    entry.pending=null;
+    publish(entry,emptySnapshot());
+  }
+}
+
+/** App-level timer and panel share a single bounded sequential request stream. */
+export function verifyYuketangCourse(
+  courseId:string,access:Access,options:{force?:boolean;resume?:boolean}={}
+):Promise<void>{
+  if(!courseId||!access.desktop||!access.connected||access.scopeDirty)return Promise.resolve();
+  const entry=getEntry(courseId);
+  if(entry.inFlight)return entry.inFlight;
+  const now=Date.now();
+  if(!options.force){
+    if(entry.lastAttempt!==0&&now-entry.lastAttempt<RETRY_COOLDOWN_MS)return Promise.resolve();
+    if(entry.snapshot.checkedAt!==null&&now-entry.snapshot.checkedAt<AUTO_REFRESH_MS)return Promise.resolve();
+  }
+  entry.lastAttempt=now;
+  const revision=++entry.revision;
+  const hadComplete=entry.snapshot.checkedAt!==null&&entry.snapshot.nextOffset===null;
+  const resuming=(options.resume??entry.snapshot.state==="error")&&entry.pending!==null;
+  const initial:PendingBatch=resuming
+    ?{videos:[...entry.pending!.videos],total:entry.pending!.total,cursor:entry.pending!.cursor}
+    :{videos:[],total:null,cursor:0};
+  entry.pending=null;
+  publish(entry,{...entry.snapshot,state:"loading",message:"",
+    scanningCount:initial.videos.length,scanningTotal:initial.total,resumeOffset:null});
+  const run=async()=>{
+    let working=initial.videos;
+    let cursor=initial.cursor;
+    let expectedTotal=initial.total;
     try{
       while(true){
         const pageOffset=cursor;
         const result=await request<YuketangCourseProgress>({
-          operation:"yuketang.course.detail",course_id:course.course_id,
+          operation:"yuketang.course.detail",course_id:courseId,
           offset:pageOffset,limit:PAGE_SIZE
         });
-        if(current!==revision.current)return;
-        if(!validPage(result,course.course_id,pageOffset)||
-          (expectedTotal!==null&&result.total!==expectedTotal)||
-          (result.next_offset!==null&&result.items.length===0))
+        if(entry.revision!==revision)return;
+        if(!validPage(result,courseId,pageOffset)||
+           (expectedTotal!==null&&result.total!==expectedTotal)||
+           (result.next_offset!==null&&result.items.length===0))
           throw new Error("INVALID_IPC_RESPONSE");
         expectedTotal=result.total;
-        // Only append validated server evidence; a failed later page must not
-        // erase successfully checked earlier pages or imply completion.
-        setVideos(previous=>reset&&pageOffset===offset?result.items:[...previous,...result.items]);
-        loadedInThisRun+=result.items.length;
-        setTotal(result.total);
-        setNextOffset(result.next_offset);
+        working=[...working,...result.items];
+        cursor=result.next_offset??result.total;
         if(result.next_offset===null){
-          setState("ready");
+          entry.pending=null;
+          publish(entry,{
+            videos:working,total:result.total,nextOffset:null,
+            state:"ready",message:"",checkedAt:Date.now(),
+            scanningCount:0,scanningTotal:null,resumeOffset:null
+          });
           return;
         }
-        cursor=result.next_offset;
+        // During a later recheck, leave the complete previous evidence visible.
+        // The first scan can display only the successfully verified pages.
+        publish(entry,{
+          ...(hadComplete?entry.snapshot:{
+            ...entry.snapshot,videos:working,total:result.total,nextOffset:result.next_offset
+          }),
+          state:"loading",message:"",scanningCount:working.length,
+          scanningTotal:result.total,resumeOffset:null
+        });
       }
     }catch(error){
-      if(current!==revision.current)return;
-      setState("error");
+      if(entry.revision!==revision)return;
+      const invalid=error instanceof Error&&error.message==="INVALID_IPC_RESPONSE";
+      entry.pending=!invalid&&working.length>0?
+        {videos:working,total:expectedTotal,cursor}:null;
       const reason=friendlyBridgeError(error);
-      setMessage(loadedInThisRun>0
-        ?"部分视频已读取并保留真实服务器记录；后续批次失败："+reason+"。可从中断位置继续核验。"
-        :reason);
+      publish(entry,{
+        ...entry.snapshot,
+        ...(!hadComplete&&working.length>0?{
+          videos:working,total:expectedTotal??working.length,nextOffset:cursor
+        }:{}),
+        state:"error",
+        message:hadComplete
+          ?"后台复核失败，继续显示上次真实服务器核验结果："+reason
+          :working.length>0
+            ?"部分视频已读取并保留真实服务器记录；后续批次失败："+reason+"。可从中断位置继续核验。"
+            :reason,
+        scanningCount:0,scanningTotal:null,
+        resumeOffset:entry.pending?.cursor??null
+      });
     }
-  },[course.course_id,desktop,connected,scopeDirty]);
+  };
+  const running=run();
+  entry.inFlight=running;
+  void running.finally(()=>{if(entry.inFlight===running)entry.inFlight=null;});
+  return running;
+}
 
-  useEffect(()=>{void load(0,true);return()=>{revision.current++;};},[load]);
+/** Current classroom only: shared read-only state across navigation. */
+export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty,
+  autoVerifyEnabled=true,onAutoVerifyChange}:Props&{
+    autoVerifyEnabled?:boolean;onAutoVerifyChange?:(enabled:boolean)=>void
+  }){
+  const entry=getEntry(course.course_id);
+  const subscribe=useCallback((notify:()=>void)=>{
+    entry.listeners.add(notify);
+    return ()=>{entry.listeners.delete(notify);};
+  },[entry]);
+  const cached=useSyncExternalStore(subscribe,()=>entry.snapshot,()=>entry.snapshot);
+  const blockedMessage=!desktop?"请使用学序 Windows 桌面版读取真实课堂进度。"
+    :scopeDirty?"课堂范围尚未保存，请先保存课堂范围，再同步课程列表。"
+    :!connected?"雨课堂会话未确认，请检查登录状态。":"";
+  const {videos,total,nextOffset,state,message,checkedAt,scanningCount,scanningTotal,resumeOffset}=
+    blockedMessage?{...emptySnapshot(),state:"blocked" as LoadState,message:blockedMessage}:cached;
+  const access={desktop,connected,scopeDirty};
+  const [filter,setFilter]=useState<ProgressFilter>("all");
+  const [expanded,setExpanded]=useState<Record<string,boolean>>({});
+  const panelId=useId();
 
+  // Returning to a fresh snapshot does not request the same pages again.
+  // App owns background polling, so unmounting this view never stops it.
   useEffect(()=>{
-    setFilter("all");
-    setExpanded({});
-  },[course.course_id]);
+    if(autoVerifyEnabled)void verifyYuketangCourse(course.course_id,{desktop,connected,scopeDirty});
+  },[course.course_id,desktop,connected,scopeDirty,autoVerifyEnabled]);
+  useEffect(()=>{setFilter("all");setExpanded({});},[course.course_id]);
+  const refresh=()=>void verifyYuketangCourse(course.course_id,access,{force:true});
+  const resume=()=>void verifyYuketangCourse(course.course_id,access,{force:true,resume:true});
 
   const chapters=useMemo(()=>{
     const groups=new Map<string,YuketangVideoProgress[]>();
@@ -147,22 +236,27 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
         <h3>章节进度</h3>
         <p>自动逐批读取全部视频的真实服务器进度；未核验内容不推断完成状态。</p>
       </div>
+      <div className="sf-ykt-verify-actions"><label className="sf-ykt-auto-verify"><input type="checkbox"
+        checked={autoVerifyEnabled} disabled={!desktop||!connected||scopeDirty||!onAutoVerifyChange}
+        onChange={event=>onAutoVerifyChange?.(event.currentTarget.checked)}/>
+        后续自动核验（约每 2 分钟）</label>
       <button type="button" className="secondary"
         disabled={!desktop||!connected||scopeDirty||state==="loading"}
-        onClick={()=>void load(0,true)}>
+        onClick={refresh}>
         <RefreshCw size={14}/>{state==="loading"?"核验全课中…":"重新核验全课"}
-      </button>
+      </button></div>
     </div>
+    {checkedAt!==null&&!blockedMessage&&<p className="sf-ykt-scan-state" role="status">上次完整服务器核验：{new Date(checkedAt).toLocaleString()}。返回课程不会重复全量读取。</p>}
     {videos.length>0&&<div className="sf-zd-detail-summary sf-ykt-progress-summary">
       <div><span>已读取视频</span><strong>{videos.length} / {total}</strong></div>
       <div><span>服务器已核验</span><strong>{verified.length} / {videos.length}</strong></div>
       <div><span>已确认完成</span><strong>{completed} 节</strong></div>
     </div>}
     {state==="loading"&&<p className="sf-ykt-scan-state" role="status" aria-live="polite">
-      正在自动核验全课：已读取 {videos.length} / {total||"…"} 节视频，按批次连续读取，无需手动翻页。
+      正在自动核验全课：本轮已读取 {scanningCount} / {scanningTotal??"…"} 节视频，按批次连续读取。
     </p>}
     {state==="ready"&&videos.length>0&&<p className="sf-ykt-scan-state" role="status">
-      本次已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}
+      已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}
     </p>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     {videos.length>0&&<div className="sf-ykt-progress-toolbar">
@@ -227,10 +321,10 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
             </div>;
           })}
     </div>}
-    {nextOffset!==null&&state==="error"&&<div className="actions sf-ykt-page-actions">
+    {(nextOffset!==null||resumeOffset!==null)&&state==="error"&&<div className="actions sf-ykt-page-actions">
       <button type="button" className="secondary"
         disabled={!connected||scopeDirty}
-        onClick={()=>void load(nextOffset,false)}>
+        onClick={resume}>
         {"继续核验剩余视频（剩余 "+Math.max(0,total-videos.length)+" 节）"}
       </button>
     </div>}
