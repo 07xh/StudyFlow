@@ -129,3 +129,31 @@ test('ready idle ZHS task does not show an invented blocking reason',async()=>{
   assert.doesNotMatch(words(view.root),/暂不能启动：/);
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
+
+test('transient status failure preserves owned run for safe stop but hides stale local progress',async()=>{
+ const sent=[];let reads=0;
+ const stopped={...running,state:'stopped',zhs_progress:null};
+ const env=setup({
+  getLegacyStatus:async()=>{
+   reads++;
+   if(reads===2)throw new Error('temporary transport failure');
+   if(reads>=4)return stopped;
+   return running;
+  },
+  stopLegacy:async(platform,expectedRunId)=>{sent.push([platform,expectedRunId]);return stopped;}
+ });let view;
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,props));});
+  assert.match(words(view.root),/48.5%/);
+  await act(async()=>env.tick());
+  assert.match(words(view.root),/状态待核实/);
+  assert.doesNotMatch(words(view.root),/48.5%/);
+  const start=view.root.findAllByType('button').find(n=>words(n).includes('启动原版任务'));
+  assert.equal(start.props.disabled,true);
+  const stop=view.root.findAllByType('button').find(n=>words(n)===' 停止');
+  assert.equal(stop.props.disabled,false,'old run ID must remain available for verified stop');
+  await act(async()=>stop.props.onClick());
+  assert.deepEqual(sent,[['zhidao','run-A']]);
+  assert.match(words(view.root),/已终止/);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
