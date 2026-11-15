@@ -190,6 +190,9 @@ export function legacyExitMessage(status: LegacyTaskStatus): string {
     case 5: return "未找到可用的 ZHS 0.1.5 运行时，请重新安装完整学序安装包。";
     case 6: return "所选课程不属于当前登录会话、已失效，或缺少有效课程路由，请重新同步课程。";
     case 9: return "原版 ZHS 要求交互输入，当前无终端模式无法继续；需在应用内处理该交互。";
+    case 12: return "已达到设置的视频数量或任务时长上限；不代表服务器确认课程完成。";
+    case 13: return "视频处理遇到错误，已按本次停止策略结束任务；请检查诊断信息。";
+    case 14: return "指定的视频或知识点已不在当前真实课程目录中，请重新同步并选择。";
     case 1: return "ZHS 已启动但原版执行失败，请检查登录、课程状态及运行环境。";
     default: return `ZHS 意外退出（代码 ${status.exit_code ?? "未知"}），尚未确认执行成功。`;
   }

@@ -123,10 +123,10 @@ export function ZhsTaskSettingsPanel({desktop,courseId,courseType,onReady,onEven
           <label><span>实际倍速上限（1–2×）</span>
             <input type="number" min={1} max={2} step={0.25} value={options.speed_cap}
               disabled={!desktop||busy} onChange={e=>update("speed_cap",Number(e.target.value))}/></label>
-          <label><span>本次最多处理视频数（0 不限制）</span>
+          <label><span>本次最多安排视频数（0 不限制）</span>
             <input type="number" min={0} max={1000} step={1} value={options.max_videos}
               disabled={!desktop||busy} onChange={e=>update("max_videos",Number(e.target.value))}/></label>
-          <label><span>单次观看时间限制（分钟；0 沿用原版）</span>
+          <label><span>单次任务时间限制（分钟；0 沿用原版）</span>
             <input type="number" min={0} max={1440} step={1} value={options.limit_minutes}
               disabled={!desktop||busy} onChange={e=>update("limit_minutes",Number(e.target.value))}/></label>
         </div>

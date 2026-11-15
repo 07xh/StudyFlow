@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, Manager};
 
 #[derive(serde::Deserialize)]
 pub struct OriginalYktOptions {
@@ -314,6 +314,9 @@ pub fn legacy_start(
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
     let child = command.spawn().map_err(|_| "LEGACY_LAUNCH_FAILED")?;
+    let wallclock_limit = if platform == "zhidao" {
+        zhs_options.as_ref().map(|x| x.limit_minutes).unwrap_or(0)
+    } else { 0 };
     guard.insert(platform.clone(), LegacyJob {
         child: Some(child), state: "running".into(), exit_code: None,
         run_id: run_id.clone(),
@@ -321,6 +324,29 @@ pub fn legacy_start(
         monitor_token,
         last_zhs_progress: None,
     });
+    if wallclock_limit > 0 {
+        // Dedicated timer enforces the cap even when the UI is minimized or not polling.
+        // It never owns a heartbeat generator; it only stops this run's child tree.
+        let watcher_app = app.clone();
+        let expected = run_id.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(u64::from(wallclock_limit) * 60));
+            let managed = watcher_app.state::<LegacyTasks>();
+            if let Ok(mut tasks) = managed.jobs.lock() {
+                if let Some(task) = tasks.get_mut("zhidao") {
+                    if task.run_id == expected &&
+                       status_of("zhidao", task).map(|s| s.state == "running").unwrap_or(false) {
+                        if let Some(mut process) = task.child.take() {
+                            terminate_tree(&mut process);
+                            task.exit_code = Some(12);
+                            task.state = "exited".into();
+                            remove_zhs_snapshot(task.monitor_token.as_deref());
+                        }
+                    }
+                }
+            }
+        });
+    }
     Ok(LegacyStatus {
         platform: platform.clone(), state: "running".into(), exit_code: None, run_id,
         course_id: if platform == "zhidao" { course_id } else { None },
