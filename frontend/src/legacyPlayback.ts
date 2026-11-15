@@ -177,7 +177,11 @@ export function legacyError(err: unknown): string {
     case "TASK_RUN_CHANGED": return "运行任务已变化，请刷新状态后再操作。";
     case "TASK_ALREADY_RUNNING": return "该平台原版任务已在运行，请先停止后再启动。";
     case "LEGACY_NOT_INSTALLED": return "缺少学序本机执行器或原版知到运行环境。";
-    case "LEGACY_LAUNCH_FAILED": return "原版任务启动失败，请检查 Windows 运行环境。";
+    case "LEGACY_LAUNCH_FAILED":
+    case "TASK_START_FAILED":
+    case "TASK_LAUNCH_FAILED": return "原版任务启动失败，请检查 Windows 运行环境。";
+    case "TASK_STATUS_FAILED": return "无法读取运行任务状态，请重新查询。";
+    case "TASK_STOP_FAILED": return "停止任务操作失败，请查询当前任务状态后重试。";
     case "TASK_STATE_UNAVAILABLE": return "无法获取本地任务状态。";
     case "RUN_NOT_AVAILABLE": return "网页版无法运行原版任务，请启动 Windows 桌面版。";
     default: return "原版任务操作失败，请检查安装与登录状态。";
