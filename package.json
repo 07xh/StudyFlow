@@ -1,7 +1,7 @@
 {
   "name": "studyflow-build",
   "private": true,
-  "version": "0.1.1-rc.5",
+  "version": "0.1.1-rc.6",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
