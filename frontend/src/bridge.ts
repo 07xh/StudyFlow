@@ -51,9 +51,9 @@ export type BridgeRequest =
      dtype?:"Video"|"Audio"}
   | {id:string;version:1;operation:"xuexitong.heartbeat.status";course_id?:string}
   | {id:string;version:1;operation:"xuexitong.heartbeat.logs";limit?:number;course_id?:string}
-  | {id:string;version:1;operation:"xuexitong.heartbeat.pause";run_id?:string}
-  | {id:string;version:1;operation:"xuexitong.heartbeat.resume";run_id?:string}
-  | {id:string;version:1;operation:"xuexitong.heartbeat.stop";run_id?:string};
+  | {id:string;version:1;operation:"xuexitong.heartbeat.pause";run_id:string}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.resume";run_id:string}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.stop";run_id:string};
 
 export type XuexitongSettings = {playback_speed:number;concurrency:number;skip_completed:boolean;verify_after_run:boolean};
 export type HeartbeatTaskView={
