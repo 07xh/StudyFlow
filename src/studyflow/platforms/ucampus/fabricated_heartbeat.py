@@ -366,8 +366,8 @@ class FabricatedStateStore:
     def _safe_count(value: Any) -> int:
         return value if type(value) is int and 0 <= value <= 1_000_000 else 0
 
-    @staticmethod
-    def _safe_snapshot(record: Any) -> dict[str, Any] | None:
+    @classmethod
+    def _safe_snapshot(cls, record: Any) -> dict[str, Any] | None:
         """Persist only local counters; reject credentials, raw errors and metadata.
 
         This is deliberately a lossy, read-only archive. It cannot be used to
@@ -390,7 +390,7 @@ class FabricatedStateStore:
                         or not isinstance(row, dict)):
                     continue
                 tasks[resource_id] = {
-                    key: FabricatedStateStore._safe_count(row.get(key))
+                    key: cls._safe_count(row.get(key))
                     for key in ("generated", "sent", "accepted", "confirmed")
                 }
         return {
