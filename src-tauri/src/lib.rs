@@ -601,6 +601,22 @@ mod ipc_validation_tests {
     }
 
     #[test]
+    fn xuexitong_controls_require_explicit_run_identity() {
+        for operation in ["xuexitong.heartbeat.pause", "xuexitong.heartbeat.resume",
+                          "xuexitong.heartbeat.stop"] {
+            let mut request = json!({"id":"xxt-control","version":1,"operation":operation});
+            assert!(validate(&request).is_err(), "unscoped control accepted: {operation}");
+            request["run_id"] = json!("abcdef0123456789");
+            assert!(validate(&request).is_ok(), "valid run id rejected: {operation}");
+            request["graceful"] = json!(true);
+            assert!(validate(&request).is_err(), "UI bypassed shutdown boundary: {operation}");
+            request.as_object_mut().unwrap().remove("graceful");
+            request["run_id"] = json!("old-run");
+            assert!(validate(&request).is_err(), "non-hex run accepted: {operation}");
+        }
+    }
+
+    #[test]
     fn yuketang_course_detail_validates_course_and_bounded_progress_pages() {
         let valid = json!({"id":"yp","version":1,"operation":"yuketang.course.detail",
             "course_id":"123","offset":0,"limit":8});
