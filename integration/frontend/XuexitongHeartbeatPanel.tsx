@@ -102,7 +102,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     setBusy(true);setMessage("");
     try{
       if(action==="start"){
-        if(!validConfig)throw new Error("请输入有效的速度（0.25–2）与章节并发数（1–4）。");
+        if(!validConfig)throw new Error("XUEXITONG_INVALID_PARAMETER");
         // Reuse the same validated settings contract as the platform settings page.
         // Only saved speed/concurrency are updated; verification preferences survive.
         const defaults=await request<XuexitongSettings>({operation:"xuexitong.settings.get"});
