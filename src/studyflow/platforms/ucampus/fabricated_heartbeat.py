@@ -362,12 +362,57 @@ class FabricatedStateStore:
         except (OSError, ValueError):
             return {}
 
+    @staticmethod
+    def _safe_snapshot(record: Any) -> dict[str, Any] | None:
+        """Persist only local counters; reject credentials, raw errors and metadata.
+
+        This is deliberately a lossy, read-only archive. It cannot be used to
+        reconstruct or replay a network learning-event request.
+        """
+        if not isinstance(record, dict):
+            return None
+        def safe_id(value: Any) -> str:
+            return value if isinstance(value, str) and _ID_RE.fullmatch(value) else ""
+        def safe_count(value: Any) -> int:
+            return value if type(value) is int and 0 <= value <= 1_000_000 else 0
+        phase = record.get("phase")
+        if phase not in ("idle", "queued", "running", "paused", "stopping",
+                         "finished_locally", "failed", "stopped"):
+            phase = "historical"
+        raw_tasks = record.get("tasks")
+        tasks: dict[str, dict[str, int]] = {}
+        if isinstance(raw_tasks, dict):
+            for resource_id, row in list(raw_tasks.items())[:200]:
+                if (not isinstance(resource_id, str)
+                        or not _ID_RE.fullmatch(resource_id)
+                        or not isinstance(row, dict)):
+                    continue
+                tasks[resource_id] = {
+                    key: safe_count(row.get(key))
+                    for key in ("generated", "sent", "accepted", "confirmed")
+                }
+        return {
+            "course_id": safe_id(record.get("course_id")),
+            "unit_id": safe_id(record.get("unit_id")),
+            "phase": phase,
+            "tasks": tasks,
+        }
+
     def save(self, run_id: str, record: Mapping[str, Any]) -> None:
         _identifier(run_id)
+        if not isinstance(record, dict):
+            raise ValueError("UCAMPUS_INVALID_HISTORY_RECORD")
         with self._lock:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            data = self._read()
-            data[run_id] = dict(record)
+            # Scrub legacy entries as well when rewriting the archive.
+            data = {
+                key: sanitized
+                for key, value in self._read().items()
+                if isinstance(key, str) and _ID_RE.fullmatch(key)
+                for sanitized in (self._safe_snapshot(value),)
+                if sanitized is not None
+            }
+            data[run_id] = self._safe_snapshot(record)
             payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
             fd, tmp = tempfile.mkstemp(prefix=".ucampus-", dir=str(self.path.parent))
             try:
@@ -387,7 +432,7 @@ class FabricatedStateStore:
         _identifier(run_id)
         with self._lock:
             record = self._read().get(run_id)
-            return dict(record) if isinstance(record, dict) else None
+            return self._safe_snapshot(record)
 
     def list_recent(self, course_id: str, *, limit: int = 5) -> list[dict[str, Any]]:
         """Inspect local snapshots with a fixed safe schema. Never replay events."""
@@ -430,7 +475,14 @@ class FabricatedStateStore:
     def clear(self, run_id: str) -> None:
         _identifier(run_id)
         with self._lock:
-            data = self._read()
+            # Removing one entry also scrubs any legacy sensitive fields.
+            data = {
+                key: sanitized
+                for key, value in self._read().items()
+                if isinstance(key, str) and _ID_RE.fullmatch(key)
+                for sanitized in (self._safe_snapshot(value),)
+                if sanitized is not None
+            }
             if data.pop(run_id, None) is not None and self.path.exists():
                 payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
                 fd, tmp = tempfile.mkstemp(prefix=".ucampus-", dir=str(self.path.parent))
