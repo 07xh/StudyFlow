@@ -316,6 +316,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "XUEXITONG_SESSION_MISSING": return "学习通会话未配置，请先登录。";
     case "XUEXITONG_TASK_NOT_RUNNING": return "当前没有运行中的心跳任务。";
   case "XUEXITONG_NO_ACTIVE_TASK": return "当前账号或课程下没有活动心跳任务，请先启动。";
+    case "XUEXITONG_RUN_ID_REQUIRED": return "当前任务缺少运行 ID，请刷新课程状态后重试。";
     case "XUEXITONG_RUN_ID_MISMATCH": return "运行 ID 不匹配，请刷新状态后重试。";
     case "XUEXITONG_INTERNAL_ERROR": return "本地心跳服务内部错误，请查看运行日志。";
     case "XUEXITONG_UNKNOWN_OPERATION": return "不支持的心跳操作。";
