@@ -74,6 +74,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"; course_id: string; run_id: string}
   | {id: string; version: 1; operation: "ucampus.session.info"}
   | {id: string; version: 1; operation: "ucampus.session.configure"; configuration: UCampusConfig}
+  | {id: string; version: 1; operation: "ucampus.session.login"; username: string; password: string}
   | {id: string; version: 1; operation: "ucampus.session.clear"}
   | {id: string; version: 1; operation: "xuexitong.session.configure"; cookie: string}
   | {id: string; version: 1; operation: "xuexitong.session.clear"}
@@ -231,6 +232,8 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "UCAMPUS_TASK_ALREADY_RUNNING", "UCAMPUS_TASK_NOT_RUNNING",
                              "UCAMPUS_RUN_ID_MISMATCH", "UCAMPUS_RUNTIME_UNAVAILABLE",
                              "UCAMPUS_SESSION_MISSING", "UCAMPUS_SESSION_EXPIRED",
+                              "INVALID_UCAMPUS_LOGIN", "UCAMPUS_LOGIN_UNAVAILABLE", "UCAMPUS_LOGIN_REJECTED",
+                              "UCAMPUS_LOGIN_FORMAT_UNVERIFIED", "UCAMPUS_LOGIN_VERIFICATION_REQUIRED", "UCAMPUS_LOGIN_RATE_LIMITED",
                               "UCAMPUS_CATALOG_UNAVAILABLE", "UCAMPUS_CATALOG_FORMAT_UNVERIFIED",
                              "UCAMPUS_AI_ONLY", "UCAMPUS_OPEN_ID_REQUIRED",
                              "UCAMPUS_PROGRESS_UNAVAILABLE", "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED",
@@ -372,6 +375,12 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_AI_ONLY": return "目前单元与任务读取仅支持 U校园5.0 AI版。";
     case "UCAMPUS_SESSION_MISSING": return "请先配置 U校园登录会话。";
     case "UCAMPUS_SESSION_EXPIRED": return "U校园会话已失效，请重新登录。";
+    case "INVALID_UCAMPUS_LOGIN": return "请输入有效的 U校园账号和密码。";
+    case "UCAMPUS_LOGIN_UNAVAILABLE": return "U校园 SSO 登录接口请求失败，请检查网络或稍后再试。";
+    case "UCAMPUS_LOGIN_REJECTED": return "U校园未接受本次登录，请检查账号密码及平台账号状态。";
+    case "UCAMPUS_LOGIN_FORMAT_UNVERIFIED": return "U校园 SSO 返回的数据结构与当前适配器不一致，未保存会话。";
+    case "UCAMPUS_LOGIN_VERIFICATION_REQUIRED": return "U校园要求图形、滑块等额外验证。请通过官方页面完成验证，不自动绕过。";
+    case "UCAMPUS_LOGIN_RATE_LIMITED": return "U校园限制了本次登录请求，请遵循平台提示后再试。";
     case "UCAMPUS_CATALOG_UNAVAILABLE": return "U校园课程接口请求失败，请检查网络、账号与接口版本。";
     case "UCAMPUS_CATALOG_FORMAT_UNVERIFIED": return "U校园课程接口返回了未知数据格式；未生成任何模拟课程，请核验平台版本。";
     case "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED": return "U校园返回的数据结构与已知开源接口不一致，未推断任何进度。";
