@@ -132,10 +132,21 @@ class UCampusAdapter:
         if credentials.load() is None:
             return ConnectionInfo(Platform.UCAMPUS, False, "尚未配置 U校园会话")
         try:
-            self.list_courses()
+            courses = self.list_courses()
+            if not courses:
+                return ConnectionInfo(Platform.UCAMPUS, False,
+                                      "课程接口返回空列表，账号与课程绑定状态尚不能确认")
             return ConnectionInfo(Platform.UCAMPUS, True, "U校园课程目录读取成功（学习与进度尚未验收）")
+        except UCampusCatalogError as exc:
+            messages = {
+                "UCAMPUS_SESSION_EXPIRED": "U校园会话已失效，请重新登录",
+                "UCAMPUS_CATALOG_FORMAT_UNVERIFIED": "U校园课程响应格式不匹配",
+                "UCAMPUS_CATALOG_UNAVAILABLE": "U校园课程接口暂不可用",
+            }
+            return ConnectionInfo(Platform.UCAMPUS, False,
+                                  messages.get(str(exc), "U校园课程状态未核验"))
         except Exception:
-            return ConnectionInfo(Platform.UCAMPUS, False, "会话失效、接口不匹配或网络不可用")
+            return ConnectionInfo(Platform.UCAMPUS, False, "U校园课程状态暂不可核验")
 
     @staticmethod
     def _fetch(url: str, headers: dict[str, str]) -> list[Course]:
