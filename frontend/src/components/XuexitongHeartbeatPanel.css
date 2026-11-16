@@ -199,6 +199,55 @@
   line-height:1.55;
   overflow-wrap:anywhere;
 }
+.sf-shell .sf-xxt-runtime .sf-xxt-task-chapter{
+  display:block;
+  margin-top:5px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:400;
+  line-height:1.45;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-task-state{
+  display:inline-flex;
+  align-items:center;
+  min-height:23px;
+  padding:3px 8px;
+  border-radius:999px;
+  background:var(--soft-accent);
+  color:var(--text);
+  font-size:11px;
+  font-weight:600;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-local-time{
+  display:flex;
+  justify-content:space-between;
+  gap:6px;
+  margin-bottom:7px;
+  color:var(--text);
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-progress{
+  height:7px;
+  overflow:hidden;
+  border-radius:999px;
+  background:var(--soft-accent);
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-progress span{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:var(--accent);
+  transition:width 220ms ease;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-progress-unknown{
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+}
+@media(prefers-reduced-motion:reduce){
+  .sf-shell .sf-xxt-runtime .sf-xxt-progress span{transition:none}
+}
 @media(max-width:850px){
   .sf-shell .sf-xxt-runtime .sf-settings-row{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
