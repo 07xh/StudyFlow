@@ -450,7 +450,15 @@ impl LegacyTasks {
                     let finished = terminate_tree(&mut child, task.process_job.as_ref()).is_ok();
                     #[cfg(not(windows))]
                     let finished = terminate_tree(&mut child).is_ok();
-                    if finished { task.state = "stopped".into(); }
+                    if finished {
+                        task.state = "stopped".into();
+                    } else {
+                        // Preserve the prior last-resort shutdown behavior.
+                        // This only targets the exact child owned by this app;
+                        // the Job Object, when available, closes below.
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
                 }
                 #[cfg(windows)]
                 { task.process_job = None; } // guaranteed kill on close if the fallback failed
