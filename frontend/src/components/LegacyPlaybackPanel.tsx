@@ -371,7 +371,7 @@ export function LegacyPlaybackPanel({
           <span style={{width:zhsSegment!=null?zhsSegment+"%":"0%"}}/>
         </div>
         <small className="sf-zhs-now-footnote">
-          {zhsSegment!=null?"本地播放位置 · 切换视频后重新计数":
+          {zhsSegment!=null?"本地片段位置 · 非课程总进度":
             status?.state==="running"&&ownsStatus
               ?status.zhs_stale?"运行中 · 最近采样已过期":"正在等待播放进度":
               "本次暂无可展示的播放位置"}
@@ -380,10 +380,9 @@ export function LegacyPlaybackPanel({
           <summary>采样与核验详情</summary>
           <div>
             <small>任务状态：{statusReadFailed?"状态待核实":status?labels[status.state]:"待确认"} · 约每 2 秒查询</small>
-            <small>当前视频片段位置不是课程进度，不代表观看倍速或服务器已确认的学习进度。</small>
             {status?.zhs_stale&&ownsStatus&&<small role="status">本地进度输出已过期；仅保留上次识别的资源信息，未沿用旧进度值。</small>}
             {status?.state==="exited"&&ownsStatus&&liveZhs&&<small>任务已结束 · 显示结束前最后一次真实采样</small>}
-            <small>实际课程完成情况请以服务器只读核验为准；片段进度为非服务器确认进度。</small>
+            <small>当前片段位置不代表平台确认的课程进度或完成状态。</small>
           </div>
         </details>
         {status?.state==="exited"&&ownsStatus&&!statusReadFailed&&<div className="sf-task-context sf-zhs-exit-diagnostic" role="status" aria-live="polite">
@@ -395,7 +394,7 @@ export function LegacyPlaybackPanel({
     </div>}
     {platform === "yuketang" && <div className={"sf-ykt-live"+(detailMode?" sf-detail-live":"")} aria-label="雨课堂原版实时进度">
       <div className="sf-ykt-live-title"><strong>并发任务进度</strong>
-        <small>{yktProgress?.available ? "本次任务日志 · 每 2 秒读取" : "本次任务尚无进度记录"}</small></div>
+        <small>{yktProgress?.available ? "执行记录已读取" : "暂无进度记录"}</small></div>
       <div className="sf-ykt-worker-grid" aria-label="并发任务独立状态">
         {status?.run_id&&status.state!=="idle"?workerSlots.map(slot=>{
           const video=slot.video_index!=null?videoByIndex.get(slot.video_index):undefined;
@@ -411,7 +410,7 @@ export function LegacyPlaybackPanel({
         }):<p className="sf-muted">启动批量任务后显示实际并发状态。</p>}
       </div>
       {videoTasks.length>0&&<details className="sf-ykt-video-details">
-        <summary>逐视频详情 · 已识别 {videoTasks.length} 个视频任务</summary>
+        <summary>逐视频 · {videoTasks.length} 项</summary>
         <div className="sf-ykt-video-list">
           {videoTasks.map(video=>{
             const state=status?.state==="stopped"&&["watching","preparing"].includes(video.state)

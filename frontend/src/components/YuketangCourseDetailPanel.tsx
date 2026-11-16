@@ -353,9 +353,8 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     aria-label="雨课堂章节学习进度">
     <div className="sf-zd-detail-heading">
       <div>
-        <span className="eyebrow">当前课堂 / 服务器只读记录</span>
+        <span className="eyebrow">雨课堂 · 服务器记录</span>
         <h3>章节进度</h3>
-        <p>首次进入核验全课；之后手动刷新，播放期间仅自动复核能够准确匹配的视频。</p>
       </div>
       <button type="button" className="secondary"
         disabled={!desktop||!connected||scopeDirty||state==="loading"}
@@ -363,8 +362,10 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
         <RefreshCw size={14}/>{state==="loading"?"核验全课中…":"重新核验全课"}
       </button>
     </div>
-    {checkedAt!==null&&!blocked&&<p className="sf-ykt-scan-state" role="status">上次全课核验：{new Date(checkedAt).toLocaleString()}。返回课程不重复扫描。</p>}
-    {lastPlaybackAt!==null&&!blocked&&<p className="sf-ykt-scan-state" role="status">最近播放视频复核 / 单节手动复核：{new Date(lastPlaybackAt).toLocaleString()}（仅对应视频）。</p>}
+    {(checkedAt!==null||lastPlaybackAt!==null)&&!blocked&&<div className="sf-record-verification-meta" role="status">
+      {checkedAt!==null&&<span>上次全课核验：{new Date(checkedAt).toLocaleString()}</span>}
+      {lastPlaybackAt!==null&&<span>最近播放视频复核：{new Date(lastPlaybackAt).toLocaleString()}</span>}
+    </div>
     {videos.length>0&&<div className="sf-zd-detail-summary sf-ykt-progress-summary sf-record-summary">
       <div><span>已读取视频</span><strong>{videos.length} / {total}</strong></div>
       <div><span>服务器已核验</span><strong>{verified.length} / {videos.length}</strong></div>
@@ -373,9 +374,12 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     {state==="loading"&&<p className="sf-ykt-scan-state" role="status" aria-live="polite">
       首次或手动全课核验中：本轮已读取 {scanningCount} / {scanningTotal??"…"} 节视频。
     </p>}
-    {state==="ready"&&videos.length>0&&<p className="sf-ykt-scan-state" role="status">
-      本次已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}
-    </p>}
+    {state==="ready"&&videos.length>0&&<>
+      {unknown>0&&<p className="sf-record-pending" role="status">{unknown} 节待核验</p>}
+      <details className="sf-technical-note"><summary>核验摘要</summary>
+        <p>本次已读取 {videos.length} / {total} 节；{unknown>0?unknown+" 节尚无服务器确认记录。":"全部视频均有可确认的服务器进度。"}</p>
+      </details>
+    </>}
     {message&&<p className="sf-zd-progress-message" role="status">{message}</p>}
     {singleCheckMessage&&<p className="sf-ykt-scan-state" role="status">{singleCheckMessage}</p>}
     {videos.length>0&&<CourseRecordToolbar key={course.course_id}
@@ -394,7 +398,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
             const done=allItems.filter(item=>item.server_completed===true).length;
             const isExpanded=expanded[chapter]??index===0;
             return <CourseChapterGroup key={chapter} title={chapter}
-              meta={`已读取 ${allItems.length} 节 · 已核验 ${count} 节 · 已完成 ${done} 节`}
+              meta={`${allItems.length} 节 · ${count} 核验 · ${done} 完成`}
               expanded={isExpanded} onToggle={()=>setExpanded(previous=>({...previous,[chapter]:!isExpanded}))}>
               {items.map(video=><article className="sf-zd-detail-item sf-record-item" key={video.id}>
                 <div className="sf-zd-detail-item-head">

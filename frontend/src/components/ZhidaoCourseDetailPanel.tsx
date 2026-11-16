@@ -114,13 +114,8 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
     aria-label="课程章节进度">
     <div className="sf-zd-detail-heading">
       <div>
-        <span className="eyebrow">课程内容 / {kind==="ai"?"智慧课程":"共享课程"}</span>
+        <span className="eyebrow">{kind==="ai"?"智慧课程":"共享课程"}</span>
         <h3>章节进度</h3>
-        <p>{currentDetail?.verified
-          ?(currentDetail.stale?"历史缓存，待重新核验":"服务器已核验")
-          :"暂无当前会话可确认的详细学习记录"}
-          {currentDetail?.verified_at?" · "+new Date(currentDetail.verified_at).toLocaleString():""}
-        </p>
       </div>
       <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void load()}>
         <RefreshCw size={14}/>{busy?"核验中…":"刷新章节"}
@@ -147,7 +142,7 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
         const verified=all.filter(item=>lessonStatus(item,kind)!=="unverified").length;
         const open=expanded[chapter]??groupIndex===0;
         return <CourseChapterGroup key={chapter} title={chapter}
-          meta={`已读取 ${all.length} · 已核验 ${verified} · 已完成 ${completed}`}
+          meta={`${all.length} 项 · ${verified} 核验 · ${completed} 完成`}
           expanded={open}
           onToggle={()=>setExpanded(previous=>({...previous,[chapter]:!open}))}>
           {records.map(({item,index})=>{
@@ -164,7 +159,7 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
                 </span>
               </div>
               <small>{kind==="ai"
-                ?(item.theme||"知识点")+" · "+(status==="completed"?"已达到满进度":status==="unverified"?"暂无确认进度":"尚未达到满进度")
+                ?(item.theme||"知识点")
                 :"已记录 "+seconds(item.studied_seconds)+" / 总时长 "+seconds(item.duration_seconds)}
                 {currentDetail?.stale?" · 历史缓存":""}
               </small>
