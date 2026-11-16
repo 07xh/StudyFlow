@@ -142,7 +142,7 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
   function backdrop(event:MouseEvent<HTMLDivElement>){
     if(open&&event.target===event.currentTarget)onClose();
   }
-  if(!mounted)return null;
+  if(!mounted&&!open)return null;
   return createPortal(
     <div className={"app sf-shell sf-global-settings-overlay"+(dark?" dark":"")}
       data-state={entered&&open?"open":"closed"} data-theme={dark?"dark":"light"}

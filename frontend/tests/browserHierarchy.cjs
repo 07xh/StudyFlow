@@ -90,6 +90,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.locator('.sf-task-shortcuts,.sf-runtime-task').count(),0);
    await page.getByRole('button',{name:'设置',exact:true}).click();
    const global=page.getByRole('dialog',{name:'设置',exact:true});
+   await global.waitFor({state:'visible'});
    assert.equal(await global.count(),1,'Global settings opens as a modal instead of changing main route');
    await global.getByRole('group',{name:'主题模式'}).getByRole('button',{name:'深色',exact:true}).click();
    assert.equal(await page.locator('.sf-global-settings-overlay.dark').count(),1,'Settings surface reflects the new dark theme');

@@ -49,6 +49,7 @@ const server=http.createServer((req,res)=>{
    const settingsButton=page.getByRole('button',{name:'设置',exact:true});
    await settingsButton.click();
    const global=page.getByRole('dialog',{name:'设置',exact:true});
+   await global.waitFor({state:'visible'});
    assert.equal(await global.count(),1,'Global settings must float above the workspace');
    assert.equal(await page.locator('.sf-platform-courses').count(),1,'The underlying workspace stays mounted');
    const globalRect=await global.boundingBox();
