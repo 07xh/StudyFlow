@@ -62,7 +62,7 @@ class RunConfig:
     """自定义运行参数。速度范围对齐 settings.py v1（0.25–2.0）。"""
 
     speed: float = 1.0
-    instant_complete: bool = True
+    instant_complete: bool = False
     tick_seconds: float = 1.0
     heartbeat_interval_video_seconds: float = 60.0
     dtype: str = "Video"
@@ -613,6 +613,38 @@ class ChapterQueue:
                 runner.pause()
             snapshots.append(runner.start())
         return snapshots
+
+
+    def status_snapshots(self, *, running: bool) -> list[TaskSnapshot]:
+        """Read-only status of every scheduled task, including never-started chapters.
+
+        The persistent state store only contains tasks after runner.start(); it
+        cannot describe queued chapters. These synthetic pending snapshots are
+        returned to the UI only and are never written to disk.
+        """
+        with self._lock:
+            chapters = [(chapter, tuple(targets)) for chapter, targets in self._chapters.items()]
+            runners = dict(self._runners)
+        items: list[TaskSnapshot] = []
+        for _chapter, targets in chapters:
+            for target in targets:
+                runner = runners.get(target.task_id)
+                if runner is not None:
+                    items.append(runner.snapshot)
+                    continue
+                items.append(TaskSnapshot(
+                    task_id=target.task_id,
+                    run_id=self.config.run_id,
+                    account_marker=self.config.account_marker,
+                    course_key=target.course_key,
+                    chapter_id=target.chapter_id,
+                    chapter=target.chapter,
+                    title=target.title,
+                    duration=target.duration,
+                    speed=self.config.speed,
+                    state="pending" if running and not self._cancelled.is_set() else "not_started",
+                ))
+        return items
 
     def _current_runners(self) -> list[HeartbeatTaskRunner]:
         with self._lock:
