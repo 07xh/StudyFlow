@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import quote
 
@@ -48,9 +48,6 @@ class FabricatedReceipt:
     position_seconds: float
     completion: bool
     socket_reply: str
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 def _valid_path_id(value: Any) -> str:
@@ -288,6 +285,3 @@ class FabricatedTransport:
             position_seconds=float(pulse.position_seconds),
             completion=True, socket_reply="")
 
-    def send(self, pulse: Any, target: fh.FabricatedTarget | None = None) -> bool:
-        """``PulseTransport``-compatible boolean: accepted, NOT completed."""
-        return self.send_result(pulse, target).accepted
