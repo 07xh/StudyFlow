@@ -8,7 +8,7 @@ on:
       - 'src-tauri/**'
       - 'package.json'
       - 'pyproject.toml'
-      - 'docs/RELEASE_CANDIDATE_0.1.1_RC29.md'
+      - 'docs/RELEASE_CANDIDATE_*.md'
       - 'src/**'
       - 'packaging/**'
       - 'scripts/build-windows.ps1'
@@ -66,7 +66,7 @@ jobs:
         run: npm --prefix frontend test
 
   publish-candidate:
-    name: Publish verified 0.1.1-rc.29 pre-release
+    name: Publish verified candidate pre-release
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [windows-package, frontend-checks]
     runs-on: ubuntu-latest
@@ -78,26 +78,50 @@ jobs:
         with:
           name: StudyFlow-Windows-NSIS
           path: dist
-      - name: Create candidate release only once
+      - name: Publish version-matched, verified candidate
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           version=$(python -c 'import json; print(json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))["version"])')
-          if [ "$version" != "0.1.1-rc.29" ]; then
-            echo "This one-time candidate publisher does not apply to version $version."
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "Skipping non-RC version: $version."
             exit 0
           fi
-          # Never tag an older build if a later main commit superseded this run.
+          tag="v${version}"
+          notes_file="docs/RELEASE_CANDIDATE_${version/-rc./_RC}.md"
+          if [ ! -s "$notes_file" ]; then
+            echo "Missing version-matched release notes: $notes_file"
+            exit 1
+          fi
+          # Every manifest that embeds the candidate version must agree.
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import re
+          version=json.loads(Path("src-tauri/tauri.conf.json").read_text(encoding="utf-8"))["version"]
+          assert json.loads(Path("frontend/package.json").read_text(encoding="utf-8"))["version"] == version
+          assert json.loads(Path("package.json").read_text(encoding="utf-8"))["version"] == version
+          lock=json.loads(Path("frontend/package-lock.json").read_text(encoding="utf-8"))
+          assert lock["version"] == version and lock["packages"][""]["version"] == version
+          assert re.search(r'^version = "'+re.escape(version)+r'"$',Path("src-tauri/Cargo.toml").read_text(encoding="utf-8"),re.M)
+          print("Version manifests aligned:",version)
+          PY
+          # Avoid stale release artifacts from a superseded main build.
           current_main=$(git ls-remote origin refs/heads/main | cut -f1)
           if [ -z "$current_main" ] || [ "$current_main" != "$GITHUB_SHA" ]; then
             echo "Release aborted: this run does not match the latest main commit."
             exit 1
           fi
-          if gh release view v0.1.1-rc.29 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Candidate already published; not replacing binaries."
-            exit 0
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            published_sha=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)
+            if [ "$published_sha" = "$GITHUB_SHA" ]; then
+              echo "This commit has already been published as $tag; keeping existing binaries."
+              exit 0
+            fi
+            echo "Release $tag already exists for $published_sha, refusing to overwrite."
+            exit 1
           fi
           shopt -s nullglob
           installers=(dist/*.exe)
@@ -105,9 +129,9 @@ jobs:
             echo "Expected one tested NSIS installer."
             exit 1
           fi
-          gh release create v0.1.1-rc.29 "${installers[0]}" \
+          gh release create "$tag" "${installers[0]}" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "学序 StudyFlow 0.1.1-rc.29" \
+            --title "学序 StudyFlow $version" \
             --prerelease --latest=false \
-            --notes-file docs/RELEASE_CANDIDATE_0.1.1_RC29.md
+            --notes-file "$notes_file"
