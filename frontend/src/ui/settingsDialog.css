@@ -48,7 +48,6 @@
 .sf-shell .sf-zd-progress-sync-time{margin:9px 0 0;color:var(--muted);font-size:11px}
 .sf-settings-modal-body .sf-zd-progress-auto small{color:var(--muted)}
 .sf-settings-modal-body .text-button{align-self:flex-start}
-.sf-course-detail-topline>.sf-course-logs-action{margin-left:auto}
 @media(max-width:650px){
   .app.sf-shell.sf-settings-overlay{padding:8px}
   .sf-settings-modal{max-height:calc(100dvh - 16px);width:100%}
