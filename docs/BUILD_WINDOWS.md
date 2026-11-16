@@ -19,8 +19,9 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 
 ## GitHub Actions 节省时间
 - `workflow_dispatch` 可手动启动完整 Windows 打包；涉及打包的主分支提交亦可触发构建。
-- Python 回归默认仅在 Pull Request 或手动执行，减少 Windows Runner 时间占用。
-- 只有工作流实际成功且上传 artifact 后，才能称为“Windows EXE 构建成功”。
+- Python 回归在 Pull Request、主分支 push 和手动触发时运行；主分支 Windows 打包与 React 前端门禁由独立的 Build Windows EXE 工作流负责。
+- Pull Request 的 Windows 安装包验收使用 windows-latest，与主分支发布门禁对齐；安装、升级、正常退出、卸载以及原始数据保留均需通过。
+- 只有工作流实际成功且上传 artifact 后，才能称为“Windows EXE 构建成功”；只有对应 GitHub Release 存在且含可安装的 NSIS 产物，才能称为“已发布”。
 
 ## 真实验收清单
 1. 在**仅安装学序**的全新 Windows 用户环境中完成知到扫码登录；检测连接必须基于真实 `doctor-server` 服务器结果，不以 Cookie 文件存在当作登录成功。

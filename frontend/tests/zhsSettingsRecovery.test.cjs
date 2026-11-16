@@ -37,7 +37,7 @@ test('failed ZHS settings read is visible and can be explicitly repaired without
       validateZhsStoredOptions:obj=>obj?.speed>=1&&obj?.speed<=2,
       validateZhsOptions:obj=>obj?.scope_mode==='all'
     },
-    'ui/SettingsDialog.tsx':{SettingsDialog:({children})=>React.createElement('section',null,children)}
+    'ui/SettingsDialog.tsx':{SettingsDialog:({children,footer})=>React.createElement('section',null,children,footer)}
   }).ZhsTaskSettingsPanel;
   let view;
   try{

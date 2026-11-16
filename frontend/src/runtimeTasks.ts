@@ -10,8 +10,12 @@ export function useRuntimeTasks(desktop:boolean){
  const [tasks,setTasks]=useState<RuntimeTask[]>([]);
  const [loading,setLoading]=useState(desktop);
  const revision=useRef(0);
+ const inFlight=useRef<number|null>(null);
  const refresh=useCallback(async()=>{
-  if(!desktop)return;const request=++revision.current;
+  if(!desktop||inFlight.current!==null)return;
+  const request=++revision.current;
+  inFlight.current=request;
+  try {
   const results=await Promise.allSettled([
    invoke<{state:LegacyTaskState;courseKey:string|null;runId:string|null;exitCode:number|null}>('zhidao_player_status'),
    getLegacyStatus('zhidao'),getLegacyStatus('yuketang')
@@ -37,8 +41,11 @@ export function useRuntimeTasks(desktop:boolean){
    if('courseKey' in value)return {runner,platform,state:value.state,courseId:value.courseKey,runId:value.runId,exitCode:value.exitCode};
    return {runner,platform,state:value.state,courseId:value.course_id,runId:value.run_id??null,exitCode:value.exit_code};
   }));
+  } finally {
+   if(inFlight.current===request)inFlight.current=null;
+  }
  },[desktop]);
- useEffect(()=>{setLoading(desktop);void refresh();if(!desktop)return;const timer=window.setInterval(()=>void refresh(),2000);return ()=>{revision.current++;window.clearInterval(timer);};},[desktop,refresh]);
+ useEffect(()=>{setLoading(desktop);void refresh();if(!desktop)return;const timer=window.setInterval(()=>void refresh(),2000);return ()=>{revision.current++;inFlight.current=null;window.clearInterval(timer);};},[desktop,refresh]);
  return {tasks,refresh,loading};
 }
 export async function stopRuntime(task:RuntimeTask){

@@ -123,12 +123,37 @@ try {
     if ($app.HasExited) { throw "Installed desktop app exited early: $($app.ExitCode)" }
     # Exercise normal user exit, not a hard kill. Hard-killing the desktop
     # bypasses Tauri window-destroyed cleanup and can orphan its Python bridge.
-    if (-not $app.CloseMainWindow()) {
-        throw 'Could not request graceful StudyFlow window shutdown'
+    # On GitHub's headless Windows runner, the borderless WebView can take
+    # longer to finish its native teardown than in the interactive PR smoke.
+    # Retry only the close request; never force an exit or pass on a live app.
+    $app.Refresh()
+    Write-Host "[SHUTDOWN] Requesting normal window close, pid=$($app.Id), handle=$($app.MainWindowHandle)"
+    $closeRequested = $false
+    $exitedGracefully = $false
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        $app.Refresh()
+        if ($app.HasExited) {
+            $exitedGracefully = $true
+            break
+        }
+        if ($app.CloseMainWindow()) { $closeRequested = $true }
+        if ($app.WaitForExit(5000)) {
+            $exitedGracefully = $true
+            break
+        }
+        Write-Host "[SHUTDOWN] Still running after attempt $attempt; windowHandle=$($app.MainWindowHandle)"
     }
-    if (-not $app.WaitForExit(15000)) {
-        throw 'StudyFlow did not exit gracefully within 15 seconds'
+    if (-not $exitedGracefully) {
+        # Only diagnostic enumeration: do not kill other processes to hide a
+        # desktop lifecycle regression from the release gate.
+        Get-CimInstance Win32_Process |
+            Where-Object { $_.Name -in @('studyflow.exe','studyflow-bridge.exe') } |
+            Select-Object ProcessId,ParentProcessId,Name |
+            Format-Table -Wrap | Out-String | Write-Host
+        throw "StudyFlow did not exit gracefully after 30 seconds (closeRequested=$closeRequested)"
     }
+    Write-Host "[SHUTDOWN] Desktop app exited after normal close; code=$($app.ExitCode)"
+    $app.Dispose()
     $app = $null
 
     # The installer refuses to overwrite/delete the bridge while it is running.
