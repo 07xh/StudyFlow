@@ -278,8 +278,10 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "xuexitong.heartbeat.logs" if request.get("limit").map_or(true, |v| v.as_u64()
             .is_some_and(|n| n <= 500)) => Ok(()),
         "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume" | "xuexitong.heartbeat.stop"
-            if request.get("run_id").map_or(true, |v| v.as_str().is_some_and(|id|
-                !id.is_empty() && id.len() <= 64 && id.bytes().all(|c| c.is_ascii_hexdigit()))) => Ok(()),
+            if request.get("graceful").is_none()
+                && request.get("run_id").and_then(|v| v.as_str()).is_some_and(|id|
+                    !id.is_empty() && id.len() <= 64
+                    && id.bytes().all(|c| c.is_ascii_hexdigit())) => Ok(()),
         "xuexitong.settings.save" if request.get("settings").and_then(|v| v.as_object())
             .is_some_and(|value| value.len() == 4
                 && value.get("playback_speed").and_then(|v| v.as_f64()).is_some_and(|n| (0.25..=2.0).contains(&n))
