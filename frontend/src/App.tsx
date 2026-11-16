@@ -513,7 +513,7 @@ export default function App(){
     const active=course&&runtime.tasks.some(task=>task.courseId===course.course_id&&task.platform==="zhidao"&&task.state==="running");
     const choose=(next:"official"|"zhs-original")=>course?setCourseModes(previous=>({...previous,[course.course_id]:next})):void changeZhidaoPlaybackMode(next);
     return <section className="sf-course-mode-bar" aria-label="知到运行方式">
-      <strong>{course?(active?"本次运行方式":"本次启动方式"):"平台默认运行方式"}</strong>
+      <strong>{course?"运行方式":"默认方式"}</strong>
       <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
     </section>;
   };
@@ -524,9 +524,6 @@ export default function App(){
           onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
     </nav>;
   const renderPlatformSettings=(platform:Platform)=> <section className="sf-platform-settings-view" aria-label={platformNames[platform]+"参数设置"}>
-    <div className="sf-platform-settings-heading">
-      <p>{platformSettingsSection==="account"?"管理当前平台的登录与连接。":platformSettingsSection==="parameters"?(platform==="xuexitong"?"保存本机运行参数预设。":"设置后续播放使用的默认参数。"):"核验平台进度，或维护本机数据。"}</p>
-    </div>
     {platformSettingsSection==="account"&&<PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
       desktop={desktop} busy={Boolean(busy)||syncFeedback[platform].phase==="syncing"} variant="account"
       expanded={platformLoginExpanded[platform]} onSync={()=>void sync(platform,true)}
@@ -740,14 +737,13 @@ export default function App(){
         </div>
       </div>
       <div className="sf-course-playback-heading">
-        <span className="eyebrow">{platformNames[course.platform]} / {catalogOnly?"课程与任务":"播放工作台"}</span>
+        <span className="eyebrow">{platformNames[course.platform]}</span>
         <h2>{course.title}</h2>
-        <p>{catalogOnly?"查看章节任务、本机运行状态与平台核验结果。":"在这里管理播放与查看真实章节；平台账号、默认参数和历史记录不再占用首屏。"}</p>
       </div>
       <section className="sf-course-playback-stage" aria-label={catalogOnly?"任务模块状态":"播放控制"}>
         <div className="sf-course-player-heading">
           <h3>{catalogOnly?"任务模块状态":"播放控制"}</h3>
-          <span>{catalogOnly?"本机执行记录与服务端核验分开展示":"运行状态与课程进度分别显示，互不替代"}</span>
+          <span className="sf-visually-hidden">{catalogOnly?"本机执行记录与服务端核验分开展示":"运行状态与课程进度分别显示，互不替代"}</span>
         </div>
         {course.platform==="zhidao"?<>
           {renderZhidaoModeSwitch(course)}
@@ -762,10 +758,13 @@ export default function App(){
         </>:course.platform==="xuexitong"?<>
           <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
-          <p className="sf-course-scope-note">
-            雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
-            需要切换课堂范围或默认播放参数时，请使用右上方「平台设置」。
-          </p>
+          <div className="sf-course-scope-note" role="note">
+            <span>按已保存的课堂范围执行，可能包含其他课程。</span>
+            <details>
+              <summary>范围说明</summary>
+              <p>雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。需要切换课堂范围或默认参数时，请使用「平台设置」。</p>
+            </details>
+          </div>
           <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
             desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
             events={activity}

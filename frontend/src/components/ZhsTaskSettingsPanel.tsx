@@ -188,6 +188,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         <span className="legacy-run-state">{loadState==="ready"?"本机参数已加载":
           loadState==="loading"?"读取中":"读取失败"}</span></div>
       <div className="legacy-options">
+        <h4 className="sf-settings-section-title">执行参数</h4>
         <div className="legacy-option-grid">
           <label><span>同课程章节并行数</span>
             <select value={options.concurrency??1} disabled={!desktop||busy}
@@ -220,7 +221,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               disabled={!desktop||busy}
               onChange={e=>update("completion_threshold",Number(e.target.value))}/></label>}
         </div>
-        <p className="sf-ykt-advanced-note">不同章节最多同时运行 1–3 路，每个章节内部严格按原版视频、文章和 PPT 顺序执行。若本次只有一个可执行章节，则实际只运行一项；逐资源可独立停止，课程完成情况仍以服务器核验为准。</p>
+        <details className="sf-ykt-advanced-options"><summary>并发运行说明</summary><p className="sf-ykt-advanced-note">不同章节最多同时运行 1–3 路，每个章节内部严格按原版视频、文章和 PPT 顺序执行。若本次只有一个可执行章节，则实际只运行一项；逐资源可独立停止，课程完成情况仍以服务器核验为准。</p></details>
         <div className="legacy-flags">
           <label title="ZHS 0.1.5 原版自动跳过已完成内容，暂不支持在学序中关闭此行为。">
             <input type="checkbox" checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/>
@@ -231,7 +232,8 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
           <label><input type="checkbox" checked={options.stop_on_error} disabled={!desktop||busy}
             onChange={e=>update("stop_on_error",e.currentTarget.checked)}/>视频处理异常时停止任务</label>
         </div>
-        <p className="sf-ykt-advanced-note">本课程默认继承 ZHS 原版对不同课程类型的执行阈值。自定义百分比只控制本地执行目标，不代表平台已经确认完成；平台仍返回未完成时，界面不会标为完成。阈值随课程独立保存。“跳过已完成”由 ZHS 0.1.5 原版自动执行；共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p>
+        <details className="sf-ykt-advanced-options"><summary>阈值与倍速说明</summary><p className="sf-ykt-advanced-note">本课程默认继承 ZHS 原版对不同课程类型的执行阈值。自定义百分比只控制本地执行目标，不代表平台已经确认完成；平台仍返回未完成时，界面不会标为完成。阈值随课程独立保存。“跳过已完成”由 ZHS 0.1.5 原版自动执行；共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p></details>
+        <h4 className="sf-settings-section-title">执行范围</h4>
         <div className="legacy-option-grid">
           <label><span>本次选择的资源类型</span>
             <select value={resourceMode} disabled={!desktop||!courseId||busy}
@@ -249,7 +251,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
             </select>
           </label>
         </div>
-        <p className="sf-ykt-advanced-note">仅针对当前课程的真实资源选择类型，不更改 ZHS 原版的发送节奏。视频比例是单个片段位置，切换视频或知识点时可从 0 开始；课程总体进度以服务器核验为准。停止后再次启动会创建新的原版进程，不会续用已停止的进程。</p>
+        <details className="sf-ykt-advanced-options"><summary>范围与续播说明</summary><p className="sf-ykt-advanced-note">仅针对当前课程的真实资源选择类型，不更改 ZHS 原版的发送节奏。视频比例是单个片段位置，切换视频或知识点时可从 0 开始；课程总体进度以服务器核验为准。停止后再次启动会创建新的原版进程，不会续用已停止的进程。</p></details>
         {scopeMode==="selected"&&<div className="sf-ykt-advanced-options">
           <div className="actions"><button className="secondary" type="button" disabled={!desktop}
             onClick={()=>void fetchDetail()}><RefreshCw size={14}/>刷新已核验目录</button>

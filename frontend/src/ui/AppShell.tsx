@@ -157,8 +157,7 @@ export function AppShell({
             </select>
           </label>
         </div>:<div className="sf-workspace-empty-progress">
-          <div><small>课程进度</small><strong>—</strong></div>
-          <span className="sf-header-no-course">在学习平台中选择课程查看详情</span>
+          <div><small>当前页面</small><strong>{titles[page]}</strong></div>
         </div>}
       </div>
       <div className="sf-header-actions">

@@ -1809,14 +1809,11 @@
 .sf-shell .sf-workspace-empty-progress>div{
   display:flex;flex-direction:column;gap:4px;min-width:0;
 }
-.sf-shell .sf-workspace-empty-progress small,.sf-shell .sf-header-no-course{
+.sf-shell .sf-workspace-empty-progress small{
   color:var(--muted);font-size:10px;
 }
 .sf-shell .sf-workspace-empty-progress strong{
-  font-size:18px;font-weight:740;color:var(--muted);
-}
-.sf-shell .sf-workspace-empty-progress .sf-header-course-picker{
-  flex:1;min-width:0;max-width:320px;
+  font-size:18px;font-weight:740;color:var(--text);
 }
 @media(max-width:720px){
   .app.sf-shell{grid-template-rows:32px auto minmax(0,1fr)}
@@ -1827,7 +1824,6 @@
 }
 @media(max-width:600px){
   .sf-shell .sf-workspace-empty-progress{flex-wrap:wrap;gap:4px}
-  .sf-shell .sf-workspace-empty-progress .sf-header-course-picker{max-width:none}
 }
 
 /* A blocked launch must never retain the green "ready" treatment. */
@@ -1849,7 +1845,6 @@
 /* Course workspace: controls first; maintenance lives in platform settings. */
 .sf-shell .sf-course-playback-heading{display:grid;gap:5px;min-width:0;padding:2px 2px 3px}
 .sf-shell .sf-course-playback-heading h2{margin:0;font-size:clamp(17px,2vw,21px);line-height:1.4;color:var(--text);overflow-wrap:anywhere}
-.sf-shell .sf-course-playback-heading p{margin:0;font-size:11px;line-height:1.6;color:var(--muted)}
 .sf-shell .sf-course-top-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;min-width:0}
 .sf-shell .sf-course-top-actions .secondary{min-height:32px;padding:6px 10px}
 .sf-shell .sf-course-playback-stage{
@@ -1859,7 +1854,6 @@
 .sf-shell:not(.dark) .sf-course-playback-stage{background:#f9fcfa}
 .sf-shell .sf-course-player-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
 .sf-shell .sf-course-player-heading h3{margin:0;font-size:15px;font-weight:720}
-.sf-shell .sf-course-player-heading span{font-size:11px;line-height:1.5;color:var(--muted)}
 .sf-shell .sf-course-scope-note{margin:0;padding:10px 12px;border-radius:10px;background:var(--soft-accent);font-size:11px;line-height:1.65;color:var(--text)}
 .sf-shell .sf-course-scope-note strong{font-weight:700}
 .sf-shell .sf-course-playback-stage>.sf-runtime-mode{min-width:0}
@@ -2263,3 +2257,11 @@
 .sf-shell .sf-zhs-diagnostics summary{cursor:pointer;color:var(--muted);font-size:11px}
 .sf-shell .sf-zhs-diagnostics>div{display:flex;flex-direction:column;gap:6px;padding:9px 0 0}
 .sf-shell .sf-zhs-diagnostics small{font-size:11px;line-height:1.45;color:var(--muted)}
+
+/* Compact provider help and evidence timestamps: full diagnostics stay accessible on demand. */
+.sf-shell .sf-settings-section-title{margin:13px 0 6px;font-size:12px;font-weight:720;line-height:1.5;color:var(--text)}
+.sf-shell .sf-course-scope-note details{margin-top:4px;font-size:10px;color:var(--muted)}
+.sf-shell .sf-course-scope-note summary{width:max-content;cursor:pointer;color:var(--accent-text)}
+.sf-shell .sf-course-scope-note details p{margin:6px 0 0;line-height:1.6}
+.sf-shell .sf-record-verification-meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--muted);font-size:10px;line-height:1.5}
+.sf-shell .sf-record-pending{margin:0;color:var(--warning);font-size:11px}

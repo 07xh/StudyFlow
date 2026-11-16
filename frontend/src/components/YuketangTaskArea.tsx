@@ -103,6 +103,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
         <span className="legacy-run-state">{loaded?"已读取本机配置":"等待读取配置"}</span>
       </div>
       <div className="legacy-options">
+        <h4 className="sf-settings-section-title">播放参数</h4>
         <div className="legacy-option-grid">
           {([
             ["video_speed","视频倍速",0.1,4,0.1],
@@ -116,6 +117,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
               onChange={event=>update(id,Number(event.target.value))}/>
           </label>)}
         </div>
+        <h4 className="sf-settings-section-title">完成规则</h4>
         <div className="legacy-option-grid">
           <label><span>当前课堂执行阈值</span>
             <select value={thresholdOverride===null?"auto":"custom"} disabled={!desktop||busy!==null||!scope}
@@ -128,7 +130,10 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
               disabled={!desktop||busy!==null||!scope}
               onChange={e=>setThresholdOverride(Number(e.target.value))}/></label>}
         </div>
-        <p className="sf-ykt-advanced-note">{scope?"当前课堂："+scope.classroom_id+"。":""}不同课堂可能要求不同进度。自动模式采用保守的 100% 本地执行目标；知道本课堂规则时可自定义。该数值只控制本地执行与跳过，不能替代平台实际完成状态；最终以服务器只读核验标志为准。{!scope?"请先连接课堂。":""}</p>
+        {!scope&&<p className="sf-validation-error">请先连接课堂。</p>}
+        <details className="sf-ykt-advanced-options"><summary>阈值说明{scope?" · 当前课堂 "+scope.classroom_id:""}</summary>
+          <p className="sf-ykt-advanced-note">不同课堂可能要求不同进度。自动模式采用保守的 100% 本地执行目标；知道本课堂规则时可自定义。该数值只控制本地执行与跳过，不能替代平台实际完成状态；最终以服务器只读核验标志为准。</p>
+        </details>
         <div className="legacy-flags">
           {([
             ["skip_completed","跳过已完成"],
@@ -177,6 +182,6 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
         </div>
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
-      <p className="legacy-disclaimer">设置单独保存在雨课堂平台配置中；启动任务时由学序透传给原版执行器，不修改原版心跳逻辑。</p>
+      <details className="sf-technical-note"><summary>参数作用范围</summary><p className="legacy-disclaimer">设置单独保存在雨课堂平台配置中；启动任务时由学序透传给原版执行器，不修改原版心跳逻辑。</p></details>
       </section>;
 }
