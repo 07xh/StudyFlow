@@ -482,3 +482,17 @@ def test_local_history_whitelists_values_and_never_restarts_worker():
         assert "PRIVATE_COOKIE" not in repr(history)
         assert "PRIVATE_TOKEN" not in repr(history)
         assert store.load("run001")["phase"]=="running"
+
+
+def test_shutdown_before_first_run_never_writes_invalid_snapshot():
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as temp:
+        file=Path(temp)/"history.json"
+        runner=FabricatedRunner(state_store=fh.FabricatedStateStore(file))
+        runner.shutdown()
+        assert not file.exists()
+        state=runner.status("course-v2:100")
+        assert state["phase"]=="idle"
+        assert state["snapshot_store_configured"] is True
+        assert state["restart_resume_supported"] is False
