@@ -100,7 +100,8 @@ test('manual chapter refresh verifies current server state instead of reading ca
  try{
   await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
   const button=view.root.findAllByType('button').find(x=>
-   JSON.stringify(x.props.children).includes('刷新章节'));
+   Array.isArray(x.props.children)&&
+   x.props.children.some(child=>typeof child==='string'&&child.includes('刷新章节')));
   assert.ok(button);
   await act(async()=>{button.props.onClick();});
   assert.deepEqual(calls,['zhidao.course.detail','zhidao.course.detail',
