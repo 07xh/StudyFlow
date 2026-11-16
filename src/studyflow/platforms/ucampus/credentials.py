@@ -13,6 +13,9 @@ ALLOWED_HOSTS = {
     "ai": frozenset(("uai.unipus.cn", "ucloud.unipus.cn", "ucontent.unipus.cn")),
     "classic": frozenset(("u.unipus.cn", "ucontent.unipus.cn")),
 }
+# Public AI course route documented in the GPL-3.0 UnipusAI project,
+# src/api/course.rs. It is not yet account-verified in StudyFlow.
+AI_HOME_COURSES_URL = "https://uai.unipus.cn/api/cmgt/course/getHomeCourseListByStudent"
 COOKIE_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$")
 
 
@@ -28,6 +31,8 @@ class UCampusConfig:
         if not isinstance(data, dict) or set(data) - {"variant", "catalog_url", "cookie", "authorization"}:
             raise ValueError("INVALID_UCAMPUS_CONFIG")
         variant, url, cookie = data.get("variant"), data.get("catalog_url"), data.get("cookie")
+        if variant == "ai" and (url is None or url == ""):
+            url = AI_HOME_COURSES_URL
         auth = data.get("authorization", "")
         if variant not in ALLOWED_HOSTS or not isinstance(url, str) or not 10 <= len(url) <= 2048:
             raise ValueError("INVALID_UCAMPUS_CONFIG")

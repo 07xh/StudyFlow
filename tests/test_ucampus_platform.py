@@ -59,3 +59,61 @@ def test_single_get_no_redirect(monkeypatch):
     assert UCampusAdapter().list_courses()[0].title == "English"
     assert captured[0][1]["allow_redirects"] is False
     assert len(captured) == 1
+
+
+
+def test_ai_home_course_envelope_and_duplicate_resources():
+    payload = {"code": 1, "value": {"courseList": [
+        {"classId": "100", "id": "200", "name": "大学英语", "courseResourceList": [
+            {"instanceId": "301", "name": "英语听说"},
+            {"instanceId": "301", "name": "重复"},
+            {"instanceId": "302", "name": "英语读写"}]}]}}
+    courses = parse_catalog(payload)
+    assert [(course.course_id, course.title) for course in courses] == [
+        ("301", "英语听说"), ("302", "英语读写")]
+    assert all(course.progress_percent is None for course in courses)
+    with pytest.raises(UCampusCatalogError):
+        parse_catalog({**payload, "code": -1})
+
+
+def test_bookshelf_parse_skips_expired_and_deduplicates():
+    payload = {"success": True, "value": {"groups": {
+        "CLASS_COURSE": [{"instanceId": "1", "name": "班级课程"}],
+        "PERSONAL": [{"instanceId": "1", "name": "重复"}, {"instanceId": "2", "name": "个人课程"}],
+        "EXPIRED": [{"instanceId": "3", "name": "过期"}]
+    }}}
+    assert [(c.course_id, c.title) for c in parse_catalog(payload)] == [
+        ("1", "班级课程"), ("2", "个人课程")]
+
+
+def test_ai_home_empty_falls_back_to_upstream_bookshelf(monkeypatch):
+    cfg = UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=secret"})
+    assert cfg.catalog_url.endswith("/getHomeCourseListByStudent")
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.credentials.load", lambda: cfg)
+    calls = []
+    class Response:
+        status_code = 200
+        is_redirect = False
+        headers = {"content-type": "application/json"}
+        content = b"{}"
+        def __init__(self, payload):
+            self.payload = payload
+        def json(self):
+            return self.payload
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        if len(calls) == 1:
+            return Response({"code": 1, "value": {"courseList": []}})
+        return Response({"code": 1, "value": {"groups": {
+            "CLASS_COURSE": [{"instanceId": "123", "name": "大学英语"}]}}})
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.requests.get", get)
+    courses = UCampusAdapter().list_courses()
+    assert [c.title for c in courses] == ["大学英语"]
+    assert len(calls) == 2
+    assert all(call[1]["allow_redirects"] is False for call in calls)
+    assert all(call[1]["headers"]["Cookie"] == "sid=secret" for call in calls)
+
+
+def test_classic_requires_explicit_endpoint():
+    with pytest.raises(ValueError):
+        UCampusConfig.from_dict({"variant": "classic", "cookie": "sid=secret"})

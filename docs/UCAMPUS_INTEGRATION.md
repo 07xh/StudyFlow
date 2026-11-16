@@ -15,3 +15,17 @@
 2. 验证实际请求方法（GET/POST）、域名、参数、返回结构、分页/课程分类与会话过期特征。当前试验适配器**仅支持 GET JSON**，若真实接口不是该形式必须修改适配器，不能套用假接口。
 3. 增加经过脱敏的 fixture 和契约测试，再接入真实会话并读取课程、单元/章节、作业与服务器进度；不使用伪造完成率。
 4. 通过 Python、前端、CI、Windows 打包门禁后再发布安装包。
+
+## 成熟源码优先复用（2026-11-16）
+
+学序仓库为 GPL-3.0。U校园AI版首页课程列表、我的教材两级目录解析
+参考了 GPL-3.0 [Zzj-klwgxdz/UnipusAI](https://github.com/Zzj-klwgxdz/UnipusAI)
+的 `src/api/course.rs`。本仓库的 Python 实现只提取可靠的只读字段
+`value.courseList[].courseResourceList[].instanceId/name` 以及书架 `value.groups`。
+首页读到空列表才走已知书架接口；不复用自动答题、提交或虚报进度代码。
+
+- AI版默认首页课程 API 已有可审核的开源来源，无须猜测或手动粘贴 URL。
+- 使用者仍须在本机提供有效且由本人持有的会话。是否适用于该账号必须经 Windows 真机验证。
+- 章节、资源、学习活动、发送协议及服务端进度尚未接入，**不得视为已交付心跳能力**。
+- 章节任务状态研究优先参考 `YSJohnson/UnipusAI-Helper`；通用 UI 与任务调度优先复用学序内部实现。
+- 账号、会话、接口错误不上传日志或仓库；无需在聊天里共享 Cookie。

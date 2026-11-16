@@ -210,7 +210,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
-        | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get" => Ok(()),
+        | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
+        | "ucampus.session.info" | "ucampus.session.clear" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -242,7 +243,16 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
-        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong")) => Ok(()),
+        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong" | "ucampus")) => Ok(()),
+        "ucampus.session.configure" if request.get("configuration").and_then(|v| v.as_object())
+            .is_some_and(|data| data.len() >= 2 && data.len() <= 4
+                && matches!(data.get("variant").and_then(|v| v.as_str()), Some("ai" | "classic"))
+                && data.get("cookie").and_then(|v| v.as_str()).is_some_and(|s|
+                    !s.is_empty() && s.len() <= 8192 && !s.contains('\r') && !s.contains('\n'))
+                && data.get("catalog_url").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 2048 && !s.contains('\r') && !s.contains('\n')))
+                && data.get("authorization").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 8192 && !s.contains('\r') && !s.contains('\n')))) => Ok(()),
         "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
             .is_some_and(|value| !value.is_empty() && value.len() <= 8192
                 && !value.contains('\r') && !value.contains('\n')) => Ok(()),
@@ -605,6 +615,26 @@ mod ipc_validation_tests {
             let request = json!({"id":"qr-test","version":1,"operation":operation});
             assert!(validate(&request).is_ok(), "QR operation was rejected: {operation}");
         }
+    }
+
+    #[test]
+    fn ucampus_ipc_accepts_only_scoped_read_and_credential_operations() {
+        for operation in ["ucampus.session.info", "ucampus.session.clear"] {
+            assert!(validate(&json!({"id":"u","version":1,"operation":operation})).is_ok());
+        }
+        assert!(validate(&json!({"id":"u","version":1,"operation":"courses.list",
+            "platform":"ucampus"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.session.configure","configuration":{
+            "variant":"ai","catalog_url":"","cookie":"sid=test","authorization":""}})).is_ok());
+        for config in [json!({}), json!({"variant":"ai","cookie":""}),
+            json!({"variant":"unknown","cookie":"sid=test"}),
+            json!({"variant":"ai","cookie":"bad\\nheader"})] {
+            assert!(validate(&json!({"id":"u","version":1,
+                "operation":"ucampus.session.configure","configuration":config})).is_err());
+        }
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.heartbeat.start",
+            "course_id":"123"})).is_err());
     }
 
     #[test]
