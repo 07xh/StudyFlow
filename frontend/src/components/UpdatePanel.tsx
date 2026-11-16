@@ -98,7 +98,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog}:{
         <FolderOpen size={15}/>打开更新目录</button>}
     </div>
     {message&&<p role="status">{message}</p>}
-    <p className="muted">当前运行版本：{current||"读取中"}。自动更新只负责下载与 SHA-256 校验，不会自动安装。安装完成并重新启动后，版本号才会变化。</p>
+    <p className="muted">当前版本 {current||"读取中"} · 下载后需手动安装，重启后生效。</p>
     <div className="actions">
       <button className="secondary" type="button" disabled={!desktop||!current} onClick={onOpenChangelog}>
         <History size={15}/>历史更新日志
