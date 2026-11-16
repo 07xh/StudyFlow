@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useState} from "react";
 import type {Course} from "../types";
-import {request,friendlyBridgeError,type UCampusLocalStatus,type UCampusUnit,type UCampusSocketDiagnostic} from "../bridge";
+import {request,friendlyBridgeError,type UCampusLocalStatus,type UCampusUnit,type UCampusSocketDiagnostic,type UCampusVerifiedProgress} from "../bridge";
 import "./XuexitongHeartbeatPanel.css";
 
 export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:boolean}){
@@ -13,6 +13,9 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   const [socketBusy,setSocketBusy]=useState(false);
   const [socketDiagnostic,setSocketDiagnostic]=useState<UCampusSocketDiagnostic|null>(null);
   const [socketError,setSocketError]=useState("");
+  const [serverBusy,setServerBusy]=useState(false);
+  const [serverProgress,setServerProgress]=useState<UCampusVerifiedProgress|null>(null);
+  const [serverError,setServerError]=useState("");
   const courseId=course.course_id;
   const refresh=useCallback(async()=>{
     const state=await request<UCampusLocalStatus>({
@@ -23,7 +26,7 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   },[courseId]);
   useEffect(()=>{
     let live=true;
-    setUnits([]);setUnitId("");setStatus(null);setMessage("");
+    setUnits([]);setUnitId("");setStatus(null);setMessage("");setServerProgress(null);setServerError("");
     if(!desktop)return()=>{live=false;};
     void request<UCampusUnit[]>({operation:"ucampus.units.list",course_id:courseId})
       .then(value=>{
@@ -38,6 +41,19 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   },[desktop,courseId,refresh]);
 
   const active=Boolean(status?.active);
+  async function verifyServer(){
+    if(!desktop||serverBusy||!unitId)return;
+    setServerBusy(true);setServerProgress(null);setServerError("");
+    try{
+      const result=await request<UCampusVerifiedProgress>({
+        operation:"ucampus.progress.verify",course_id:courseId,unit_id:unitId
+      });
+      if(result.course_id!==courseId||result.unit_id!==unitId||!Array.isArray(result.tasks))
+        throw Error("INVALID_IPC_RESPONSE");
+      setServerProgress(result);
+    }catch(error){setServerError(friendlyBridgeError(error));}
+    finally{setServerBusy(false);}
+  }
   async function diagnoseSocket(){
     if(!desktop||socketBusy)return;
     setSocketBusy(true);setSocketDiagnostic(null);setSocketError("");
@@ -88,7 +104,7 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
     </div>
     <div className="sf-settings-row">
       <label>真实课程单元
-        <select value={unitId} onChange={e=>setUnitId(e.target.value)}
+        <select value={unitId} onChange={e=>{setUnitId(e.target.value);setServerProgress(null);setServerError("");}}
           disabled={!desktop||active||busy}>
           <option value="">请选择</option>
           {units.map(unit=><option key={unit.id} value={unit.id}>{unit.title||unit.id}</option>)}
@@ -101,6 +117,10 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
       </label>
     </div>
     <div className="sf-actions actions">
+      <button type="button" className="secondary"
+        disabled={!desktop||serverBusy||!unitId} onClick={()=>void verifyServer()}>
+        {serverBusy?"正在核验平台进度…":"核验 U校园服务器进度"}
+      </button>
       <button type="button" className="primary" disabled={!desktop||busy||active||!unitId}
         onClick={()=>void control("start")}>开始本地心跳</button>
       <button type="button" className="secondary" disabled={!active||status?.paused||busy}
@@ -113,6 +133,16 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
         onClick={()=>void refresh().catch(error=>setMessage(friendlyBridgeError(error)))}>刷新</button>
     </div>
     {message&&<p role="alert">{message}</p>}
+    {serverError&&<p role="alert">{serverError}</p>}
+    {serverProgress&&<div role="status" className="sf-xxt-evidence-note">
+      <strong>服务器实际记录</strong>：
+      已通过 {serverProgress.passed}/{serverProgress.total} 项，
+      必修通过 {serverProgress.required_passed}/{serverProgress.required_total} 项；
+      {serverProgress.unknown} 项状态未知。
+      <p className="sf-muted">
+        {serverProgress.verified_at} 核验 · 与本地心跳计数无关
+      </p>
+    </div>}
     <dl className="sf-stat-grid">
       <div><dt>本地运行状态</dt><dd>{status?.phase||"尚未读取"}</dd></div>
       <div><dt>本地已生成</dt><dd>{status?.generated??0}</dd></div>
