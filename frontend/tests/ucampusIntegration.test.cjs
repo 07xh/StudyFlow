@@ -85,3 +85,11 @@ test("U校园 synthetic module reports no restart recovery and no causal proof",
   assert.match(bridge,/restart_resume_supported:boolean/);
   assert.match(panel,/归因未知/);
 });
+
+test("U校园 saved local history is inspectable but does not auto-replay",()=>{
+  const panel=read("components/UCampusFabricatedPanel.tsx");
+  const bridge=read("bridge.ts");
+  assert.match(panel,/ucampus\.fabricated\.history/);
+  assert.match(panel,/不会自动续发或补交模拟事件/);
+  assert.match(bridge,/UCampusFabricatedHistory/);
+});
