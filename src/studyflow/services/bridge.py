@@ -38,7 +38,7 @@ from studyflow.services import ucampus_fabricated_bridge
 from studyflow.services.ucampus_fabricated_bridge import dispatch as ucampus_fabricated_dispatch
 from studyflow.services import xuexitong_heartbeat_bridge
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
-from studyflow.platforms.ucampus.adapter import UCampusAdapter
+from studyflow.platforms.ucampus.adapter import UCampusAdapter, UCampusCatalogError
 from studyflow.platforms.ucampus.course_progress import UCampusProgressReader, UCampusProgressError
 from studyflow.platforms.ucampus import credentials as ucampus_credentials
 from studyflow.platforms.yuketang import credentials
@@ -152,6 +152,12 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "UNKNOWN_PLATFORM"}
         try:
             courses = ADAPTERS[platform].list_courses()
+        except UCampusCatalogError as exc:
+            # Keep only stable diagnostics; never return arbitrary exception text.
+            allowed = {"UCAMPUS_SESSION_MISSING", "UCAMPUS_SESSION_EXPIRED",
+                       "UCAMPUS_CATALOG_UNAVAILABLE", "UCAMPUS_CATALOG_FORMAT_UNVERIFIED"}
+            code = str(exc) if platform == "ucampus" and str(exc) in allowed else "PLATFORM_NOT_READY"
+            return {"id": request_id, "ok": False, "error": code}
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
