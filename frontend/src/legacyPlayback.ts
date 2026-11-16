@@ -280,7 +280,7 @@ export function legacyExitMessage(status: LegacyTaskStatus): string {
     case 5: return "未找到可用的 ZHS 0.1.5 运行时，请重新安装完整学序安装包。";
     case 6: return "所选课程不属于当前登录会话、已失效，或缺少有效课程路由，请重新同步课程。";
     case 9: return "原版 ZHS 要求交互输入，当前无终端模式无法继续；需在应用内处理该交互。";
-    case 10: return "已有同平台的原版进程运行，已拒绝重复启动。";
+    case 10: return "检测到另一个知到原版进程仍占用运行锁（可能是上轮残留进程），已拒绝重复启动。请先确认旧任务确实结束；不要通过清除 Cookie 解决进程冲突。";
     case 11: return "无法获取进程互斥锁，已拒绝启动以避免任务重复。";
     case 12: return "已达到设置的视频数量或任务时长上限；不代表服务器确认课程完成。";
     case 13: return "视频处理遇到错误，已按本次停止策略结束任务；请检查诊断信息。";
