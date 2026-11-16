@@ -35,8 +35,16 @@ def get_runner() -> FabricatedRunner:
     global _RUNNER
     with _LOCK:
         if _RUNNER is None:
-            # Save local-only snapshots, but never auto-replay on restart.
-            _RUNNER = FabricatedRunner(state_store=fh.FabricatedStateStore())
+            # Scrub any legacy disk archive before exposing history. Neither
+            # migration nor worker construction replays network requests.
+            store = fh.FabricatedStateStore()
+            try:
+                store.sanitize_existing()
+            except (OSError, ValueError):
+                # A permissions/corruption problem must not expose raw file
+                # content through the IPC error path or crash normal startup.
+                pass
+            _RUNNER = FabricatedRunner(state_store=store)
         return _RUNNER
 
 
