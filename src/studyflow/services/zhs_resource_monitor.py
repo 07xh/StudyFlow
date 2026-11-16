@@ -9,8 +9,18 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
+
+# ZHS 0.1.5 formats differ: AI prints "playing [bar] 12.3%", while
+# shared courses print "playing VIDEO_ID [bar] 12.3%". The immutable vendor
+# observer recognizes the former; this adapter observes only the latter.
+_SHARED_VIDEO_PROGRESS = re.compile(
+    r"^playing\s+([1-9][0-9]{0,19})\s+\[[^\r\n]{0,512}\]\s*"
+    r"(\d{1,3}(?:\.\d)?)%", re.IGNORECASE,
+)
+_ANSI_SGR = re.compile(r"\x1b\[[0-9;]*m")
 
 ALLOWED_KINDS = frozenset(("video", "ppt", "article", "other"))
 PRIVATE_MARKERS = ("http:", "https:", "cookie", "token", "authorization", "password", "secret", "apikey", "api_key")
@@ -38,6 +48,21 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
             super().__init__(token, directory=directory)
             self.resource_kind: str | None = None
             self.resource_name: str | None = None
+
+        def receive(self, chunk: str) -> None:
+            # Preserve the upstream AI percentage and resource count parser.
+            super().receive(chunk)
+            # Read-only compatibility for the official ZHS shared-course display.
+            # Restrict parsing to the latest terminal frame, never CLI diagnostics,
+            # URLs, unrelated percentages or previous progress-bar rows.
+            latest = re.split(r"[\r\n]", _ANSI_SGR.sub("", chunk[-4096:]))[-1]
+            observed = _SHARED_VIDEO_PROGRESS.match(latest)
+            if observed is None:
+                return
+            value = float(observed.group(2))
+            if 0.0 <= value <= 100.0 and self.percent != value:
+                self.percent = value
+                self.publish()
 
         def mark_resource(self, kind: str, name: object) -> None:
             if kind not in ALLOWED_KINDS:

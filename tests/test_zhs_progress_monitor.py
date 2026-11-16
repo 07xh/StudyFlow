@@ -89,6 +89,61 @@ def test_original_cli_still_runs_unpatched_while_local_snapshot_is_collected(mon
     assert sys.stderr is original_stderr
 
 
+
+def test_parallel_ai_and_shared_progress_frames_use_separate_local_snapshots(tmp_path):
+    from studyflow.services.zhs_resource_monitor import create_resource_monitor
+
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    first = create_resource_monitor(vendor["NumericTelemetry"], "a" * 32, tmp_path)
+    second = create_resource_monitor(vendor["NumericTelemetry"], "b" * 32, tmp_path)
+    ai_stdout = io.StringIO()
+    shared_stdout = io.StringIO()
+    ai = vendor["StdoutObserver"](ai_stdout, legacy._RefreshingZhsSink(first))
+    shared = vendor["StdoutObserver"](shared_stdout, legacy._RefreshingZhsSink(second))
+
+    # ZHS v0.1.5 uses distinct console progress layouts for AI and shared courses.
+    ai.write("\rplaying [######----] 24.0%")
+    shared.write("\rplaying 712")
+    shared.write("345 [######----] 62.5%")
+    first_data = json.loads(first.path.read_text(encoding="utf-8"))
+    second_data = json.loads(second.path.read_text(encoding="utf-8"))
+    assert first_data["token"] == "a" * 32
+    assert second_data["token"] == "b" * 32
+    assert first_data["videoSegmentPercent"] == 24.0
+    assert second_data["videoSegmentPercent"] == 62.5
+    assert "24.0%" in ai_stdout.getvalue()
+    assert "62.5%" in shared_stdout.getvalue()
+
+    # Only real, valid console bar data may change each independently scoped file.
+    shared.write("\rplaying 712345 [######----] 120.0%")
+    shared.write("\rlogin diagnostic: 99.0%")
+    assert json.loads(second.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 62.5
+    ai.write("\rplaying [########--] 80.0%")
+    assert json.loads(first.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 80.0
+    assert json.loads(second.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 62.5
+
+
+def test_shared_output_preserves_resource_boundary_and_ignores_non_video_numbers(tmp_path):
+    from studyflow.services.zhs_resource_monitor import create_resource_monitor
+
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    monitor = create_resource_monitor(vendor["NumericTelemetry"], "c" * 32, tmp_path)
+    observer = vendor["StdoutObserver"](io.StringIO(), legacy._RefreshingZhsSink(monitor))
+    monitor.mark_resource("video", "章节视频")
+    observer.write("\rplaying 125 [########--] 81.0%")
+    assert json.loads(monitor.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 81.0
+    monitor.mark_resource("video", "下一段视频")
+    record = json.loads(monitor.path.read_text(encoding="utf-8"))
+    assert record["videoSegmentPercent"] is None
+    assert record["resourceName"] == "下一段视频"
+
+    observer.write("\ranswering [####] 90.0%")
+    observer.write("\rpause [####] 40.0%")
+    observer.write("\rplaying nope [####] 75.0%")
+    assert json.loads(monitor.path.read_text(encoding="utf-8"))["videoSegmentPercent"] is None
+    observer.write("\rplaying 126 [##] 13.0%")
+    assert json.loads(monitor.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 13.0
+
 def test_repeated_original_progress_output_refreshes_local_observation(monkeypatch, tmp_path):
     vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
     raw = vendor["NumericTelemetry"]("d" * 32, directory=tmp_path)
