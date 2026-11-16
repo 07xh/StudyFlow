@@ -18,6 +18,19 @@
 
 ## 成熟源码优先复用（2026-11-16）
 
+已核对的上游提交与复用边界：
+
+| 来源 | 上游 SHA（可复现） | 许可证 | 学序复用范围 |
+|---|---|---|---|
+| [Zzj-klwgxdz/UnipusAI](https://github.com/Zzj-klwgxdz/UnipusAI/tree/937725ede225f63e7746f11c0ff6ac297e524909) | `937725e` | GPL-3.0 | **已参考实现**首页/书架读取及只读目录解析 |
+| [YSJohnson/UnipusAI-Helper](https://github.com/YSJohnson/UnipusAI-Helper/tree/fffb882adf5d1d35c259bc5b653273f0eac094c9) | `fffb882` | AGPL-3.0 | **待适配**章节目录、必修/完成等状态模型 |
+| [ACaiCat/UnipusHelper.NET](https://github.com/ACaiCat/UnipusHelper.NET/tree/3e8492fab6aa0bbaa72aecf60fead39a7248ac21) | `3e8492f` | MIT | **架构参考** API 定义及数据模型 |
+
+本仓库自身为 GPL-3.0；复制文件、修改、分发前保留对应版权和许可证条款。
+不同运行时不能将类名相似视为协议兼容；正式运行时必须基于 U校园5.0
+实际网络数据核验接口及字段，尤其不能套用学习通或知到的心跳包格式。
+
+
 学序仓库为 GPL-3.0。U校园AI版首页课程列表、我的教材两级目录解析
 参考了 GPL-3.0 [Zzj-klwgxdz/UnipusAI](https://github.com/Zzj-klwgxdz/UnipusAI)
 的 `src/api/course.rs`。本仓库的 Python 实现只提取可靠的只读字段
