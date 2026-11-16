@@ -18,12 +18,12 @@ test('navigation preserves valid selection without leaking its heading to anothe
  const Null=()=>null;
  const presentation=evaluate(compile('presentation.ts'),require);
  const App=evaluate(compile('App.tsx'),name=>{
-  if(name==='./platforms')return {initialPlatforms:{zhidao:{platform:'zhidao',status:'connected',courses:[course]},yuketang:{platform:'yuketang',status:'connected',courses:[yuketangCourse]},xuexitong:{platform:'xuexitong',status:'not_connected',courses:[]}}};
+  if(name==='./platforms')return {initialPlatforms:{zhidao:{platform:'zhidao',status:'connected',courses:[course]},yuketang:{platform:'yuketang',status:'connected',courses:[yuketangCourse]},xuexitong:{platform:'xuexitong',status:'not_connected',courses:[]},ucampus:{platform:'ucampus',status:'not_connected',courses:[]}}};
   if(name==='./presentation')return presentation;
   if(name==='./activity')return require('./helpers/load.cjs')('activity.ts');
   if(name==='./runtimeTasks')return require('./helpers/load.cjs')('runtimeTasks.ts');
   if(name==='./bridge')return {isDesktop:()=>false,friendlyBridgeError:String,request:async()=>({})};
-  if(name==='./ui/registry')return {platformRegistry:[{id:'zhidao',name:'知到'},{id:'yuketang',name:'雨课堂'},{id:'xuexitong',name:'学习通'}],platformInfo:id=>({id,name:id==='zhidao'?'知到':id==='yuketang'?'雨课堂':'学习通'})};
+  if(name==='./ui/registry')return {platformRegistry:[{id:'zhidao',name:'知到'},{id:'yuketang',name:'雨课堂'},{id:'xuexitong',name:'学习通'},{id:'ucampus',name:'U校园'}],platformInfo:id=>({id,name:id==='zhidao'?'知到':id==='yuketang'?'雨课堂':'学习通'})};
   if(name==='./ui/useAppearance')return {useAppearance:()=>({dark:false,mode:'light',setMode:()=>{},toggleTheme:()=>{}})};
   if(name==='./useReleaseChangelog')return {useReleaseChangelog:()=>({dialog:null,close:()=>{},openHistory:()=>{}})};
   if(name==='./ui/AppShell')return {AppShell:props=>{shell=props;return props.children;}};
