@@ -22,7 +22,7 @@ def target(chapter: str, item: str) -> VideoTarget:
         course_key=COURSE, chapter_id=chapter, chapter="第" + chapter + "章",
         title="任务" + item, clazz_id="class", course_id="course", cpi="cpi",
         job_id="job" + item, object_id="object" + item, other_info="nodeId_1-rt_1",
-        duration=600, initial_seconds=0, dtoken="secret",
+        duration=600, initial_seconds=0, dtoken="secret", userid="test-user",
     )
 
 
