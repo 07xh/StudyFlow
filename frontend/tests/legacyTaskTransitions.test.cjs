@@ -165,3 +165,31 @@ test('transient status failure preserves owned run for safe stop but hides stale
   assert.match(words(view.root),/已终止/);
  }finally{if(view)act(()=>view.unmount());env.restore();}
 });
+
+
+test('stop then restart always uses a fresh run ID and never stops the previous run twice',async()=>{
+ const stopped={...running,state:'stopped',zhs_progress:null};
+ const restarted={...running,run_id:'run-B',zhs_progress:null};
+ let current=running;
+ const launches=[],stops=[],events=[];
+ const env=setup({
+  getLegacyStatus:async()=>current,
+  startLegacy:async(platform,courseId)=>{launches.push([platform,courseId]);current=restarted;return current;},
+  stopLegacy:async(platform,runId)=>{stops.push([platform,runId]);current={...current,state:'stopped',zhs_progress:null};return current;}
+ },{request:async()=>({courses:[]})});
+ let view;
+ const click=fragment=>view.root.findAllByType('button').find(n=>words(n).includes(fragment)).props.onClick();
+ try{
+  await act(async()=>{view=create(React.createElement(env.Panel,{...props,onEvent:(...args)=>events.push(args)}));});
+  await act(async()=>click('停止'));
+  assert.equal(stops.length,1);
+  assert.deepEqual(stops[0],['zhidao','run-A']);
+  assert.match(words(view.root),/已终止/);
+  await act(async()=>click('启动原版任务'));
+  assert.deepEqual(launches,[['zhidao','A']]);
+  assert.match(words(view.root),/原版进程运行中/);
+  await act(async()=>click('停止'));
+  assert.deepEqual(stops,[['zhidao','run-A'],['zhidao','run-B']]);
+  assert.equal(events.filter(entry=>entry[0]==='启动原版任务').length,1);
+ }finally{if(view)act(()=>view.unmount());env.restore();}
+});
