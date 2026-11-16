@@ -89,10 +89,16 @@ const server=http.createServer((req,res)=>{
    await page.getByRole('button',{name:'学习任务',exact:true}).click();
    assert.equal(await page.locator('.sf-task-shortcuts,.sf-runtime-task').count(),0);
    await page.getByRole('button',{name:'设置',exact:true}).click();
-   await page.getByRole('button',{name:'切换深色主题',exact:true}).click();
-   assert.equal(await page.locator('.sf-shell.dark').count(),1);
+   const global=page.getByRole('dialog',{name:'设置',exact:true});
+   assert.equal(await global.count(),1,'Global settings opens as a modal instead of changing main route');
+   await global.getByRole('group',{name:'主题模式'}).getByRole('button',{name:'深色',exact:true}).click();
+   assert.equal(await page.locator('.sf-global-settings-overlay.dark').count(),1,'Settings surface reflects the new dark theme');
+   assert.ok((await page.locator('.sf-shell.dark').count())>=2,'Workspace also adopts the dark theme');
    await page.mouse.move(0,0);
    await page.screenshot({animations:'disabled',path:path.join(output,'settings-dark-'+width+'.png'),fullPage:true});
+   await page.keyboard.press('Escape');
+   await global.waitFor({state:'detached'});
+   assert.equal(await page.locator('.sf-shell.dark').count(),1,'Workspace retains dark theme after closing settings');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
    await context.close();
   }
