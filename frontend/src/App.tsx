@@ -11,6 +11,7 @@ import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
 import {UCampusLoginPanel} from "./components/UCampusLoginPanel";
 import {UCampusCourseDetailPanel} from "./components/UCampusCourseDetailPanel";
 import {UCampusHeartbeatPanel} from "./components/UCampusHeartbeatPanel";
+import {UCampusFabricatedPanel} from "./components/UCampusFabricatedPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -771,6 +772,7 @@ export default function App(){
           </div>
         </>:course.platform==="ucampus"?<>
           <UCampusHeartbeatPanel course={course} desktop={desktop}/>
+          <UCampusFabricatedPanel course={course} desktop={desktop}/>
         </>:course.platform==="xuexitong"?<>
           <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>

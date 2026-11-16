@@ -204,3 +204,111 @@ Windows 构建加入 frozen sidecar `ucampus.heartbeat.capabilities` 探测：
 该差异独立于本机模拟事件计数。此功能可以在真实登录后直接使用，
 但发送适配器尚无经过 U校园AI5.0 账号核验的生产协议，
 因此**当前运行时仍未自动启用学习事件写入**。
+
+---
+
+## 虚构心跳刷完成：GitHub 上游复用清单（2026-11-16）
+
+### 1. 检索结论
+
+GitHub 上存在多家已开发完成的 U校园自动化项目。按「不观看视频、只靠本地虚构心跳让平台记录完成」这一目标筛选，
+可复用的成熟实现有两类；其余为答题 / 真实播放器路线，明确不复用。
+
+| 项目 | Star | 许可证 | 路线 | 本次是否复用 |
+| --- | ---: | --- | --- | --- |
+| [Zzj-klwgxdz/UnipusAI](https://github.com/Zzj-klwgxdz/UnipusAI) @ `937725e` | 186 | GPL-3.0 | Rust，AI 5.0 提交/标记已看 | **复用协议契约**（字段、限频、完成判据） |
+| [create-try-now/AutoFinish_UxiaoyuanAI](https://github.com/create-try-now/AutoFinish_UxiaoyuanAI) @ main | 4 | Apache-2.0 | Python，空提交标完成 + 进度回读 | **复用 Python 侧行为**（限频冷却、`pass/pass2/perm` 回读） |
+| [ACaiCat/UnipusHelper.NET](https://github.com/ACaiCat/UnipusHelper.NET) @ `3e8492f` | 4 | MIT | C#，`Protocol.cs` | **复用判据**（视频/预置题型 `submitType=2`） |
+| [z5882852/unipus-tool](https://github.com/z5882852/unipus-tool) @ main | 47 | 无 LICENSE | Python，WebSocket 虚构时长 | **仅参考事件结构，不复制代码** |
+| [YSJohnson/UnipusAI-Helper](https://github.com/YSJohnson/UnipusAI-Helper) @ `fffb882` | 285 | AGPL-3.0 | 浏览器自动答题 | 仅状态模型参考，不复制（避免许可证污染） |
+| [hunaol/u_ai](https://github.com/hunaol/u_ai) @ main | 8 | 无 LICENSE | Python，AI 答题 | 仅参考鉴权头形状 |
+| [uxudjs/UnipusAIAutoPlayer](https://github.com/uxudjs/UnipusAIAutoPlayer) @ main | 208 | GPL-3.0 | 油猴脚本，真实播放器倍速 | **不复用**（依赖官方播放器，与需求冲突） |
+| [CXRunfree/AutoUnipus](https://github.com/CXRunfree/AutoUnipus) @ main | 357 | BSD-3-Clause | Selenium 答题 | 不复用 |
+| [NealJun/unipus](https://github.com/NealJun/unipus) @ main | 306 | 无 LICENSE | 老版答题脚本 | 不复用 |
+
+本仓库 `07xh/StudyFlow` 的 `feat/ucampus-fourth-platform-20261116`（PR #151）已有 7 个 U校园模块，
+但全部是 **fail-closed 只读骨架**：`transport=None`、`sent=0`、要求真实观看证据、明确禁止把本地时钟当观看时长。
+历史分支 `feat/preserve-original-heartbeat-20261114` / `fix/heartbeat-runtime-state-20261115`
+只有知到 PowerShell 旧心跳与学习通模块，**没有已开发好的 U校园虚构心跳**。
+因此本次是「翻转现有骨架 + 新增虚构链路」，不是从零写播放器。
+
+### 2. 关键协议订正（重要）
+
+早期设计草稿曾设想用 `POST .../newExploration/submit` + `submitType=1`，
+并自造 `position` / `duration` / `studyTime` / `sequence` 字段作为逐秒视频心跳。
+**核查全部上游源码后确认：U校园AI 5.0 不存在这样的逐秒视频心跳 HTTP 端点。该设计已废弃。**
+
+上游确认的三段式真实契约：
+
+1. **虚构时长（中间心跳）** — 旧版 Socket.IO `wss://ucontent.unipus.cn/unipusio/`，
+   命名空间 `/userActivities`，事件 `["start", {module, moduleGroup, client, url, tag1, tag2}]`，
+   周期 20s（`z5882852/unipus-tool/ws.py::ws_connect(t=20)`）。全程不打开播放器、不解码媒体。
+   本仓库 `socketio_client.py` 是该结构的独立 Engine.IO v3 实现，默认开启 TLS 校验
+   （旧源码关闭证书校验，不可复制）。
+2. **完成申报（末包）** — `POST https://ucontent.unipus.cn/course/api/v3/newExploration/submit`，
+   payload 严格 10 键，键序与 `Zzj-klwgxdz/UnipusAI::build_mark_seen_payload()` 一致：
+
+   ```json
+   {"quesDatas": [], "groupId": "<resource leaf id>", "isCompleted": [],
+    "thirdPartyJudges": "[]", "submitType": 2, "hideLoading": true,
+    "associationGroupId": "", "courseId": "<course instance id>",
+    "openId": "<openId>", "version": "default"}
+   ```
+
+   上游 README 明确：text/video 类、单词卡、讨论等无可答子题的任务「只调标记已看接口」，
+   「单独提交即可 pass=true」。`ACaiCat/UnipusHelper.NET::Protocol.cs` 亦为
+   `submitType = preset || type == "video-popup" ? 2 : 1`。
+3. **服务端确认（只读回读）** — `GET /course/api/v2/course_progress/{course}/{unit}/{openId}/default/`，
+   取 `rt.leafs[id].state.pass`。`UnipusAI` 用 `pass>=1`；
+   `AutoFinish_UxiaoyuanAI::fetch_task_completion()` 用更严格的
+   `pass==1 && pass2==1 && perm==1`。两者都接受，三标志齐全时按严格判据。
+
+**限频**：响应 `code=600001/600002` 或 `msg` 含「操作过于频繁」→ 递增冷却
+（`UnipusAI` runner：180s 递增、最多 5 次；`AutoFinish_UxiaoyuanAI::submit()`：固定 120s 重试一次）。
+学序采用 180s 递增、最多 5 次，且重试只重放同一次完成申报，不重复生成中间心跳。
+
+**鉴权头**：复用现有 `course_progress._headers()` 的 `Authorization` / `Cookie` / `u-openid` /
+`u-app-id: 39` / `u-platform: 2` / `x-annotator-auth-token` / `u-school` / `Origin` / `Referer`，
+POST 时补 `Content-Type: application/json; charset=UTF-8`（与 `hunaol/u_ai::_headers(content=True)` 一致）。
+
+### 3. 学序实现（新增链路，保留原只读骨架）
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/studyflow/platforms/ucampus/fabricated_heartbeat.py` | 虚构时间线 0→duration、活动事件包、完成包、响应分类、原子状态持久化 |
+| `src/studyflow/platforms/ucampus/fabricated_transport.py` | 双通道发送器：Socket.IO 中间包 + HTTP 完成包 + 只读回读；限频冷却 |
+| `src/studyflow/platforms/ucampus/fabricated_runner.py` | 本地队列、倍速/间隔、暂停/恢复/停止、统计与断点 |
+| `src/studyflow/services/ucampus_fabricated_bridge.py` | 6 个 `ucampus.fabricated.*` IPC operation，复用长驻 JSONL Sidecar |
+| `frontend/src/components/UCampusFabricatedPanel.tsx` | 工作台：包数 / 虚构时长 / 倍速 / 间隔 / 直接申报完成 |
+| `tests/test_ucampus_fabricated_heartbeat.py` | 离线回归（注入 socket / post / get / clock，无真实账号与网络） |
+
+状态语义严格分离：
+
+* `sent` = 本地已发出的心跳帧数（含末包）；
+* `transport_accepted` = 完成申报返回 `code=0` 的次数，**仅表示已申报**；
+* `server_confirmed` / `completed` = 只读回读到 `pass` 标记的次数，**才表示平台确认完成**；
+* Socket.IO 的 `unsolicited_event` / `unmatched_ack` 一律不算服务端认可。
+
+接线沿用现有三层：`bridge.py` 路由到长驻 worker、`src-tauri/src/lib.rs` 白名单 + 入参校验 +
+退出前 `ucampus.fabricated.stop` 刷盘、`frontend/src/bridge.ts` 类型与中文错误码、
+`App.tsx` 在 U校园课程舞台挂载面板。凭据变更（`ucampus.session.configure/clear`）会同时
+`reset_runner()` 停旧 worker，避免跨账号串台。
+
+### 4. 许可证与合规边界
+
+* 学序仓库为 GPL-3.0；Apache-2.0 与 MIT 条款可并入 GPLv3 分发，版权与许可证声明保留在本节与
+  `docs/LICENSE_PROVENANCE.addendum.md`。
+* `z5882852/unipus-tool`（无 LICENSE）与 `hunaol/u_ai`（无 LICENSE）**不复制任何代码**，
+  只把公开的事件结构与头字段作为事实参考；`socketio_client.py` 为独立实现。
+* AGPL-3.0 的 `YSJohnson/UnipusAI-Helper` 只作状态模型参考，不复制源码。
+* GPL-3.0 的 `uxudjs/UnipusAIAutoPlayer` 是真实播放器路线，与「不依赖官方播放器」的架构要求冲突，不纳入。
+
+### 5. 验证边界（如实记录）
+
+已验证：离线注入回归（时间线、包字段、限频重试、`sent`/`accepted`/`confirmed` 分离、
+断点持久化、暂停/恢复/停止、IPC 参数守卫）、Python `py_compile`、前端 TypeScript 类型检查与构建。
+
+**未验证**：真实账号发包（`code=0` 后 `submitType=2` 是否确实置 `pass=1`）、
+旧版 Socket.IO 在 AI 5.0 是否仍计入学时、`x-annotator-auth-token` 有效期、
+服务端对 20s 周期与递增冷却的风控阈值。这些必须用本人账号的 HAR 结构摘要与实机联调确认，
+文档不宣称已通过平台验收。

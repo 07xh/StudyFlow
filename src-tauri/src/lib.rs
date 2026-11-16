@@ -212,7 +212,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
         | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
         | "ucampus.session.info" | "ucampus.session.clear"
-        | "ucampus.heartbeat.capabilities" | "ucampus.socket.diagnose" => Ok(()),
+        | "ucampus.heartbeat.capabilities" | "ucampus.socket.diagnose"
+        | "ucampus.fabricated.capabilities" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -277,6 +278,28 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
             => Ok(()),
         "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"
+            if request.get("graceful").is_none()
+                && request.get("course_id").and_then(|v| v.as_str())
+                    .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && request.get("run_id").and_then(|v| v.as_str())
+                    .is_some_and(|id| id.len() == 32
+                        && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
+        "ucampus.fabricated.status" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
+        "ucampus.fabricated.start" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+            && request.get("unit_id").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                    && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+            && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
+            && request.get("speed").map_or(true, |v| v.as_f64().is_some_and(|n| (0.25..=16.0).contains(&n)))
+            && request.get("duration_seconds").map_or(true, |v| v.as_f64().is_some_and(|n| (1.0..=36000.0).contains(&n)))
+            && request.get("heartbeat_interval").map_or(true, |v| v.as_f64().is_some_and(|n| (0.01..=3600.0).contains(&n)))
+            && request.get("instant_complete").map_or(true, |v| v.is_boolean()) => Ok(()),
+        "ucampus.fabricated.pause" | "ucampus.fabricated.resume" | "ucampus.fabricated.stop"
             if request.get("graceful").is_none()
                 && request.get("course_id").and_then(|v| v.as_str())
                     .is_some_and(|v| !v.is_empty() && v.len() <= 128
@@ -403,6 +426,7 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
                         || op.starts_with("xuexitong.heartbeat.")
                         || op.starts_with("ucampus.heartbeat.")
                         || op.starts_with("ucampus.socket.")
+                        || op.starts_with("ucampus.fabricated.")
                         || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"
                             | "ucampus.session.configure" | "ucampus.session.clear"));
     if is_persistent {
@@ -475,6 +499,10 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
             let _ = worker.request(
                 b"{\"id\":\"u-hb-shutdown\",\"version\":1,\"operation\":\"ucampus.heartbeat.stop\",\"graceful\":true}\n",
                 "u-hb-shutdown",
+            );
+            let _ = worker.request(
+                b"{\"id\":\"uf-hb-shutdown\",\"version\":1,\"operation\":\"ucampus.fabricated.stop\",\"graceful\":true}\n",
+                "uf-hb-shutdown",
             );
         }
         guard.take();
@@ -729,6 +757,27 @@ mod ipc_validation_tests {
         assert!(validate(&json!({"id":"u","version":1,
             "operation":"ucampus.heartbeat.stop","course_id":"c1",
             "run_id":"abcdef0123456789abcdef0123456789","graceful":true})).is_err());
+    }
+
+    #[test]
+    fn ucampus_fabricated_operation_guard() {
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.capabilities"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.start","course_id":"course-v2:1",
+            "unit_id":"u1","pulses":6,"speed":2,"duration_seconds":600,
+            "heartbeat_interval":20,"instant_complete":false})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.start","course_id":"c1",
+            "unit_id":"u1","speed":100})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.start","course_id":"c1",
+            "unit_id":"u1","pulses":101})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.pause","course_id":"c1"})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.stop","course_id":"c1",
+            "run_id":"abcdef0123456789abcdef0123456789"})).is_ok());
     }
 
     #[test]

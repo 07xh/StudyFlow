@@ -17,6 +17,19 @@ export type UCampusSocketDiagnostic={
   transport:"legacy_socketio_v3";handshake:"namespace_joined";
   learning_events_sent:0;progress_verified:false;ai5_compatible:null;
 };
+export type UCampusFabricatedStatus={
+  run_id:string;course_id:string;unit_id:string;phase:string;active:boolean;paused:boolean;
+  generated:number;sent:number;transport_accepted:number;server_confirmed:number;
+  completed:number;reported:number;sender_connected:boolean;last_error:string;
+  tasks:Array<{resource_id:string;title:string;dtype:string;duration_seconds:number;
+    state:string;generated:number;sent:number;accepted:number;confirmed:number;
+    position_seconds:number;server_completed:boolean|null;last_error:string}>;
+};
+export type UCampusFabricatedCapabilities={
+  ok:boolean;local_generation:boolean;socket_transport_available:boolean;
+  session_configured:boolean;official_player_required:boolean;
+  activity_heartbeat:string;completion_packet:string;server_readback:string;message:string;
+};
 export type UCampusVerifiedProgress={
   course_id:string;unit_id:string;verified_at:string;
   total:number;passed:number;not_passed:number;unknown:number;
@@ -42,6 +55,10 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ucampus.progress.verify"; course_id: string; unit_id: string}
   | {id: string; version: 1; operation: "ucampus.socket.diagnose"}
   | {id: string; version: 1; operation: "ucampus.heartbeat.capabilities"}
+  | {id: string; version: 1; operation: "ucampus.fabricated.capabilities"}
+  | {id: string; version: 1; operation: "ucampus.fabricated.start"; course_id: string; unit_id: string; pulses?: number; speed?: number; duration_seconds?: number; heartbeat_interval?: number; instant_complete?: boolean}
+  | {id: string; version: 1; operation: "ucampus.fabricated.status"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.fabricated.pause" | "ucampus.fabricated.resume" | "ucampus.fabricated.stop"; course_id: string; run_id: string}
   | {id: string; version: 1; operation: "ucampus.heartbeat.start"; course_id: string; unit_id: string; pulses?: number}
   | {id: string; version: 1; operation: "ucampus.heartbeat.status"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"; course_id: string; run_id: string}
@@ -198,7 +215,19 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "XUEXITONG_SESSION_MISSING", "XUEXITONG_INTERNAL_ERROR",
                              "XUEXITONG_UNKNOWN_OPERATION", "XUEXITONG_TASK_NOT_RUNNING",
                              "XUEXITONG_RUN_ID_MISMATCH", "XUEXITONG_NO_TARGET_FOR_DTYPE",
-                             "XUEXITONG_NO_ACTIVE_TASK"]);
+                             "XUEXITONG_NO_ACTIVE_TASK",
+                             "UCAMPUS_COURSE_REQUIRED", "UCAMPUS_INVALID_PARAMETER",
+                             "UCAMPUS_INVALID_MEDIA_TASK", "UCAMPUS_NO_MEDIA_TASKS",
+                             "UCAMPUS_TASK_ALREADY_RUNNING", "UCAMPUS_TASK_NOT_RUNNING",
+                             "UCAMPUS_RUN_ID_MISMATCH", "UCAMPUS_RUNTIME_UNAVAILABLE",
+                             "UCAMPUS_SESSION_MISSING", "UCAMPUS_SESSION_EXPIRED",
+                             "UCAMPUS_AI_ONLY", "UCAMPUS_OPEN_ID_REQUIRED",
+                             "UCAMPUS_PROGRESS_UNAVAILABLE", "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED",
+                             "UCAMPUS_INVALID_FABRICATED_PARAMETER", "UCAMPUS_INVALID_FABRICATED_TARGET",
+                             "UCAMPUS_INVALID_FABRICATED_PAYLOAD", "UCAMPUS_INVALID_FABRICATED_SEQUENCE",
+                             "UCAMPUS_RATE_LIMITED", "UCAMPUS_SUBMIT_REJECTED",
+                             "UCAMPUS_SUBMIT_UNVERIFIED", "UCAMPUS_SEND_UNAVAILABLE",
+                             "UCAMPUS_SENDER_UNAVAILABLE", "UCAMPUS_RUN_FAILED"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -335,6 +364,16 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_PROGRESS_UNAVAILABLE": return "U校园单元/任务进度接口请求失败，请检查账号、网络和课程。";
     case "INVALID_UCAMPUS_CONFIG": return "U校园配置不符合要求：仅支持官方 HTTPS 域名与正确格式的登录会话。";
     case "UCAMPUS_CREDENTIAL_STORAGE_FAILED": return "U校园登录信息未能写入 Windows 凭据管理器。";
+    case "UCAMPUS_INVALID_FABRICATED_PARAMETER": return "虚构心跳参数超出允许范围。";
+    case "UCAMPUS_INVALID_FABRICATED_TARGET": return "课程资源标识校验失败，已停止发送。";
+    case "UCAMPUS_INVALID_FABRICATED_PAYLOAD": return "虚构心跳包字段校验失败，已停止发送。";
+    case "UCAMPUS_INVALID_FABRICATED_SEQUENCE": return "虚构心跳序号不合法。";
+    case "UCAMPUS_RATE_LIMITED": return "U校园提示操作过于频繁，已按上游冷却策略重试。";
+    case "UCAMPUS_SUBMIT_REJECTED": return "U校园拒绝了完成申报，本次未记为通过。";
+    case "UCAMPUS_SUBMIT_UNVERIFIED": return "完成申报返回了无法核验的结果，本次未记为通过。";
+    case "UCAMPUS_SEND_UNAVAILABLE": return "无法连接 U校园提交接口，请检查网络与本机会话。";
+    case "UCAMPUS_SENDER_UNAVAILABLE": return "虚构心跳发送器未就绪，请重新配置会话。";
+    case "UCAMPUS_RUN_FAILED": return "虚构心跳运行异常，请查看运行状态后重试。";
     case "XUEXITONG_TASK_STOP_TIMEOUT": return "学习通任务尚未安全停止，请稍后重试退出或切换账号。";
     case "INVALID_XUEXITONG_SETTINGS": return "学习通参数超出允许范围，原设置未修改。";
     case "XUEXITONG_SETTINGS_UNAVAILABLE": return "学习通本机设置保存失败，请检查本地文件权限。";

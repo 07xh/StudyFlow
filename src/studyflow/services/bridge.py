@@ -34,6 +34,8 @@ from studyflow.platforms.xuexitong import settings as xuexitong_settings
 from studyflow.services.xuexitong_heartbeat_bridge import dispatch as xuexitong_heartbeat_dispatch
 from studyflow.services.ucampus_runtime_bridge import dispatch as ucampus_heartbeat_dispatch
 from studyflow.services import ucampus_runtime_bridge
+from studyflow.services import ucampus_fabricated_bridge
+from studyflow.services.ucampus_fabricated_bridge import dispatch as ucampus_fabricated_dispatch
 from studyflow.services import xuexitong_heartbeat_bridge
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.ucampus.adapter import UCampusAdapter
@@ -102,6 +104,12 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": heartbeat}
         return {"id": request_id, "ok": False,
                 "error": str(heartbeat.get("error") or "XUEXITONG_INTERNAL_ERROR")}
+    uc_fabricated = ucampus_fabricated_dispatch(operation, request)
+    if uc_fabricated is not None:
+        if uc_fabricated.get("ok") is True:
+            return {"id": request_id, "ok": True, "data": uc_fabricated}
+        return {"id": request_id, "ok": False,
+                "error": str(uc_fabricated.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
     uc_heartbeat = ucampus_heartbeat_dispatch(operation, request)
     if uc_heartbeat is not None:
         if uc_heartbeat.get("ok") is True:
@@ -197,6 +205,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if operation == "ucampus.session.configure":
         try:
             ucampus_runtime_bridge.reset_runner()
+            ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.save(request.get("configuration"))
             return {"id": request_id, "ok": True, "data": {"saved": True}}
         except ValueError:
@@ -206,6 +215,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if operation == "ucampus.session.clear":
         try:
             ucampus_runtime_bridge.reset_runner()
+            ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.clear()
             return {"id": request_id, "ok": True, "data": {"cleared": True}}
         except Exception:
