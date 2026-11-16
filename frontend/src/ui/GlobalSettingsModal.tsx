@@ -56,10 +56,11 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
       const frame=window.requestAnimationFrame(()=>setEntered(true));
       return ()=>window.cancelAnimationFrame(frame);
     }
+    if(!mounted)return;
     setEntered(false);
-    const timeout=window.setTimeout(()=>setMounted(false),190);
-    return ()=>window.clearTimeout(timeout);
-  },[open]);
+    const timeout=setTimeout(()=>setMounted(false),190);
+    return ()=>clearTimeout(timeout);
+  },[open,mounted]);
   useEffect(()=>{
     if(!open)return;
     openerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
