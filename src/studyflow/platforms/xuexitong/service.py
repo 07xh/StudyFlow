@@ -277,7 +277,8 @@ class XuexitongHeartbeatService:
                 if event.get("_account_marker") == account_marker
                 and (course_key is None or event.get("course_key") == course_key)
             ]
-        return {"ok": True, "events": events[-max(0, min(limit, 500)):]}
+        count = max(0, min(limit, 500))
+        return {"ok": True, "events": events[-count:] if count else []}
 
     def _control(self, action: str, run_id: str | None = None) -> dict[str, Any]:
         with self._lock:
