@@ -53,5 +53,56 @@ class TestHeartbeatLogScopes(unittest.TestCase):
             self.assertEqual(result, {"ok": True, "events": []})
 
 
+    def test_pause_controls_reflect_live_queue_state(self) -> None:
+        import threading
+
+        from studyflow.platforms.xuexitong.runner import ChapterQueue, RunConfig
+        from studyflow.platforms.xuexitong.heartbeat import HeartbeatSender
+
+        with tempfile.TemporaryDirectory() as folder:
+            service = XuexitongHeartbeatService(
+                os.path.join(folder, "state.json"),
+                session_factory=lambda: object(),
+                targets_provider=lambda _course: [],
+            )
+            gate = threading.Event()
+            worker = threading.Thread(target=gate.wait, args=(2,), daemon=True)
+            worker.start()
+            queue = ChapterQueue(HeartbeatSender(object()), RunConfig())
+            try:
+                service._queue = queue
+                service._thread = worker
+                service._course_key = "10:20:30"
+                service._run_id = "control-run"
+                service._account_marker = ""
+
+                running = service.handle("xuexitong.heartbeat.status", {"course_id": "10:20:30"})
+                self.assertTrue(running["running"])
+                self.assertFalse(running["paused"])
+                self.assertEqual(running["queue_controls"],
+                                 {"pause": True, "resume": False, "stop": True})
+
+                queue.pause_all()
+                paused = service.handle("xuexitong.heartbeat.status", {"course_id": "10:20:30"})
+                self.assertTrue(paused["paused"])
+                self.assertEqual(paused["queue_controls"],
+                                 {"pause": False, "resume": True, "stop": True})
+
+                different_course = service.handle("xuexitong.heartbeat.status", {"course_id": "40:50:60"})
+                self.assertFalse(different_course["running"])
+                self.assertFalse(different_course["paused"])
+                self.assertEqual(different_course["queue_controls"],
+                                 {"pause": False, "resume": False, "stop": False})
+
+                queue.resume_all()
+                resumed = service.handle("xuexitong.heartbeat.status", {"course_id": "10:20:30"})
+                self.assertFalse(resumed["paused"])
+                self.assertTrue(resumed["queue_controls"]["pause"])
+            finally:
+                gate.set()
+                worker.join(timeout=3)
+
+
+
 if __name__ == "__main__":
     unittest.main()
