@@ -56,3 +56,11 @@ test("U校园 verifies server progress separately from local event counters",()=
   assert.match(panel,/与本地心跳计数无关/);
   assert.match(bridge,/ucampus\.progress\.verify/);
 });
+
+test("U校园 compares two real server snapshots, never local tick count",()=>{
+  const panel=read("components/UCampusHeartbeatPanel.tsx");
+  assert.match(panel,/const newlyPassed=previousProgress&&serverProgress/);
+  assert.match(panel,/previous\.completed===false/);
+  assert.match(panel,/已记录本次服务器状态为基准/);
+  assert.match(panel,/不能推断由本地心跳引起/);
+});
