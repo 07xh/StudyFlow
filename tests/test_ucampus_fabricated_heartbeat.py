@@ -482,6 +482,11 @@ def test_local_history_whitelists_values_and_never_restarts_worker():
         assert "PRIVATE_COOKIE" not in repr(history)
         assert "PRIVATE_TOKEN" not in repr(history)
         assert store.load("run001")["phase"]=="running"
+        raw=(Path(folder)/"history.json").read_text(encoding="utf-8")
+        assert "PRIVATE_COOKIE" not in raw
+        assert "PRIVATE_TOKEN" not in raw
+        assert "authorization" not in raw.lower()
+        assert "cookie" not in raw.lower()
 
 
 def test_shutdown_before_first_run_never_writes_invalid_snapshot():
@@ -513,3 +518,37 @@ def test_saved_local_history_uses_terminal_phase_without_replay():
         assert records[0]["phase"] == "finished_locally"
         assert records[0]["resume_available"] is False
         runner.shutdown()
+
+
+def test_history_snapshot_disk_whitelist_strips_nested_secrets_and_legacy_fields():
+    import json
+    with tempfile.TemporaryDirectory() as folder:
+        file=Path(folder)/"history.json"
+        # A historical file may contain untrusted metadata. The next save
+        # rewrites all entries using the strict local-counter schema.
+        file.write_text(json.dumps({
+            "oldrun":{"course_id":"course-v2:100","unit_id":"u1",
+                      "phase":"running","cookie":"LEAKED_OLD_COOKIE",
+                      "tasks":{"leaf1":{"generated":2,"sent":1,
+                                        "last_error":"Bearer LEAKED_OLD_TOKEN"}}}
+        }),encoding="utf-8")
+        store=fh.FabricatedStateStore(file)
+        store.save("newrun",{
+            "course_id":"course-v2:100","unit_id":"u1","phase":"failed",
+            "authorization":"LEAKED_NEW_AUTH",
+            "tasks":{"leaf2":{"generated":4,"sent":3,
+                              "confirmed":1,"title":"LEAKED_TITLE_SECRET",
+                              "last_error":"LEAKED_ERROR_SECRET",
+                              "accepted":True}}
+        })
+        text=file.read_text(encoding="utf-8")
+        for secret in ("LEAKED_OLD_COOKIE","LEAKED_OLD_TOKEN",
+                       "LEAKED_NEW_AUTH","LEAKED_TITLE_SECRET",
+                       "LEAKED_ERROR_SECRET"):
+            assert secret not in text
+        assert store.load("newrun")["tasks"]["leaf2"]=={
+            "generated":4,"sent":3,"accepted":0,"confirmed":1}
+        rows=store.list_recent("course-v2:100")
+        assert len(rows)==2
+        assert rows[0]["generated"]==4 and rows[1]["generated"]==2
+        assert all(row["resume_available"] is False for row in rows)
