@@ -50,7 +50,7 @@ export type BridgeRequest =
      max_unconfirmed_rounds?:number;completion_rounds?:number;max_ticks?:number;
      dtype?:"Video"|"Audio"}
   | {id:string;version:1;operation:"xuexitong.heartbeat.status";course_id?:string}
-  | {id:string;version:1;operation:"xuexitong.heartbeat.logs";limit?:number}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.logs";limit?:number;course_id?:string}
   | {id:string;version:1;operation:"xuexitong.heartbeat.pause";run_id?:string}
   | {id:string;version:1;operation:"xuexitong.heartbeat.resume";run_id?:string}
   | {id:string;version:1;operation:"xuexitong.heartbeat.stop";run_id?:string};
