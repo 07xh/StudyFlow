@@ -13,6 +13,10 @@ export type UCampusLocalStatus={
   tasks:Array<{resource_id:string;chapter_id:string;title:string;state:string;
     generated:number;attempted:number;accepted:number;local_elapsed_seconds:number;server_completed:boolean|null}>;
 };
+export type UCampusSocketDiagnostic={
+  transport:"legacy_socketio_v3";handshake:"namespace_joined";
+  learning_events_sent:0;progress_verified:false;ai5_compatible:null;
+};
 export type UCampusUnit = {id:string;title:string;completed:boolean|null};
 export type UCampusTask = {id:string;unit_id:string;title:string;type:string;required:boolean|null;completed:boolean|null};
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
@@ -29,6 +33,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
   | {id: string; version: 1; operation: "ucampus.units.list"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.unit.tasks"; course_id: string; unit_id: string}
+  | {id: string; version: 1; operation: "ucampus.socket.diagnose"}
   | {id: string; version: 1; operation: "ucampus.heartbeat.capabilities"}
   | {id: string; version: 1; operation: "ucampus.heartbeat.start"; course_id: string; unit_id: string; pulses?: number}
   | {id: string; version: 1; operation: "ucampus.heartbeat.status"; course_id: string}
@@ -301,6 +306,12 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "UCAMPUS_SOCKET_TOKEN_REQUIRED": return "请先在 U校园账号设置中填写本人会话的内容授权令牌。";
+    case "UCAMPUS_SOCKET_HANDSHAKE_UNVERIFIED": return "旧版 WebSocket 握手未通过，当前接口可能不兼容 U校园5.0。";
+    case "UCAMPUS_SOCKET_NAMESPACE_UNVERIFIED": return "旧版 Socket.IO 命名空间认证未通过。";
+    case "UCAMPUS_SOCKET_TRANSPORT_UNKNOWN": return "U校园 WebSocket 连接失败或超时，请检查网络和本机会话。";
+    case "UCAMPUS_SOCKET_BAD_FRAME": return "U校园 WebSocket 返回了无法识别的数据。";
+    case "UCAMPUS_SOCKET_NO_ACK": return "U校园 WebSocket 未按预期响应。";
     case "UCAMPUS_COURSE_REQUIRED": return "请先选择 U校园真实课程。";
     case "UCAMPUS_INVALID_PARAMETER": return "本地心跳参数不符合要求。";
     case "UCAMPUS_INVALID_MEDIA_TASK": return "课程资源标识不正确。";

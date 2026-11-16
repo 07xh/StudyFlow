@@ -140,3 +140,15 @@ StudyFlow 的 `socketio_client.py` 为独立实现，提供：
 它只是旧版传输基础组件；U校园AI 5.0 是否仍接受旧版 Socket.IO、
 具体课程事件名称/字段、服务端学习记录判定均未通过本人账号验收。
 因此不在生产版本自动发送旧版的伪造学习时长消息。
+
+## 旧版 WSS 握手诊断（Windows IPC）
+
+新增桌面操作 `ucampus.socket.diagnose`：由本人点击按钮后才发起
+**一次**旧版 Socket.IO v3 握手及命名空间加入，结束立即关闭连接；
+不会发出任何媒体学习事件，也不会启动/中断当前本地心跳调度。
+
+- 使用保存在 Windows 凭据管理器的本人 U校园AI会话，不通过 UI 回显凭据。
+- 无会话或无 `annotator_token` 时直接返回明确错误码，不发起网络连接。
+- 只返回 `handshake=namespace_joined`、`learning_events_sent=0`、
+  `progress_verified=false` 和 `ai5_compatible=null`，不输出凭据、原始请求、服务器消息。
+- 握手成功只证明旧版传输/认证当时成功，**无法证明 U校园AI5.0 允许旧版心跳消息或认可学习时长**。

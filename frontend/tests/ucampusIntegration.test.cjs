@@ -38,3 +38,12 @@ test("U校园 local heartbeat is independent of official player",()=>{
   assert.match(panel,/平台确认/);
   assert.doesNotMatch(panel,/ZhidaoOfficialPlayerPanel|LegacyPlaybackPanel/);
 });
+
+test("U校园 legacy socket diagnostic cannot send learning events",()=>{
+  const panel=read("components/UCampusHeartbeatPanel.tsx");
+  const bridge=read("bridge.ts");
+  assert.match(panel,/ucampus\.socket\.diagnose/);
+  assert.match(panel,/仅检查旧版 Socket.IO 连接和认证，不发送学习心跳/);
+  assert.match(bridge,/operation: "ucampus\.socket\.diagnose"/);
+  assert.doesNotMatch(panel,/ucampus\.socket\.send/);
+});

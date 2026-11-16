@@ -12,11 +12,17 @@ from typing import Any
 
 from studyflow.platforms.ucampus.course_progress import UCampusProgressReader, UCampusProgressError
 from studyflow.platforms.ucampus.local_runtime import MediaTask, UCampusLocalRunner
+from studyflow.platforms.ucampus import credentials as ucampus_credentials
+from studyflow.platforms.ucampus.course_progress import _jwt_open_id
+from studyflow.platforms.ucampus.socketio_client import (
+    SocketSession, SocketProtocolError, UCampusLegacySocket,
+)
 
 _OPERATIONS = frozenset({
     "ucampus.heartbeat.capabilities", "ucampus.heartbeat.start",
     "ucampus.heartbeat.status", "ucampus.heartbeat.pause",
     "ucampus.heartbeat.resume", "ucampus.heartbeat.stop",
+    "ucampus.socket.diagnose",
 })
 _LOCK = threading.Lock()
 _RUNNER: UCampusLocalRunner | None = None
@@ -30,9 +36,41 @@ def get_runner() -> UCampusLocalRunner:
         return _RUNNER
 
 
+def diagnose_legacy_socket() -> dict[str, Any]:
+    """Opt-in, authentication-only legacy WSS handshake.
+
+    No study events are sent, and a successful namespace connection is not
+    evidence that U校园AI5.0 accepts the older learning-event wire format.
+    """
+    config = ucampus_credentials.load()
+    if config is None:
+        return {"ok": False, "error": "UCAMPUS_SESSION_MISSING"}
+    if config.variant != "ai":
+        return {"ok": False, "error": "UCAMPUS_AI_ONLY"}
+    if not config.annotator_token:
+        return {"ok": False, "error": "UCAMPUS_SOCKET_TOKEN_REQUIRED"}
+    try:
+        open_id = _jwt_open_id(config)
+        session = SocketSession(open_id, config.annotator_token)
+        with UCampusLegacySocket(session):
+            return {"ok": True, "transport": "legacy_socketio_v3",
+                    "handshake": "namespace_joined", "learning_events_sent": 0,
+                    "progress_verified": False, "ai5_compatible": None}
+    except UCampusProgressError as exc:
+        return {"ok": False, "error": str(exc)}
+    except SocketProtocolError as exc:
+        return {"ok": False, "error": str(exc)}
+    except ValueError:
+        return {"ok": False, "error": "UCAMPUS_SOCKET_SESSION_INVALID"}
+    except Exception:
+        return {"ok": False, "error": "UCAMPUS_SOCKET_TRANSPORT_UNKNOWN"}
+
+
 def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
     if operation not in _OPERATIONS:
         return None
+    if operation == "ucampus.socket.diagnose":
+        return diagnose_legacy_socket()
     if operation == "ucampus.heartbeat.capabilities":
         return {"ok": True, "local_generation": True,
                 "sender_connected": False, "server_verified": False,

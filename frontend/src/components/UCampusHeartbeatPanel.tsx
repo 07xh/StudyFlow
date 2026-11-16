@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useState} from "react";
 import type {Course} from "../types";
-import {request,friendlyBridgeError,type UCampusLocalStatus,type UCampusUnit} from "../bridge";
+import {request,friendlyBridgeError,type UCampusLocalStatus,type UCampusUnit,type UCampusSocketDiagnostic} from "../bridge";
 import "./XuexitongHeartbeatPanel.css";
 
 export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:boolean}){
@@ -10,6 +10,9 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   const [status,setStatus]=useState<UCampusLocalStatus|null>(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
+  const [socketBusy,setSocketBusy]=useState(false);
+  const [socketDiagnostic,setSocketDiagnostic]=useState<UCampusSocketDiagnostic|null>(null);
+  const [socketError,setSocketError]=useState("");
   const courseId=course.course_id;
   const refresh=useCallback(async()=>{
     const state=await request<UCampusLocalStatus>({
@@ -35,6 +38,15 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   },[desktop,courseId,refresh]);
 
   const active=Boolean(status?.active);
+  async function diagnoseSocket(){
+    if(!desktop||socketBusy)return;
+    setSocketBusy(true);setSocketDiagnostic(null);setSocketError("");
+    try{
+      const data=await request<UCampusSocketDiagnostic>({operation:"ucampus.socket.diagnose"});
+      setSocketDiagnostic(data);
+    }catch(error){setSocketError(friendlyBridgeError(error));}
+    finally{setSocketBusy(false);}
+  }
   async function control(action:"start"|"pause"|"resume"|"stop"){
     if(!desktop||busy)return;
     setBusy(true);setMessage("");
@@ -60,6 +72,20 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="U校园本地心跳">
     <p className="sf-hint">使用学序<strong>本地自定义心跳生成器</strong>，不依赖官方播放器。
       目前是本机运行模式：U校园发送协议未验收，不会向平台发送，也不会显示已完成。</p>
+    <div className="sf-settings-row">
+      <div>
+        <button type="button" className="secondary"
+          disabled={!desktop||socketBusy}
+          onClick={()=>void diagnoseSocket()}>
+          {socketBusy?"正在检查旧版通道…":"检测旧版 WebSocket 通道"}
+        </button>
+        <p className="sf-muted">仅检查旧版 Socket.IO 连接和认证，不发送学习心跳。点击后将使用本机保存的 U校园会话发起一次官方服务器连接。</p>
+        {socketDiagnostic&&<p role="status">
+          握手通过 · 旧版命名空间已连接 · 已发送学习事件 {socketDiagnostic.learning_events_sent} 次 · U校园5.0 进度协议仍待核验
+        </p>}
+        {socketError&&<p role="alert">{socketError}</p>}
+      </div>
+    </div>
     <div className="sf-settings-row">
       <label>真实课程单元
         <select value={unitId} onChange={e=>setUnitId(e.target.value)}

@@ -212,7 +212,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
         | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
         | "ucampus.session.info" | "ucampus.session.clear"
-        | "ucampus.heartbeat.capabilities" => Ok(()),
+        | "ucampus.heartbeat.capabilities" | "ucampus.socket.diagnose" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -402,6 +402,7 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         .map_or(false, |op| op.starts_with("zhidao.qr.")
                         || op.starts_with("xuexitong.heartbeat.")
                         || op.starts_with("ucampus.heartbeat.")
+                        || op.starts_with("ucampus.socket.")
                         || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"
                             | "ucampus.session.configure" | "ucampus.session.clear"));
     if is_persistent {
@@ -695,6 +696,14 @@ mod ipc_validation_tests {
         ] {
             assert!(validate(&bad).is_err());
         }
+    }
+
+    #[test]
+    fn ucampus_socket_diagnostics_has_no_untrusted_parameters() {
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.socket.diagnose"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.socket.send","course_id":"C1"})).is_err());
     }
 
     #[test]
