@@ -190,6 +190,7 @@
 }
 .sf-shell .sf-provider-blue{background:linear-gradient(145deg,#658eff,#4e5fcb);color:#fff}
 .sf-shell .sf-provider-rose{background:linear-gradient(145deg,#ff879b,#d94e79);color:#fff}
+.sf-shell .sf-provider-violet{background:linear-gradient(145deg,#a78bfa,#7654c5);color:#fff}
 .sf-shell .sf-provider-neutral{background:linear-gradient(145deg,#929aa1,#626d76);color:#fff}
 .sf-shell .status{
   display:inline-flex;align-items:center;gap:6px;
