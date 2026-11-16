@@ -138,6 +138,25 @@ export default function App(){
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
   const runtime=useRuntimeTasks(desktop&&consentAccepted);
+  // Restore only an explicitly enabled read-only U校园 progress check after
+  // StudyFlow restarts. The backend persists a scoped checkpoint and rate-limits
+  // GET requests; this never resumes fabricated playback or sends heartbeats.
+  useEffect(()=>{
+    if(!desktop||!consentAccepted)return;
+    let live=true;
+    let inFlight=false;
+    const tick=async()=>{
+      if(!live||inFlight)return;
+      inFlight=true;
+      try{await request({operation:"ucampus.monitor.tick"});}
+      catch{/* Fail closed; do not infer progress from a failed readback. */}
+      finally{inFlight=false;}
+    };
+    void tick();
+    const timer=window.setInterval(()=>void tick(),90_000);
+    return()=>{live=false;window.clearInterval(timer);};
+  },[desktop,consentAccepted]);
+
   const releaseChangelog=useReleaseChangelog(desktop,consentAccepted);
   const yuketangRun=runtime.tasks.find(task=>task.runner==="yuketang"&&!task.unavailable);
   const yuketangRunId=yuketangRun?.runId??"";
