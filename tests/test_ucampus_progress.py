@@ -122,9 +122,35 @@ def test_real_course_v2_id_is_valid_path_segment(monkeypatch):
     monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get", get)
     reader = UCampusProgressReader(credentials_loader=lambda: cfg)
     assert reader.list_units("course-v2:real-id")[0]["id"] == "U1"
+    real_id = "course-v2:75b7546ea002b72+nhce_v4_rw_2+20230116"
+    assert reader.list_units(real_id)[0]["id"] == "U1"
     assert "/course_progress/course-v2:real-id/" in seen[0][0]
-    assert seen[0][1]["allow_redirects"] is False
-    for bad in ("course-v2:../private", "course-v2:%2Fetc", "course-v2:?k=v"):
+    assert f"/course_progress/{real_id}/" in seen[1][0]
+    assert all(request[1]["allow_redirects"] is False for request in seen)
+    for bad in ("course-v2:../private", "course-v2:%2Fetc", "course-v2:?k=v",
+                "course-v2:ok+foo/bar", "course-v2:ok#fragment"):
         with pytest.raises(UCampusProgressError, match="INVALID_REQUEST"):
             reader.list_units(bad)
-    assert len(seen) == 1
+    assert len(seen) == 2
+
+
+def test_real_plus_delimited_course_id_reads_unit_resource_without_rewriting_path(monkeypatch):
+    cfg = _config()
+    calls = []
+    class Response:
+        status_code = 200
+        is_redirect = False
+        headers = {"content-type": "application/json"}
+        content = b'{"rt":{"leafs":{"resource1":{"tab_type":"video","state":{"pass":0}}}}}'
+        def json(self):
+            return {"rt": {"leafs": {"resource1": {"tab_type": "video", "state": {"pass": 0}}}}}
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+    monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get", get)
+    reader = UCampusProgressReader(credentials_loader=lambda: cfg)
+    course_id = "course-v2:75b7546ea002b72+nhce_v4_rw_2+20230116"
+    tasks = reader.list_tasks(course_id, "U1")
+    assert len(tasks) == 1 and tasks[0]["completed"] is False
+    assert f"/course_progress/{course_id}/U1/" in calls[0][0]
+    assert calls[0][1]["allow_redirects"] is False
