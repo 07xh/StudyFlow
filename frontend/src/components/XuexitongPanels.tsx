@@ -83,12 +83,12 @@ export function XuexitongSettingsPanel({desktop}:{
     try{
       const saved=await request<XuexitongSettings>({operation:"xuexitong.settings.save",settings});
       setSettings(saved);
-      setNotice("参数预设已保存在本机。待你接入自己的执行模块后由适配器读取。");
+      setNotice("参数预设已保存在本机，后续课程任务会读取这些默认参数。");
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
   };
   return <section className="sf-platform-settings-view" aria-label="学习通参数预设">
-    <p className="sf-muted">保存本机任务参数预设；课程工作台中可查看运行状态和平台核验结果。</p>
+    <p className="sf-muted">保存本机任务参数预设；课程工作台启动任务时也会同步保存速度与并发。</p>
     <div className="sf-settings-line">
       <label htmlFor="xxt-speed">播放速度预设</label>
       <select id="xxt-speed" disabled={!desktop||!loaded||busy}
