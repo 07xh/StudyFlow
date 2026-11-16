@@ -149,3 +149,68 @@ def test_connection_status_preserves_safe_known_catalog_failure(monkeypatch):
     monkeypatch.setattr(UCampusAdapter, "list_courses", expired)
     status = UCampusAdapter().connection_info()
     assert not status.connected and "会话已失效" in status.message
+
+
+def test_ai_catalog_uses_provider_auth_headers_after_sso_login(monkeypatch):
+    import base64
+    import json
+    claim = base64.urlsafe_b64encode(json.dumps({"openId": "my-user-id"}).encode()).decode().rstrip("=")
+    jwt = f"header.{claim}.signature"
+    config = UCampusConfig.from_dict({"variant": "ai", "cookie": "jwt=" + jwt,
+        "school_id": "8320", "annotator_token": "my-content-token"})
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.credentials.load", lambda: config)
+    observed = []
+    class Response:
+        status_code = 200
+        is_redirect = False
+        content = b"{}"
+        headers = {"content-type": "application/json"}
+        def json(self):
+            return {"code": 1, "value": {"courseList": [
+                {"name": "English", "courseResourceList": [
+                    {"instanceId": "course-v2:real+course+1", "name": "English II"}
+                ]}
+            ]}}
+    def get(url, **kwargs):
+        observed.append((url, kwargs))
+        return Response()
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.requests.get", get)
+    courses = UCampusAdapter().list_courses()
+    assert len(courses) == 1 and courses[0].course_id == "course-v2:real+course+1"
+    assert len(observed) == 1
+    url, options = observed[0]
+    headers = options["headers"]
+    assert url.startswith("https://uai.unipus.cn/")
+    assert options["allow_redirects"] is False
+    assert headers["Cookie"] == "jwt=" + jwt
+    assert headers["Authorization"] == jwt
+    assert headers["u-openid"] == "my-user-id"
+    assert headers["x-csrftoken"] == "my-user-id"
+    assert headers["u-app-id"] == "39"
+    assert headers["u-platform"] == "2"
+    assert headers["u-school"] == "8320"
+    assert headers["x-annotator-auth-token"] == "my-content-token"
+
+
+def test_opaque_cookie_can_still_query_catalog_without_invented_openid(monkeypatch):
+    config = UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=opaque-session"})
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.credentials.load", lambda: config)
+    observed = []
+    class Response:
+        status_code = 200
+        is_redirect = False
+        content = b"{}"
+        headers = {"content-type": "application/json"}
+        def json(self):
+            return {"code": 1, "value": {"courseList": [
+                {"name": "English", "courseResourceList": [
+                    {"instanceId": "course-v2:abc+eng+1", "name": "English"}
+                ]}
+            ]}}
+    def get(url, **kwargs):
+        observed.append(kwargs)
+        return Response()
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.requests.get", get)
+    assert len(UCampusAdapter().list_courses()) == 1
+    assert "Authorization" not in observed[0]["headers"]
+    assert "u-openid" not in observed[0]["headers"]
