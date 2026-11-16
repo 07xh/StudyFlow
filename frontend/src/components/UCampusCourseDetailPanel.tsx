@@ -120,3 +120,4 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
       当前仅支持课程与任务状态只读核验。学习内容、媒体播放与本地心跳发送仍待真实协议验收。
     </p>
   </section>;
+}
