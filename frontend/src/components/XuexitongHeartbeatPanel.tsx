@@ -173,12 +173,12 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     {message?<p className="sf-message">{message}</p>:null}
 
     <dl className="sf-stat-grid">
-      <div><dt>运行状态</dt><dd>{running?(paused?"已暂停":"运行中"):"空闲"}</dd></div>
+      <div><dt>运行状态</dt><dd>{!status?"尚未读取":running?(paused?"已暂停":"运行中"):tasks.length?"历史记录（未运行）":"空闲"}</dd></div>
       <div><dt>本地已申报</dt><dd>{status?.heartbeats.sent??0}</dd></div>
       <div><dt>服务端确认</dt><dd>{status?.heartbeats.server_confirmed??0}</dd></div>
       <div><dt>任务数</dt><dd>{status?.task_count??0}</dd></div>
       <div><dt>运行 ID</dt><dd>{status?.run_id||"—"}</dd></div>
-      <div><dt>当前配置</dt><dd>{status?`${status.config.speed}x / ${status.config.jobs} 并发`:"—"}</dd></div>
+      <div><dt>当前配置</dt><dd>{running&&status?`${status.config.speed}x / ${status.config.jobs} 并发`:"—"}</dd></div>
     </dl>
 
     <table className="sf-task-table" aria-label="心跳任务状态">
