@@ -10,6 +10,7 @@
 | AI版课程/书架读取 | `platforms/ucampus/adapter.py` | 真实 API 只读实现，待账号验收 |
 | 单元、资源、通过状态 | `platforms/ucampus/course_progress.py` | 真实 API 只读实现，待账号验收 |
 | 凭据保存、状态查询和删除 | `platforms/ucampus/credentials.py` | Windows Credential Manager；不回传原始凭据 |
+| 账号页验证课程接口 | `UCampusLoginPanel.tsx` → `courses.list` | 主动执行一次真实目录 GET；识别会话过期、格式不匹配及空课程，**不把配置成功当成登录成功** |
 | 本地模拟事件 | `platforms/ucampus/local_runtime.py`、`services/ucampus_runtime_bridge.py` | 不发送学习事件；与课程完成无关 |
 | 旧版 Socket.IO 诊断 | `platforms/ucampus/socketio_client.py` | 手动认证握手，不发送学习事件 |
 | 独立 HTTP 契约研究层 | `platforms/ucampus/send_transport.py`、`submission_coordinator.py` | 未注册生产协议；只在单测中使用 |
