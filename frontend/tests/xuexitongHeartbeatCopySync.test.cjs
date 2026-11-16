@@ -28,3 +28,21 @@ test("Xuexitong task controls keep run identity and shared parameter defaults",(
   assert.ok(bridge.includes('case "XUEXITONG_RUN_ID_REQUIRED":'),
     "Missing run identity must have an actionable UI explanation");
 });
+
+test("Xuexitong panel does not control a different course",()=>{
+  const source=fs.readFileSync(official,"utf8");
+  assert.ok(source.includes("const currentStatus=status?.course_key===course.course_id?status:null;"),
+    "The panel must discard previous-course status immediately");
+  assert.ok(source.includes("const runId=currentStatus?.run_id;"),
+    "Run controls must use the selected course, never stale status");
+  assert.ok(source.includes("if(selectedCourse.current===actionCourse)setMessage("),
+    "Responses from a previous course must not update the current course");
+  assert.ok(source.includes('setStatus(null);setLogs([]);setMessage("");'),
+    "Navigation must clear stale messages and logs");
+  assert.ok(source.includes("Number.isFinite(speed)")&&source.includes("Number.isInteger(jobs)"),
+    "Speed and chapter counts require validation before starting");
+  assert.ok(source.includes("disabled={busy||!desktop||running||!validConfig}"),
+    "Invalid settings must not enable start");
+  assert.ok(source.includes("本地记录（非播放证明）"),
+    "Local scheduling estimates must be distinct from verified playback");
+});
