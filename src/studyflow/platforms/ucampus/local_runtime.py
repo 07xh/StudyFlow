@@ -131,6 +131,8 @@ class UCampusLocalRunner:
                            for group in chapters.values()]
                 for future in futures:
                     future.result()
+            with self._lock:
+                failed = any(task["state"] == "failed" for task in self._tasks.values())
         except Exception:
             failed = True
         finally:

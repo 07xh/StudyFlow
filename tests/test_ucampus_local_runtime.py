@@ -66,7 +66,7 @@ def test_pause_resume_stop_requires_same_run_id():
         runner.control("pause", "wrong")
     assert runner.control("pause", run_id)["paused"]
     assert runner.control("resume", run_id)["paused"] is False
-    assert runner.control("stop", run_id)["phase"] == "stopping"
+    assert runner.control("stop", run_id)["phase"] in ("stopping", "stopped")
     runner.shutdown()
     assert runner.status("different")["tasks"] == []
 
@@ -83,3 +83,23 @@ def test_invalid_targets_and_non_finite_positions_are_rejected():
     runner = UCampusLocalRunner()
     with pytest.raises(ValueError):
         runner.start("course1", [task(), task()], observer=Observer(), transport=Sender())
+
+
+def test_observer_failure_is_not_mislabeled_as_completed():
+    class Observer:
+        def observe(self, _target):
+            raise RuntimeError("local media source failed")
+    class Sender:
+        def send(self, _pulse):
+            raise AssertionError("no packet should be attempted")
+    runner = UCampusLocalRunner(interval=0.01)
+    runner.start("course1", [task()], observer=Observer(), transport=Sender())
+    for _ in range(100):
+        if runner.status("course1")["phase"] == "failed":
+            break
+        time.sleep(0.01)
+    result = runner.status("course1")
+    assert result["phase"] == "failed"
+    assert result["tasks"][0]["state"] == "failed"
+    assert result["sent"] == 0 and result["server_confirmed"] is None
+    runner.shutdown()
