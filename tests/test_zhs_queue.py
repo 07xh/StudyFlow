@@ -292,6 +292,41 @@ def test_malformed_stop_file_does_not_end_entire_queue(tmp_path):
     assert supervise([target],2,"e"*32,tmp_path,launch) == 0
 
 
+def test_sampling_freshness_is_video_only_and_never_invents_a_percentage():
+    from studyflow.services.zhs_queue import sampling_is_stale
+    for kind in ("ppt", "article", "other"):
+        assert not sampling_is_stale(kind, None, had_sample=False, running_seconds=120)
+        assert not sampling_is_stale(kind, None, had_sample=True, running_seconds=120)
+    assert not sampling_is_stale("video", None, had_sample=False, running_seconds=24.9)
+    assert sampling_is_stale("video", None, had_sample=False, running_seconds=25)
+    assert sampling_is_stale("video", None, had_sample=True, running_seconds=1)
+    assert not sampling_is_stale("video", 37.5, had_sample=True, running_seconds=120)
+
+
+def test_running_ppt_does_not_report_unavailable_video_sampling(tmp_path, monkeypatch):
+    from studyflow.services import zhs_queue
+    snapshots = []
+    atomic_json = zhs_queue.atomic_json
+
+    def capture(path, data):
+        if path.name.startswith("zhs-queue-"):
+            snapshots.append(json.loads(json.dumps(data)))
+        atomic_json(path, data)
+
+    monkeypatch.setattr(zhs_queue, "atomic_json", capture)
+    target = zhs_queue.QueueTarget(1, 10, "ppt", "阅读", "ai-1", "第一章")
+
+    def launch(target, token):
+        return subprocess.Popen([sys.executable, "-c", "import time;time.sleep(.25)"],
+                                stdin=subprocess.PIPE)
+
+    assert zhs_queue.supervise([target], 1, "d" * 32, tmp_path, launch) == 0
+    active = [entry["tasks"][0] for entry in snapshots
+              if entry["tasks"][0]["state"] == "running"]
+    assert active
+    assert all(row["percent"] is None and row["stale"] is False for row in active)
+
+
 def test_stale_and_foreign_child_telemetry_cannot_supply_live_percentage(tmp_path):
     from studyflow.services.zhs_queue import local_percent
     path = tmp_path / f"monitor-zhs-{'a'*32}.json"
