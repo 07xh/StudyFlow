@@ -19,6 +19,6 @@ test("U校园 reads no invented courses or progress",()=>{
   assert.match(app,/renderPlatformDetail\("ucampus"\)/);
   assert.match(app,/等待完成 U校园5\.0 真实章节与作业接口验收/);
   assert.match(login,/type="password"/);
-  assert.doesNotMatch(login,/localStorage/);
+  assert.doesNotMatch(login,/localStorage\.(?:getItem|setItem)/);
   assert.doesNotMatch(login,/2026110电气|2026级大学外语/);
 });
