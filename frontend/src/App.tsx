@@ -48,6 +48,7 @@ import {Switch} from "./ui/Switch";
 import {EmptyState} from "./ui/EmptyState";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
 import {SettingsDialog} from "./ui/SettingsDialog";
+import {GlobalSettingsModal,type GlobalSettingsTab} from "./ui/GlobalSettingsModal";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const ACTIVITY_KEY="studyflow.activity.v1";
@@ -71,6 +72,12 @@ function readActivity():ActivityEntry[]{
 
 export default function App(){
   const [page,setPage]=useState<Page>("home");
+  const [globalSettingsOpen,setGlobalSettingsOpen]=useState(false);
+  const [globalSettingsTab,setGlobalSettingsTab]=useState<GlobalSettingsTab>("general");
+  function openGlobalSettings(tab:GlobalSettingsTab="general"){
+    setGlobalSettingsTab(tab);
+    setGlobalSettingsOpen(true);
+  }
   const {dark,mode,setMode,toggleTheme}=useAppearance();
   const [compactCards,setCompactCards]=useState(()=>{
     try{return window.localStorage.getItem("studyflow.cards.compact")==="true";}
@@ -869,7 +876,7 @@ export default function App(){
   </section>;
 
   return <>
-    <AppShell page={page} onNavigate={next=>{
+    <AppShell page={page} settingsOpen={globalSettingsOpen} onOpenSettings={()=>openGlobalSettings()} onNavigate={next=>{
       if(next==="platform-zhidao"){goPlatform("zhidao");return;}
       if(next==="platform-yuketang"){goPlatform("yuketang");return;}
       setPlatformSettingsOpen(null);
@@ -905,26 +912,29 @@ export default function App(){
       {page==="platform-yuketang"&&renderPlatformDetail("yuketang")}
       {page==="records"&&renderRecords()}
       {page==="logs"&&renderLogs()}
-      {page==="settings"&&<>
-        <section className="settings-card">
-          <h3>外观</h3>
-          <div className="sf-settings-line">
-            <div><strong>界面主题</strong></div>
-            <ThemeModeSelector mode={mode} onChange={setMode}/>
-          </div>
-          <div className="sf-settings-line">
-            <div><strong>紧凑卡片</strong></div>
-            <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
-          </div>
-        </section>
-        <ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>
-      </>}
-      <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
     </AppShell>
+    <GlobalSettingsModal open={globalSettingsOpen} dark={dark}
+      activeTab={globalSettingsTab} onTabChange={setGlobalSettingsTab} onClose={()=>setGlobalSettingsOpen(false)}>
+      {globalSettingsTab==="general"&&<section className="settings-card">
+        <h3>外观</h3>
+        <div className="sf-settings-line">
+          <div><strong>界面主题</strong></div>
+          <ThemeModeSelector mode={mode} onChange={setMode}/>
+        </div>
+        <div className="sf-settings-line">
+          <div><strong>紧凑卡片</strong></div>
+          <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
+        </div>
+      </section>}
+      <UpdatePanel desktop={desktop&&consentAccepted}
+        visible={globalSettingsOpen&&globalSettingsTab==="updates"} embedded
+        onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
+      {globalSettingsTab==="about"&&<ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>}
+    </GlobalSettingsModal>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
     <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}
       onRetry={releaseChangelog.retry}
-      onOpenUpdates={()=>{releaseChangelog.close();setPage("settings");}}/>
+      onOpenUpdates={()=>{releaseChangelog.close();openGlobalSettings("updates");}}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}

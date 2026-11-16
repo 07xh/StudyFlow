@@ -67,7 +67,7 @@ test("running desktop checks real releases and displays their body directly",()=
   assert.match(lifecycle,/markReleaseDismissed\(dialog.version\)/);
   assert.match(dialog,/发现新版本/);
   assert.match(dialog,/查看更新/);
-  assert.match(app,/onOpenUpdates=\{\(\)=>\{releaseChangelog.close\(\);setPage\("settings"\);\}\}/);
+  assert.match(app,/onOpenUpdates=\{\(\)=>\{releaseChangelog.close\(\);openGlobalSettings\("updates"\);\}\}/);
 });
 test("installed upgrade changelog has bundled candidate fallback and retry",()=>{
   const lifecycle=read("useReleaseChangelog.ts");

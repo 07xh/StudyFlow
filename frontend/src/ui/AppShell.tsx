@@ -13,7 +13,7 @@ import {PageSurface} from "./PageSurface";
 import "./foundation.css";
 
 export type Page="home"|"tasks"|"platforms"|"platform-zhidao"|
-  "platform-yuketang"|"records"|"logs"|"settings";
+  "platform-yuketang"|"records"|"logs";
 const workspaceNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
   {id:"home",label:"首页",icon:LayoutDashboard},
   {id:"tasks",label:"学习任务",icon:ListChecks},
@@ -28,7 +28,7 @@ const platformNavigation:{id:Page;label:string;icon:LucideIcon}[]=[
 const titles:Record<Page,string>={
   home:"学习总览",tasks:"学习任务",platforms:"学习平台",
   "platform-zhidao":"知到","platform-yuketang":"雨课堂",
-  records:"学习记录",logs:"日志中心",settings:"设置"
+  records:"学习记录",logs:"日志中心"
 };
 
 function readPlatformExpanded():boolean{
@@ -37,7 +37,7 @@ function readPlatformExpanded():boolean{
 }
 
 interface Props {
-  page:Page;onNavigate:(next:Page)=>void;dark:boolean;onThemeToggle:()=>void;
+  page:Page;onNavigate:(next:Page)=>void;settingsOpen:boolean;onOpenSettings:()=>void;dark:boolean;onThemeToggle:()=>void;
   onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
   compact:boolean;children:ReactNode;
   headerTitle?:string;
@@ -48,7 +48,7 @@ interface Props {
   metricLabel?:string;courseEvidence?:string;courseVerifiedAt?:string|null;currentPlatformStatus?:ConnectionStatus;
 }
 export function AppShell({
-  page,onNavigate,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,platformOverview,selectedCourseId="",courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
+  page,onNavigate,settingsOpen,onOpenSettings,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,platformOverview,selectedCourseId="",courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -99,8 +99,8 @@ export function AppShell({
       </div>
       <div className="sf-window-titlebar-actions">
         <button className="sf-window-control sf-settings-button" type="button"
-          title="设置" aria-label="设置" aria-current={page==="settings"?"page":undefined}
-          onClick={()=>onNavigate("settings")}><Settings size={15}/></button>
+          title="设置" aria-label="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}
+          onClick={onOpenSettings}><Settings size={15}/></button>
         <span className="sf-window-control-separator" aria-hidden="true"/>
         <button className="sf-window-control" type="button" disabled={!desktop}
           title="最小化" aria-label="最小化窗口"
