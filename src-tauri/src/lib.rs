@@ -285,7 +285,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && request.get("run_id").and_then(|v| v.as_str())
                     .is_some_and(|id| id.len() == 32
                         && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
-        "ucampus.fabricated.status" if request.get("course_id").and_then(|v| v.as_str())
+        "ucampus.fabricated.status" | "ucampus.fabricated.history" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
                 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
         "ucampus.fabricated.start" if request.get("course_id").and_then(|v| v.as_str())
@@ -763,6 +763,10 @@ mod ipc_validation_tests {
     fn ucampus_fabricated_operation_guard() {
         assert!(validate(&json!({"id":"u","version":1,
             "operation":"ucampus.fabricated.capabilities"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.history","course_id":"course-v2:1"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.history"})).is_err());
         assert!(validate(&json!({"id":"u","version":1,
             "operation":"ucampus.fabricated.start","course_id":"course-v2:1",
             "unit_id":"u1","pulses":6,"speed":2,"duration_seconds":600,
