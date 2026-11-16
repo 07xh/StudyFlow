@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useState} from "react";
 import type {Course} from "../types";
-import {request,friendlyBridgeError,type UCampusFabricatedStatus,type UCampusUnit} from "../bridge";
+import {request,friendlyBridgeError,type UCampusFabricatedStatus,type UCampusUnit,type UCampusFabricatedHistory} from "../bridge";
 import "./XuexitongHeartbeatPanel.css";
 
 /** 虚构心跳刷完成：不打开官方播放器，不解码视频，虚拟播放位置由本机生成。 */
@@ -15,6 +15,8 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
   const [status,setStatus]=useState<UCampusFabricatedStatus|null>(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
+  const [historyBusy,setHistoryBusy]=useState(false);
+  const [history,setHistory]=useState<UCampusFabricatedHistory|null>(null);
   const courseId=course.course_id;
   const refresh=useCallback(async()=>{
     const state=await request<UCampusFabricatedStatus>({
@@ -25,7 +27,7 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
   },[courseId]);
   useEffect(()=>{
     let live=true;
-    setUnits([]);setUnitId("");setStatus(null);setMessage("");
+    setUnits([]);setUnitId("");setStatus(null);setMessage("");setHistory(null);
     if(!desktop)return()=>{live=false;};
     void request<UCampusUnit[]>({operation:"ucampus.units.list",course_id:courseId})
       .then(value=>{
@@ -40,6 +42,19 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
   },[desktop,courseId,refresh]);
 
   const active=Boolean(status?.active);
+  async function loadHistory(){
+    if(!desktop||historyBusy)return;
+    setHistoryBusy(true);setMessage("");
+    try{
+      const snapshot=await request<UCampusFabricatedHistory>({
+        operation:"ucampus.fabricated.history",course_id:courseId
+      });
+      if(!Array.isArray(snapshot.records)||snapshot.resume_available!==false)
+        throw Error("INVALID_IPC_RESPONSE");
+      setHistory(snapshot);
+    }catch(error){setMessage(friendlyBridgeError(error));}
+    finally{setHistoryBusy(false);}
+  }
   async function control(action:"start"|"pause"|"resume"|"stop"){
     if(!desktop||busy)return;
     setBusy(true);setMessage("");
@@ -121,6 +136,10 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
         onClick={()=>void control("stop")}>停止</button>
       <button type="button" className="secondary" disabled={busy}
         onClick={()=>void refresh().catch(error=>setMessage(friendlyBridgeError(error)))}>刷新</button>
+      <button type="button" className="secondary" disabled={!desktop||historyBusy}
+        onClick={()=>void loadHistory()}>
+        {historyBusy?"正在读取历史…":"查看本地历史快照"}
+      </button>
     </div>
     {message&&<p role="alert">{message}</p>}
     {status?.last_error&&<p role="alert">{friendlyBridgeError(new Error(status.last_error))}</p>}
@@ -133,6 +152,16 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
       <div><dt>通道已连接</dt><dd>{status?.sender_connected?"是":"否"}</dd></div>
       <div><dt>重启后自动续跑</dt><dd>不支持</dd></div>
     </dl>
+    {history&&<div className="sf-xxt-evidence-note">
+      <strong>本地历史快照（只读）</strong>
+      <p className="sf-muted">重启后可查看此前的任务计数；不会自动续发或补交模拟事件。</p>
+      {history.records.length===0&&<p className="sf-muted">当前课程暂无已保存的本地任务快照。</p>}
+      <ul>{history.records.map(record=><li key={record.run_id}>
+        {record.unit_id||"未知单元"} · {record.phase} ·
+        本地生成 {record.generated} · 曾尝试发送 {record.sent} ·
+        回读已通过 {record.server_readback_passed}（归因未知）
+      </li>)}</ul>
+    </div>}
     <div className="sf-xxt-section-heading">资源记录 <span>{status?.tasks.length??0} 项</span></div>
     <div className="sf-xxt-table-scroll" role="region" aria-label="虚构心跳资源列表" tabIndex={0}>
       <table className="sf-task-table">
