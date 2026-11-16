@@ -1,6 +1,7 @@
 """Ensure U校园 IPC enforces the read-only progress boundary."""
 from studyflow.services import bridge
 from studyflow.platforms.ucampus.course_progress import UCampusProgressError
+from studyflow.platforms.ucampus.adapter import UCampusCatalogError
 
 
 def call(operation, **kwargs):
@@ -68,3 +69,30 @@ def test_server_status_verification_reports_expired_session(monkeypatch):
     monkeypatch.setattr(bridge,"UCampusProgressReader",Reader)
     response=call("ucampus.progress.verify",course_id="course1",unit_id="U1")
     assert response == {"id":"ucampus-test","ok":False,"error":"UCAMPUS_SESSION_EXPIRED"}
+
+def test_catalog_diagnostics_preserve_known_codes_not_untrusted_text(monkeypatch):
+    class Expired:
+        def list_courses(self):
+            raise UCampusCatalogError("UCAMPUS_SESSION_EXPIRED")
+    monkeypatch.setitem(bridge.ADAPTERS, "ucampus", Expired())
+    assert call("courses.list", platform="ucampus")["error"] == "UCAMPUS_SESSION_EXPIRED"
+
+    class UnknownFormat:
+        def list_courses(self):
+            raise UCampusCatalogError("UCAMPUS_CATALOG_FORMAT_UNVERIFIED")
+    monkeypatch.setitem(bridge.ADAPTERS, "ucampus", UnknownFormat())
+    assert call("courses.list", platform="ucampus")["error"] == "UCAMPUS_CATALOG_FORMAT_UNVERIFIED"
+
+    class UntrustedException:
+        def list_courses(self):
+            raise UCampusCatalogError("Cookie: secret=never-expose")
+    monkeypatch.setitem(bridge.ADAPTERS, "ucampus", UntrustedException())
+    assert call("courses.list", platform="ucampus")["error"] == "PLATFORM_NOT_READY"
+
+
+def test_other_platform_catalog_errors_remain_generic(monkeypatch):
+    class UnexpectedCatalogError:
+        def list_courses(self):
+            raise UCampusCatalogError("UCAMPUS_SESSION_EXPIRED")
+    monkeypatch.setitem(bridge.ADAPTERS, "zhidao", UnexpectedCatalogError())
+    assert call("courses.list", platform="zhidao")["error"] == "PLATFORM_NOT_READY"
