@@ -769,7 +769,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="ucampus"?<>
-          <p className="sf-muted">U校园只读课程已载入。视频、作业和进度接口尚未获得真实核验，不展示运行或完成结果。</p>
+          <p className="sf-muted">U校园课程、单元和任务读取已接入实验性接口；本地心跳调度内核已实现，但播放器观测和 U校园发送协议尚未验证。这里不会把本机运行记录当作平台已完成。</p>
         </>:course.platform==="xuexitong"?<>
           <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
