@@ -46,23 +46,51 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
   const timer=useRef<number|null>(null);
+  const refreshInFlight=useRef(false);
+  const selectedCourse=useRef(course.course_id);
+  selectedCourse.current=course.course_id;
 
   const refresh=useCallback(async()=>{
+    if(refreshInFlight.current)return;
+    refreshInFlight.current=true;
     try{
       const [nextStatus,nextLogs]=await Promise.all([
-        request<HeartbeatStatus>({operation:"xuexitong.heartbeat.status"}),
-        request<{ok:boolean;events:HeartbeatLog[]}>({operation:"xuexitong.heartbeat.logs",limit:30}),
+        request<HeartbeatStatus>({operation:"xuexitong.heartbeat.status",course_id:course.course_id}),
+        request<{ok:boolean;events:HeartbeatLog[]}>({operation:"xuexitong.heartbeat.logs",limit:30,course_id:course.course_id}),
       ]);
-      setStatus(nextStatus);
-      setLogs(nextLogs.events||[]);
-    }catch(error){setMessage(friendlyBridgeError(error));}
-  },[]);
+      if(selectedCourse.current!==course.course_id)return;
+      if(nextStatus.course_key===course.course_id){
+        setStatus(nextStatus);
+        setLogs(nextStatus.run_id?(nextLogs.events||[]).filter(entry=>entry.run_id===nextStatus.run_id):[]);
+      }
+    }catch(error){
+      if(selectedCourse.current===course.course_id)setMessage(friendlyBridgeError(error));
+    }finally{refreshInFlight.current=false;}
+  },[course.course_id]);
 
   useEffect(()=>{
+    setStatus(null);setLogs([]);
     void refresh();
+    // React's Node-based test renderer has no window. The desktop app does.
+    if(typeof window==="undefined")return;
     timer.current=window.setInterval(()=>{void refresh();},2000);
-    return ()=>{if(timer.current!==null)window.clearInterval(timer.current);};
+    return ()=>{
+      if(timer.current!==null){
+        window.clearInterval(timer.current);
+        timer.current=null;
+      }
+    };
   },[refresh]);
+
+  useEffect(()=>{
+    if(!desktop)return;
+    let active=true;
+    void request<{playback_speed:number;concurrency:number}>({operation:"xuexitong.settings.get"})
+      .then(settings=>{
+        if(active){setSpeed(settings.playback_speed);setJobs(settings.concurrency);}
+      }).catch(()=>{});
+    return ()=>{active=false;};
+  },[desktop]);
 
   const control=async(action:"start"|"pause"|"resume"|"stop")=>{
     if(busy||!desktop)return;
@@ -95,11 +123,8 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const canControl=Boolean(status?.queue_controls?.pause);
 
   return <section className="sf-platform-settings-view" aria-label="学习通本地心跳任务">
-    <h3>本地心跳任务</h3>
     <p className="sf-hint">
-      心跳包由本机生成并发送，不依赖网页播放器。
-      「本地已申报」只表示请求发出，「服务端确认」表示平台返回任务通过标记，两者分开统计。
-      视频与音频任务按 dtype 分别构造心跳包，可单独筛选运行。
+      本地任务记录与平台核验分别统计；未经确认的任务不显示为已完成。
     </p>
 
     <div className="sf-settings-row">

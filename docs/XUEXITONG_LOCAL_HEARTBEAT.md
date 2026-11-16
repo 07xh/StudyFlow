@@ -264,7 +264,7 @@ python -m unittest discover -s tests -p "test_xuexitong*.py" -v
 | 优先级 | 问题 | 处置 |
 | --- | --- | --- |
 | P0 | 一次性 Sidecar 与持续任务不兼容 | 复用既有 `QrBridgeWorker` 长驻 JSONL 通道，服务单例放进程内；补丁见 `XUEXITONG_HEARTBEAT_INTEGRATION.md` |
-| P0 | IPC 白名单、前端、服务未接通 | 四处增量已直接合入 `bridge.py` / `lib.rs` / `bridge.ts` / Panels，并挂载心跳任务面板 |
+| P0 | IPC 白名单、前端、服务未接通 | 分支并发提交已接通长驻 IPC / 白名单 / 前端 / 服务并挂载任务面板；`9f762e5b` 补队列级暂停与退出前 `stop` 刷盘 |
 | P1 | 未确认完成缺少退出条件 | `max_wall_seconds` / `max_unconfirmed_rounds` / `completion_rounds` 三级边界，终态 `INTERRUPTED` 且带 `end_reason` |
 | P1 | 暂停期间时间计入进度 | `_wait_while_paused()` 持续重置 `_last_iter` 并累计 `_paused_wall`，墙钟超时预算排除暂停时长 |
 | P1 | 停止只作用于已创建运行器 | `ChapterQueue._cancelled` 队列级事件；`run()` 不再自动 clear，「启动后立即停止」生效 |
@@ -286,11 +286,12 @@ python -m unittest discover -s tests -p "test_xuexitong*.py" -v
 ### 验证
 
 ```text
-Ran 58 tests in 0.18s — OK（连续 3 次）
+Ran 65 tests in 0.387s — OK（连续 2 次）
 COMPILE_OK
 ```
 
-覆盖：43 项心跳模块与审计整改用例 + 5 项长驻桥接层用例 + 10 项视频/音频 dtype 分流入库用例；
+覆盖：47 项心跳模块与审计整改用例（含账号隔离恢复、真实发送计数、队列级暂停）
++ 8 项长驻桥接层用例（含登出安全 worker）+ 10 项视频 / 音频 dtype 分流入库用例，共 65 项；
 全部使用假 session / 假时钟，未对真实账号发包。
 四处应用级接线已合入并通过三方 operation 一致性校验（Python / Rust / TypeScript 各 6 个）；
 Rust / TypeScript 编译与 NSIS 打包在本机缺工具链，仍未执行。

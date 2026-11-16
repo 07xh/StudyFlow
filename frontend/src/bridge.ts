@@ -165,7 +165,8 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "XUEXITONG_INVALID_PARAMETER", "XUEXITONG_INVALID_TARGET",
                              "XUEXITONG_SESSION_MISSING", "XUEXITONG_INTERNAL_ERROR",
                              "XUEXITONG_UNKNOWN_OPERATION", "XUEXITONG_TASK_NOT_RUNNING",
-                             "XUEXITONG_RUN_ID_MISMATCH", "XUEXITONG_NO_TARGET_FOR_DTYPE"]);
+                             "XUEXITONG_RUN_ID_MISMATCH", "XUEXITONG_NO_TARGET_FOR_DTYPE",
+                             "XUEXITONG_NO_ACTIVE_TASK"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -314,6 +315,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "XUEXITONG_INVALID_TARGET": return "任务点信息不完整，请重新读取章节任务。";
     case "XUEXITONG_SESSION_MISSING": return "学习通会话未配置，请先登录。";
     case "XUEXITONG_TASK_NOT_RUNNING": return "当前没有运行中的心跳任务。";
+  case "XUEXITONG_NO_ACTIVE_TASK": return "当前账号或课程下没有活动心跳任务，请先启动。";
     case "XUEXITONG_RUN_ID_MISMATCH": return "运行 ID 不匹配，请刷新状态后重试。";
     case "XUEXITONG_INTERNAL_ERROR": return "本地心跳服务内部错误，请查看运行日志。";
     case "XUEXITONG_UNKNOWN_OPERATION": return "不支持的心跳操作。";

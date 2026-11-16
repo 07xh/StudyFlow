@@ -262,15 +262,20 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ## 7. 合入状态（2026-11-16）
 
-四处增量已直接合入 `feat/xuexitong-unified-platform-20261116`，不再需要手工复制补丁：
+四处接线由分支上的并发提交完成：`413c889a`（长驻心跳 IPC、课程工作区、bridge 回归）、
+`78eb4cae`（账号隔离恢复、真实发送计数、登出安全的 worker）、`fd85e67e`（账号隔离与音频分流回归）、
+`9f762e5b`（队列级暂停与 Sidecar 优雅退出交接）。收尾提交在这些改动之上补齐 Rust 入参校验、
+`XUEXITONG_NO_ACTIVE_TASK` 中文提示、`integration/frontend` 组件副本同步与验证数字，
+未覆盖并发提交引入的账号隔离与计数修正。以下为仓库现状，无需手工复制补丁：
 
 | 文件 | 合入内容 |
 | --- | --- |
 | `src/studyflow/services/bridge.py` | import 心跳桥 + `dispatch()` 内 6 个 operation 路由到长驻服务单例 |
-| `src-tauri/src/lib.rs` | `validate()` 白名单（含 `dtype` 限定）、`bridge_request()` 长驻通道判定、退出前发 `stop` 刷盘 |
+| `src-tauri/src/lib.rs` | `validate()` 白名单（`dtype` / `speed` / `jobs` / `course_id` / `limit` / `run_id` 校验）、`bridge_request()` 长驻通道判定、退出前发 `stop` 刷盘 |
 | `frontend/src/bridge.ts` | 心跳视图类型 + `BridgeRequest` 6 个成员 + 公开错误码与中文提示 |
 | `frontend/src/components/XuexitongPanels.tsx` | 课程详情下方挂载 `XuexitongHeartbeatPanel` |
-| `frontend/src/components/XuexitongHeartbeatPanel.tsx` | 任务面板（新增），含速度 / 并发 / 首包申报 / 任务类型筛选 |
+| `frontend/src/components/XuexitongHeartbeatPanel.tsx` | 任务面板（新增），含速度 / 并发 / 首包申报 / 任务类型筛选 / 防重入刷新 / 课程切换防串台 |
+| `integration/frontend/XuexitongHeartbeatPanel.tsx` | 可复制组件副本，与 `frontend/src/components/` 下正式组件逐字节一致 |
 
 ### 视频与音频 dtype 分流
 
@@ -283,13 +288,17 @@ UI 的「任务类型」下拉提供「视频 + 音频 / 仅视频 / 仅音频�
 ### 验证
 
 ```text
-Ran 58 tests in 0.18s — OK（连续 3 次）
+Ran 65 tests in 0.387s — OK（连续 2 次）
 COMPILE_OK
 Python / Rust / TypeScript 三方 operation 集合一致：6 / 6 / 6
+（校验统计各文件中全部 `xuexitong.heartbeat.*` 字面量，不受 TS 把
+`pause | resume | stop` 写成单个并集成员的影响）
 ```
 
-新增 `tests/test_xuexitong_audio_dtype.py`：卡解析双类型、目标 dtype 继承、
-音频 headers、runner 按目标发包、服务按 dtype 过滤与空集合错误码。
+用例分布：`test_xuexitong_heartbeat.py` 47 项（含账号隔离恢复、真实发送计数、
+队列级暂停）、`test_xuexitong_bridge.py` 8 项（含登出安全 worker）、
+`tests/test_xuexitong_audio_dtype.py` 10 项（卡解析双类型、目标 dtype 继承、
+音频 headers、runner 按目标发包、服务按 dtype 过滤与空集合错误码）。
 
 ### 仍未执行
 

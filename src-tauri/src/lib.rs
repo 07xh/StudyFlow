@@ -265,10 +265,21 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             })
             && request.get("settings").map_or(true, |value| value.is_object())
             && request.get("dtype").map_or(true, |value|
-                matches!(value.as_str(), Some("Video" | "Audio"))) => Ok(()),
-        "xuexitong.heartbeat.status" | "xuexitong.heartbeat.logs"
-        | "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume"
-        | "xuexitong.heartbeat.stop" => Ok(()),
+                matches!(value.as_str(), Some("Video" | "Audio")))
+            && request.get("speed").map_or(true, |v| v.as_f64().is_some_and(|n| (0.25..=2.0).contains(&n)))
+            && request.get("jobs").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=4).contains(&n))) => Ok(()),
+        "xuexitong.heartbeat.status" if request.get("course_id").map_or(true, |v| v.as_str()
+            .is_some_and(|key| key.len() <= 96 && {
+                let parts: Vec<&str> = key.split(':').collect();
+                parts.len() == 3 && parts.iter().all(|part|
+                    !part.is_empty() && part.len() <= 24
+                    && part.bytes().all(|c| c.is_ascii_digit()))
+            })) => Ok(()),
+        "xuexitong.heartbeat.logs" if request.get("limit").map_or(true, |v| v.as_u64()
+            .is_some_and(|n| n <= 500)) => Ok(()),
+        "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume" | "xuexitong.heartbeat.stop"
+            if request.get("run_id").map_or(true, |v| v.as_str().is_some_and(|id|
+                !id.is_empty() && id.len() <= 64 && id.bytes().all(|c| c.is_ascii_hexdigit()))) => Ok(()),
         "xuexitong.settings.save" if request.get("settings").and_then(|v| v.as_object())
             .is_some_and(|value| value.len() == 4
                 && value.get("playback_speed").and_then(|v| v.as_f64()).is_some_and(|n| (0.25..=2.0).contains(&n))
