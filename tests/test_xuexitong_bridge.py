@@ -56,9 +56,20 @@ class TestHeartbeatBridge(unittest.TestCase):
 
     def test_control_operations_forward_run_id(self) -> None:
         bridge.dispatch("xuexitong.heartbeat.pause", {
-            "operation": "xuexitong.heartbeat.pause", "run_id": "run-abc",
+            "operation": "xuexitong.heartbeat.pause", "run_id": "aabbcc",
         })
-        self.assertEqual(self.fake.calls[0][1]["run_id"], "run-abc")
+        self.assertEqual(self.fake.calls[0][1]["run_id"], "aabbcc")
+
+    def test_public_controls_require_valid_run_id(self) -> None:
+        for operation in ("xuexitong.heartbeat.pause", "xuexitong.heartbeat.resume",
+                          "xuexitong.heartbeat.stop"):
+            for run_id in (None, "", "previous-run", 123, "a" * 65):
+                request = {"operation": operation}
+                if run_id is not None:
+                    request["run_id"] = run_id
+                result = bridge.dispatch(operation, request)
+                self.assertEqual(result, {"ok": False, "error": "XUEXITONG_RUN_ID_REQUIRED"})
+        self.assertEqual(self.fake.calls, [])
 
     def test_main_dispatch_uses_persistent_heartbeat_service(self) -> None:
         from studyflow.services.bridge import dispatch as app_dispatch
