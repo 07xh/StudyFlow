@@ -32,6 +32,7 @@ export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated}:Props)
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const revision=useRef(0);
+  const autoVerifiedCourseRef=useRef("");
   const detailCourseKey=useRef(course.course_id);
   const onCoursesUpdatedRef=useRef(onCoursesUpdated);
   onCoursesUpdatedRef.current=onCoursesUpdated;
@@ -63,7 +64,11 @@ export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated}:Props)
       // no usable chapter evidence, query the real server before declaring it empty.
       // A manual refresh always requests new server evidence.
       const missingEvidence=!cached.verified||cached.stale||cached.items.length===0;
-      if(!verifyServer&&(!missingEvidence||course.stale))return;
+      if(!verifyServer&&(!missingEvidence||course.stale||
+        autoVerifiedCourseRef.current===course.course_id))return;
+      // Only one automatic retry per selected course, even if the server
+      // legitimately has no chapter records. Manual refresh can retry again.
+      autoVerifiedCourseRef.current=course.course_id;
       const snapshot=await request<ZhidaoProgressSnapshot>({
         operation:"zhidao.progress.verify",course_key:course.course_id
       });
