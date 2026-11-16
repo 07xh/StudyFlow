@@ -474,29 +474,30 @@ class FabricatedStateStore:
         if type(limit) is not int or not 1 <= limit <= 10:
             raise ValueError("UCAMPUS_INVALID_HISTORY_LIMIT")
         with self._lock:
+            raw = self._read()
+            # Reuse the same sanitizer as save/migration. Read-only history
+            # must not grow its own alternative ID/counter validation rules.
+            entries = self._sanitized_entries(raw)
             results: list[dict[str, Any]] = []
-            for run_id, record in reversed(list(self._read().items())):
-                if (not isinstance(run_id, str) or not _ID_RE.fullmatch(run_id)
-                        or not isinstance(record, dict)
-                        or record.get("course_id") != course_id):
+            for run_id, record in reversed(list(entries.items())):
+                if record["course_id"] != course_id:
                     continue
-                tasks = record.get("tasks")
-                if not isinstance(tasks, dict):
+                # Preserve the historic rule: malformed/missing task maps
+                # do not create a visible history record.
+                if not isinstance(raw[run_id].get("tasks"), dict):
                     continue
-                rows = [row for row in tasks.values() if isinstance(row, dict)]
-                phase = record.get("phase")
+                rows = record["tasks"].values()
+                phase = record["phase"]
                 phase = ("interrupted" if phase in ("running", "paused", "stopping")
                          else phase if phase in ("finished_locally", "failed", "stopped")
                          else "historical")
-                unit_id = record.get("unit_id")
                 results.append({
                     "run_id": run_id, "course_id": course_id,
-                    "unit_id": unit_id if isinstance(unit_id, str) and
-                        _ID_RE.fullmatch(unit_id) else "",
-                    "phase": phase, "resources": len(rows),
-                    "generated": sum(self._safe_count(row.get("generated")) for row in rows),
-                    "sent": sum(self._safe_count(row.get("sent")) for row in rows),
-                    "server_readback_passed": sum(self._safe_count(row.get("confirmed")) for row in rows),
+                    "unit_id": record["unit_id"],
+                    "phase": phase, "resources": len(record["tasks"]),
+                    "generated": sum(row["generated"] for row in rows),
+                    "sent": sum(row["sent"] for row in rows),
+                    "server_readback_passed": sum(row["confirmed"] for row in rows),
                     "resume_available": False,
                     "progress_causality": "unverified",
                 })
