@@ -246,6 +246,16 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong" | "ucampus")) => Ok(()),
+        "ucampus.monitor.status" | "ucampus.monitor.tick" => Ok(()),
+        "ucampus.monitor.configure" if request.get("enabled").and_then(|v| v.as_bool())
+            .is_some_and(|enabled| !enabled || (
+                request.get("course_id").and_then(|x| x.as_str())
+                    .is_some_and(|x| !x.is_empty() && x.len() <= 128
+                        && x.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
+                && request.get("unit_id").and_then(|x| x.as_str())
+                    .is_some_and(|x| !x.is_empty() && x.len() <= 128
+                        && x.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
+            )) => Ok(()),
         "ucampus.session.login" if request.get("username").and_then(|v| v.as_str())
             .is_some_and(|s| !s.trim().is_empty() && s.len() <= 128
                 && !s.contains('\r') && !s.contains('\n') && !s.contains('\0'))
@@ -703,6 +713,14 @@ mod ipc_validation_tests {
             "annotator_token":"local-token","school_id":"8320"}})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.session.login",
             "username":"student01","password":"example-password"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.status"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.tick"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.configure",
+            "enabled":true,"course_id":"course-v2:abc+english+1","unit_id":"U1"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.configure",
+            "enabled":false})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.configure",
+            "enabled":true,"course_id":"../leak","unit_id":"U1"})).is_err());
         for invalid in [
             json!({"id":"u","version":1,"operation":"ucampus.session.login",
                 "username":"","password":"secret"}),
