@@ -229,7 +229,8 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "UCAMPUS_INVALID_FABRICATED_PAYLOAD", "UCAMPUS_INVALID_FABRICATED_SEQUENCE",
                              "UCAMPUS_RATE_LIMITED", "UCAMPUS_SUBMIT_REJECTED",
                              "UCAMPUS_SUBMIT_UNVERIFIED", "UCAMPUS_SEND_UNAVAILABLE",
-                             "UCAMPUS_SENDER_UNAVAILABLE", "UCAMPUS_RUN_FAILED"]);
+                             "UCAMPUS_SENDER_UNAVAILABLE", "UCAMPUS_RUN_FAILED",
+                             "UCAMPUS_CLEANUP_FAILED"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -375,7 +376,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_SUBMIT_UNVERIFIED": return "完成申报返回了无法核验的结果，本次未记为通过。";
     case "UCAMPUS_SEND_UNAVAILABLE": return "无法连接 U校园提交接口，请检查网络与本机会话。";
     case "UCAMPUS_SENDER_UNAVAILABLE": return "虚构心跳发送器未就绪，请重新配置会话。";
-    case "UCAMPUS_RUN_FAILED": return "虚构心跳运行异常，请查看运行状态后重试。";
+    case "UCAMPUS_RUN_FAILED": return "本机任务运行异常，已隐藏可能包含会话信息的错误详情。";
+    case "UCAMPUS_CLEANUP_FAILED": return "任务结束时关闭通信连接失败，未将其视为平台完成证明。";
     case "XUEXITONG_TASK_STOP_TIMEOUT": return "学习通任务尚未安全停止，请稍后重试退出或切换账号。";
     case "INVALID_XUEXITONG_SETTINGS": return "学习通参数超出允许范围，原设置未修改。";
     case "XUEXITONG_SETTINGS_UNAVAILABLE": return "学习通本机设置保存失败，请检查本地文件权限。";
