@@ -62,7 +62,7 @@ class RunConfig:
     """自定义运行参数。速度范围对齐 settings.py v1（0.25–2.0）。"""
 
     speed: float = 1.0
-    instant_complete: bool = True
+    instant_complete: bool = False
     tick_seconds: float = 1.0
     heartbeat_interval_video_seconds: float = 60.0
     dtype: str = "Video"
@@ -215,10 +215,23 @@ class HeartbeatTaskRunner:
             state=TaskState.PENDING.value,
             updated_at=clock(),
         )
+        # UI-only estimate, never written to the resume state file.
+        self._runtime_playing_time = float(self._snapshot.playing_time)
 
     @property
     def snapshot(self) -> TaskSnapshot:
         return TaskSnapshot(**self._snapshot.__dict__.copy())
+
+    @property
+    def status_snapshot(self) -> TaskSnapshot:
+        """Live local-time view, not evidence of playback or server completion."""
+        item = self.snapshot
+        if item.state in (TaskState.RUNNING.value, TaskState.PAUSED.value):
+            item.playing_time = max(
+                item.playing_time,
+                min(item.duration, int(self._runtime_playing_time)),
+            )
+        return item
 
     @property
     def state(self) -> str:
@@ -280,6 +293,7 @@ class HeartbeatTaskRunner:
                 return self.snapshot
 
         play_time = float(self._snapshot.playing_time)
+        self._runtime_playing_time = play_time
         last_log_time = play_time
         self._last_iter = self._clock()
         start_wall = self._clock()
@@ -295,6 +309,7 @@ class HeartbeatTaskRunner:
 
             now = self._clock()
             play_time = min(duration, play_time + (now - self._last_iter) * self.config.speed)
+            self._runtime_playing_time = play_time
             self._last_iter = now
             # 墙钟总时限只统计实际运行时间，暂停等待不计入（审计 P1）
             if now - start_wall - self._paused_wall > self.config.max_wall_seconds:
@@ -613,6 +628,42 @@ class ChapterQueue:
                 runner.pause()
             snapshots.append(runner.start())
         return snapshots
+
+
+    def status_snapshots(self, *, running: bool) -> list[TaskSnapshot]:
+        """Read-only status of every scheduled task, including never-started chapters.
+
+        The persistent state store only contains tasks after runner.start(); it
+        cannot describe queued chapters. These synthetic pending snapshots are
+        returned to the UI only and are never written to disk.
+        """
+        with self._lock:
+            chapters = [(chapter, tuple(targets)) for chapter, targets in self._chapters.items()]
+            runners = dict(self._runners)
+        items: list[TaskSnapshot] = []
+        for _chapter, targets in chapters:
+            for target in targets:
+                runner = runners.get(target.task_id)
+                if runner is not None:
+                    snapshot = runner.status_snapshot
+                    # A terminated queue must not appear to be still running.
+                    if not running and snapshot.state in ("running", "paused", "pending"):
+                        snapshot.state = "interrupted"
+                    items.append(snapshot)
+                    continue
+                items.append(TaskSnapshot(
+                    task_id=target.task_id,
+                    run_id=self.config.run_id,
+                    account_marker=self.config.account_marker,
+                    course_key=target.course_key,
+                    chapter_id=target.chapter_id,
+                    chapter=target.chapter,
+                    title=target.title,
+                    duration=target.duration,
+                    speed=self.config.speed,
+                    state="pending" if running and not self._cancelled.is_set() else "not_started",
+                ))
+        return items
 
     def _current_runners(self) -> list[HeartbeatTaskRunner]:
         with self._lock:

@@ -407,7 +407,7 @@ class TestRunner(unittest.TestCase):
 class TestChapterQueue(unittest.TestCase):
     @staticmethod
     def queue_config(**overrides: object) -> RunConfig:
-        values = dict(max_ticks=6, tick_seconds=0.01,
+        values = dict(max_ticks=6, tick_seconds=0.01, instant_complete=True,
                       heartbeat_interval_video_seconds=30, max_workers=1)
         values.update(overrides)
         return RunConfig(**values)  # type: ignore[arg-type]
@@ -528,6 +528,7 @@ class TestSidecarService(unittest.TestCase):
             )
             started = service.handle("xuexitong.heartbeat.start", {
                 "course_key": "100001:200002:300003", "speed": 1.5, "jobs": 2,
+                "instant_complete": True,  # This fixture's clock is intentionally static.
             })
             self.assertTrue(started["ok"])
             self.assertEqual(started["task_count"], 2)
@@ -580,7 +581,9 @@ class TestSidecarService(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             targets = [make_target(object_id="v1", job_id="j1")]
             service = self.make_service(folder, targets, [FakeResponse(payload={"isPassed": True})])
-            started = service.handle("xuexitong.heartbeat.start", {"course_key": "1:2:3"})
+            started = service.handle("xuexitong.heartbeat.start", {
+                "course_key": "1:2:3", "instant_complete": True,
+            })
             self.assertTrue(started["ok"])
             pause = service.handle("xuexitong.heartbeat.pause", {})
             logs = service.handle("xuexitong.heartbeat.logs", {})
@@ -818,6 +821,7 @@ class TestSidecarContractFixes(unittest.TestCase):
             )
             started = service.handle("xuexitong.heartbeat.start", {
                 "course_key": "100001:200002:300003",
+                "instant_complete": True,  # Synthetic test clock never advances.
             })
             self.assertTrue(started["ok"])
             run_id = started["run_id"]
