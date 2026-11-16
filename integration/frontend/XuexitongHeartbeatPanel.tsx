@@ -4,6 +4,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import type {Course} from "../types";
 import {friendlyBridgeError,request,type XuexitongSettings} from "../bridge";
+import "./XuexitongHeartbeatPanel.css";
 
 export type HeartbeatTaskView={
   task_id:string;run_id:string;course_key:string;chapter:string;title:string;
@@ -139,7 +140,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const tasks=currentStatus?.tasks||[];
   const controls=currentStatus?.queue_controls;
 
-  return <section className="sf-platform-settings-view" aria-label="学习通本地心跳任务">
+  return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="学习通本地心跳任务">
     <p className="sf-hint">
       已连接学序本地自定义任务服务（实验性）；本地记录与平台核验分别统计，未经平台确认不显示为已完成。速度、并发在启动时保存；其他选项仅本次生效。
     </p>
@@ -170,16 +171,17 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
       </label>
     </div>
 
-    <div className="sf-actions">
-      <button type="button" disabled={busy||!desktop||running||!validConfig} onClick={()=>void control("start")}>开始</button>
-      <button type="button" disabled={busy||!desktop||!controls?.pause} onClick={()=>void control("pause")}>暂停</button>
-      <button type="button" disabled={busy||!desktop||!controls?.resume} onClick={()=>void control("resume")}>继续</button>
-      <button type="button" disabled={busy||!desktop||!controls?.stop} onClick={()=>void control("stop")}>停止</button>
-      <button type="button" disabled={busy} onClick={()=>void refresh()}>刷新</button>
+    <div className="sf-actions actions">
+      <button type="button" className="primary" disabled={busy||!desktop||running||!validConfig} onClick={()=>void control("start")}>开始</button>
+      <button type="button" className="secondary" disabled={busy||!desktop||!controls?.pause} onClick={()=>void control("pause")}>暂停</button>
+      <button type="button" className="secondary" disabled={busy||!desktop||!controls?.resume} onClick={()=>void control("resume")}>继续</button>
+      <button type="button" className="secondary" disabled={busy||!desktop||!controls?.stop} onClick={()=>void control("stop")}>停止</button>
+      <button type="button" className="secondary" disabled={busy} onClick={()=>void refresh()}>刷新</button>
     </div>
 
     {message?<p className="sf-message">{message}</p>:null}
 
+    <h4 className="sf-xxt-section-heading">运行概览</h4>
     <dl className="sf-stat-grid">
       <div><dt>运行状态</dt><dd>{!currentStatus?"尚未读取":running?(paused?"已暂停":"运行中"):tasks.length?"历史记录（未运行）":"空闲"}</dd></div>
       <div><dt>本地已申报</dt><dd>{currentStatus?.heartbeats.sent??0}</dd></div>
@@ -189,10 +191,13 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
       <div><dt>当前配置</dt><dd>{running&&currentStatus?`${currentStatus.config.speed}x / ${currentStatus.config.jobs} 并发`:"—"}</dd></div>
     </dl>
 
+    <div className="sf-xxt-section-heading">任务记录 <span>{tasks.length} 项</span></div>
+    {tasks.length===0?<div className="sf-xxt-empty" role="status">暂无任务记录，开始后将在这里显示执行状态。</div>:
+    <div className="sf-xxt-table-scroll" role="region" aria-label="学习通任务状态表" tabIndex={0}>
     <table className="sf-task-table" aria-label="心跳任务状态">
       <thead><tr><th>任务</th><th>状态</th><th>本地记录（非播放证明）</th><th>服务端进度</th><th>最近一次请求</th></tr></thead>
       <tbody>
-        {tasks.length===0?<tr><td colSpan={5}>暂无任务记录</td></tr>:tasks.map(task=>
+        {tasks.map(task=>
           <tr key={task.task_id}>
             <td>{task.title||task.task_id}</td>
             <td>{stateLabels[task.state]||task.state}</td>
@@ -202,8 +207,9 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
           </tr>)}
       </tbody>
     </table>
+    </div>}
 
-    <details>
+    <details className="sf-xxt-log">
       <summary>运行日志（最近 {logs.length} 条）</summary>
       <ul className="sf-log-list">
         {logs.map((entry,index)=><li key={`${entry.event}-${entry.at}-${index}`}>

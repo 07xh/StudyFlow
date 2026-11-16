@@ -1,0 +1,212 @@
+/* Xuexitong course runtime: scoped to its panel to avoid cross-platform regressions. */
+.sf-shell .sf-xxt-runtime{
+  width:100%;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:15px;
+  margin:0;
+}
+.sf-shell .sf-xxt-runtime .sf-hint{
+  margin:0;
+  padding:10px 12px;
+  border-radius:10px;
+  background:var(--soft-accent);
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.6;
+}
+.sf-shell .sf-xxt-runtime .sf-settings-row{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr)) minmax(175px,1.1fr);
+  align-items:end;
+  gap:10px;
+  min-width:0;
+}
+.sf-shell .sf-xxt-runtime .sf-settings-row>label{
+  display:grid;
+  gap:6px;
+  min-width:0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.5;
+}
+.sf-shell .sf-xxt-runtime .sf-settings-row :is(input[type="number"],select){
+  width:100%;
+  min-width:0;
+  min-height:36px;
+  padding:7px 10px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--panel-raised);
+  color:var(--text);
+  font:inherit;
+  font-size:13px;
+}
+.sf-shell .sf-xxt-runtime .sf-settings-row .sf-check{
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  gap:8px;
+  min-height:36px;
+  padding:7px 9px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:var(--panel-raised);
+  color:var(--text);
+  font-size:12px;
+}
+.sf-shell .sf-xxt-runtime .sf-check input{
+  width:15px;
+  height:15px;
+  flex:none;
+  accent-color:var(--accent);
+}
+.sf-shell .sf-xxt-runtime .sf-actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  margin:0;
+}
+.sf-shell .sf-xxt-runtime .sf-actions button{
+  min-height:34px;
+  min-width:64px;
+}
+.sf-shell .sf-xxt-runtime .sf-message{
+  margin:0;
+  overflow-wrap:anywhere;
+  color:var(--text);
+  font-size:12px;
+  line-height:1.5;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-section-heading{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  margin:0;
+  color:var(--text);
+  font-size:13px;
+  font-weight:650;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-section-heading span{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:400;
+}
+.sf-shell .sf-xxt-runtime .sf-stat-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:9px;
+  min-width:0;
+  margin:0;
+}
+.sf-shell .sf-xxt-runtime .sf-stat-grid>div{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:5px;
+  min-width:0;
+  min-height:68px;
+  padding:11px 13px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel-raised);
+}
+.sf-shell .sf-xxt-runtime .sf-stat-grid dt{
+  margin:0;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.45;
+}
+.sf-shell .sf-xxt-runtime .sf-stat-grid dd{
+  margin:0;
+  min-width:0;
+  color:var(--text);
+  font-size:14px;
+  font-weight:650;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+  font-variant-numeric:tabular-nums;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-table-scroll{
+  width:100%;
+  min-width:0;
+  overflow-x:auto;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel-raised);
+}
+.sf-shell .sf-xxt-runtime .sf-task-table{
+  width:100%;
+  min-width:660px;
+  border-collapse:collapse;
+  table-layout:fixed;
+  color:var(--text);
+  font-size:12px;
+}
+.sf-shell .sf-xxt-runtime .sf-task-table th,
+.sf-shell .sf-xxt-runtime .sf-task-table td{
+  padding:11px 12px;
+  text-align:left;
+  vertical-align:top;
+  overflow-wrap:anywhere;
+  border-bottom:1px solid var(--line);
+}
+.sf-shell .sf-xxt-runtime .sf-task-table th{
+  background:var(--soft-accent);
+  color:var(--muted);
+  font-size:11px;
+  font-weight:650;
+}
+.sf-shell .sf-xxt-runtime .sf-task-table tr:last-child td{border-bottom:0}
+.sf-shell .sf-xxt-runtime .sf-task-table th:first-child{width:26%}
+.sf-shell .sf-xxt-runtime .sf-task-table th:nth-child(2){width:15%}
+.sf-shell .sf-xxt-runtime .sf-xxt-empty{
+  padding:20px 16px;
+  border:1px dashed var(--line);
+  border-radius:12px;
+  background:var(--panel-raised);
+  color:var(--muted);
+  text-align:center;
+  font-size:12px;
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-log{
+  width:100%;
+  min-width:0;
+  margin:0;
+  padding:0 13px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel-raised);
+}
+.sf-shell .sf-xxt-runtime .sf-xxt-log summary{
+  padding:12px 0;
+  cursor:pointer;
+  color:var(--text);
+  font-size:12px;
+  font-weight:600;
+}
+.sf-shell .sf-xxt-runtime .sf-log-list{
+  display:grid;
+  gap:7px;
+  margin:0 0 13px;
+  padding:0 0 0 18px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.55;
+  overflow-wrap:anywhere;
+}
+@media(max-width:850px){
+  .sf-shell .sf-xxt-runtime .sf-settings-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:620px){
+  .sf-shell .sf-xxt-runtime .sf-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:460px){
+  .sf-shell .sf-xxt-runtime .sf-settings-row{grid-template-columns:minmax(0,1fr)}
+  .sf-shell .sf-xxt-runtime .sf-stat-grid{grid-template-columns:minmax(0,1fr)}
+  .sf-shell .sf-xxt-runtime .sf-xxt-section-heading{flex-wrap:wrap}
+}
