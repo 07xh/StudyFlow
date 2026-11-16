@@ -40,7 +40,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     if(!desktop||busy||variant!=="ai"||!username.trim()||!password)return;
     setBusy(true);setNotice("");
     try{
-      await request<{saved:boolean;variant:"ai"}>({
+      const saved=await request<{saved:boolean;variant:"ai";monitor_reset:boolean}>({
         operation:"ucampus.session.login",username:username.trim(),password
       });
       setStatus({configured:true,variant:"ai"});
@@ -48,9 +48,9 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       onChanged();
       try{
         const summary=await verifyCatalog();
-        setNotice("U校园 SSO 会话已保存。"+summary+"单元和学习进度仍需分别核验。");
+        setNotice("U校园 SSO 会话已保存。"+summary+"单元和学习进度仍需分别核验。"+(saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
       }catch(catalogError){
-        setNotice("U校园 SSO 会话已保存，但课程读取失败："+friendlyBridgeError(catalogError));
+        setNotice("U校园 SSO 会话已保存，但课程读取失败："+friendlyBridgeError(catalogError)+(saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
       }
     }catch(error){
       setNotice(friendlyBridgeError(error));
@@ -64,10 +64,10 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     try{
       const configuration:UCampusConfig={variant,catalog_url:url.trim(),cookie:cookie.trim(),
         authorization:authorization.trim(),annotator_token:annotator.trim(),school_id:schoolId.trim()};
-      await request<{saved:boolean}>({operation:"ucampus.session.configure",configuration});
+      const saved=await request<{saved:boolean;monitor_reset:boolean}>({operation:"ucampus.session.configure",configuration});
       clearSensitiveInputs();
       setStatus({configured:true,variant});
-      setNotice("已在本机保存会话。保存成功不表示已登录或接口可用，请点击“验证课程读取”核验当前账号。");
+      setNotice("已在本机保存会话。保存成功不表示已登录或接口可用，请点击“验证课程读取”核验当前账号。"+(saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
       onChanged();
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
@@ -84,9 +84,9 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     if(!desktop||busy)return;
     setBusy(true);setNotice("");
     try{
-      await request<{cleared:boolean}>({operation:"ucampus.session.clear"});
+      const cleared=await request<{cleared:boolean;monitor_reset:boolean}>({operation:"ucampus.session.clear"});
       clearSensitiveInputs();setUsername("");setPassword("");setUrl("");setStatus({configured:false,variant:null});
-      setNotice("已清除学序保存的 U校园会话。");
+      setNotice("已清除学序保存的 U校园会话。"+(cleared.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
       onChanged();
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
