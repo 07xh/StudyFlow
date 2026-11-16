@@ -255,11 +255,14 @@
 .sf-shell .sf-progress-area{margin-top:auto}
 .sf-shell .sf-progress-label{
   display:flex;justify-content:space-between;align-items:center;gap:10px;
-  color:var(--muted);font-size:10px;
+  color:var(--muted);font-size:12px;line-height:1.5;
 }
-.sf-shell .sf-progress-label span:last-child{font-variant-numeric:tabular-nums}
+.sf-shell .sf-progress-label span:last-child{
+  flex-shrink:0;color:var(--text);font-size:17px;font-weight:750;
+  line-height:1.2;font-variant-numeric:tabular-nums;
+}
 .sf-shell .sf-progress{
-  height:6px;margin-top:7px;overflow:hidden;border-radius:20px;background:rgba(255,255,255,.09);
+  height:8px;margin-top:8px;overflow:hidden;border-radius:20px;background:rgba(255,255,255,.09);
 }
 .sf-shell:not(.dark) .sf-progress{background:rgba(30,70,48,.1)}
 .sf-shell .sf-progress>div{
