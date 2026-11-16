@@ -41,7 +41,8 @@ from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.ucampus.adapter import UCampusAdapter, UCampusCatalogError
 from studyflow.platforms.ucampus.course_progress import UCampusProgressReader, UCampusProgressError
 from studyflow.platforms.ucampus import credentials as ucampus_credentials
-from studyflow.platforms.ucampus.sso_login import authenticate as ucampus_authenticate, UCampusLoginError
+from studyflow.platforms.ucampus.sso_login import (authenticate as ucampus_authenticate,
+    enrich_school_from_account as ucampus_enrich_school, UCampusLoginError)
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
 from studyflow.services import update_manager
@@ -214,6 +215,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             # The username/password only live inside this one request. Persist
             # exclusively the returned provider JWT, never either plaintext field.
             config = ucampus_authenticate(request.get("username"), request.get("password"))
+            config = ucampus_enrich_school(config)
         except UCampusLoginError as exc:
             allowed = {"INVALID_UCAMPUS_LOGIN", "UCAMPUS_LOGIN_UNAVAILABLE",
                        "UCAMPUS_LOGIN_REJECTED", "UCAMPUS_LOGIN_FORMAT_UNVERIFIED",
