@@ -9,6 +9,7 @@ export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null
 export type UCampusLocalStatus={
   run_id:string;course_id:string;phase:string;active:boolean;paused:boolean;
   generated:number;sent:number;transport_accepted:number;server_confirmed:number|null;
+  pulses_per_resource:number;
   sender_connected:boolean;
   tasks:Array<{resource_id:string;chapter_id:string;title:string;state:string;
     generated:number;attempted:number;accepted:number;local_elapsed_seconds:number;server_completed:boolean|null}>;
