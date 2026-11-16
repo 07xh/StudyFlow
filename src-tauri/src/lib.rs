@@ -210,7 +210,10 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
-        | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get" => Ok(()),
+        | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
+        | "ucampus.session.info" | "ucampus.session.clear"
+        | "ucampus.heartbeat.capabilities" | "ucampus.socket.diagnose"
+        | "ucampus.fabricated.capabilities" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -242,7 +245,85 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
-        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong")) => Ok(()),
+        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong" | "ucampus")) => Ok(()),
+        "ucampus.monitor.status" | "ucampus.monitor.tick" => Ok(()),
+        "ucampus.monitor.configure" if request.get("enabled").and_then(|v| v.as_bool())
+            .is_some_and(|enabled| !enabled || (
+                request.get("course_id").and_then(|x| x.as_str())
+                    .is_some_and(|x| !x.is_empty() && x.len() <= 128
+                        && x.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
+                && request.get("unit_id").and_then(|x| x.as_str())
+                    .is_some_and(|x| !x.is_empty() && x.len() <= 128
+                        && x.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
+            )) => Ok(()),
+        "ucampus.session.login" if request.get("username").and_then(|v| v.as_str())
+            .is_some_and(|s| !s.trim().is_empty() && s.len() <= 128
+                && !s.contains('\r') && !s.contains('\n') && !s.contains('\0'))
+            && request.get("password").and_then(|v| v.as_str())
+                .is_some_and(|s| !s.is_empty() && s.len() <= 256
+                    && !s.contains('\r') && !s.contains('\n') && !s.contains('\0'))
+                => Ok(()),
+        "ucampus.session.configure" if request.get("configuration").and_then(|v| v.as_object())
+            .is_some_and(|data| data.len() >= 2 && data.len() <= 6
+                && matches!(data.get("variant").and_then(|v| v.as_str()), Some("ai" | "classic"))
+                && data.get("cookie").and_then(|v| v.as_str()).is_some_and(|s|
+                    !s.is_empty() && s.len() <= 8192 && !s.contains('\r') && !s.contains('\n'))
+                && data.get("catalog_url").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 2048 && !s.contains('\r') && !s.contains('\n')))
+                && data.get("authorization").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 8192 && !s.contains('\r') && !s.contains('\n')))
+                && data.get("annotator_token").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 4096 && !s.contains('\r') && !s.contains('\n')))
+                && data.get("school_id").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 24 && s.bytes().all(|c| c.is_ascii_digit())))) => Ok(()),
+        "ucampus.units.list" | "ucampus.unit.tasks" | "ucampus.progress.verify" if request.get("course_id")
+            .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
+            && (operation == "ucampus.units.list" || request.get("unit_id")
+                .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')))
+                => Ok(()),
+        "ucampus.heartbeat.status" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
+        "ucampus.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+            && request.get("unit_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+            && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
+            => Ok(()),
+        "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"
+            if request.get("graceful").is_none()
+                && request.get("course_id").and_then(|v| v.as_str())
+                    .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && request.get("run_id").and_then(|v| v.as_str())
+                    .is_some_and(|id| id.len() == 32
+                        && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
+        "ucampus.fabricated.status" | "ucampus.fabricated.history" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
+        "ucampus.fabricated.start" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+            && request.get("unit_id").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                    && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+            && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
+            && request.get("speed").map_or(true, |v| v.as_f64().is_some_and(|n| (0.25..=16.0).contains(&n)))
+            && request.get("duration_seconds").map_or(true, |v| v.as_f64().is_some_and(|n| (1.0..=36000.0).contains(&n)))
+            && request.get("heartbeat_interval").map_or(true, |v| v.as_f64().is_some_and(|n| (0.01..=3600.0).contains(&n)))
+            && request.get("instant_complete").map_or(true, |v| v.is_boolean()) => Ok(()),
+        "ucampus.fabricated.pause" | "ucampus.fabricated.resume" | "ucampus.fabricated.stop"
+            if request.get("graceful").is_none()
+                && request.get("course_id").and_then(|v| v.as_str())
+                    .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && request.get("run_id").and_then(|v| v.as_str())
+                    .is_some_and(|id| id.len() == 32
+                        && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
         "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
             .is_some_and(|value| !value.is_empty() && value.len() <= 8192
                 && !value.contains('\r') && !value.contains('\n')) => Ok(()),
@@ -360,7 +441,12 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     let is_persistent = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr.")
                         || op.starts_with("xuexitong.heartbeat.")
-                        || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"));
+                        || op.starts_with("ucampus.heartbeat.")
+                        || op.starts_with("ucampus.socket.")
+                        || op.starts_with("ucampus.fabricated.")
+                        || op.starts_with("ucampus.monitor.")
+                        || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"
+                            | "ucampus.session.login" | "ucampus.session.configure" | "ucampus.session.clear"));
     if is_persistent {
         // QR start/status/cancel must share the same Python process; ordinary
         // requests intentionally retain the existing one-shot behavior.
@@ -427,6 +513,14 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
             let _ = worker.request(
                 b"{\"id\":\"hb-shutdown\",\"version\":1,\"operation\":\"xuexitong.heartbeat.stop\",\"graceful\":true}\n",
                 "hb-shutdown",
+            );
+            let _ = worker.request(
+                b"{\"id\":\"u-hb-shutdown\",\"version\":1,\"operation\":\"ucampus.heartbeat.stop\",\"graceful\":true}\n",
+                "u-hb-shutdown",
+            );
+            let _ = worker.request(
+                b"{\"id\":\"uf-hb-shutdown\",\"version\":1,\"operation\":\"ucampus.fabricated.stop\",\"graceful\":true}\n",
+                "uf-hb-shutdown",
             );
         }
         guard.take();
@@ -605,6 +699,136 @@ mod ipc_validation_tests {
             let request = json!({"id":"qr-test","version":1,"operation":operation});
             assert!(validate(&request).is_ok(), "QR operation was rejected: {operation}");
         }
+    }
+
+    #[test]
+    fn ucampus_ipc_accepts_only_scoped_read_and_credential_operations() {
+        for operation in ["ucampus.session.info", "ucampus.session.clear"] {
+            assert!(validate(&json!({"id":"u","version":1,"operation":operation})).is_ok());
+        }
+        assert!(validate(&json!({"id":"u","version":1,"operation":"courses.list",
+            "platform":"ucampus"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.session.configure","configuration":{
+            "variant":"ai","catalog_url":"","cookie":"sid=test","authorization":"",
+            "annotator_token":"local-token","school_id":"8320"}})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.session.login",
+            "username":"student01","password":"example-password"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.status"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.tick"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.configure",
+            "enabled":true,"course_id":"course-v2:abc+english+1","unit_id":"U1"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.configure",
+            "enabled":false})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.monitor.configure",
+            "enabled":true,"course_id":"../leak","unit_id":"U1"})).is_err());
+        for invalid in [
+            json!({"id":"u","version":1,"operation":"ucampus.session.login",
+                "username":"","password":"secret"}),
+            json!({"id":"u","version":1,"operation":"ucampus.session.login",
+                "username":"student01","password":""}),
+            json!({"id":"u","version":1,"operation":"ucampus.session.login",
+                "username":"student01","password":"invalid\nheader"}),
+        ] {
+            assert!(validate(&invalid).is_err());
+        }
+
+        for config in [json!({}), json!({"variant":"ai","cookie":""}),
+            json!({"variant":"unknown","cookie":"sid=test"}),
+            json!({"variant":"ai","cookie":"bad\nheader"})] {
+            assert!(validate(&json!({"id":"u","version":1,
+                "operation":"ucampus.session.configure","configuration":config})).is_err());
+        }
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.heartbeat.start",
+            "course_id":"123"})).is_err());
+    }
+
+    #[test]
+    fn ucampus_progress_reads_validate_resource_scope() {
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.units.list",
+            "course_id":"course123"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+            "course_id":"course123","unit_id":"U-123"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.units.list",
+            "course_id":"course-v2:real-course-id"})).is_ok());
+        // Real U校园AI IDs contain literal '+' separators.
+        let real_course = "course-v2:75b7546ea002b72+nhce_v4_rw_2+20230116";
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.units.list",
+            "course_id":real_course})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+            "course_id":real_course,"unit_id":"U1"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.progress.verify",
+            "course_id":real_course,"unit_id":"U1"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.progress.verify",
+            "course_id":"course-v2:real-course-id","unit_id":"U-123"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.progress.verify",
+            "course_id":"course-v2:real-course-id"})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+            "course_id":"course-v2:real-course-id","unit_id":"U-123"})).is_ok());
+        for bad in [
+            json!({"id":"u","version":1,"operation":"ucampus.units.list",
+                "course_id":"../etc"}),
+            json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+                "course_id":"course123","unit_id":"../other"}),
+            json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+                "course_id":"course123"})
+        ] {
+            assert!(validate(&bad).is_err());
+        }
+    }
+
+    #[test]
+    fn ucampus_socket_diagnostics_has_no_untrusted_parameters() {
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.socket.diagnose"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.socket.send","course_id":"C1"})).is_err());
+    }
+
+    #[test]
+    fn ucampus_heartbeat_operation_guard() {
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.start","course_id":"c1",
+            "unit_id":"u1","pulses":5})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.start","course_id":"course-v2:real-course-id",
+            "unit_id":"u1","pulses":5})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.start","course_id":"c1",
+            "unit_id":"u1","pulses":101})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.stop","course_id":"c1"})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.pause","course_id":"c1",
+            "run_id":"abcdef0123456789abcdef0123456789"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.stop","course_id":"c1",
+            "run_id":"abcdef0123456789abcdef0123456789","graceful":true})).is_err());
+    }
+
+    #[test]
+    fn ucampus_fabricated_operation_guard() {
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.capabilities"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.history","course_id":"course-v2:1"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.history"})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.start","course_id":"course-v2:1",
+            "unit_id":"u1","pulses":6,"speed":2,"duration_seconds":600,
+            "heartbeat_interval":20,"instant_complete":false})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.start","course_id":"c1",
+            "unit_id":"u1","speed":100})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.start","course_id":"c1",
+            "unit_id":"u1","pulses":101})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.pause","course_id":"c1"})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.stop","course_id":"c1",
+            "run_id":"abcdef0123456789abcdef0123456789"})).is_ok());
     }
 
     #[test]

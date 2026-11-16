@@ -8,6 +8,10 @@ import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel"
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
+import {UCampusLoginPanel} from "./components/UCampusLoginPanel";
+import {UCampusCourseDetailPanel} from "./components/UCampusCourseDetailPanel";
+import {UCampusProgressVerifyPanel} from "./components/UCampusProgressVerifyPanel";
+import {UCampusFabricatedPanel} from "./components/UCampusFabricatedPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -61,8 +65,8 @@ type CourseSyncFeedback={phase:CourseSyncPhase;error:string};
 function readPlatformLoginExpanded():Record<Platform,boolean>{
   try{
     const saved=JSON.parse(window.localStorage.getItem(PLATFORM_LOGIN_EXPANDED_KEY)||"{}");
-    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true,xuexitong:saved.xuexitong===true};
-  }catch{return {zhidao:false,yuketang:false,xuexitong:false};}
+    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true,xuexitong:saved.xuexitong===true,ucampus:saved.ucampus===true};
+  }catch{return {zhidao:false,yuketang:false,xuexitong:false,ucampus:false};}
 }
 
 function readActivity():ActivityEntry[]{
@@ -95,9 +99,9 @@ export default function App(){
     subscribeYuketangVerification,getYuketangVerificationRevision,getYuketangVerificationRevision);
   const platformsRef=useRef(platforms);
   platformsRef.current=platforms;
-  const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint(),xuexitong:newCourseSyncCheckpoint()});
+  const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint(),xuexitong:newCourseSyncCheckpoint(),ucampus:newCourseSyncCheckpoint()});
   const [syncFeedback,setSyncFeedback]=useState<Record<Platform,CourseSyncFeedback>>({
-    zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""},xuexitong:{phase:"idle",error:""}
+    zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""},xuexitong:{phase:"idle",error:""},ucampus:{phase:"idle",error:""}
   });
   const [statusCheckRevision,setStatusCheckRevision]=useState(0);
   const [busy,setBusy]=useState("");
@@ -134,6 +138,27 @@ export default function App(){
   const desktop=isDesktop();
   const [consentAccepted,setConsentAccepted]=useState(!desktop);
   const runtime=useRuntimeTasks(desktop&&consentAccepted);
+  // Restore only an explicitly enabled read-only U校园 progress check after
+  // StudyFlow restarts. The backend persists a scoped checkpoint and rate-limits
+  // GET requests; this never resumes fabricated playback or sends heartbeats.
+  useEffect(()=>{
+    if(!desktop||!consentAccepted)return;
+    let live=true;
+    let inFlight=false;
+    const tick=async()=>{
+      if(!live||inFlight)return;
+      inFlight=true;
+      try{await request({operation:"ucampus.monitor.tick"});}
+      catch{/* Fail closed; do not infer progress from a failed readback. */}
+      finally{inFlight=false;}
+    };
+    void tick();
+    const timer=typeof window.setInterval==="function"
+      ?window.setInterval(()=>void tick(),90_000):null;
+    return()=>{live=false;if(timer!==null&&typeof window.clearInterval==="function")
+      window.clearInterval(timer);};
+  },[desktop,consentAccepted]);
+
   const releaseChangelog=useReleaseChangelog(desktop,consentAccepted);
   const yuketangRun=runtime.tasks.find(task=>task.runner==="yuketang"&&!task.unavailable);
   const yuketangRunId=yuketangRun?.runId??"";
@@ -390,16 +415,16 @@ export default function App(){
     if(!desktop||!consentAccepted)return;
     const newStatusCheck=statusCheckRevision!==lastObservedStatusCheck.current;
     lastObservedStatusCheck.current=statusCheckRevision;
-    for(const platform of ["zhidao","yuketang","xuexitong"] as const){
+    for(const platform of ["zhidao","yuketang","xuexitong","ucampus"] as const){
       if(platforms[platform].status!=="connected")continue;
       if(newStatusCheck||page==="platform-"+platform)void sync(platform);
     }
-  },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,platforms.xuexitong.status,statusCheckRevision,sync]);
+  },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,platforms.xuexitong.status,platforms.ucampus.status,statusCheckRevision,sync]);
 
   useEffect(()=>{
     if(!desktop||!consentAccepted||typeof window.addEventListener!=="function")return;
     const onFocus=()=>{
-      const platform=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":null;
+      const platform=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":page==="platform-ucampus"?"ucampus":null;
       if(platform&&platformsRef.current[platform].status==="connected")void sync(platform);
     };
     window.addEventListener("focus",onFocus);
@@ -452,7 +477,7 @@ export default function App(){
     setPlatformSettingsOpen(null);
     setSelectedCourse(null);
     setQuery("");
-    setPage(platform==="zhidao"?"platform-zhidao":platform==="xuexitong"?"platform-xuexitong":"platform-yuketang");
+    setPage("platform-"+platform as Page);
   }
 
   function goPlatform(platform:Platform,openLogin=false){
@@ -477,7 +502,7 @@ export default function App(){
         enabled:previous.preferences[course.course_id]??true
       });
     }
-    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":course.platform==="xuexitong"?"platform-xuexitong":"platform-yuketang");
+    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage("platform-"+course.platform as Page);
   }
   function courseMode(course:Course):"official"|"zhs-original"{
     const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
@@ -494,6 +519,7 @@ export default function App(){
       onSubmit={()=>void configureFromPanel()} onOpenScope={openYuketangScopeFields}
       onClear={()=>setClearDialogOpen(true)}/>;
     if(platform==="xuexitong")return <XuexitongLoginPanel desktop={desktop} onConnected={()=>{invalidatePlatform("xuexitong",true);void refresh();}}/>;
+    if(platform==="ucampus")return <UCampusLoginPanel desktop={desktop} onChanged={()=>{invalidatePlatform("ucampus",true);void refresh();}}/>;
     return null;
   }
 
@@ -526,7 +552,7 @@ export default function App(){
   };
   const renderSettingsNavigation=(platform:Platform)=>
     <nav className="sf-settings-menu" aria-label="平台设置分类">
-      {([["account","账号与连接"],["parameters",platform==="xuexitong"?"运行参数预设":"播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
+      {([["account","账号与连接"],["parameters",platform==="xuexitong"?"运行参数预设":platform==="ucampus"?"只读接口设置":"播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
           onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
     </nav>;
@@ -560,6 +586,9 @@ export default function App(){
     </>:platform==="xuexitong"?<>
       {platformSettingsSection==="parameters"&&<XuexitongSettingsPanel desktop={desktop}/>}
       {platformSettingsSection==="advanced"&&<p className="sf-muted">已保存的登录会话使用 Windows 凭据管理器；可在「账号与连接」清除。</p>}
+    </>:platform==="ucampus"?<>
+      {platformSettingsSection==="parameters"&&<p className="sf-muted">U校园5.0 目前只读接入：请在「账号与连接」配置已经核验的真实课程接口。尚未实现课程行为写入、播放、章节与进度核验。</p>}
+      {platformSettingsSection==="advanced"&&<p className="sf-muted">U校园会话保存在 Windows 凭据管理器。未确认的学习进度不会填充到课程进度条。</p>}
     </>:<>
       {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings"
         desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
@@ -730,7 +759,7 @@ export default function App(){
         ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
-    const catalogOnly=course.platform==="xuexitong";
+    const catalogOnly=course.platform==="xuexitong"||course.platform==="ucampus";
     return <section className="sf-course-workspace" aria-label={catalogOnly?"课程与任务工作台":"课程播放工作台"}>
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
@@ -762,6 +791,9 @@ export default function App(){
             <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
+        </>:course.platform==="ucampus"?<>
+          <UCampusProgressVerifyPanel course={course} desktop={desktop}/>
+          <UCampusFabricatedPanel course={course} desktop={desktop}/>
         </>:course.platform==="xuexitong"?<>
           <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
@@ -788,6 +820,10 @@ export default function App(){
             onAutoVerifyChange={configureAutoVerify}
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
+      </>:course.platform==="ucampus"?<>
+        <CollapsibleSection id={scope+"chapters"} title="章节与学习任务" defaultExpanded={true}>
+          <UCampusCourseDetailPanel course={course} desktop={desktop}/>
+        </CollapsibleSection>
       </>:course.platform==="xuexitong"?<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
           <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
@@ -811,7 +847,8 @@ export default function App(){
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
   const workspaceCourse=(page==="platform-zhidao"&&activeSelectedCourse?.platform==="zhidao"
     ||page==="platform-yuketang"&&activeSelectedCourse?.platform==="yuketang"
-    ||page==="platform-xuexitong"&&activeSelectedCourse?.platform==="xuexitong")
+    ||page==="platform-xuexitong"&&activeSelectedCourse?.platform==="xuexitong"
+    ||page==="platform-ucampus"&&activeSelectedCourse?.platform==="ucampus")
     ?activeSelectedCourse:null;
   const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":null;
   const activeMetric=workspaceCourse?courseMetric(workspaceCourse,workspaceCourse.platform==="yuketang"?yuketangSummaries[workspaceCourse.course_id]:undefined):null;
@@ -894,6 +931,7 @@ export default function App(){
       if(next==="platform-zhidao"){goPlatform("zhidao");return;}
       if(next==="platform-yuketang"){goPlatform("yuketang");return;}
       if(next==="platform-xuexitong"){goPlatform("xuexitong");return;}
+      if(next==="platform-ucampus"){goPlatform("ucampus");return;}
       setPlatformSettingsOpen(null);
       setSelectedCourse(null);
       setPage(next);
@@ -926,6 +964,7 @@ export default function App(){
       {page==="platform-zhidao"&&renderPlatformDetail("zhidao")}
       {page==="platform-yuketang"&&renderPlatformDetail("yuketang")}
       {page==="platform-xuexitong"&&renderPlatformDetail("xuexitong")}
+      {page==="platform-ucampus"&&renderPlatformDetail("ucampus")}
       {page==="records"&&renderRecords()}
       {page==="logs"&&renderLogs()}
     </AppShell>

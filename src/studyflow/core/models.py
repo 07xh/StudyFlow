@@ -7,6 +7,7 @@ class Platform(str, Enum):
     ZHIDAO = "zhidao"
     YUKETANG = "yuketang"
     XUEXITONG = "xuexitong"
+    UCAMPUS = "ucampus"
 
 
 @dataclass(frozen=True)

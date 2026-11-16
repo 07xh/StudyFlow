@@ -8,6 +8,7 @@ from __future__ import annotations
 import atexit
 import json
 import sys
+from datetime import datetime, timezone
 from contextlib import redirect_stdout
 from typing import Any
 
@@ -31,8 +32,18 @@ from studyflow.platforms.xuexitong.adapter import XuexitongAdapter
 from studyflow.platforms.xuexitong import credentials as xuexitong_credentials
 from studyflow.platforms.xuexitong import settings as xuexitong_settings
 from studyflow.services.xuexitong_heartbeat_bridge import dispatch as xuexitong_heartbeat_dispatch
+from studyflow.services.ucampus_runtime_bridge import dispatch as ucampus_heartbeat_dispatch
+from studyflow.services import ucampus_runtime_bridge
+from studyflow.services import ucampus_fabricated_bridge
+from studyflow.services.ucampus_fabricated_bridge import dispatch as ucampus_fabricated_dispatch
 from studyflow.services import xuexitong_heartbeat_bridge
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
+from studyflow.platforms.ucampus.adapter import UCampusAdapter, UCampusCatalogError
+from studyflow.platforms.ucampus.course_progress import UCampusProgressReader, UCampusProgressError
+from studyflow.platforms.ucampus import credentials as ucampus_credentials
+from studyflow.platforms.ucampus import readonly_monitor as ucampus_monitor
+from studyflow.platforms.ucampus.sso_login import (authenticate as ucampus_authenticate,
+    enrich_school_from_account as ucampus_enrich_school, UCampusLoginError)
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
 from studyflow.services import update_manager
@@ -40,7 +51,21 @@ from studyflow.platforms.yuketang.legacy_config import read_settings as get_orig
 
 MAX_LINE = 600000
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter(),
-            "xuexitong": XuexitongAdapter()}
+            "xuexitong": XuexitongAdapter(), "ucampus": UCampusAdapter()}
+
+
+def _clear_ucampus_monitor_safely() -> bool:
+    """After changing login, protect the account even if its old checkpoint is locked.
+
+    The stored checkpoint has an account fingerprint, so a failed delete is
+    fail-closed. Surface a warning separately; never call successful login
+    "credential save failed" merely because checkpoint cleanup failed.
+    """
+    try:
+        ucampus_monitor.configure(None, None, False)
+        return True
+    except Exception:
+        return False
 
 
 def _course_payload(course):
@@ -96,6 +121,18 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": heartbeat}
         return {"id": request_id, "ok": False,
                 "error": str(heartbeat.get("error") or "XUEXITONG_INTERNAL_ERROR")}
+    uc_fabricated = ucampus_fabricated_dispatch(operation, request)
+    if uc_fabricated is not None:
+        if uc_fabricated.get("ok") is True:
+            return {"id": request_id, "ok": True, "data": uc_fabricated}
+        return {"id": request_id, "ok": False,
+                "error": str(uc_fabricated.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
+    uc_heartbeat = ucampus_heartbeat_dispatch(operation, request)
+    if uc_heartbeat is not None:
+        if uc_heartbeat.get("ok") is True:
+            return {"id": request_id, "ok": True, "data": uc_heartbeat}
+        return {"id": request_id, "ok": False,
+                "error": str(uc_heartbeat.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
     if operation in ("zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"):
@@ -132,9 +169,127 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "UNKNOWN_PLATFORM"}
         try:
             courses = ADAPTERS[platform].list_courses()
+        except UCampusCatalogError as exc:
+            # Keep only stable diagnostics; never return arbitrary exception text.
+            allowed = {"UCAMPUS_SESSION_MISSING", "UCAMPUS_SESSION_EXPIRED",
+                       "UCAMPUS_CATALOG_UNAVAILABLE", "UCAMPUS_CATALOG_FORMAT_UNVERIFIED"}
+            code = str(exc) if platform == "ucampus" and str(exc) in allowed else "PLATFORM_NOT_READY"
+            return {"id": request_id, "ok": False, "error": code}
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
+    if operation == "ucampus.progress.verify":
+        course_id = request.get("course_id")
+        unit_id = request.get("unit_id")
+        if (not isinstance(course_id, str) or not 1 <= len(course_id) <= 128
+                or not isinstance(unit_id, str) or not 1 <= len(unit_id) <= 128):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        try:
+            rows = UCampusProgressReader().list_tasks(course_id, unit_id)
+            data = {
+                "course_id": course_id, "unit_id": unit_id,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+                "total": len(rows),
+                "passed": sum(row.get("completed") is True for row in rows),
+                "not_passed": sum(row.get("completed") is False for row in rows),
+                "unknown": sum(row.get("completed") is None for row in rows),
+                "required_total": sum(row.get("required") is True for row in rows),
+                "required_passed": sum(row.get("required") is True
+                                       and row.get("completed") is True for row in rows),
+                "tasks": [{"id": row["id"], "type": row.get("type", "unknown"),
+                           "required": row.get("required"),
+                           "completed": row.get("completed")} for row in rows],
+            }
+            return {"id": request_id, "ok": True, "data": data}
+        except UCampusProgressError as exc:
+            return {"id": request_id, "ok": False, "error": str(exc)}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_PROGRESS_UNAVAILABLE"}
+    if operation in ("ucampus.units.list", "ucampus.unit.tasks"):
+        course_id = request.get("course_id")
+        unit_id = request.get("unit_id")
+        if (not isinstance(course_id, str) or not 1 <= len(course_id) <= 128
+                or (operation == "ucampus.unit.tasks"
+                    and (not isinstance(unit_id, str) or not 1 <= len(unit_id) <= 128))):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        try:
+            reader = UCampusProgressReader()
+            if operation == "ucampus.units.list":
+                data = reader.list_units(course_id)
+            else:
+                data = reader.list_tasks(course_id, unit_id)
+            return {"id": request_id, "ok": True, "data": data}
+        except UCampusProgressError as exc:
+            return {"id": request_id, "ok": False, "error": str(exc)}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_PROGRESS_UNAVAILABLE"}
+    if operation in ("ucampus.monitor.status", "ucampus.monitor.tick", "ucampus.monitor.configure"):
+        try:
+            if operation == "ucampus.monitor.status":
+                data = ucampus_monitor.status()
+            elif operation == "ucampus.monitor.tick":
+                data = ucampus_monitor.tick()
+            else:
+                data = ucampus_monitor.configure(
+                    request.get("course_id"), request.get("unit_id"),
+                    request.get("enabled"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ucampus_monitor.UCampusMonitorError as exc:
+            allowed = {"INVALID_REQUEST", "UCAMPUS_SESSION_MISSING",
+                       "UCAMPUS_MONITOR_STORAGE_FAILED"}
+            code = str(exc)
+            return {"id": request_id, "ok": False,
+                    "error": code if code in allowed else "UCAMPUS_MONITOR_UNAVAILABLE"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_MONITOR_UNAVAILABLE"}
+    if operation == "ucampus.session.info":
+        return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
+    if operation == "ucampus.session.login":
+        try:
+            # The username/password only live inside this one request. Persist
+            # exclusively the returned provider JWT, never either plaintext field.
+            config = ucampus_authenticate(request.get("username"), request.get("password"))
+            config = ucampus_enrich_school(config)
+        except UCampusLoginError as exc:
+            allowed = {"INVALID_UCAMPUS_LOGIN", "UCAMPUS_LOGIN_UNAVAILABLE",
+                       "UCAMPUS_LOGIN_REJECTED", "UCAMPUS_LOGIN_FORMAT_UNVERIFIED",
+                       "UCAMPUS_LOGIN_VERIFICATION_REQUIRED", "UCAMPUS_LOGIN_RATE_LIMITED"}
+            code = str(exc)
+            return {"id": request_id, "ok": False,
+                    "error": code if code in allowed else "UCAMPUS_LOGIN_UNAVAILABLE"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_LOGIN_UNAVAILABLE"}
+        try:
+            ucampus_runtime_bridge.reset_runner()
+            ucampus_fabricated_bridge.reset_runner()
+            ucampus_credentials.save(config.__dict__)
+            monitor_reset = _clear_ucampus_monitor_safely()
+            return {"id": request_id, "ok": True, "data": {
+                "saved": True, "variant": "ai", "monitor_reset": monitor_reset}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
+    if operation == "ucampus.session.configure":
+        try:
+            ucampus_runtime_bridge.reset_runner()
+            ucampus_fabricated_bridge.reset_runner()
+            ucampus_credentials.save(request.get("configuration"))
+            monitor_reset = _clear_ucampus_monitor_safely()
+            return {"id": request_id, "ok": True, "data": {
+                "saved": True, "monitor_reset": monitor_reset}}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_UCAMPUS_CONFIG"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
+    if operation == "ucampus.session.clear":
+        try:
+            ucampus_runtime_bridge.reset_runner()
+            ucampus_fabricated_bridge.reset_runner()
+            ucampus_credentials.clear()
+            monitor_reset = _clear_ucampus_monitor_safely()
+            return {"id": request_id, "ok": True, "data": {
+                "cleared": True, "monitor_reset": monitor_reset}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "xuexitong.settings.get":
         return {"id": request_id, "ok": True, "data": xuexitong_settings.read()}
     if operation == "xuexitong.settings.save":

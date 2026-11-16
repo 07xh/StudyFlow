@@ -54,7 +54,8 @@ test("bridge validates actual platform status and does not synthesize courses", 
     id: req.id, ok: true, data: [
       {platform: "zhidao", connected: true, message: "服务器已确认"},
       {platform: "yuketang", connected: false, message: "未接入"},
-      {platform: "xuexitong", connected: false, message: "未导入会话"}
+      {platform: "xuexitong", connected: false, message: "未导入会话"},
+      {platform: "ucampus", connected: false, message: "尚未核验真实课程接口"}
     ]
   })};
   const status = await fetchPlatformStatuses(transport);
@@ -63,6 +64,8 @@ test("bridge validates actual platform status and does not synthesize courses", 
   assert.equal(status[1].status, "not_connected");
   assert.equal(status[2].platform, "xuexitong");
   assert.equal(status[2].status, "not_connected");
+  assert.equal(status[3].platform, "ucampus");
+  assert.equal(status[3].status, "not_connected");
 });
 
 test("course bridge preserves exact source fields but rejects progress without provenance", async () => {

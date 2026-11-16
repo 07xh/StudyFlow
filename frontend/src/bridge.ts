@@ -4,6 +4,53 @@ import type {OriginalYktOptions,ZhsStoredOptions} from "./legacyPlayback";
 
 export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
+export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string;annotator_token?:string;school_id?:string};
+export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null};
+export type UCampusLocalStatus={
+  run_id:string;course_id:string;phase:string;active:boolean;paused:boolean;
+  generated:number;sent:number;transport_accepted:number;server_confirmed:number|null;
+  pulses_per_resource:number;
+  sender_connected:boolean;
+  tasks:Array<{resource_id:string;chapter_id:string;title:string;state:string;
+    generated:number;attempted:number;accepted:number;local_elapsed_seconds:number;server_completed:boolean|null}>;
+};
+export type UCampusSocketDiagnostic={
+  transport:"legacy_socketio_v3";handshake:"namespace_joined";
+  learning_events_sent:0;progress_verified:false;ai5_compatible:null;
+};
+export type UCampusFabricatedStatus={
+  run_id:string;course_id:string;unit_id:string;phase:string;active:boolean;paused:boolean;
+  generated:number;sent:number;transport_accepted:number;server_confirmed:number;
+  completed:number;reported:number;sender_connected:boolean;last_error:string;
+  progress_causality:"unverified";source_kind:"synthetic_activity";
+  restart_resume_supported:boolean;snapshot_store_configured:boolean;
+  tasks:Array<{resource_id:string;title:string;dtype:string;duration_seconds:number;
+    state:string;generated:number;sent:number;accepted:number;confirmed:number;
+    position_seconds:number;server_completed:boolean|null;last_error:string}>;
+};
+export type UCampusFabricatedHistory={
+  records:Array<{run_id:string;course_id:string;unit_id:string;phase:string;
+    resources:number;generated:number;sent:number;server_readback_passed:number;
+    resume_available:false;progress_causality:"unverified"}>;
+  resume_available:false;
+};
+export type UCampusFabricatedCapabilities={
+  ok:boolean;local_generation:boolean;socket_transport_available:boolean;
+  session_configured:boolean;official_player_required:boolean;
+  activity_heartbeat:string;completion_packet:string;server_readback:string;message:string;
+};
+export type UCampusVerifiedProgress={
+  course_id:string;unit_id:string;verified_at:string;
+  total:number;passed:number;not_passed:number;unknown:number;
+  required_total:number;required_passed:number;
+  tasks:Array<{id:string;type:string;required:boolean|null;completed:boolean|null}>;
+};
+export type UCampusMonitorStatus={
+  enabled:boolean;course_id:string;unit_id:string;
+  state:string;checked_at:string;total:number;passed:number;unknown:number
+};
+export type UCampusUnit = {id:string;title:string;completed:boolean|null};
+export type UCampusTask = {id:string;unit_id:string;title:string;type:string;required:boolean|null;completed:boolean|null};
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
 export type YuketangSessionMarker = {marker:string};
 export type BridgeRequest =
@@ -16,6 +63,25 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
+  | {id: string; version: 1; operation: "ucampus.units.list"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.unit.tasks"; course_id: string; unit_id: string}
+  | {id: string; version: 1; operation: "ucampus.progress.verify"; course_id: string; unit_id: string}
+  | {id: string; version: 1; operation: "ucampus.monitor.status" | "ucampus.monitor.tick"}
+  | {id: string; version: 1; operation: "ucampus.monitor.configure"; enabled: boolean; course_id?: string; unit_id?: string}
+  | {id: string; version: 1; operation: "ucampus.socket.diagnose"}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.capabilities"}
+  | {id: string; version: 1; operation: "ucampus.fabricated.capabilities"}
+  | {id: string; version: 1; operation: "ucampus.fabricated.start"; course_id: string; unit_id: string; pulses?: number; speed?: number; duration_seconds?: number; heartbeat_interval?: number; instant_complete?: boolean}
+  | {id: string; version: 1; operation: "ucampus.fabricated.status"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.fabricated.history"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.fabricated.pause" | "ucampus.fabricated.resume" | "ucampus.fabricated.stop"; course_id: string; run_id: string}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.start"; course_id: string; unit_id: string; pulses?: number}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.status"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"; course_id: string; run_id: string}
+  | {id: string; version: 1; operation: "ucampus.session.info"}
+  | {id: string; version: 1; operation: "ucampus.session.configure"; configuration: UCampusConfig}
+  | {id: string; version: 1; operation: "ucampus.session.login"; username: string; password: string}
+  | {id: string; version: 1; operation: "ucampus.session.clear"}
   | {id: string; version: 1; operation: "xuexitong.session.configure"; cookie: string}
   | {id: string; version: 1; operation: "xuexitong.session.clear"}
   | {id: string; version: 1; operation: "xuexitong.settings.get"}
@@ -154,7 +220,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
     throw new Error("INVALID_IPC_RESPONSE");
   }
   if (!result.ok) {
-    const allowed = new Set(["XUEXITONG_TASK_STOP_TIMEOUT", "INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
+    const allowed = new Set(["INVALID_UCAMPUS_CONFIG", "UCAMPUS_CREDENTIAL_STORAGE_FAILED", "XUEXITONG_TASK_STOP_TIMEOUT", "INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
                              "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
@@ -168,7 +234,24 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "XUEXITONG_SESSION_MISSING", "XUEXITONG_INTERNAL_ERROR",
                              "XUEXITONG_UNKNOWN_OPERATION", "XUEXITONG_TASK_NOT_RUNNING",
                              "XUEXITONG_RUN_ID_MISMATCH", "XUEXITONG_NO_TARGET_FOR_DTYPE",
-                             "XUEXITONG_NO_ACTIVE_TASK"]);
+                             "XUEXITONG_NO_ACTIVE_TASK",
+                             "UCAMPUS_COURSE_REQUIRED", "UCAMPUS_INVALID_PARAMETER",
+                             "UCAMPUS_INVALID_MEDIA_TASK", "UCAMPUS_NO_MEDIA_TASKS",
+                             "UCAMPUS_TASK_ALREADY_RUNNING", "UCAMPUS_TASK_NOT_RUNNING",
+                             "UCAMPUS_RUN_ID_MISMATCH", "UCAMPUS_RUNTIME_UNAVAILABLE",
+                             "UCAMPUS_SESSION_MISSING", "UCAMPUS_SESSION_EXPIRED",
+                              "INVALID_UCAMPUS_LOGIN", "UCAMPUS_LOGIN_UNAVAILABLE", "UCAMPUS_LOGIN_REJECTED",
+                              "UCAMPUS_LOGIN_FORMAT_UNVERIFIED", "UCAMPUS_LOGIN_VERIFICATION_REQUIRED", "UCAMPUS_LOGIN_RATE_LIMITED",
+                              "UCAMPUS_CATALOG_UNAVAILABLE", "UCAMPUS_CATALOG_FORMAT_UNVERIFIED",
+                              "UCAMPUS_MONITOR_STORAGE_FAILED", "UCAMPUS_MONITOR_UNAVAILABLE",
+                             "UCAMPUS_AI_ONLY", "UCAMPUS_OPEN_ID_REQUIRED",
+                             "UCAMPUS_PROGRESS_UNAVAILABLE", "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED",
+                             "UCAMPUS_INVALID_FABRICATED_PARAMETER", "UCAMPUS_INVALID_FABRICATED_TARGET",
+                             "UCAMPUS_INVALID_FABRICATED_PAYLOAD", "UCAMPUS_INVALID_FABRICATED_SEQUENCE",
+                             "UCAMPUS_RATE_LIMITED", "UCAMPUS_SUBMIT_REJECTED",
+                             "UCAMPUS_SUBMIT_UNVERIFIED", "UCAMPUS_SEND_UNAVAILABLE",
+                             "UCAMPUS_SENDER_UNAVAILABLE", "UCAMPUS_RUN_FAILED",
+                             "UCAMPUS_CLEANUP_FAILED"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -182,7 +265,7 @@ export async function request<T>(message: WithoutEnvelope<BridgeRequest>): Promi
 }
 
 function validPlatform(value: unknown): value is Platform {
-  return value === "zhidao" || value === "yuketang" || value === "xuexitong";
+  return value === "zhidao" || value === "yuketang" || value === "xuexitong" || value === "ucampus";
 }
 
 /** Can be unit-tested with a fake transport; production uses the real Tauri bridge. */
@@ -201,8 +284,8 @@ export async function fetchPlatformStatuses(transport: StudyFlowTransport): Prom
       courses: [],
     });
   }
-  if (result.size !== 3) throw new Error("INVALID_IPC_RESPONSE");
-  return ["zhidao", "yuketang", "xuexitong"].map(p => result.get(p as Platform)!);
+  if (result.size !== 4) throw new Error("INVALID_IPC_RESPONSE");
+  return ["zhidao", "yuketang", "xuexitong", "ucampus"].map(p => result.get(p as Platform)!);
 }
 
 export async function fetchStatuses(): Promise<PlatformState[]> {
@@ -283,6 +366,49 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "UCAMPUS_SOCKET_TOKEN_REQUIRED": return "请先在 U校园账号设置中填写本人会话的内容授权令牌。";
+    case "UCAMPUS_SOCKET_HANDSHAKE_UNVERIFIED": return "旧版 WebSocket 握手未通过，当前接口可能不兼容 U校园5.0。";
+    case "UCAMPUS_SOCKET_NAMESPACE_UNVERIFIED": return "旧版 Socket.IO 命名空间认证未通过。";
+    case "UCAMPUS_SOCKET_TRANSPORT_UNKNOWN": return "U校园 WebSocket 连接失败或超时，请检查网络和本机会话。";
+    case "UCAMPUS_SOCKET_BAD_FRAME": return "U校园 WebSocket 返回了无法识别的数据。";
+    case "UCAMPUS_SOCKET_NO_ACK": return "U校园 WebSocket 未按预期响应。";
+    case "UCAMPUS_COURSE_REQUIRED": return "请先选择 U校园真实课程。";
+    case "UCAMPUS_INVALID_PARAMETER": return "本地心跳参数不符合要求。";
+    case "UCAMPUS_INVALID_MEDIA_TASK": return "课程资源标识不正确。";
+    case "UCAMPUS_NO_MEDIA_TASKS": return "本单元没有可识别的待学习视频或音频资源。";
+    case "UCAMPUS_TASK_ALREADY_RUNNING": return "当前已有 U校园本地运行任务。";
+    case "UCAMPUS_TASK_NOT_RUNNING": return "当前没有正在运行的 U校园本地任务。";
+    case "UCAMPUS_RUN_ID_MISMATCH": return "运行 ID 或课程不匹配，请刷新。";
+    case "UCAMPUS_RUNTIME_UNAVAILABLE": return "U校园本地任务服务不可用。";
+    case "UCAMPUS_OPEN_ID_REQUIRED": return "当前 U校园会话缺少可核验的 openId，无法读取单元与任务。请重新登录或更新本机会话。";
+    case "UCAMPUS_AI_ONLY": return "目前单元与任务读取仅支持 U校园5.0 AI版。";
+    case "UCAMPUS_SESSION_MISSING": return "请先配置 U校园登录会话。";
+    case "UCAMPUS_SESSION_EXPIRED": return "U校园会话已失效，请重新登录。";
+    case "UCAMPUS_MONITOR_STORAGE_FAILED": return "U校园断点核验记录保存失败，请检查本机权限与存储空间。";
+    case "UCAMPUS_MONITOR_UNAVAILABLE": return "U校园进度核验任务暂不可用。";
+    case "INVALID_UCAMPUS_LOGIN": return "请输入有效的 U校园账号和密码。";
+    case "UCAMPUS_LOGIN_UNAVAILABLE": return "U校园 SSO 登录接口请求失败，请检查网络或稍后再试。";
+    case "UCAMPUS_LOGIN_REJECTED": return "U校园未接受本次登录，请检查账号密码及平台账号状态。";
+    case "UCAMPUS_LOGIN_FORMAT_UNVERIFIED": return "U校园 SSO 返回的数据结构与当前适配器不一致，未保存会话。";
+    case "UCAMPUS_LOGIN_VERIFICATION_REQUIRED": return "U校园要求图形、滑块等额外验证。请通过官方页面完成验证，不自动绕过。";
+    case "UCAMPUS_LOGIN_RATE_LIMITED": return "U校园限制了本次登录请求，请遵循平台提示后再试。";
+    case "UCAMPUS_CATALOG_UNAVAILABLE": return "U校园课程接口请求失败，请检查网络、账号与接口版本。";
+    case "UCAMPUS_CATALOG_FORMAT_UNVERIFIED": return "U校园课程接口返回了未知数据格式；未生成任何模拟课程，请核验平台版本。";
+    case "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED": return "U校园返回的数据结构与已知开源接口不一致，未推断任何进度。";
+    case "UCAMPUS_PROGRESS_UNAVAILABLE": return "U校园单元/任务进度接口请求失败，请检查账号、网络和课程。";
+    case "INVALID_UCAMPUS_CONFIG": return "U校园配置不符合要求：仅支持官方 HTTPS 域名与正确格式的登录会话。";
+    case "UCAMPUS_CREDENTIAL_STORAGE_FAILED": return "U校园登录信息未能写入 Windows 凭据管理器。";
+    case "UCAMPUS_INVALID_FABRICATED_PARAMETER": return "虚构心跳参数超出允许范围。";
+    case "UCAMPUS_INVALID_FABRICATED_TARGET": return "课程资源标识校验失败，已停止发送。";
+    case "UCAMPUS_INVALID_FABRICATED_PAYLOAD": return "虚构心跳包字段校验失败，已停止发送。";
+    case "UCAMPUS_INVALID_FABRICATED_SEQUENCE": return "虚构心跳序号不合法。";
+    case "UCAMPUS_RATE_LIMITED": return "U校园提示操作过于频繁，已按上游冷却策略重试。";
+    case "UCAMPUS_SUBMIT_REJECTED": return "U校园拒绝了完成申报，本次未记为通过。";
+    case "UCAMPUS_SUBMIT_UNVERIFIED": return "完成申报返回了无法核验的结果，本次未记为通过。";
+    case "UCAMPUS_SEND_UNAVAILABLE": return "无法连接 U校园提交接口，请检查网络与本机会话。";
+    case "UCAMPUS_SENDER_UNAVAILABLE": return "虚构心跳发送器未就绪，请重新配置会话。";
+    case "UCAMPUS_RUN_FAILED": return "本机任务运行异常，已隐藏可能包含会话信息的错误详情。";
+    case "UCAMPUS_CLEANUP_FAILED": return "任务结束时关闭通信连接失败，未将其视为平台完成证明。";
     case "XUEXITONG_TASK_STOP_TIMEOUT": return "学习通任务尚未安全停止，请稍后重试退出或切换账号。";
     case "INVALID_XUEXITONG_SETTINGS": return "学习通参数超出允许范围，原设置未修改。";
     case "XUEXITONG_SETTINGS_UNAVAILABLE": return "学习通本机设置保存失败，请检查本地文件权限。";
