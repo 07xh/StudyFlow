@@ -69,8 +69,13 @@ class TestQueueMetrics(unittest.TestCase):
     def test_active_chapter_counts_unique_chapter_not_configured_workers(self) -> None:
         runner = HeartbeatTaskRunner(self.first, object(), self.config)
         runner._snapshot.state = "running"  # Observe a runner; do not start network work.
+        runner._runtime_playing_time = 240.8  # UI-only clock sample.
         self.queue._runners[self.first.task_id] = runner
         result = self.service.status(COURSE)
+        live = next(item for item in result["tasks"] if item["task_id"] == self.first.task_id)
+        self.assertEqual(live["playing_time"], 240)
+        self.assertEqual(runner.snapshot.playing_time, 0,
+                         "Live display must not mutate the persisted task state")
         self.assertEqual(result["queue"]["active_chapters"], 1)
         self.assertEqual(result["queue"]["queued_chapters"], 1)
         self.assertEqual(result["queue"]["running_tasks"], 1)
