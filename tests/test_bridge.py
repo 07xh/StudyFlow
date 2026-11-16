@@ -11,7 +11,7 @@ def test_ping():
 def test_status_contract():
     result = dispatch({"id": "b", "version": 1, "operation": "platform.status"})
     assert result["ok"]
-    assert [p["platform"] for p in result["data"]] == ["zhidao", "yuketang", "xuexitong"]
+    assert [p["platform"] for p in result["data"]] == ["zhidao", "yuketang", "xuexitong", "ucampus"]
     assert all(isinstance(p["connected"], bool) for p in result["data"])
 
 
