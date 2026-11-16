@@ -248,10 +248,10 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong" | "ucampus")) => Ok(()),
         "ucampus.session.login" if request.get("username").and_then(|v| v.as_str())
             .is_some_and(|s| !s.trim().is_empty() && s.len() <= 128
-                && !s.contains('\\r') && !s.contains('\\n') && !s.contains('\\0'))
+                && !s.contains('\r') && !s.contains('\n') && !s.contains('\0'))
             && request.get("password").and_then(|v| v.as_str())
                 .is_some_and(|s| !s.is_empty() && s.len() <= 256
-                    && !s.contains('\\r') && !s.contains('\\n') && !s.contains('\\0'))
+                    && !s.contains('\r') && !s.contains('\n') && !s.contains('\0'))
                 => Ok(()),
         "ucampus.session.configure" if request.get("configuration").and_then(|v| v.as_object())
             .is_some_and(|data| data.len() >= 2 && data.len() <= 6
@@ -709,7 +709,7 @@ mod ipc_validation_tests {
             json!({"id":"u","version":1,"operation":"ucampus.session.login",
                 "username":"student01","password":""}),
             json!({"id":"u","version":1,"operation":"ucampus.session.login",
-                "username":"student01","password":"invalid\\nheader"}),
+                "username":"student01","password":"invalid\nheader"}),
         ] {
             assert!(validate(&invalid).is_err());
         }
