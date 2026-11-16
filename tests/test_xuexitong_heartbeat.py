@@ -424,6 +424,48 @@ class TestChapterQueue(unittest.TestCase):
         self.assertEqual([c["params"]["objectId"] for c in session.calls], ["v1", "v2"])
         self.assertTrue(all(s.state == TaskState.SUCCEEDED.value for s in results.values()))
 
+    def test_pause_before_queue_start_blocks_all_chapters(self) -> None:
+        session = FakeSession([FakeResponse(payload={"isPassed": True})])
+        queue = ChapterQueue(
+            make_sender(session),
+            self.queue_config(max_workers=1, instant_complete=True),
+        )
+        queue.submit_chapter("c1", [make_target(object_id="later", job_id="j-later")])
+        queue.pause_all()
+        results = {}
+
+        def execute() -> None:
+            results.update(queue.run())
+
+        thread = threading.Thread(target=execute, daemon=True)
+        thread.start()
+        try:
+            time.sleep(0.08)
+            self.assertEqual(session.calls, [], "暂停时不得启动队列中的章节")
+            self.assertTrue(thread.is_alive())
+        finally:
+            queue.resume_all()
+            thread.join(3)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(session.calls), 1)
+        self.assertEqual(len(results), 1)
+
+    def test_stop_wakes_queued_pause_without_network_work(self) -> None:
+        session = FakeSession([])
+        queue = ChapterQueue(make_sender(session), self.queue_config())
+        queue.submit_chapter("c1", [make_target(object_id="later", job_id="j-later")])
+        queue.pause_all()
+        thread = threading.Thread(target=queue.run, daemon=True)
+        thread.start()
+        try:
+            time.sleep(0.05)
+            queue.stop_all()
+            thread.join(3)
+        finally:
+            queue.resume_all()
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(session.calls, [])
+
     def test_chapters_run_concurrently(self) -> None:
         barrier = threading.Barrier(2, timeout=3)
         arrived: list[str] = []

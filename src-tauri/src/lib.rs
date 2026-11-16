@@ -405,7 +405,7 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
         if let Some(worker) = guard.as_mut() {
             // Flush heartbeat state before the child is killed.
             let _ = worker.request(
-                b"{\"id\":\"hb-shutdown\",\"version\":1,\"operation\":\"xuexitong.heartbeat.stop\"}\n",
+                b"{\"id\":\"hb-shutdown\",\"version\":1,\"operation\":\"xuexitong.heartbeat.stop\",\"graceful\":true}\n",
                 "hb-shutdown",
             );
         }

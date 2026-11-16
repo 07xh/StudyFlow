@@ -78,6 +78,15 @@ class TestHeartbeatBridge(unittest.TestCase):
         self.assertIn("xuexitong.heartbeat.stop", operations)
         self.assertIn("__wait__", operations)
 
+    def test_graceful_stop_waits_for_queue_before_returning(self) -> None:
+        result = bridge.dispatch("xuexitong.heartbeat.stop", {
+            "id": "shutdown-test", "version": 1,
+            "operation": "xuexitong.heartbeat.stop", "graceful": True,
+        })
+        self.assertTrue(result["ok"])
+        self.assertEqual([name for name, _payload in self.fake.calls],
+                         ["xuexitong.heartbeat.stop", "__wait__"])
+
     def test_shutdown_stops_and_waits(self) -> None:
         bridge.shutdown()
         operations = [name for name, _payload in self.fake.calls]

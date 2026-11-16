@@ -59,7 +59,14 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
         course_id = payload.pop("course_id", None)
         if isinstance(course_id, str) and course_id:
             payload["course_key"] = course_id
-    return get_service().handle(operation, payload)
+    service = get_service()
+    result = service.handle(operation, payload)
+    if operation == "xuexitong.heartbeat.stop" and request.get("graceful") is True:
+        # Rust requests graceful=True before reaping the persistent worker.
+        # A plain stop only signals cancellation; it does not ensure disk flush.
+        if not service.wait(8.0):
+            return {"ok": False, "error": "XUEXITONG_TASK_STOP_TIMEOUT"}
+    return result
 
 
 def reset_for_credentials_change() -> bool:

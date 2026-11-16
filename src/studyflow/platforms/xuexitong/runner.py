@@ -225,17 +225,21 @@ class HeartbeatTaskRunner:
         return self._snapshot.state
 
     def pause(self) -> None:
-        if not self._started or self._stopped.is_set() or self._is_terminal():
+        if self._stopped.is_set() or self._is_terminal():
             return
+        # A queue may pause between runner registration and start().
+        # Latch the request even before _started becomes true.
         self._paused.set()
-        self._transition(TaskState.PAUSED)
+        if self._started:
+            self._transition(TaskState.PAUSED)
 
     def resume(self) -> None:
         if not self._paused.is_set() or self._stopped.is_set():
             return
         self._paused.clear()
         self._last_iter = self._clock()
-        self._transition(TaskState.RUNNING)
+        if self._started:
+            self._transition(TaskState.RUNNING)
 
     def stop(self) -> None:
         if not self._started or self._is_terminal():
@@ -249,8 +253,13 @@ class HeartbeatTaskRunner:
             raise RuntimeError("XUEXITONG_TASK_ALREADY_STARTED")
         self._started = True
         self._transition(TaskState.RUNNING)
+        if self._paused.is_set():
+            self._transition(TaskState.PAUSED)
+        # Respect a pause/stop latched before this runner entered start().
+        if not self._wait_while_paused():
+            return self.snapshot
         self._calibrate_from_server()
-        if self._is_terminal():
+        if self._is_terminal() or not self._wait_while_paused():
             return self.snapshot
 
         # 首包：直接申报整段时长 / 完成状态（上游 study_video 的瞬间完成路径）。
@@ -505,6 +514,7 @@ class ChapterQueue:
         self._chapters: dict[str, list[VideoTarget]] = {}
         self._runners: dict[str, HeartbeatTaskRunner] = {}
         self._cancelled = threading.Event()
+        self._paused = threading.Event()
 
     def submit_chapter(self, chapter_id: str, targets: list[VideoTarget]) -> bool:
         with self._lock:
@@ -514,16 +524,20 @@ class ChapterQueue:
             return True
 
     def pause_all(self) -> None:
+        # The queue-wide flag prevents not-yet-started chapters from running.
+        self._paused.set()
         for runner in self._current_runners():
             runner.pause()
 
     def resume_all(self) -> None:
+        self._paused.clear()
         for runner in self._current_runners():
             runner.resume()
 
     def stop_all(self) -> None:
         """队列级取消：先置标志，未启动的章节不会再创建运行器。"""
         self._cancelled.set()
+        self._paused.clear()
         for runner in self._current_runners():
             runner.stop()
         if self._on_event is not None:
@@ -532,6 +546,13 @@ class ChapterQueue:
     def reset(self) -> None:
         """显式复位取消标志；仅在新建运行批次时调用，run() 不自动清除。"""
         self._cancelled.clear()
+        self._paused.clear()
+
+    def _wait_for_queue_resume(self) -> bool:
+        # wait() on the cancel event also lets stop_all wake a paused queue.
+        while self._paused.is_set() and not self._cancelled.is_set():
+            self._cancelled.wait(0.1)
+        return not self._cancelled.is_set()
 
     def run(self) -> dict[str, TaskSnapshot]:
         # 不清除 _cancelled：stop_all() 可能先于工作线程进入 run()，
@@ -559,7 +580,7 @@ class ChapterQueue:
     def _run_chapter(self, chapter_id: str, targets: list[VideoTarget]) -> list[TaskSnapshot]:
         snapshots: list[TaskSnapshot] = []
         for target in targets:
-            if self._cancelled.is_set():
+            if not self._wait_for_queue_resume():
                 break
             target.validate()
             resumed = self.store.load(target.task_id, self.config.account_marker) if self.store is not None else None
@@ -582,6 +603,10 @@ class ChapterQueue:
             )
             with self._lock:
                 self._runners[target.task_id] = runner
+            # pause_all might have raced with registration. Its queue flag
+            # remains set until resume_all, so latch a pre-start pause here.
+            if self._paused.is_set():
+                runner.pause()
             snapshots.append(runner.start())
         return snapshots
 
