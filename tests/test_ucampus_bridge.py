@@ -29,3 +29,14 @@ def test_errors_are_public_codes_no_cookie(monkeypatch):
     monkeypatch.setattr(bridge, "UCampusProgressReader", Reader)
     assert call("ucampus.units.list", course_id="test")["error"] == "UCAMPUS_OPEN_ID_REQUIRED"
     assert call("ucampus.unit.tasks", course_id=123, unit_id="U1")["error"] == "INVALID_REQUEST"
+
+
+def test_course_v2_id_through_python_bridge(monkeypatch):
+    class Reader:
+        def list_units(self, course_id):
+            assert course_id == "course-v2:real-id"
+            return [{"id": "U1", "title": "", "completed": None}]
+    monkeypatch.setattr(bridge, "UCampusProgressReader", Reader)
+    response = call("ucampus.units.list", course_id="course-v2:real-id")
+    assert response["ok"] is True
+    assert response["data"][0]["id"] == "U1"

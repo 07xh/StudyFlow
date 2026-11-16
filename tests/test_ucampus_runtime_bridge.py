@@ -56,3 +56,18 @@ def test_no_synthetic_course_targets(monkeypatch):
     state = service.dispatch("ucampus.heartbeat.start",
                              {"course_id": "c", "unit_id": "U1"})
     assert state["error"] == "UCAMPUS_NO_MEDIA_TASKS"
+
+
+def test_course_v2_id_enters_local_runner(monkeypatch):
+    runner = UCampusLocalRunner(interval=0.01)
+    monkeypatch.setattr(service, "get_runner", lambda: runner)
+    class Reader:
+        def list_tasks(self, course_id, unit_id):
+            assert course_id == "course-v2:real-id"
+            assert unit_id == "U1"
+            return [{"id": "V1", "title": "视频", "type": "video", "completed": False}]
+    monkeypatch.setattr(service, "UCampusProgressReader", Reader)
+    state = service.dispatch("ucampus.heartbeat.start",
+        {"course_id": "course-v2:real-id", "unit_id": "U1", "pulses": 1})
+    assert state["ok"] and state["course_id"] == "course-v2:real-id"
+    runner.shutdown()

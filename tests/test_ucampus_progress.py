@@ -105,3 +105,26 @@ def test_user_owned_content_headers_are_only_sent_to_fixed_ucontent(monkeypatch)
     assert args["headers"]["x-annotator-auth-token"] == "user-owned-token"
     assert args["headers"]["u-school"] == "8320"
     assert args["allow_redirects"] is False
+
+
+def test_real_course_v2_id_is_valid_path_segment(monkeypatch):
+    cfg = _config()
+    seen = []
+    class Response:
+        status_code = 200
+        is_redirect = False
+        headers = {"content-type": "application/json"}
+        content = b'{"rt":{"units":{"U1":{}}}}'
+        def json(self): return {"rt": {"units": {"U1": {}}}}
+    def get(url, **kwargs):
+        seen.append((url, kwargs))
+        return Response()
+    monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get", get)
+    reader = UCampusProgressReader(credentials_loader=lambda: cfg)
+    assert reader.list_units("course-v2:real-id")[0]["id"] == "U1"
+    assert "/course_progress/course-v2:real-id/" in seen[0][0]
+    assert seen[0][1]["allow_redirects"] is False
+    for bad in ("course-v2:../private", "course-v2:%2Fetc", "course-v2:?k=v"):
+        with pytest.raises(UCampusProgressError, match="INVALID_REQUEST"):
+            reader.list_units(bad)
+    assert len(seen) == 1

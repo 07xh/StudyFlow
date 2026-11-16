@@ -260,27 +260,27 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     s.len() <= 24 && s.bytes().all(|c| c.is_ascii_digit())))) => Ok(()),
         "ucampus.units.list" | "ucampus.unit.tasks" if request.get("course_id")
             .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
             && (operation == "ucampus.units.list" || request.get("unit_id")
                 .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')))
                 => Ok(()),
         "ucampus.heartbeat.status" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')) => Ok(()),
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
         "ucampus.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
             && request.get("unit_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
             && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
             => Ok(()),
         "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"
             if request.get("graceful").is_none()
                 && request.get("course_id").and_then(|v| v.as_str())
                     .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
                 && request.get("run_id").and_then(|v| v.as_str())
                     .is_some_and(|id| id.len() == 32
                         && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
@@ -681,6 +681,10 @@ mod ipc_validation_tests {
             "course_id":"course123"})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
             "course_id":"course123","unit_id":"U-123"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.units.list",
+            "course_id":"course-v2:real-course-id"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+            "course_id":"course-v2:real-course-id","unit_id":"U-123"})).is_ok());
         for bad in [
             json!({"id":"u","version":1,"operation":"ucampus.units.list",
                 "course_id":"../etc"}),
@@ -697,6 +701,9 @@ mod ipc_validation_tests {
     fn ucampus_heartbeat_operation_guard() {
         assert!(validate(&json!({"id":"u","version":1,
             "operation":"ucampus.heartbeat.start","course_id":"c1",
+            "unit_id":"u1","pulses":5})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.start","course_id":"course-v2:real-course-id",
             "unit_id":"u1","pulses":5})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,
             "operation":"ucampus.heartbeat.start","course_id":"c1",
