@@ -630,7 +630,11 @@ class ChapterQueue:
             for target in targets:
                 runner = runners.get(target.task_id)
                 if runner is not None:
-                    items.append(runner.snapshot)
+                    snapshot = runner.snapshot
+                    # A terminated queue must not appear to be still running.
+                    if not running and snapshot.state in ("running", "paused", "pending"):
+                        snapshot.state = "interrupted"
+                    items.append(snapshot)
                     continue
                 items.append(TaskSnapshot(
                     task_id=target.task_id,
