@@ -153,8 +153,10 @@ export default function App(){
       finally{inFlight=false;}
     };
     void tick();
-    const timer=window.setInterval(()=>void tick(),90_000);
-    return()=>{live=false;window.clearInterval(timer);};
+    const timer=typeof window.setInterval==="function"
+      ?window.setInterval(()=>void tick(),90_000):null;
+    return()=>{live=false;if(timer!==null&&typeof window.clearInterval==="function")
+      window.clearInterval(timer);};
   },[desktop,consentAccepted]);
 
   const releaseChangelog=useReleaseChangelog(desktop,consentAccepted);
