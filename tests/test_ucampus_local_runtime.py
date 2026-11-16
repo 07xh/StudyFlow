@@ -112,3 +112,22 @@ def test_blocked_transport_does_not_serialize_other_chapters():
     status = runner.status("course1")
     assert status["sent"] == status["transport_accepted"] == 2
     assert status["server_confirmed"] is None
+
+
+def test_local_status_exposes_event_target_without_any_server_credit():
+    runner = UCampusLocalRunner(interval=0.01)
+    try:
+        runner.start("course1", [task("U1", "A"), task("U1", "B")],
+                     pulses_per_resource=3)
+        status = until_done(runner)
+        assert status["pulses_per_resource"] == 3
+        assert len(status["tasks"]) == 2
+        assert status["generated"] == 6
+        assert all(row["generated"] == 3 for row in status["tasks"])
+        assert status["sent"] == 0
+        assert status["server_confirmed"] is None
+        other = runner.status("another-course")
+        assert other["pulses_per_resource"] == 0
+        assert other["generated"] == 0
+    finally:
+        runner.shutdown()
