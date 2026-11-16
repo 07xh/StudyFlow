@@ -25,4 +25,6 @@ test("Xuexitong task controls keep run identity and shared parameter defaults",(
   assert.ok(source.includes('operation:"xuexitong.settings.save"'));
   assert.ok(source.includes('settings:{...defaults,playback_speed:speed,concurrency:jobs}'));
   assert.ok(rust.includes('request.get("graceful").is_none()'));
+  assert.ok(bridge.includes('case "XUEXITONG_RUN_ID_REQUIRED":'),
+    "Missing run identity must have an actionable UI explanation");
 });
