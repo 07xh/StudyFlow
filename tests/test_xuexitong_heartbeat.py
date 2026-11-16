@@ -528,6 +528,7 @@ class TestSidecarService(unittest.TestCase):
             )
             started = service.handle("xuexitong.heartbeat.start", {
                 "course_key": "100001:200002:300003", "speed": 1.5, "jobs": 2,
+                "instant_complete": True,  # This fixture's clock is intentionally static.
             })
             self.assertTrue(started["ok"])
             self.assertEqual(started["task_count"], 2)
@@ -580,7 +581,9 @@ class TestSidecarService(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             targets = [make_target(object_id="v1", job_id="j1")]
             service = self.make_service(folder, targets, [FakeResponse(payload={"isPassed": True})])
-            started = service.handle("xuexitong.heartbeat.start", {"course_key": "1:2:3"})
+            started = service.handle("xuexitong.heartbeat.start", {
+                "course_key": "1:2:3", "instant_complete": True,
+            })
             self.assertTrue(started["ok"])
             pause = service.handle("xuexitong.heartbeat.pause", {})
             logs = service.handle("xuexitong.heartbeat.logs", {})
