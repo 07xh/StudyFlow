@@ -546,7 +546,7 @@ export default function App(){
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
-      <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
+      <ZhidaoProgressPanel key={"server:"+course.course_id} courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
       autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
       onAutoVerifyChange={configureAutoVerify}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:mergeZhidaoEvidence(previous.zhidao.courses,list)}}))}
@@ -755,11 +755,11 @@ export default function App(){
         {course.platform==="zhidao"?<>
           {renderZhidaoModeSwitch(course)}
           <div className="sf-runtime-mode" hidden={mode!=="official"}>
-            <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")}
+            <ZhidaoOfficialPlayerPanel key={"official:"+course.course_id} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
-            <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
+            <LegacyPlaybackPanel key={"zhs:"+course.course_id} platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="xuexitong"?<>
@@ -780,7 +780,7 @@ export default function App(){
       </section>
       {course.platform==="zhidao"?<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
-          <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
+          <ZhidaoCourseDetailPanel key={"chapters:"+course.course_id} course={course} desktop={desktop} onCoursesUpdated={updateCourses}/>
         </CollapsibleSection>
         <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
