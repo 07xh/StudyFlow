@@ -8,6 +8,7 @@ from __future__ import annotations
 import atexit
 import json
 import sys
+from datetime import datetime, timezone
 from contextlib import redirect_stdout
 from typing import Any
 
@@ -146,6 +147,33 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
+    if operation == "ucampus.progress.verify":
+        course_id = request.get("course_id")
+        unit_id = request.get("unit_id")
+        if (not isinstance(course_id, str) or not 1 <= len(course_id) <= 128
+                or not isinstance(unit_id, str) or not 1 <= len(unit_id) <= 128):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        try:
+            rows = UCampusProgressReader().list_tasks(course_id, unit_id)
+            data = {
+                "course_id": course_id, "unit_id": unit_id,
+                "verified_at": datetime.now(timezone.utc).isoformat(),
+                "total": len(rows),
+                "passed": sum(row.get("completed") is True for row in rows),
+                "not_passed": sum(row.get("completed") is False for row in rows),
+                "unknown": sum(row.get("completed") is None for row in rows),
+                "required_total": sum(row.get("required") is True for row in rows),
+                "required_passed": sum(row.get("required") is True
+                                       and row.get("completed") is True for row in rows),
+                "tasks": [{"id": row["id"], "type": row.get("type", "unknown"),
+                           "required": row.get("required"),
+                           "completed": row.get("completed")} for row in rows],
+            }
+            return {"id": request_id, "ok": True, "data": data}
+        except UCampusProgressError as exc:
+            return {"id": request_id, "ok": False, "error": str(exc)}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_PROGRESS_UNAVAILABLE"}
     if operation in ("ucampus.units.list", "ucampus.unit.tasks"):
         course_id = request.get("course_id")
         unit_id = request.get("unit_id")

@@ -40,3 +40,31 @@ def test_course_v2_id_through_python_bridge(monkeypatch):
     response = call("ucampus.units.list", course_id="course-v2:real-id")
     assert response["ok"] is True
     assert response["data"][0]["id"] == "U1"
+
+def test_server_status_verification_reads_platform_flags_only(monkeypatch):
+    class Reader:
+        def list_tasks(self, course_id, unit_id):
+            assert (course_id, unit_id) == ("course-v2:real-id", "u1")
+            return [
+                {"id":"V1","type":"video","required":True,"completed":True},
+                {"id":"A1","type":"audio","required":True,"completed":False},
+                {"id":"Q1","type":"task","required":None,"completed":None},
+            ]
+    monkeypatch.setattr(bridge,"UCampusProgressReader",Reader)
+    response=call("ucampus.progress.verify",course_id="course-v2:real-id",unit_id="u1")
+    assert response["ok"]
+    value=response["data"]
+    assert (value["total"],value["passed"],value["not_passed"],value["unknown"])==(3,1,1,1)
+    assert (value["required_total"],value["required_passed"])==(2,1)
+    assert value["verified_at"].endswith("+00:00")
+    assert "progress_percent" not in value
+    assert call("ucampus.progress.verify",course_id="course1")["error"]=="INVALID_REQUEST"
+
+
+def test_server_status_verification_reports_expired_session(monkeypatch):
+    class Reader:
+        def list_tasks(self,course_id,unit_id):
+            raise UCampusProgressError("UCAMPUS_SESSION_EXPIRED")
+    monkeypatch.setattr(bridge,"UCampusProgressReader",Reader)
+    response=call("ucampus.progress.verify",course_id="course1",unit_id="U1")
+    assert response == {"id":"ucampus-test","ok":False,"error":"UCAMPUS_SESSION_EXPIRED"}
