@@ -434,8 +434,7 @@ class HeartbeatTaskRunner:
     def _wait_while_paused(self) -> bool:
         while self._paused.is_set() and not self._stopped.is_set() and not self._cancelled():
             before = self._clock()
-            if not self._consume_tick():
-                return False
+            # Paused time must not consume the execution tick budget.
             self._sleeper(self.config.tick_seconds)
             now = self._clock()
             # 暂停期间既不计入播放时间，也不计入墙钟超时预算
