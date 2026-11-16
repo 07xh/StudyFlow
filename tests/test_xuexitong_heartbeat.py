@@ -407,7 +407,7 @@ class TestRunner(unittest.TestCase):
 class TestChapterQueue(unittest.TestCase):
     @staticmethod
     def queue_config(**overrides: object) -> RunConfig:
-        values = dict(max_ticks=6, tick_seconds=0.01,
+        values = dict(max_ticks=6, tick_seconds=0.01, instant_complete=True,
                       heartbeat_interval_video_seconds=30, max_workers=1)
         values.update(overrides)
         return RunConfig(**values)  # type: ignore[arg-type]
@@ -818,6 +818,7 @@ class TestSidecarContractFixes(unittest.TestCase):
             )
             started = service.handle("xuexitong.heartbeat.start", {
                 "course_key": "100001:200002:300003",
+                "instant_complete": True,  # Synthetic test clock never advances.
             })
             self.assertTrue(started["ok"])
             run_id = started["run_id"]
