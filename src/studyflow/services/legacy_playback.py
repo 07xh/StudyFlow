@@ -529,6 +529,10 @@ def run_zhidao_original(course_key: str, monitor_token: str | None = None, zhs_o
 
 
 
+class _WorkerLockBusy(OSError):
+    """A different live worker owns the per-platform OS lock."""
+
+
 @contextmanager
 def _exclusive_worker(platform: str):
     """Hold an OS-owned lock for the whole legacy worker lifetime.
@@ -548,7 +552,12 @@ def _exclusive_worker(platform: str):
         stream.seek(0)
         if os.name == "nt":
             import msvcrt
-            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            try:
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                if exc.errno in (errno.EACCES, errno.EAGAIN):
+                    raise _WorkerLockBusy(exc.errno, "active platform worker") from None
+                raise
             try:
                 yield
             finally:
@@ -556,7 +565,12 @@ def _exclusive_worker(platform: str):
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
         else:
             import fcntl
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno in (errno.EACCES, errno.EAGAIN):
+                    raise _WorkerLockBusy(exc.errno, "active platform worker") from None
+                raise
             try:
                 yield
             finally:
@@ -564,11 +578,20 @@ def _exclusive_worker(platform: str):
 
 
 def _run_exclusive(platform: str, callback) -> int:
-    try:
-        with _exclusive_worker(platform):
-            return callback()
-    except OSError as exc:
-        return 10 if exc.errno in (errno.EACCES, errno.EAGAIN) else 11
+    # Windows can release an exited worker's OS lock just after the supervisor
+    # reaps the process tree. Retry *only lock acquisition*, never the task
+    # callback: replaying a started task would risk duplicate work.
+    for attempt in range(8):
+        try:
+            with _exclusive_worker(platform):
+                return callback()
+        except _WorkerLockBusy:
+            if attempt == 7:
+                return 10  # A live other worker still owns the lock.
+            time.sleep(0.15)
+        except OSError:
+            return 11
+    return 10
 
 
 def main(argv: list[str] | None = None) -> int:
