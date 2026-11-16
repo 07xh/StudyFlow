@@ -143,3 +143,30 @@ def test_sso_login_preserves_session_if_optional_school_query_fails(monkeypatch)
     result = call("ucampus.session.login", username="student", password="secret")
     assert result["ok"] and stored[0]["school_id"] == ""
     assert stored[0]["cookie"] == "jwt=header.payload.signature"
+
+
+def test_readonly_monitor_bridge_requires_explicit_opt_in(monkeypatch):
+    events = []
+    monkeypatch.setattr(bridge.ucampus_monitor, "status",
+                        lambda: {"enabled": False, "state": "disabled"})
+    monkeypatch.setattr(bridge.ucampus_monitor, "configure",
+                        lambda course, unit, enabled: events.append((course, unit, enabled))
+                        or {"enabled": enabled, "state": "pending"})
+    monkeypatch.setattr(bridge.ucampus_monitor, "tick",
+                        lambda: {"enabled": True, "state": "verified", "passed": 1})
+    assert call("ucampus.monitor.status")["data"]["enabled"] is False
+    assert call("ucampus.monitor.tick")["data"]["passed"] == 1
+    assert call("ucampus.monitor.configure", enabled=True,
+                course_id="course-v2:eng+1", unit_id="U1")["data"]["enabled"] is True
+    assert events == [("course-v2:eng+1", "U1", True)]
+
+
+def test_monitor_errors_are_fixed_codes(monkeypatch):
+    from studyflow.platforms.ucampus.readonly_monitor import UCampusMonitorError
+    def bad(*args):
+        raise UCampusMonitorError("Authorization: should-never-appear")
+    monkeypatch.setattr(bridge.ucampus_monitor, "configure", bad)
+    result = call("ucampus.monitor.configure", enabled=True,
+                  course_id="course-v2:real+1", unit_id="U1")
+    assert result["error"] == "UCAMPUS_MONITOR_UNAVAILABLE"
+    assert "Authorization" not in str(result)
