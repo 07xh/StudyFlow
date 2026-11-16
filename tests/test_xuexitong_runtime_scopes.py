@@ -36,6 +36,7 @@ class TestHeartbeatLogScopes(unittest.TestCase):
             self.assertEqual([event["state"] for event in first["events"]], ["running"])
             self.assertEqual([event["state"] for event in second["events"]], ["finished"])
             self.assertEqual(first["events"][0]["run_id"], "run-a")
+            self.assertEqual(service.handle("xuexitong.heartbeat.logs", {"course_id": "10:20:30", "limit": 0})["events"], [])
             self.assertTrue(all("_account_marker" not in item for item in first["events"]))
 
     def test_no_records_from_unselected_account(self) -> None:
