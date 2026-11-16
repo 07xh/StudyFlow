@@ -235,7 +235,25 @@ class XuexitongHeartbeatService:
         running = bool(active_scope and thread is not None and thread.is_alive())
         paused = bool(running and queue is not None and queue.paused)
         selected_course = course_key or active_course
-        if active_scope:
+        queue_metrics: dict[str, int] | None = None
+        if active_scope and queue is not None:
+            # Use the actual in-memory chapter queue, not configured jobs or
+            # persisted task count, so never-started chapters are also visible.
+            snapshots = queue.status_snapshots(running=running)
+            chapter_ids = {item.chapter_id for item in snapshots}
+            active_ids = {item.chapter_id for item in snapshots if item.state == "running"}
+            paused_ids = {item.chapter_id for item in snapshots if item.state == "paused"}
+            pending_ids = {item.chapter_id for item in snapshots if item.state == "pending"}
+            queued_ids = (pending_ids - active_ids - paused_ids) if running else set()
+            queue_metrics = {
+                "total_chapters": len(chapter_ids),
+                "active_chapters": len(active_ids) if running else 0,
+                "paused_chapters": len(paused_ids) if running else 0,
+                "queued_chapters": len(queued_ids),
+                "pending_tasks": sum(1 for item in snapshots if item.state == "pending") if running else 0,
+                "running_tasks": sum(1 for item in snapshots if item.state == "running") if running else 0,
+            }
+        elif active_scope:
             snapshots = self.store.list_by_run(run_id, account_marker)
         elif selected_course:
             snapshots = self.store.list_by_course(selected_course, account_marker)
@@ -249,10 +267,11 @@ class XuexitongHeartbeatService:
             "config": {
                 "speed": config.speed if active_scope and config else 1.0,
                 "jobs": config.max_workers if active_scope and config else 2,
-                "instant_complete": config.instant_complete if active_scope and config else True,
+                "instant_complete": config.instant_complete if active_scope and config else False,
                 "randomize_interval": config.randomize_interval if active_scope and config else False,
             },
             "task_count": len(tasks), "tasks": tasks,
+            "queue": queue_metrics,
             "heartbeats": {
                 "sent": sum(item.sent_count for item in snapshots),
                 "server_confirmed": sum(1 for item in snapshots if item.server_confirmed),
@@ -354,6 +373,7 @@ class XuexitongHeartbeatService:
             "task_id": snapshot.task_id,
             "run_id": snapshot.run_id,
             "course_key": snapshot.course_key,
+            "chapter_id": snapshot.chapter_id,
             "chapter": snapshot.chapter,
             "title": snapshot.title,
             "state": snapshot.state,
