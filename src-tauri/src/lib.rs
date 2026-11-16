@@ -261,10 +261,10 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     s.len() <= 24 && s.bytes().all(|c| c.is_ascii_digit())))) => Ok(()),
         "ucampus.units.list" | "ucampus.unit.tasks" | "ucampus.progress.verify" if request.get("course_id")
             .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && (operation == "ucampus.units.list" || request.get("unit_id")
                 .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')))
                 => Ok(()),
         "ucampus.heartbeat.status" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
@@ -712,6 +712,14 @@ mod ipc_validation_tests {
             "course_id":"course123","unit_id":"U-123"})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.units.list",
             "course_id":"course-v2:real-course-id"})).is_ok());
+        // Real U校园AI IDs contain literal '+' separators.
+        let real_course = "course-v2:75b7546ea002b72+nhce_v4_rw_2+20230116";
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.units.list",
+            "course_id":real_course})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+            "course_id":real_course,"unit_id":"U1"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.progress.verify",
+            "course_id":real_course,"unit_id":"U1"})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.progress.verify",
             "course_id":"course-v2:real-course-id","unit_id":"U-123"})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.progress.verify",
