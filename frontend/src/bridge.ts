@@ -63,7 +63,7 @@ export type HeartbeatTaskView={
   server_play_time:number;end_reason:string;confirmed:boolean;resumable:boolean;
 };
 export type HeartbeatStatus={
-  ok:boolean;running:boolean;run_id:string;course_key:string;
+  ok:boolean;running:boolean;paused:boolean;run_id:string;course_key:string;
   config:{speed:number;jobs:number;instant_complete:boolean;randomize_interval:boolean};
   task_count:number;tasks:HeartbeatTaskView[];
   heartbeats:{sent:number;server_confirmed:number};
