@@ -4,7 +4,7 @@
 // 合入位置：frontend/src/components/XuexitongHeartbeatPanel.tsx
 import {useCallback,useEffect,useRef,useState} from "react";
 import type {Course} from "../types";
-import {friendlyBridgeError,request} from "../bridge";
+import {friendlyBridgeError,request,type XuexitongSettings} from "../bridge";
 
 export type HeartbeatTaskView={
   task_id:string;run_id:string;course_key:string;chapter:string;title:string;
@@ -85,7 +85,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   useEffect(()=>{
     if(!desktop)return;
     let active=true;
-    void request<{playback_speed:number;concurrency:number}>({operation:"xuexitong.settings.get"})
+    void request<XuexitongSettings>({operation:"xuexitong.settings.get"})
       .then(settings=>{
         if(active){setSpeed(settings.playback_speed);setJobs(settings.concurrency);}
       }).catch(()=>{});
@@ -97,6 +97,13 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     setBusy(true);setMessage("");
     try{
       if(action==="start"){
+        // Reuse the same validated settings contract as the platform settings page.
+        // Only saved speed/concurrency are updated; verification preferences survive.
+        const defaults=await request<XuexitongSettings>({operation:"xuexitong.settings.get"});
+        await request<XuexitongSettings>({
+          operation:"xuexitong.settings.save",
+          settings:{...defaults,playback_speed:speed,concurrency:jobs},
+        });
         await request<{ok:boolean;run_id:string}>({
           operation:"xuexitong.heartbeat.start",course_id:course.course_id,
           speed,jobs,instant_complete:instant,
@@ -104,13 +111,14 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
         });
         setMessage("本地心跳任务已启动。");
       }else{
-        const runId=status?.run_id?{run_id:status.run_id}:{};
+        const runId=status?.run_id;
+        if(!runId)throw new Error("XUEXITONG_RUN_ID_REQUIRED");
         if(action==="pause"){
-          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.pause",...runId});
+          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.pause",run_id:runId});
         }else if(action==="resume"){
-          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.resume",...runId});
+          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.resume",run_id:runId});
         }else{
-          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.stop",...runId});
+          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.stop",run_id:runId});
         }
       }
       await refresh();
@@ -125,7 +133,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
 
   return <section className="sf-platform-settings-view" aria-label="学习通本地心跳任务">
     <p className="sf-hint">
-      本地任务记录与平台核验分别统计；未经确认的任务不显示为已完成。
+      本地任务记录与平台核验分别统计；未经确认的任务不显示为已完成。速度、并发在启动时保存；其他选项仅本次生效。
     </p>
 
     <div className="sf-settings-row">
