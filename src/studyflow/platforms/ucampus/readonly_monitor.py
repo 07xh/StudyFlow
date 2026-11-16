@@ -68,7 +68,10 @@ def _load() -> dict[str, Any] | None:
 
 def _write(data: dict[str, Any] | None) -> None:
     path = _path()
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as exc:
+        raise UCampusMonitorError("UCAMPUS_MONITOR_STORAGE_FAILED") from exc
     if data is None:
         try:
             path.unlink(missing_ok=True)
@@ -88,8 +91,13 @@ def _write(data: dict[str, Any] | None) -> None:
     except OSError as exc:
         raise UCampusMonitorError("UCAMPUS_MONITOR_STORAGE_FAILED") from exc
     finally:
-        if name and os.path.exists(name):
-            os.unlink(name)
+        if name:
+            try:
+                os.unlink(name)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass  # Never leak the temporary path or mask an earlier error.
 
 
 def _public(data: dict[str, Any] | None) -> dict[str, Any]:
@@ -103,12 +111,19 @@ def _public(data: dict[str, Any] | None) -> dict[str, Any]:
         return {"enabled": False, "course_id": "", "unit_id": "",
                 "state": "account_changed", "checked_at": "", "total": 0,
                 "passed": 0, "unknown": 0}
+    state = data.get("state")
+    if not isinstance(state, str) or state not in _ALLOWED_STATUS:
+        state = "pending"
+    checked_at = data.get("checked_at")
+    if not isinstance(checked_at, str) or len(checked_at) > 48:
+        checked_at = ""
+    def count(field: str) -> int:
+        value = data.get(field)
+        return value if type(value) is int and 0 <= value <= 100000 else 0
     return {"enabled": True, "course_id": data["course_id"], "unit_id": data["unit_id"],
-            "state": data.get("state") if data.get("state") in _ALLOWED_STATUS else "pending",
-            "checked_at": data.get("checked_at", ""),
-            "total": max(0, int(data.get("total", 0))),
-            "passed": max(0, int(data.get("passed", 0))),
-            "unknown": max(0, int(data.get("unknown", 0)))}
+            "state": state, "checked_at": checked_at,
+            "total": count("total"), "passed": count("passed"),
+            "unknown": count("unknown")}
 
 
 def status() -> dict[str, Any]:
@@ -145,7 +160,11 @@ def tick(*, clock=None, reader_factory=UCampusProgressReader) -> dict[str, Any]:
         if not public["enabled"] or saved is None:
             return public
         now = float(clock() if clock else time.time())
-        if now - float(saved.get("last_attempt", 0)) < _MIN_INTERVAL_SECONDS:
+        previous_attempt = saved.get("last_attempt", 0)
+        if (type(previous_attempt) not in (int, float)
+                or previous_attempt < 0 or not float(previous_attempt) < float("inf")):
+            previous_attempt = 0
+        if now - float(previous_attempt) < _MIN_INTERVAL_SECONDS:
             return public
         saved["last_attempt"] = now
         _write(saved)  # persist attempt before GET to avoid restart request storms
