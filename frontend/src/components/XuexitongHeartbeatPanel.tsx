@@ -71,8 +71,15 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   useEffect(()=>{
     setStatus(null);setLogs([]);
     void refresh();
+    // React's Node-based test renderer has no window. The desktop app does.
+    if(typeof window==="undefined")return;
     timer.current=window.setInterval(()=>{void refresh();},2000);
-    return ()=>{if(timer.current!==null)window.clearInterval(timer.current);};
+    return ()=>{
+      if(timer.current!==null){
+        window.clearInterval(timer.current);
+        timer.current=null;
+      }
+    };
   },[refresh]);
 
   useEffect(()=>{
