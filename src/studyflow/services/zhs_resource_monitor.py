@@ -55,7 +55,7 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
             # Read-only compatibility for the official ZHS shared-course display.
             # Restrict parsing to the latest terminal frame, never CLI diagnostics,
             # URLs, unrelated percentages or previous progress-bar rows.
-            latest = re.split(r"[\\r\\n]", _ANSI_SGR.sub("", chunk[-4096:]))[-1]
+            latest = re.split(r"[\r\n]", _ANSI_SGR.sub("", chunk[-4096:]))[-1]
             observed = _SHARED_VIDEO_PROGRESS.match(latest)
             if observed is None:
                 return
