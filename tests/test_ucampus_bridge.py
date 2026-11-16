@@ -104,6 +104,7 @@ def test_sso_login_persists_only_session_and_no_password(monkeypatch):
     monkeypatch.setattr(bridge, "ucampus_authenticate",
                         lambda user, password: UCampusConfig.from_dict({
                             "variant": "ai", "cookie": "jwt=header.payload.signature"}))
+    monkeypatch.setattr(bridge, "ucampus_enrich_school", lambda config: config)
     monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda value: changes.append(value))
@@ -127,3 +128,18 @@ def test_sso_login_failure_does_not_replace_existing_credentials(monkeypatch):
     assert not result["ok"]
     assert result["error"] == "UCAMPUS_LOGIN_VERIFICATION_REQUIRED"
     assert not calls
+
+
+def test_sso_login_preserves_session_if_optional_school_query_fails(monkeypatch):
+    from studyflow.platforms.ucampus.credentials import UCampusConfig
+    stored = []
+    config = UCampusConfig.from_dict({"variant": "ai",
+                                      "cookie": "jwt=header.payload.signature"})
+    monkeypatch.setattr(bridge, "ucampus_authenticate", lambda user, pw: config)
+    monkeypatch.setattr(bridge, "ucampus_enrich_school", lambda incoming: incoming)
+    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda payload: stored.append(payload))
+    result = call("ucampus.session.login", username="student", password="secret")
+    assert result["ok"] and stored[0]["school_id"] == ""
+    assert stored[0]["cookie"] == "jwt=header.payload.signature"
