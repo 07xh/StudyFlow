@@ -123,3 +123,20 @@ python -m studyflow.platforms.ucampus.har_diagnostics .\own-session.har > ucampu
 输出只包含官方域名、请求方法、泛化路由、HTTP 状态和允许的 JSON 字段名。
 不要公开原始 HAR、Cookie 或登录会话。结构摘要用于确定真实协议，
 不是自动绕过平台认证的工具，也不能直接作为可以提交进度的证明。
+
+## 旧版 Socket.IO WebSocket 传输层（2026-11-16）
+
+已核验 [z5882852/unipus-tool](https://github.com/z5882852/unipus-tool/blob/main/ws.py)
+存在本地建立 WebSocket、加入命名空间和发送消息的旧版实现。
+当前上游项目已归档，未发现明确源码授权许可证；**不直接复制其代码**。
+StudyFlow 的 `socketio_client.py` 为独立实现，提供：
+
+- TLS 证书验证默认开启（旧源码直接关闭验证，不可复用）；
+- 固定 U校园官方 WSS 域名、已编码的连接凭据、Engine.IO v3 握手与 ping/pong；
+- 命名空间加入、发送事件、应答分类、超时断开与关闭资源；
+- 运行进度与传输应答独立，不从任意应答判断课程完成。
+
+**该模块不需要播放器提供心跳；学序本地心跳由 `local_runtime.py` 生成。**
+它只是旧版传输基础组件；U校园AI 5.0 是否仍接受旧版 Socket.IO、
+具体课程事件名称/字段、服务端学习记录判定均未通过本人账号验收。
+因此不在生产版本自动发送旧版的伪造学习时长消息。
