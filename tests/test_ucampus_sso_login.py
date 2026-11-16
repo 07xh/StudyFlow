@@ -79,3 +79,52 @@ def test_success_without_valid_jwt_does_not_create_a_session(monkeypatch):
                             lambda *args, **kwargs: _response(body))
         with pytest.raises(sso_login.UCampusLoginError, match="UCAMPUS_LOGIN_FORMAT_UNVERIFIED"):
             sso_login.authenticate("student", "password")
+
+
+def test_profile_reads_school_from_fixed_first_party_get(monkeypatch):
+    from studyflow.platforms.ucampus.credentials import UCampusConfig
+    original = UCampusConfig.from_dict({"variant": "ai",
+        "cookie": "jwt=header.eyJvcGVuSWQiOiJ1MSJ9.signature"})
+    sent = []
+    def get(url, **kwargs):
+        sent.append((url, kwargs))
+        return _response({"code": 1, "value": {"userInfo": {"school": "8320"}}})
+    monkeypatch.setattr(sso_login.requests, "get", get)
+    enriched = sso_login.enrich_school_from_account(original)
+    assert original.school_id == ""
+    assert enriched.school_id == "8320"
+    assert enriched.cookie == original.cookie
+    assert len(sent) == 1
+    url, options = sent[0]
+    assert url == "https://uai.unipus.cn/api/account/user/info"
+    assert options["allow_redirects"] is False
+    assert options["headers"]["Cookie"] == original.cookie
+    assert options["headers"]["Authorization"] == original.cookie[4:]
+    assert options["timeout"] == (5, 10)
+
+
+@pytest.mark.parametrize("body", [
+    {"code": 1, "value": {"userInfo": {"school": "unknown"}}},
+    {"code": 1, "value": {"userInfo": {"school": "../secret"}}},
+    {"code": 1, "value": {"userInfo": {"school": True}}},
+    {"code": 401, "value": {"userInfo": {"school": "8320"}}},
+    {"code": 1, "value": {"userInfo": {}}},
+    {"code": 1, "value": None},
+])
+def test_bad_profile_never_overwrites_session(monkeypatch, body):
+    from studyflow.platforms.ucampus.credentials import UCampusConfig
+    original = UCampusConfig.from_dict({"variant": "ai",
+        "cookie": "jwt=header.eyJvcGVuSWQiOiJ1MSJ9.signature"})
+    monkeypatch.setattr(sso_login.requests, "get", lambda *a, **k: _response(body))
+    assert sso_login.enrich_school_from_account(original) == original
+
+
+def test_profile_network_failure_does_not_block_login(monkeypatch):
+    import requests
+    from studyflow.platforms.ucampus.credentials import UCampusConfig
+    original = UCampusConfig.from_dict({"variant": "ai",
+        "cookie": "jwt=header.eyJvcGVuSWQiOiJ1MSJ9.signature"})
+    def unavailable(*args, **kwargs):
+        raise requests.exceptions.Timeout("contains private details")
+    monkeypatch.setattr(sso_login.requests, "get", unavailable)
+    assert sso_login.enrich_school_from_account(original) == original
