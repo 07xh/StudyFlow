@@ -365,7 +365,7 @@ export function YuketangCourseDetailPanel({course,desktop,connected,scopeDirty}:
     {(checkedAt!==null||lastPlaybackAt!==null)&&!blocked&&<div className="sf-record-verification-meta" role="status">
       {checkedAt!==null&&<span>上次全课核验：{new Date(checkedAt).toLocaleString()}</span>}
       {lastPlaybackAt!==null&&<span>最近播放视频复核：{new Date(lastPlaybackAt).toLocaleString()}</span>}
-    </div>
+    </div>}
     {videos.length>0&&<div className="sf-zd-detail-summary sf-ykt-progress-summary sf-record-summary">
       <div><span>已读取视频</span><strong>{videos.length} / {total}</strong></div>
       <div><span>服务器已核验</span><strong>{verified.length} / {videos.length}</strong></div>
