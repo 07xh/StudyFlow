@@ -444,6 +444,7 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
                         || op.starts_with("ucampus.heartbeat.")
                         || op.starts_with("ucampus.socket.")
                         || op.starts_with("ucampus.fabricated.")
+                        || op.starts_with("ucampus.monitor.")
                         || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"
                             | "ucampus.session.login" | "ucampus.session.configure" | "ucampus.session.clear"));
     if is_persistent {
