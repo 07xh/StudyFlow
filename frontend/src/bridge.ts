@@ -27,6 +27,12 @@ export type UCampusFabricatedStatus={
     state:string;generated:number;sent:number;accepted:number;confirmed:number;
     position_seconds:number;server_completed:boolean|null;last_error:string}>;
 };
+export type UCampusFabricatedHistory={
+  records:Array<{run_id:string;course_id:string;unit_id:string;phase:string;
+    resources:number;generated:number;sent:number;server_readback_passed:number;
+    resume_available:false;progress_causality:"unverified"}>;
+  resume_available:false;
+};
 export type UCampusFabricatedCapabilities={
   ok:boolean;local_generation:boolean;socket_transport_available:boolean;
   session_configured:boolean;official_player_required:boolean;
@@ -60,6 +66,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ucampus.fabricated.capabilities"}
   | {id: string; version: 1; operation: "ucampus.fabricated.start"; course_id: string; unit_id: string; pulses?: number; speed?: number; duration_seconds?: number; heartbeat_interval?: number; instant_complete?: boolean}
   | {id: string; version: 1; operation: "ucampus.fabricated.status"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.fabricated.history"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.fabricated.pause" | "ucampus.fabricated.resume" | "ucampus.fabricated.stop"; course_id: string; run_id: string}
   | {id: string; version: 1; operation: "ucampus.heartbeat.start"; course_id: string; unit_id: string; pulses?: number}
   | {id: string; version: 1; operation: "ucampus.heartbeat.status"; course_id: string}
