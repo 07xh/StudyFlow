@@ -42,6 +42,12 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   },[desktop,courseId,refresh]);
 
   const active=Boolean(status?.active);
+  // Display-only progress for the local simulator. Never interpret it as
+  // server learning credit or time watched.
+  const targetPerResource=status?.pulses_per_resource??0;
+  const localTotal=(status?.tasks.length??0)*targetPerResource;
+  const localGenerated=Math.min(status?.generated??0,localTotal);
+  const localPercent=localTotal>0?Math.round(localGenerated/localTotal*100):0;
   const newlyPassed=previousProgress&&serverProgress
     ? serverProgress.tasks.filter(task=>task.completed===true
         && previousProgress.tasks.some(previous=>previous.id===task.id&&previous.completed===false))
@@ -159,6 +165,12 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
         已记录本次服务器状态为基准，下一次核验将显示差异。
       </p>}
     </div>}
+    <div className="sf-xxt-evidence-note">
+      <div className="sf-xxt-section-heading">本地模拟事件进度 <span>{localPercent}%</span></div>
+      <progress aria-label="本地模拟事件进度" value={localGenerated} max={Math.max(localTotal,1)}
+        style={{width:"100%"}}/>
+      <p className="sf-muted">已生成 {status?.generated??0} / {localTotal} 个本地事件。此进度与视频播放、平台学时或课程完成状态无关。</p>
+    </div>
     <dl className="sf-stat-grid">
       <div><dt>本地运行状态</dt><dd>{status?.phase||"尚未读取"}</dd></div>
       <div><dt>本地已生成</dt><dd>{status?.generated??0}</dd></div>
@@ -168,11 +180,18 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
     <div className="sf-xxt-section-heading">任务记录 <span>{status?.tasks.length??0} 项</span></div>
     <div className="sf-xxt-table-scroll" role="region" aria-label="本地心跳任务列表" tabIndex={0}>
       <table className="sf-task-table">
-        <thead><tr><th>资源</th><th>状态</th><th>本地生成</th><th>发送</th></tr></thead>
+        <thead><tr><th>资源</th><th>状态</th><th>本地生成</th><th>本地模拟进度</th><th>发送</th></tr></thead>
         <tbody>
           {(status?.tasks??[]).map(task=><tr key={task.resource_id}>
             <td>{task.title}</td><td>{task.state}</td>
-            <td>{task.generated}</td><td>{task.attempted}</td>
+            <td>{task.generated}</td>
+            <td>
+              <progress aria-label={`${task.title}本地事件进度`}
+                value={Math.min(task.generated,targetPerResource)}
+                max={Math.max(targetPerResource,1)} style={{width:"100%"}}/>
+              <span className="sf-muted">{task.generated}/{targetPerResource}</span>
+            </td>
+            <td>{task.attempted}</td>
           </tr>)}
         </tbody>
       </table>
