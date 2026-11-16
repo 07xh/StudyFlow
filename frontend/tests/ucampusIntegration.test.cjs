@@ -86,6 +86,11 @@ test("U校园 read-only UI keeps unit selection and account copy precise",()=>{
   assert.equal((login.match(/clearSensitiveInputs\(\);/g)||[]).length,2);
   assert.match(login,/>保存会话<\/button>/);
   assert.match(login,/>验证课程读取<\/button>/);
+  assert.match(login,/>账号密码登录<\/button>/);
+  assert.match(login,/operation:"ucampus.session.login"/);
+  assert.match(login,/高级：手动导入现有会话/);
+  assert.match(login,/setPassword\("")/);
+
   assert.match(login,/operation:"courses.list",platform:"ucampus"/);
   assert.match(login,/尚不能确认该账号已有课程/);
   const bridge=read("bridge.ts");
