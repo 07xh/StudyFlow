@@ -14,15 +14,15 @@
 | 旧版 Socket.IO 诊断 | `platforms/ucampus/socketio_client.py` | 手动认证握手，不发送学习事件 |
 | 独立 HTTP 契约研究层 | `platforms/ucampus/send_transport.py`、`submission_coordinator.py` | 未注册生产协议；只在单测中使用 |
 | 实验性网络运行模块 | `fabricated_heartbeat.py`、`fabricated_transport.py`、`fabricated_runner.py`、`services/ucampus_fabricated_bridge.py` | 有独立写入调用链；**未经 U校园5.0 账号及进度效果验收** |
-| React UI | `UCampusCourseDetailPanel.tsx`、`UCampusHeartbeatPanel.tsx`、`UCampusFabricatedPanel.tsx` | 两种模式仍分别挂载；不可合并状态 |
+| React UI | `UCampusCourseDetailPanel.tsx`、`UCampusProgressVerifyPanel.tsx`、`UCampusFabricatedPanel.tsx` | 已移除纯本地练习 UI，服务器进度查询独立呈现；实验模块仍隔离 |
 
 `services/bridge.py` 提供统一 JSONL IPC；`src-tauri/src/lib.rs` 对操作与请求范围进行校验。
-`App.tsx` 目前同时挂载“本地心跳练习模式”和“实验性事件模块”，**两者均为使用中的代码，不是可直接删除的旧面板**。
+`App.tsx` 现在挂载独立的**服务器只读进度核验**及实验性事件模块；旧版 `UCampusHeartbeatPanel.tsx` 本地练习 UI 已删除。`local_runtime.py`、`ucampus_runtime_bridge.py` 目前保留为后端兼容代码，不在前端展示，也不能用于判定观看完成。
 
 ## 本地练习与服务器状态的区别
 
-- 本地练习的 `generated`、`pulses_per_resource` 和进度条只表示模拟事件数量；它不是播放时间、完成率或成绩。
-- 本地练习的 `sent=0`、`server_confirmed=null`。这个运行器没有注册网络发送器。
+- 原本地练习的 `generated`、`pulses_per_resource` 只表示模拟事件数量；相应 UI 已移除，不再占用课程页面。
+- 后端兼容用的纯本地运行器 `sent=0`、`server_confirmed=null`；其入口不再由页面触发，也没有注册网络发送器。
 - 实验模块的 `sent` 是发送帧/尝试数，`transport_accepted` 是响应分类；这两个值**均不是**平台已完成的证明。
 - 历史字段 `server_confirmed` 反映的是读取时服务器记录的通过状态，**不证明**状态由当前某次请求造成。UI 使用“回读已通过（归因未知）”。
 - 独立只读入口 `ucampus.progress.verify` 查询课程任务状态；前后两次快照有差异也不能自动认定因果关系。
@@ -70,3 +70,11 @@ Windows 层检查 sidecar/NSIS。CI 通过只能说明本仓库代码和打包�
 后续功能修改应直接更新对应章节及验收状态，不要再追加同一天的“进度更新”段落。
 已验证、仅有代码、真实账号待验三种状态必须分别记录；
 项目中所有媒体平台统一沿用这一原则。
+
+## UI 清理记录（2026-11-16）
+
+- 删除 `frontend/src/components/UCampusHeartbeatPanel.tsx`，保留 `ucampus.progress.verify` 与真实单元选择为新的 `UCampusProgressVerifyPanel.tsx`。
+- 旧版 WebSocket 诊断放入折叠区域；仅连接认证，不发送学习事件。
+- 只读面板保留服务器快照计数、必修统计、未知状态、逐资源状态与前后快照差异；切换课程或单元时丢弃过期异步响应。
+- 纯本地模拟按钮、参数、进度条与任务列表均从 UI 移除。保留后端 `LocalPulse` 类型及兼容入口，避免破坏当前其他模块引用。
+- 实验性网络模块未经真实账号验收；此 UI 清理不变更其代码、发送协议或服务器回读机制。

@@ -10,7 +10,7 @@ import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} f
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
 import {UCampusLoginPanel} from "./components/UCampusLoginPanel";
 import {UCampusCourseDetailPanel} from "./components/UCampusCourseDetailPanel";
-import {UCampusHeartbeatPanel} from "./components/UCampusHeartbeatPanel";
+import {UCampusProgressVerifyPanel} from "./components/UCampusProgressVerifyPanel";
 import {UCampusFabricatedPanel} from "./components/UCampusFabricatedPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
@@ -771,7 +771,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="ucampus"?<>
-          <UCampusHeartbeatPanel course={course} desktop={desktop}/>
+          <UCampusProgressVerifyPanel course={course} desktop={desktop}/>
           <UCampusFabricatedPanel course={course} desktop={desktop}/>
         </>:course.platform==="xuexitong"?<>
           <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
