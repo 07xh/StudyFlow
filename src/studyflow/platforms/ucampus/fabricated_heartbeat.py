@@ -398,6 +398,46 @@ class FabricatedStateStore:
             "tasks": tasks,
         }
 
+    def sanitize_existing(self) -> bool:
+        """Scrub legacy local archives without starting or resuming any run.
+
+        Returns whether a pre-existing JSON file required sanitization.
+        Corrupt/unparseable files are left untouched rather than destroyed.
+        """
+        with self._lock:
+            if not self.path.exists():
+                return False
+            try:
+                raw = self.path.read_text(encoding="utf-8")
+                previous = json.loads(raw)
+                if not isinstance(previous, dict):
+                    return False
+            except (OSError, ValueError):
+                return False
+            clean = {
+                key: sanitized
+                for key, value in previous.items()
+                if isinstance(key, str) and _ID_RE.fullmatch(key)
+                for sanitized in (self._safe_snapshot(value),)
+                if sanitized is not None
+            }
+            if previous == clean:
+                return False
+            fd, tmp = tempfile.mkstemp(prefix=".ucampus-", dir=str(self.path.parent))
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    json.dump(clean, handle, ensure_ascii=False, separators=(",", ":"))
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp, self.path)
+            except BaseException:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
+            return True
+
     def save(self, run_id: str, record: Mapping[str, Any]) -> None:
         _identifier(run_id)
         if not isinstance(record, dict):
