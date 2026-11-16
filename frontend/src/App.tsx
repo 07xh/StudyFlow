@@ -6,6 +6,8 @@ import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
+import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
+import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -59,8 +61,8 @@ type CourseSyncFeedback={phase:CourseSyncPhase;error:string};
 function readPlatformLoginExpanded():Record<Platform,boolean>{
   try{
     const saved=JSON.parse(window.localStorage.getItem(PLATFORM_LOGIN_EXPANDED_KEY)||"{}");
-    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true};
-  }catch{return {zhidao:false,yuketang:false};}
+    return {zhidao:saved.zhidao===true,yuketang:saved.yuketang===true,xuexitong:saved.xuexitong===true};
+  }catch{return {zhidao:false,yuketang:false,xuexitong:false};}
 }
 
 function readActivity():ActivityEntry[]{
@@ -93,9 +95,9 @@ export default function App(){
     subscribeYuketangVerification,getYuketangVerificationRevision,getYuketangVerificationRevision);
   const platformsRef=useRef(platforms);
   platformsRef.current=platforms;
-  const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint()});
+  const syncCheckpoints=useRef({zhidao:newCourseSyncCheckpoint(),yuketang:newCourseSyncCheckpoint(),xuexitong:newCourseSyncCheckpoint()});
   const [syncFeedback,setSyncFeedback]=useState<Record<Platform,CourseSyncFeedback>>({
-    zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""}
+    zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""},xuexitong:{phase:"idle",error:""}
   });
   const [statusCheckRevision,setStatusCheckRevision]=useState(0);
   const [busy,setBusy]=useState("");
@@ -388,16 +390,16 @@ export default function App(){
     if(!desktop||!consentAccepted)return;
     const newStatusCheck=statusCheckRevision!==lastObservedStatusCheck.current;
     lastObservedStatusCheck.current=statusCheckRevision;
-    for(const platform of ["zhidao","yuketang"] as const){
+    for(const platform of ["zhidao","yuketang","xuexitong"] as const){
       if(platforms[platform].status!=="connected")continue;
       if(newStatusCheck||page==="platform-"+platform)void sync(platform);
     }
-  },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,statusCheckRevision,sync]);
+  },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,platforms.xuexitong.status,statusCheckRevision,sync]);
 
   useEffect(()=>{
     if(!desktop||!consentAccepted||typeof window.addEventListener!=="function")return;
     const onFocus=()=>{
-      const platform=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null;
+      const platform=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":null;
       if(platform&&platformsRef.current[platform].status==="connected")void sync(platform);
     };
     window.addEventListener("focus",onFocus);
@@ -450,7 +452,7 @@ export default function App(){
     setPlatformSettingsOpen(null);
     setSelectedCourse(null);
     setQuery("");
-    setPage(platform==="zhidao"?"platform-zhidao":"platform-yuketang");
+    setPage(platform==="zhidao"?"platform-zhidao":platform==="xuexitong"?"platform-xuexitong":"platform-yuketang");
   }
 
   function goPlatform(platform:Platform,openLogin=false){
@@ -475,7 +477,7 @@ export default function App(){
         enabled:previous.preferences[course.course_id]??true
       });
     }
-    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":"platform-yuketang");
+    setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage(course.platform==="zhidao"?"platform-zhidao":course.platform==="xuexitong"?"platform-xuexitong":"platform-yuketang");
   }
   function courseMode(course:Course):"official"|"zhs-original"{
     const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
@@ -491,6 +493,7 @@ export default function App(){
       onChange={updateConfiguration}
       onSubmit={()=>void configureFromPanel()} onOpenScope={openYuketangScopeFields}
       onClear={()=>setClearDialogOpen(true)}/>;
+    if(platform==="xuexitong")return <XuexitongLoginPanel desktop={desktop} onConnected={()=>{invalidatePlatform("xuexitong",true);void refresh();}}/>;
     return null;
   }
 
@@ -521,9 +524,9 @@ export default function App(){
       <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
     </section>;
   };
-  const renderSettingsNavigation=()=>
+  const renderSettingsNavigation=(platform:Platform)=>
     <nav className="sf-settings-menu" aria-label="平台设置分类">
-      {([["account","账号与连接"],["parameters","播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
+      {([["account","账号与连接"],["parameters",platform==="xuexitong"?"运行参数预设":"播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
           onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
     </nav>;
@@ -554,6 +557,9 @@ export default function App(){
       </CollapsibleSection>
 
       </>}
+    </>:platform==="xuexitong"?<>
+      {platformSettingsSection==="parameters"&&<XuexitongSettingsPanel desktop={desktop}/>}
+      {platformSettingsSection==="advanced"&&<p className="sf-muted">已保存的登录会话使用 Windows 凭据管理器；可在「账号与连接」清除。</p>}
     </>:<>
       {platformSettingsSection==="parameters"&&<YuketangTaskArea courses={platforms.yuketang.courses} view="settings"
         desktop={desktop} connected={platforms.yuketang.status==="connected"&&!scopeDirty}
@@ -597,7 +603,7 @@ export default function App(){
       </div>}
       {selected?renderCourseWorkspace(selected):renderCourses(platform)}
       <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
-        navigation={renderSettingsNavigation()} contentKey={platformSettingsSection}
+        navigation={renderSettingsNavigation(platform)} contentKey={platformSettingsSection}
         title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}
         footer={<div className="actions">
           <button className="secondary" type="button"
@@ -724,7 +730,8 @@ export default function App(){
         ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
-    return <section className="sf-course-workspace" aria-label="课程播放工作台">
+    const catalogOnly=course.platform==="xuexitong";
+    return <section className="sf-course-workspace" aria-label={catalogOnly?"课程与任务工作台":"课程播放工作台"}>
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
         <div className="sf-course-top-actions">
@@ -733,17 +740,17 @@ export default function App(){
           </button>
           <button className="secondary sf-course-logs-action" type="button"
             onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
-          <button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>运行任务</button>
+          {!catalogOnly&&<button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>运行任务</button>}
         </div>
       </div>
       <div className="sf-course-playback-heading">
         <span className="eyebrow">{platformNames[course.platform]}</span>
         <h2>{course.title}</h2>
       </div>
-      <section className="sf-course-playback-stage" aria-label="播放控制">
+      <section className="sf-course-playback-stage" aria-label={catalogOnly?"任务模块状态":"播放控制"}>
         <div className="sf-course-player-heading">
-          <h3>播放控制</h3>
-          <span className="sf-visually-hidden">运行状态与课程进度分别显示，互不替代</span>
+          <h3>{catalogOnly?"任务模块状态":"播放控制"}</h3>
+          <span className="sf-visually-hidden">{catalogOnly?"本机执行记录与服务端核验分开展示":"运行状态与课程进度分别显示，互不替代"}</span>
         </div>
         {course.platform==="zhidao"?<>
           {renderZhidaoModeSwitch(course)}
@@ -751,6 +758,8 @@ export default function App(){
             <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
+        </>:course.platform==="xuexitong"?<>
+          <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
             <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
@@ -772,6 +781,10 @@ export default function App(){
       {course.platform==="zhidao"?<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
           <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
+        </CollapsibleSection>
+      </>:course.platform==="xuexitong"?<>
+        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
+          <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
         <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
@@ -797,9 +810,10 @@ export default function App(){
 
   const activeSelectedCourse=selectedSessionCourse(courses,selectedCourse);
   const workspaceCourse=(page==="platform-zhidao"&&activeSelectedCourse?.platform==="zhidao"
-    ||page==="platform-yuketang"&&activeSelectedCourse?.platform==="yuketang")
+    ||page==="platform-yuketang"&&activeSelectedCourse?.platform==="yuketang"
+    ||page==="platform-xuexitong"&&activeSelectedCourse?.platform==="xuexitong")
     ?activeSelectedCourse:null;
-  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":null;
+  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":null;
   const activeMetric=workspaceCourse?courseMetric(workspaceCourse,workspaceCourse.platform==="yuketang"?yuketangSummaries[workspaceCourse.course_id]:undefined):null;
   const activeCourseProgress=activeMetric?.percent??null;
   const platformOverview=headerPlatform?platformProgressOverview(platforms[headerPlatform].courses,yuketangSummaries):null;
@@ -879,6 +893,7 @@ export default function App(){
     <AppShell page={page} settingsOpen={globalSettingsOpen} onOpenSettings={()=>openGlobalSettings()} onNavigate={next=>{
       if(next==="platform-zhidao"){goPlatform("zhidao");return;}
       if(next==="platform-yuketang"){goPlatform("yuketang");return;}
+      if(next==="platform-xuexitong"){goPlatform("xuexitong");return;}
       setPlatformSettingsOpen(null);
       setSelectedCourse(null);
       setPage(next);
@@ -910,6 +925,7 @@ export default function App(){
       {page==="platforms"&&renderPlatforms()}
       {page==="platform-zhidao"&&renderPlatformDetail("zhidao")}
       {page==="platform-yuketang"&&renderPlatformDetail("yuketang")}
+      {page==="platform-xuexitong"&&renderPlatformDetail("xuexitong")}
       {page==="records"&&renderRecords()}
       {page==="logs"&&renderLogs()}
     </AppShell>

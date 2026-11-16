@@ -7,8 +7,8 @@ const read=file=>fs.readFileSync(path.join(__dirname,"..","src",file),"utf8");
 test("course detail opens on playback controls without a fold gate",()=>{
   const app=read("App.tsx");
   const part=app.slice(app.indexOf("const renderCourseWorkspace="),app.indexOf("const activeSelectedCourse="));
-  assert.match(part,/aria-label="课程播放工作台"/);
-  assert.match(part,/<section className="sf-course-playback-stage" aria-label="播放控制">/);
+  assert.match(part,/aria-label=\{catalogOnly\?"课程与任务工作台":"课程播放工作台"\}/);
+  assert.match(part,/<section className="sf-course-playback-stage" aria-label=\{catalogOnly\?"任务模块状态":"播放控制"\}>/);
   assert.doesNotMatch(part,/id=\{scope\+"runtime"\}/,"running player must not be hidden behind a fold");
   assert.match(part,/view="player"[^>]*detailMode/,"Rain Classroom platform options should not repeat in the course player");
   assert.match(part,/title="章节与学习进度" defaultExpanded=\{true\}/);

@@ -44,6 +44,22 @@ try {
         if (-not $ping.ok -or $ping.id -cne 'installed-smoke' -or $ping.data.service -cne 'studyflow') {
             throw 'Installed JSONL response failed'
         }
+        # StudyFlow's Xuexitong adapter must be present inside the packaged
+        # sidecar. These are local read-only checks; no login or learning
+        # progress requests are made against the platform.
+        $xxtSettings = Invoke-InstalledJsonlProbe '{"id":"installed-xxt-settings","version":1,"operation":"xuexitong.settings.get"}'
+        if (-not $xxtSettings.ok -or $xxtSettings.id -cne 'installed-xxt-settings' -or
+            $xxtSettings.data.PSObject.Properties.Name -notcontains 'playback_speed' -or
+            $xxtSettings.data.PSObject.Properties.Name -notcontains 'concurrency') {
+            throw 'Installed Xuexitong settings adapter failed'
+        }
+        $xxtStatus = Invoke-InstalledJsonlProbe '{"id":"installed-xxt-status","version":1,"operation":"xuexitong.heartbeat.status","course_id":"100001:200002:300003"}'
+        if (-not $xxtStatus.ok -or $xxtStatus.id -cne 'installed-xxt-status' -or
+            $xxtStatus.data.course_key -cne '100001:200002:300003' -or
+            $xxtStatus.data.PSObject.Properties.Name -notcontains 'queue_controls' -or
+            $xxtStatus.data.PSObject.Properties.Name -notcontains 'heartbeats') {
+            throw 'Installed Xuexitong status IPC adapter failed'
+        }
         $zhidao = Invoke-InstalledJsonlProbe '{"id":"installed-zhidao","version":1,"operation":"zhidao.player.settings.get"}'
         if (-not $zhidao.ok -or $zhidao.data.speed -notin @('1','1.25','1.5','2')) {
             throw 'Installed Zhidao settings adapter failed'

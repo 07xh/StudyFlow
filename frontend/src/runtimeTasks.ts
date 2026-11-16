@@ -2,9 +2,9 @@ import {useCallback,useEffect,useRef,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {getLegacyStatus,stopLegacy,type LegacyTaskState} from './legacyPlayback';
 import {discardTaskRecovery,readTaskRecovery} from './taskRecovery';
-import type {Platform} from './types';
+type LegacyPlatform = 'zhidao' | 'yuketang';
 import type {Runner} from './activity';
-export type RuntimeTask={runner:Runner;platform:Platform;state:LegacyTaskState;courseId:string|null;runId:string|null;exitCode:number|null;unavailable?:boolean};
+export type RuntimeTask={runner:Runner;platform:LegacyPlatform;state:LegacyTaskState;courseId:string|null;runId:string|null;exitCode:number|null;unavailable?:boolean};
 export const runnerNames:Record<Runner,string>={official:'知到官方播放器',zhs:'知到 ZHS 原版',yuketang:'雨课堂批量任务'};
 export function useRuntimeTasks(desktop:boolean){
  const [tasks,setTasks]=useState<RuntimeTask[]>([]);
@@ -35,7 +35,7 @@ export function useRuntimeTasks(desktop:boolean){
   }
   setTasks(previous=>results.map((result,index)=>{
    const runner:Runner=index===0?'official':index===1?'zhs':'yuketang';
-   const platform:Platform=index===2?'yuketang':'zhidao';
+   const platform:LegacyPlatform=index===2?'yuketang':'zhidao';
    if(result.status==='rejected')return {...(previous.find(task=>task.runner===runner)??{runner,platform,state:'idle' as const,courseId:null,runId:null,exitCode:null}),unavailable:true};
    const value=result.value;
    if('courseKey' in value)return {runner,platform,state:value.state,courseId:value.courseKey,runId:value.runId,exitCode:value.exitCode};

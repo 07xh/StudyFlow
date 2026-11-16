@@ -6,7 +6,7 @@ import {ZhsTaskSettingsPanel} from "./ZhsTaskSettingsPanel";
 import {useCallback, useEffect, useId, useRef, useState} from "react";
 import {Play, Square, RefreshCw, Activity} from "lucide-react";
 import type {ActivityEntry,TaskRecorder} from "../activity";
-import type {Course, Platform} from "../types";
+import type {Course} from "../types";
 import {request,friendlyBridgeError,type ZhidaoProgressSnapshot} from "../bridge";
 import {
   getLegacyStatus, getYuketangLiveProgress, legacyError, legacyExitMessage, zhsDiagnosticMessage, originalYktDefaults, readYuketangCourseThreshold, startLegacy, stopLegacy,
@@ -46,7 +46,7 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 export function LegacyPlaybackPanel({
   platform, courses, desktop, connected, dark=true, onEvent, onCourseVerified, yuketangOptions, settingsReady=true, courseId, detailMode=false, events=[], onOpenTasks
 }: {
-  platform: Platform; courses: Course[]; desktop: boolean; connected: boolean; dark?:boolean;
+  platform: "zhidao" | "yuketang"; courses: Course[]; desktop: boolean; connected: boolean; dark?:boolean;
   onEvent?:TaskRecorder;
   onCourseVerified?:(course:Course)=>void;
   yuketangOptions?: OriginalYktOptions;
@@ -380,6 +380,7 @@ export function LegacyPlaybackPanel({
           <summary>采样与核验详情</summary>
           <div>
             <small>任务状态：{statusReadFailed?"状态待核实":status?labels[status.state]:"待确认"} · 约每 2 秒查询</small>
+
             {status?.zhs_stale&&ownsStatus&&<small role="status">本地进度输出已过期；仅保留上次识别的资源信息，未沿用旧进度值。</small>}
             {status?.state==="exited"&&ownsStatus&&liveZhs&&<small>任务已结束 · 显示结束前最后一次真实采样</small>}
             <small>当前片段位置属于本地采样，非服务器确认进度，也不代表平台完成状态。</small>

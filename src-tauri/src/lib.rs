@@ -210,7 +210,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
-        | "yuketang.session.marker" => Ok(()),
+        | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -242,7 +242,59 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
-        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang")) => Ok(()),
+        "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong")) => Ok(()),
+        "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
+            .is_some_and(|value| !value.is_empty() && value.len() <= 8192
+                && !value.contains('\r') && !value.contains('\n')) => Ok(()),
+        "xuexitong.chapters.list" | "xuexitong.chapter.tasks" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|value| {
+                let parts: Vec<&str> = value.split(':').collect();
+                parts.len() == 3 && parts.iter().all(|part|
+                    !part.is_empty() && part.len() <= 24
+                    && part.bytes().all(|c| c.is_ascii_digit()))
+            }) && (operation == "xuexitong.chapters.list"
+                || request.get("chapter_id").and_then(|v| v.as_str()).is_some_and(|id|
+                    !id.is_empty() && id.len() <= 24
+                    && id.bytes().all(|c| c.is_ascii_digit()))) => Ok(()),
+        "xuexitong.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|value| {
+                let parts: Vec<&str> = value.split(':').collect();
+                parts.len() == 3 && parts.iter().all(|part|
+                    !part.is_empty() && part.len() <= 24
+                    && part.bytes().all(|c| c.is_ascii_digit()))
+            })
+            && request.get("settings").map_or(true, |value| value.is_object())
+            && request.get("dtype").map_or(true, |value|
+                matches!(value.as_str(), Some("Video" | "Audio")))
+            && request.get("speed").map_or(true, |v| v.as_f64().is_some_and(|n| (0.25..=2.0).contains(&n)))
+            && request.get("jobs").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=4).contains(&n))) => Ok(()),
+        "xuexitong.heartbeat.status" if request.get("course_id").map_or(true, |v| v.as_str()
+            .is_some_and(|key| key.len() <= 96 && {
+                let parts: Vec<&str> = key.split(':').collect();
+                parts.len() == 3 && parts.iter().all(|part|
+                    !part.is_empty() && part.len() <= 24
+                    && part.bytes().all(|c| c.is_ascii_digit()))
+            })) => Ok(()),
+        "xuexitong.heartbeat.logs" if request.get("limit").map_or(true, |v| v.as_u64()
+            .is_some_and(|n| n <= 500))
+            && request.get("course_id").map_or(true, |v| v.as_str()
+                .is_some_and(|key| key.len() <= 96 && {
+                    let parts: Vec<&str> = key.split(':').collect();
+                    parts.len() == 3 && parts.iter().all(|part|
+                        !part.is_empty() && part.len() <= 24
+                        && part.bytes().all(|c| c.is_ascii_digit()))
+                })) => Ok(()),
+        "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume" | "xuexitong.heartbeat.stop"
+            if request.get("graceful").is_none()
+                && request.get("run_id").and_then(|v| v.as_str()).is_some_and(|id|
+                    !id.is_empty() && id.len() <= 64
+                    && id.bytes().all(|c| c.is_ascii_hexdigit())) => Ok(()),
+        "xuexitong.settings.save" if request.get("settings").and_then(|v| v.as_object())
+            .is_some_and(|value| value.len() == 4
+                && value.get("playback_speed").and_then(|v| v.as_f64()).is_some_and(|n| (0.25..=2.0).contains(&n))
+                && value.get("concurrency").and_then(|v| v.as_u64()).is_some_and(|n| (1..=4).contains(&n))
+                && value.get("skip_completed").and_then(|v| v.as_bool()).is_some()
+                && value.get("verify_after_run").and_then(|v| v.as_bool()).is_some()) => Ok(()),
         "videos.list" if request.get("platform").and_then(|p| p.as_str()) == Some("yuketang") => Ok(()),
         "yuketang.course.detail" if request.get("course_id").and_then(|x| x.as_str())
             .is_some_and(|id| !id.is_empty() && id.len() <= 24 && id.bytes().all(|c| c.is_ascii_digit()))
@@ -303,9 +355,13 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     message.push(b'\n');
     let expected_id = request.get("id").and_then(|value| value.as_str())
         .ok_or("Invalid request id")?.to_string();
-    let is_qr = request.get("operation").and_then(|x| x.as_str())
-        .map_or(false, |op| op.starts_with("zhidao.qr."));
-    if is_qr {
+    // QR and the persistent Xuexitong heartbeat runner share one long-lived
+    // Python process; ordinary requests keep their one-shot behavior.
+    let is_persistent = request.get("operation").and_then(|x| x.as_str())
+        .map_or(false, |op| op.starts_with("zhidao.qr.")
+                        || op.starts_with("xuexitong.heartbeat.")
+                        || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"));
+    if is_persistent {
         // QR start/status/cancel must share the same Python process; ordinary
         // requests intentionally retain the existing one-shot behavior.
         let shared = app.state::<QrBridgeState>().inner().clone();
@@ -366,7 +422,13 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
     app.state::<zhidao_player::ZhidaoPlayerManager>().shutdown();
     let qr_worker = app.state::<QrBridgeState>();
     if let Ok(mut guard) = qr_worker.lock() {
-        // Drop sends QR cancellation and reaps its child, when present.
+        if let Some(worker) = guard.as_mut() {
+            // Flush heartbeat state before the child is killed.
+            let _ = worker.request(
+                b"{\"id\":\"hb-shutdown\",\"version\":1,\"operation\":\"xuexitong.heartbeat.stop\",\"graceful\":true}\n",
+                "hb-shutdown",
+            );
+        }
         guard.take();
     };
 }
@@ -542,6 +604,47 @@ mod ipc_validation_tests {
         for operation in ["zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"] {
             let request = json!({"id":"qr-test","version":1,"operation":operation});
             assert!(validate(&request).is_ok(), "QR operation was rejected: {operation}");
+        }
+    }
+
+    #[test]
+    fn xuexitong_controls_require_explicit_run_identity() {
+        for operation in ["xuexitong.heartbeat.pause", "xuexitong.heartbeat.resume",
+                          "xuexitong.heartbeat.stop"] {
+            let mut request = json!({"id":"xxt-control","version":1,"operation":operation});
+            assert!(validate(&request).is_err(), "unscoped control accepted: {operation}");
+            request["run_id"] = json!("abcdef0123456789");
+            assert!(validate(&request).is_ok(), "valid run id rejected: {operation}");
+            request["graceful"] = json!(true);
+            assert!(validate(&request).is_err(), "UI bypassed shutdown boundary: {operation}");
+            request.as_object_mut().unwrap().remove("graceful");
+            request["run_id"] = json!("old-run");
+            assert!(validate(&request).is_err(), "non-hex run accepted: {operation}");
+        }
+    }
+
+    #[test]
+    fn xuexitong_logs_require_bounded_count_and_valid_course_scope() {
+        let base = json!({"id":"xxt-log","version":1,
+            "operation":"xuexitong.heartbeat.logs","limit":30,
+            "course_id":"100001:200002:300003"});
+        assert!(validate(&base).is_ok());
+        let unscoped = json!({"id":"xxt-log","version":1,
+            "operation":"xuexitong.heartbeat.logs","limit":30});
+        assert!(validate(&unscoped).is_ok());
+        for invalid in [
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","limit":501}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","limit":-1}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","course_id":"../other"}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","course_id":null}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","course_id":"1:2"}),
+        ] {
+            assert!(validate(&invalid).is_err(), "invalid log query accepted: {invalid}");
         }
     }
 
