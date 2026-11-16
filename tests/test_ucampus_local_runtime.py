@@ -1,39 +1,35 @@
-"""Only observed media and reviewed transports can advance a local U校园 run."""
+"""U校园 locally generated heartbeats do not require the official player."""
 import time
 import pytest
-
-from studyflow.platforms.ucampus.local_runtime import (
-    MediaTask, MediaPosition, UCampusLocalRunner,
-)
+from studyflow.platforms.ucampus.local_runtime import MediaTask, UCampusLocalRunner
 
 
 def task(chapter="U1", resource="R1"):
-    return MediaTask("course1", chapter, resource, "章节资源")
+    return MediaTask("course1", chapter, resource, "本地章节资源")
 
 
-def wait_finished(runner):
-    for _ in range(100):
-        result = runner.status("course1")
-        if result["phase"] == "ended_locally":
-            return result
-        time.sleep(0.01)
-    raise AssertionError("runner did not finish")
+def until_done(runner):
+    for _ in range(200):
+        state = runner.status("course1")
+        if state["phase"] in ("finished_locally", "failed"):
+            return state
+        time.sleep(0.005)
+    raise AssertionError("local heartbeat task timed out")
 
 
-def test_fails_closed_without_real_observer_or_sender():
-    runner = UCampusLocalRunner()
-    with pytest.raises(RuntimeError, match="UCAMPUS_HEARTBEAT_PROTOCOL_UNVERIFIED"):
-        runner.start("course1", [task()], observer=None, transport=None)
-    assert runner.status("course1")["sent"] == 0
+def test_local_generation_requires_no_player_or_sender():
+    runner = UCampusLocalRunner(interval=0.01)
+    runner.start("course1", [task()], pulses_per_resource=2)
+    status = until_done(runner)
+    runner.shutdown()
+    assert status["phase"] == "finished_locally"
+    assert status["generated"] == 2
+    assert status["sent"] == 0
+    assert status["server_confirmed"] is None
+    assert status["tasks"][0]["local_elapsed_seconds"] > 0
 
 
-def test_sender_only_receives_observed_positions_and_no_completion_claims():
-    class Observer:
-        def __init__(self):
-            self.n = 0
-        def observe(self, _target):
-            self.n += 1
-            return MediaPosition(float(self.n), playing=True, ended=self.n >= 2)
+def test_sender_is_independent_and_server_completion_is_unknown():
     class Sender:
         def __init__(self):
             self.pulses = []
@@ -43,63 +39,42 @@ def test_sender_only_receives_observed_positions_and_no_completion_claims():
 
     sender = Sender()
     runner = UCampusLocalRunner(interval=0.01)
-    runner.start("course1", [task()], observer=Observer(), transport=sender, concurrency=1)
-    status = wait_finished(runner)
+    runner.start("course1", [task()], transport=sender, pulses_per_resource=3)
+    status = until_done(runner)
     runner.shutdown()
-    assert [p.observed_seconds for p in sender.pulses] == [1.0, 2.0]
-    assert status["sent"] == status["transport_accepted"] == 2
+    assert [p.sequence for p in sender.pulses] == [1, 2, 3]
+    assert status["generated"] == status["sent"] == status["transport_accepted"] == 3
     assert status["server_confirmed"] is None
-    assert status["tasks"][0]["state"] == "ended_locally"
+    assert sender.pulses[0].local_elapsed_seconds > 0
 
 
-def test_pause_resume_stop_requires_same_run_id():
-    class Observer:
-        def observe(self, _target):
-            return None
-    class Sender:
-        def send(self, _pulse):
-            raise AssertionError("no fake progress")
-
+def test_parallel_chapters_and_sequential_resources():
     runner = UCampusLocalRunner(interval=0.01)
-    run_id = runner.start("course1", [task()], observer=Observer(), transport=Sender())["run_id"]
-    with pytest.raises(ValueError):
-        runner.control("pause", "wrong")
-    assert runner.control("pause", run_id)["paused"]
-    assert runner.control("resume", run_id)["paused"] is False
-    assert runner.control("stop", run_id)["phase"] in ("stopping", "stopped")
+    runner.start("course1", [task("U1", "A"), task("U2", "B"), task("U1", "C")],
+                 concurrency=2, pulses_per_resource=2)
+    status = until_done(runner)
     runner.shutdown()
-    assert runner.status("different")["tasks"] == []
+    assert status["generated"] == 6
+    assert [t["state"] for t in status["tasks"]] == ["finished_locally"] * 3
 
 
-def test_invalid_targets_and_non_finite_positions_are_rejected():
+def test_pause_resume_stop_is_scoped_to_run():
+    runner = UCampusLocalRunner(interval=0.05)
+    run = runner.start("course1", [task()], pulses_per_resource=50)["run_id"]
     with pytest.raises(ValueError):
-        MediaPosition(float("nan"), playing=True)
+        runner.control("pause", "other-run")
+    assert runner.control("pause", run)["paused"]
+    assert runner.control("resume", run)["paused"] is False
+    assert runner.control("stop", run)["phase"] in ("stopping", "stopped")
+    runner.shutdown()
+    assert runner.status("another-course")["generated"] == 0
+
+
+def test_input_validation():
     with pytest.raises(ValueError):
         MediaTask("course1", "U1", "", "title")
-    class Observer:
-        def observe(self, _target): return None
-    class Sender:
-        def send(self, _pulse): return False
     runner = UCampusLocalRunner()
     with pytest.raises(ValueError):
-        runner.start("course1", [task(), task()], observer=Observer(), transport=Sender())
-
-
-def test_observer_failure_is_not_mislabeled_as_completed():
-    class Observer:
-        def observe(self, _target):
-            raise RuntimeError("local media source failed")
-    class Sender:
-        def send(self, _pulse):
-            raise AssertionError("no packet should be attempted")
-    runner = UCampusLocalRunner(interval=0.01)
-    runner.start("course1", [task()], observer=Observer(), transport=Sender())
-    for _ in range(100):
-        if runner.status("course1")["phase"] == "failed":
-            break
-        time.sleep(0.01)
-    result = runner.status("course1")
-    assert result["phase"] == "failed"
-    assert result["tasks"][0]["state"] == "failed"
-    assert result["sent"] == 0 and result["server_confirmed"] is None
-    runner.shutdown()
+        runner.start("course1", [task(), task()])
+    with pytest.raises(ValueError):
+        runner.start("course1", [task()], pulses_per_resource=0)

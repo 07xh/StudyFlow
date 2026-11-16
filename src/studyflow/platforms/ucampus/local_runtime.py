@@ -1,9 +1,7 @@
-"""Local observed-media heartbeat scheduler for U校园5.0.
+"""Locally generated U校园 heartbeat scheduler, independent of official players.
 
-The scheduler reuses StudyFlow's per-chapter task control semantics, not
-Chaoxing's wire packet format. A real player observation source and audited
-transport must be supplied to start; elapsed wall-clock time is never treated
-as watched content or as platform-confirmed completion.
+Local ticks are never represented as viewed seconds or server-completed lessons.
+No U校园 request is sent until a separately audited transport is installed.
 """
 from __future__ import annotations
 
@@ -30,42 +28,29 @@ class MediaTask:
 
 
 @dataclass(frozen=True)
-class MediaPosition:
-    position_seconds: float
-    playing: bool
-    ended: bool = False
-
-    def __post_init__(self) -> None:
-        if (not isinstance(self.position_seconds, (int, float))
-                or not math.isfinite(self.position_seconds)
-                or not 0 <= self.position_seconds <= 3600000
-                or type(self.playing) is not bool or type(self.ended) is not bool):
-            raise ValueError("UCAMPUS_INVALID_OBSERVATION")
-
-
-@dataclass(frozen=True)
 class LocalPulse:
     run_id: str
     course_id: str
     chapter_id: str
     resource_id: str
     sequence: int
-    observed_seconds: float
-
-
-class MediaObserver(Protocol):
-    def observe(self, task: MediaTask) -> MediaPosition | None: ...
+    local_elapsed_seconds: float
 
 
 class PulseTransport(Protocol):
+    """Explicit platform-specific transport, not the official media player."""
+
     def send(self, pulse: LocalPulse) -> bool:
-        """Whether the transport received the local pulse, not grade completion."""
+        """True means transport accepted, never means course completed."""
         ...
 
 
 class UCampusLocalRunner:
-    def __init__(self, *, interval: float = 0.5):
-        if not isinstance(interval, (float, int)) or not math.isfinite(interval) or not 0.01 <= interval <= 60:
+    """Concurrent chapter queues; resources within a chapter run in order."""
+
+    def __init__(self, *, interval: float = 2.0):
+        if (not isinstance(interval, (int, float)) or not math.isfinite(interval)
+                or not 0.01 <= interval <= 60):
             raise ValueError("UCAMPUS_INVALID_INTERVAL")
         self._interval = float(interval)
         self._lock = threading.RLock()
@@ -77,24 +62,22 @@ class UCampusLocalRunner:
         self._phase = "idle"
         self._paused = False
         self._tasks: dict[str, dict] = {}
+        self._started_at = 0.0
 
     def start(self, course_id: str, tasks: list[MediaTask], *,
-              observer: MediaObserver | None,
-              transport: PulseTransport | None, concurrency: int = 2) -> dict:
-        # This guards against running with fabricated timestamps or guessed
-        # U校园 endpoints. Neither dependency is registered by default.
-        if observer is None or transport is None:
-            raise RuntimeError("UCAMPUS_HEARTBEAT_PROTOCOL_UNVERIFIED")
+              transport: PulseTransport | None = None,
+              concurrency: int = 2, pulses_per_resource: int = 5) -> dict:
         if (not isinstance(course_id, str) or not 1 <= len(course_id) <= 128
                 or type(concurrency) is not int or not 1 <= concurrency <= 4
-                or not isinstance(tasks, list) or not tasks or len(tasks) > 200):
+                or type(pulses_per_resource) is not int or not 1 <= pulses_per_resource <= 100
+                or not isinstance(tasks, list) or not 1 <= len(tasks) <= 200):
             raise ValueError("UCAMPUS_INVALID_PARAMETER")
-        unique: set[str] = set()
+        ids: set[str] = set()
         for task in tasks:
             if (not isinstance(task, MediaTask) or task.course_id != course_id
-                    or task.resource_id in unique):
+                    or task.resource_id in ids):
                 raise ValueError("UCAMPUS_INVALID_MEDIA_TASK")
-            unique.add(task.resource_id)
+            ids.add(task.resource_id)
         with self._lock:
             if self._thread is not None and self._thread.is_alive():
                 raise RuntimeError("UCAMPUS_TASK_ALREADY_RUNNING")
@@ -102,16 +85,19 @@ class UCampusLocalRunner:
             self._course_id = course_id
             self._phase = "running"
             self._paused = False
+            self._started_at = time.monotonic()
             self._tasks = {task.resource_id: {
                 "resource_id": task.resource_id, "chapter_id": task.chapter_id,
-                "title": task.title, "state": "queued", "observed_seconds": None,
-                "attempted": 0, "accepted": 0, "server_completed": None,
+                "title": task.title, "state": "queued", "generated": 0,
+                "attempted": 0, "accepted": 0,
+                "local_elapsed_seconds": 0.0, "server_completed": None
             } for task in tasks}
             self._stop.clear()
             self._wake.clear()
             self._thread = threading.Thread(
-                target=self._run, args=(list(tasks), observer, transport, concurrency),
-                daemon=True, name="ucampus-local-runner")
+                target=self._run,
+                args=(list(tasks), transport, concurrency, pulses_per_resource),
+                name="ucampus-local-heartbeat", daemon=True)
             self._thread.start()
             return self.status(course_id)
 
@@ -119,86 +105,78 @@ class UCampusLocalRunner:
         self._wake.wait(self._interval)
         self._wake.clear()
 
-    def _run(self, tasks: list[MediaTask], observer: MediaObserver,
-             transport: PulseTransport, concurrency: int):
+    def _run(self, tasks: list[MediaTask], transport: PulseTransport | None,
+             concurrency: int, pulses_per_resource: int):
         chapters: dict[str, list[MediaTask]] = {}
         for task in tasks:
             chapters.setdefault(task.chapter_id, []).append(task)
         failed = False
         try:
             with ThreadPoolExecutor(max_workers=min(concurrency, len(chapters))) as pool:
-                futures = [pool.submit(self._chapter, group, observer, transport)
+                futures = [pool.submit(self._chapter, group, transport, pulses_per_resource)
                            for group in chapters.values()]
                 for future in futures:
                     future.result()
             with self._lock:
-                failed = any(task["state"] == "failed" for task in self._tasks.values())
+                failed = any(row["state"] == "failed" for row in self._tasks.values())
         except Exception:
             failed = True
         finally:
             with self._lock:
-                self._phase = "failed" if failed else "stopped" if self._stop.is_set() else "ended_locally"
+                self._phase = "failed" if failed else "stopped" if self._stop.is_set() else "finished_locally"
 
-    def _chapter(self, group: list[MediaTask], observer: MediaObserver, transport: PulseTransport):
-        for task in group:
+    def _chapter(self, tasks: list[MediaTask], transport: PulseTransport | None,
+                 pulses_per_resource: int):
+        for task in tasks:
             with self._lock:
                 if self._stop.is_set():
                     return
                 self._tasks[task.resource_id]["state"] = "running"
-            last_position = -1.0
-            sequence = 0
-            while not self._stop.is_set():
-                with self._lock:
-                    paused = self._paused
-                if paused:
+            active_seconds = 0.0
+            last_tick = time.monotonic()
+            for sequence in range(1, pulses_per_resource + 1):
+                while not self._stop.is_set():
+                    with self._lock:
+                        paused = self._paused
+                    if paused:
+                        self._wait()
+                        last_tick = time.monotonic()
+                        continue
                     self._wait()
-                    continue
-                try:
-                    observation = observer.observe(task)
-                except Exception:
                     with self._lock:
-                        self._tasks[task.resource_id]["state"] = "failed"
-                    return
-                if observation is not None and not isinstance(observation, MediaPosition):
-                    with self._lock:
-                        self._tasks[task.resource_id]["state"] = "failed"
-                    return
-                if observation is not None and observation.playing and observation.position_seconds > last_position:
-                    sequence += 1
-                    pulse = LocalPulse(
-                        self._run_id, task.course_id, task.chapter_id, task.resource_id,
-                        sequence, observation.position_seconds)
-                    try:
-                        accepted = transport.send(pulse) is True
-                    except Exception:
-                        with self._lock:
-                            self._tasks[task.resource_id]["state"] = "failed"
-                        return
-                    with self._lock:
+                        if self._stop.is_set() or self._paused:
+                            continue
+                        now = time.monotonic()
+                        active_seconds += max(0.0, now - last_tick)
+                        last_tick = now
+                        # This is the local scheduler clock, NOT playback position.
+                        pulse = LocalPulse(
+                            self._run_id, task.course_id, task.chapter_id,
+                            task.resource_id, sequence, round(active_seconds, 3))
                         row = self._tasks[task.resource_id]
-                        row["observed_seconds"] = observation.position_seconds
-                        row["attempted"] += 1
-                        row["accepted"] += int(accepted)
-                    last_position = observation.position_seconds
-                if observation is not None and observation.ended:
-                    with self._lock:
-                        self._tasks[task.resource_id]["state"] = "ended_locally"
+                        row["local_elapsed_seconds"] = pulse.local_elapsed_seconds
+                        row["generated"] += 1
+                        if transport is not None:
+                            try:
+                                accepted = transport.send(pulse) is True
+                            except Exception:
+                                row["state"] = "failed"
+                                return
+                            row["attempted"] += 1
+                            row["accepted"] += int(accepted)
+                        break
+                if self._stop.is_set():
                     break
-                self._wait()
-            if self._stop.is_set():
-                with self._lock:
-                    self._tasks[task.resource_id]["state"] = "stopped"
-                return
-
-    def _check_run(self, run_id: str):
-        if not isinstance(run_id, str) or not run_id or run_id != self._run_id:
-            raise ValueError("UCAMPUS_RUN_ID_MISMATCH")
-        if self._thread is None or not self._thread.is_alive():
-            raise RuntimeError("UCAMPUS_TASK_NOT_RUNNING")
+            with self._lock:
+                self._tasks[task.resource_id]["state"] = (
+                    "stopped" if self._stop.is_set() else "finished_locally")
 
     def control(self, action: str, run_id: str) -> dict:
         with self._lock:
-            self._check_run(run_id)
+            if not run_id or run_id != self._run_id:
+                raise ValueError("UCAMPUS_RUN_ID_MISMATCH")
+            if self._thread is None or not self._thread.is_alive():
+                raise RuntimeError("UCAMPUS_TASK_NOT_RUNNING")
             if action == "pause":
                 self._paused = True
                 self._phase = "paused"
@@ -224,17 +202,19 @@ class UCampusLocalRunner:
 
     def status(self, course_id: str) -> dict:
         with self._lock:
-            selected = course_id == self._course_id
-            active = bool(selected and self._thread is not None and self._thread.is_alive())
+            own = course_id == self._course_id
+            rows = [dict(row) for row in self._tasks.values()] if own else []
+            active = bool(own and self._thread is not None and self._thread.is_alive())
             return {
-                "run_id": self._run_id if selected else "",
+                "run_id": self._run_id if own else "",
                 "course_id": course_id,
-                "phase": self._phase if selected else "idle",
+                "phase": self._phase if own else "idle",
                 "active": active,
-                "paused": active and self._paused,
-                "tasks": [dict(item) for item in self._tasks.values()] if selected else [],
-                "sent": sum(t["attempted"] for t in self._tasks.values()) if selected else 0,
-                "transport_accepted": sum(t["accepted"] for t in self._tasks.values()) if selected else 0,
-                # No observed position or accepted pulse implies server completion.
+                "paused": bool(active and self._paused),
+                "tasks": rows,
+                "generated": sum(row["generated"] for row in rows),
+                "sent": sum(row["attempted"] for row in rows),
+                "transport_accepted": sum(row["accepted"] for row in rows),
                 "server_confirmed": None,
+                "sender_connected": False,
             }
