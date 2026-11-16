@@ -109,7 +109,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
         value={username} onChange={e=>setUsername(e.target.value)} disabled={!desktop||busy}
         maxLength={128} placeholder="输入本人 U校园账号"/>
       <label htmlFor="ucampus-password">登录密码</label>
-      <input id="ucampus-password" type="password" autoComplete="new-password"
+      <input id="ucampus-password" type="password" autoComplete="current-password"
         value={password} onChange={e=>setPassword(e.target.value)} disabled={!desktop||busy}
         maxLength={256} placeholder="密码仅用于本次认证"/>
       <div className="actions">
