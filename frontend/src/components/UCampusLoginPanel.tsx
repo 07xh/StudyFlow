@@ -72,3 +72,4 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     {notice&&<p role="status">{notice}</p>}
     <p className="sf-muted">没有经过核验的接口时，请勿随意填写网址；当前不支持直接使用移动端截图登录，也不会生成演示课程。</p>
   </div>;
+}
