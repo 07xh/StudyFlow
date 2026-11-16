@@ -546,7 +546,7 @@ export default function App(){
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
-      <ZhidaoProgressPanel key={"server:"+course.course_id} courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
+      <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
       autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
       onAutoVerifyChange={configureAutoVerify}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:mergeZhidaoEvidence(previous.zhidao.courses,list)}}))}
@@ -783,7 +783,7 @@ export default function App(){
           <ZhidaoCourseDetailPanel key={"chapters:"+course.course_id} course={course} desktop={desktop} onCoursesUpdated={updateCourses}/>
         </CollapsibleSection>
         <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
-          <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
+          <ZhidaoProgressPanel key={"server:"+course.course_id} courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
             autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
             onAutoVerifyChange={configureAutoVerify}
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
