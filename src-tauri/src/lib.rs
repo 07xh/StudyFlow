@@ -339,7 +339,8 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     // Python process; ordinary requests keep their one-shot behavior.
     let is_persistent = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr.")
-                        || op.starts_with("xuexitong.heartbeat."));
+                        || op.starts_with("xuexitong.heartbeat.")
+                        || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"));
     if is_persistent {
         // QR start/status/cancel must share the same Python process; ordinary
         // requests intentionally retain the existing one-shot behavior.

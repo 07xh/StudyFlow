@@ -49,7 +49,7 @@ export type BridgeRequest =
      heartbeat_interval_video_seconds?:number;max_wall_seconds?:number;
      max_unconfirmed_rounds?:number;completion_rounds?:number;max_ticks?:number;
      dtype?:"Video"|"Audio"}
-  | {id:string;version:1;operation:"xuexitong.heartbeat.status"}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.status";course_id?:string}
   | {id:string;version:1;operation:"xuexitong.heartbeat.logs";limit?:number}
   | {id:string;version:1;operation:"xuexitong.heartbeat.pause";run_id?:string}
   | {id:string;version:1;operation:"xuexitong.heartbeat.resume";run_id?:string}
@@ -152,7 +152,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
     throw new Error("INVALID_IPC_RESPONSE");
   }
   if (!result.ok) {
-    const allowed = new Set(["INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
+    const allowed = new Set(["XUEXITONG_TASK_STOP_TIMEOUT", "INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
                              "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
@@ -280,6 +280,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "XUEXITONG_TASK_STOP_TIMEOUT": return "学习通任务尚未安全停止，请稍后重试退出或切换账号。";
     case "INVALID_XUEXITONG_SETTINGS": return "学习通参数超出允许范围，原设置未修改。";
     case "XUEXITONG_SETTINGS_UNAVAILABLE": return "学习通本机设置保存失败，请检查本地文件权限。";
     case "INVALID_XUEXITONG_COOKIE": return "学习通登录会话格式不正确，请确认包含有效的 _uid/UID。";

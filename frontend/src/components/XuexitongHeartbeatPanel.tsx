@@ -46,23 +46,44 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
   const timer=useRef<number|null>(null);
+  const refreshInFlight=useRef(false);
+  const selectedCourse=useRef(course.course_id);
+  selectedCourse.current=course.course_id;
 
   const refresh=useCallback(async()=>{
+    if(refreshInFlight.current)return;
+    refreshInFlight.current=true;
     try{
       const [nextStatus,nextLogs]=await Promise.all([
-        request<HeartbeatStatus>({operation:"xuexitong.heartbeat.status"}),
+        request<HeartbeatStatus>({operation:"xuexitong.heartbeat.status",course_id:course.course_id}),
         request<{ok:boolean;events:HeartbeatLog[]}>({operation:"xuexitong.heartbeat.logs",limit:30}),
       ]);
-      setStatus(nextStatus);
-      setLogs(nextLogs.events||[]);
-    }catch(error){setMessage(friendlyBridgeError(error));}
-  },[]);
+      if(selectedCourse.current!==course.course_id)return;
+      if(nextStatus.course_key===course.course_id){
+        setStatus(nextStatus);
+        setLogs(nextStatus.run_id?(nextLogs.events||[]):[]);
+      }
+    }catch(error){
+      if(selectedCourse.current===course.course_id)setMessage(friendlyBridgeError(error));
+    }finally{refreshInFlight.current=false;}
+  },[course.course_id]);
 
   useEffect(()=>{
+    setStatus(null);setLogs([]);
     void refresh();
     timer.current=window.setInterval(()=>{void refresh();},2000);
     return ()=>{if(timer.current!==null)window.clearInterval(timer.current);};
   },[refresh]);
+
+  useEffect(()=>{
+    if(!desktop)return;
+    let active=true;
+    void request<{playback_speed:number;concurrency:number}>({operation:"xuexitong.settings.get"})
+      .then(settings=>{
+        if(active){setSpeed(settings.playback_speed);setJobs(settings.concurrency);}
+      }).catch(()=>{});
+    return ()=>{active=false;};
+  },[desktop]);
 
   const control=async(action:"start"|"pause"|"resume"|"stop")=>{
     if(busy||!desktop)return;

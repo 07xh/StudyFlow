@@ -31,6 +31,7 @@ from studyflow.platforms.xuexitong.adapter import XuexitongAdapter
 from studyflow.platforms.xuexitong import credentials as xuexitong_credentials
 from studyflow.platforms.xuexitong import settings as xuexitong_settings
 from studyflow.services.xuexitong_heartbeat_bridge import dispatch as xuexitong_heartbeat_dispatch
+from studyflow.services import xuexitong_heartbeat_bridge
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
@@ -160,6 +161,8 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
     if operation == "xuexitong.session.configure":
+        if not xuexitong_heartbeat_bridge.reset_for_credentials_change():
+            return {"id": request_id, "ok": False, "error": "XUEXITONG_TASK_STOP_TIMEOUT"}
         try:
             xuexitong_credentials.save(request.get("cookie"))
             return {"id": request_id, "ok": True, "data": {"saved": True}}
@@ -168,6 +171,8 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "XUEXITONG_CREDENTIAL_STORAGE_FAILED"}
     if operation == "xuexitong.session.clear":
+        if not xuexitong_heartbeat_bridge.reset_for_credentials_change():
+            return {"id": request_id, "ok": False, "error": "XUEXITONG_TASK_STOP_TIMEOUT"}
         try:
             xuexitong_credentials.clear()
             return {"id": request_id, "ok": True, "data": {"cleared": True}}
