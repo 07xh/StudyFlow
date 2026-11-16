@@ -106,3 +106,30 @@ def inspect_har(document: dict[str, Any]) -> dict[str, Any]:
         })
     return {"source": "local-redacted-har", "entries_seen": len(entries),
             "matching_requests": len(candidates), "requests": candidates}
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the scrubber locally: never print the user's raw HAR or credentials."""
+    import sys
+    from pathlib import Path
+
+    args = sys.argv[1:] if argv is None else argv
+    if len(args) != 1:
+        print("Usage: python -m studyflow.platforms.ucampus.har_diagnostics FILE.har", file=sys.stderr)
+        return 2
+    try:
+        path = Path(args[0])
+        if path.stat().st_size > 25_000_000:
+            raise ValueError("UCAMPUS_INVALID_HAR")
+        with path.open("r", encoding="utf-8") as source:
+            document = json.load(source)
+        summary = inspect_har(document)
+        print(json.dumps(summary, ensure_ascii=False, separators=(",", ":")))
+        return 0
+    except (ValueError, OSError, UnicodeError):
+        print("UCAMPUS_INVALID_HAR", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

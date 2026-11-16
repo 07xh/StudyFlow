@@ -97,3 +97,29 @@ PR 维持 Draft，直到生产请求与测试完成。
 保留禁止 `/`、`%`、`?` 和其他非预期字符；相关跨层回归测试覆盖此场景。
 
 兼容修复不是平台发送协议已接入或课程学习已完成的证明。
+
+## 独立 HTTP 活动发送层与脱敏协议诊断（2026-11-16）
+
+`src/studyflow/platforms/ucampus/send_transport.py` 已提供 `UCampusHTTPTransport`
+和 `VerifiedSendContract`：限定第一方 HTTPS 域名及路径、严格请求参数范围、
+不跟随重定向、HTTP 超时保守处理、服务端回执三态
+（`accepted`、`rejected`、`unknown`），以及独立的 `server_completed=null`。
+该代码**是真实可用的 HTTP 发送基础组件**，但 `VerifiedSendContract` 还没有
+通过 U校园本人账号的真实请求样本验证，尚未注册生产协议或连接当前本地调度器；
+不会假设“HTTP 200 = 心跳认可 = 课程完成”。
+发送时要求真实学习活动数据，与本地计时独立。
+
+目前已核对的开源项目 `Zzj-klwgxdz/UnipusAI` 中
+`src/api/submit.rs` 是题目/任务提交、标记已看接口，不足以证明
+视频/音频心跳协议的请求方法和服务端验收含义。
+
+用户可以**只在本机**使用如下命令，对本人有权访问的网络 HAR 生成不含
+账号、查询参数、Cookie、Authorization、请求体值、响应体值的结构摘要：
+
+```powershell
+python -m studyflow.platforms.ucampus.har_diagnostics .\own-session.har > ucampus-structure.json
+```
+
+输出只包含官方域名、请求方法、泛化路由、HTTP 状态和允许的 JSON 字段名。
+不要公开原始 HAR、Cookie 或登录会话。结构摘要用于确定真实协议，
+不是自动绕过平台认证的工具，也不能直接作为可以提交进度的证明。
