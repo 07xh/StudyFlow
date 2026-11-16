@@ -98,7 +98,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog}:{
         <FolderOpen size={15}/>打开更新目录</button>}
     </div>
     {message&&<p role="status">{message}</p>}
-    <p className="muted">当前版本 {current||"读取中"} · 下载后需手动安装，重启后生效。</p>
+    <p className="muted">当前版本 {current||"读取中"} · 更新包不会自动安装；手动安装后重启生效。</p>
     <div className="actions">
       <button className="secondary" type="button" disabled={!desktop||!current} onClick={onOpenChangelog}>
         <History size={15}/>历史更新日志

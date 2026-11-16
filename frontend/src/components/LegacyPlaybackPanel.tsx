@@ -410,7 +410,7 @@ export function LegacyPlaybackPanel({
         }):<p className="sf-muted">启动批量任务后显示实际并发状态。</p>}
       </div>
       {videoTasks.length>0&&<details className="sf-ykt-video-details">
-        <summary>逐视频 · {videoTasks.length} 项</summary>
+        <summary>逐视频详情 · {videoTasks.length} 项</summary>
         <div className="sf-ykt-video-list">
           {videoTasks.map(video=>{
             const state=status?.state==="stopped"&&["watching","preparing"].includes(video.state)

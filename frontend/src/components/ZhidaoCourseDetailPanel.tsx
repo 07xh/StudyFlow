@@ -116,6 +116,7 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
       <div>
         <span className="eyebrow">{kind==="ai"?"智慧课程":"共享课程"}</span>
         <h3>章节进度</h3>
+        {currentDetail?.verified_at&&<small className="sf-record-verification-meta">最近核验：{new Date(currentDetail.verified_at).toLocaleString()}</small>}
       </div>
       <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void load()}>
         <RefreshCw size={14}/>{busy?"核验中…":"刷新章节"}
