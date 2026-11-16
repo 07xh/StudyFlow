@@ -49,9 +49,9 @@ def test_socketio_connection_pong_and_ack_never_imply_completion():
     result = client.emit("local_event", {"seq": 1, "elapsed_local": 2})
     assert result == "event"
     assert fake.writes[1] == "3"
-    assert fake.writes[-2] == "3"
-    assert fake.writes[-1].startswith("42/userActivities,")
-    assert json.loads(fake.writes[-1].split(",", 1)[1]) == [
+    assert fake.writes[-1] == "3"
+    assert fake.writes[2].startswith("42/userActivities,")
+    assert json.loads(fake.writes[2].split(",", 1)[1]) == [
         "local_event", {"seq": 1, "elapsed_local": 2}]
     client.close()
     assert fake.closed
