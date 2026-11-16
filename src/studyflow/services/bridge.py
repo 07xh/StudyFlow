@@ -168,7 +168,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
     if operation == "ucampus.session.configure":
         try:
-            ucampus_runtime_bridge.shutdown()
+            ucampus_runtime_bridge.reset_runner()
             ucampus_credentials.save(request.get("configuration"))
             return {"id": request_id, "ok": True, "data": {"saved": True}}
         except ValueError:
@@ -177,7 +177,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "ucampus.session.clear":
         try:
-            ucampus_runtime_bridge.shutdown()
+            ucampus_runtime_bridge.reset_runner()
             ucampus_credentials.clear()
             return {"id": request_id, "ok": True, "data": {"cleared": True}}
         except Exception:

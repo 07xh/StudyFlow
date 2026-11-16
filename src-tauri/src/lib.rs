@@ -402,7 +402,8 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         .map_or(false, |op| op.starts_with("zhidao.qr.")
                         || op.starts_with("xuexitong.heartbeat.")
                         || op.starts_with("ucampus.heartbeat.")
-                        || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"));
+                        || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"
+                            | "ucampus.session.configure" | "ucampus.session.clear"));
     if is_persistent {
         // QR start/status/cancel must share the same Python process; ordinary
         // requests intentionally retain the existing one-shot behavior.
@@ -469,6 +470,10 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
             let _ = worker.request(
                 b"{\"id\":\"hb-shutdown\",\"version\":1,\"operation\":\"xuexitong.heartbeat.stop\",\"graceful\":true}\n",
                 "hb-shutdown",
+            );
+            let _ = worker.request(
+                b"{\"id\":\"u-hb-shutdown\",\"version\":1,\"operation\":\"ucampus.heartbeat.stop\",\"graceful\":true}\n",
+                "u-hb-shutdown",
             );
         }
         guard.take();

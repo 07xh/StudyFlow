@@ -85,6 +85,16 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
         return {"ok": False, "error": str(exc)}
 
 
+def reset_runner() -> None:
+    """Stop and release the previous account's local task state."""
+    global _RUNNER
+    with _LOCK:
+        runner = _RUNNER
+        _RUNNER = None
+    if runner is not None:
+        runner.shutdown()
+
+
 def shutdown() -> None:
     with _LOCK:
         runner = _RUNNER
