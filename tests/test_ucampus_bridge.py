@@ -96,3 +96,34 @@ def test_other_platform_catalog_errors_remain_generic(monkeypatch):
             raise UCampusCatalogError("UCAMPUS_SESSION_EXPIRED")
     monkeypatch.setitem(bridge.ADAPTERS, "zhidao", UnexpectedCatalogError())
     assert call("courses.list", platform="zhidao")["error"] == "PLATFORM_NOT_READY"
+
+
+def test_sso_login_persists_only_session_and_no_password(monkeypatch):
+    from studyflow.platforms.ucampus.credentials import UCampusConfig
+    changes = []
+    monkeypatch.setattr(bridge, "ucampus_authenticate",
+                        lambda user, password: UCampusConfig.from_dict({
+                            "variant": "ai", "cookie": "jwt=header.payload.signature"}))
+    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda value: changes.append(value))
+    result = call("ucampus.session.login", username="student", password="not-persisted")
+    assert result == {"id": "ucampus-test", "ok": True, "data": {"saved": True, "variant": "ai"}}
+    assert len(changes) == 1
+    assert changes[0]["cookie"] == "jwt=header.payload.signature"
+    assert "password" not in changes[0]
+    assert "username" not in changes[0]
+    assert "not-persisted" not in str(result)
+
+
+def test_sso_login_failure_does_not_replace_existing_credentials(monkeypatch):
+    from studyflow.platforms.ucampus.sso_login import UCampusLoginError
+    calls = []
+    def reject(username, password):
+        raise UCampusLoginError("UCAMPUS_LOGIN_VERIFICATION_REQUIRED")
+    monkeypatch.setattr(bridge, "ucampus_authenticate", reject)
+    monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda _: calls.append("saved"))
+    result = call("ucampus.session.login", username="student", password="secret")
+    assert not result["ok"]
+    assert result["error"] == "UCAMPUS_LOGIN_VERIFICATION_REQUIRED"
+    assert not calls
