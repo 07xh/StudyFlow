@@ -4,6 +4,8 @@ import type {OriginalYktOptions,ZhsStoredOptions} from "./legacyPlayback";
 
 export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
+export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string};
+export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null};
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
 export type YuketangSessionMarker = {marker:string};
 export type BridgeRequest =
@@ -16,6 +18,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
+  | {id: string; version: 1; operation: "ucampus.session.info"}
+  | {id: string; version: 1; operation: "ucampus.session.configure"; configuration: UCampusConfig}
+  | {id: string; version: 1; operation: "ucampus.session.clear"}
   | {id: string; version: 1; operation: "xuexitong.session.configure"; cookie: string}
   | {id: string; version: 1; operation: "xuexitong.session.clear"}
   | {id: string; version: 1; operation: "xuexitong.settings.get"}
@@ -152,7 +157,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
     throw new Error("INVALID_IPC_RESPONSE");
   }
   if (!result.ok) {
-    const allowed = new Set(["XUEXITONG_TASK_STOP_TIMEOUT", "INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
+    const allowed = new Set(["INVALID_UCAMPUS_CONFIG", "UCAMPUS_CREDENTIAL_STORAGE_FAILED", "XUEXITONG_TASK_STOP_TIMEOUT", "INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
                              "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
@@ -180,7 +185,7 @@ export async function request<T>(message: WithoutEnvelope<BridgeRequest>): Promi
 }
 
 function validPlatform(value: unknown): value is Platform {
-  return value === "zhidao" || value === "yuketang" || value === "xuexitong";
+  return value === "zhidao" || value === "yuketang" || value === "xuexitong" || value === "ucampus";
 }
 
 /** Can be unit-tested with a fake transport; production uses the real Tauri bridge. */
@@ -199,8 +204,8 @@ export async function fetchPlatformStatuses(transport: StudyFlowTransport): Prom
       courses: [],
     });
   }
-  if (result.size !== 3) throw new Error("INVALID_IPC_RESPONSE");
-  return ["zhidao", "yuketang", "xuexitong"].map(p => result.get(p as Platform)!);
+  if (result.size !== 4) throw new Error("INVALID_IPC_RESPONSE");
+  return ["zhidao", "yuketang", "xuexitong", "ucampus"].map(p => result.get(p as Platform)!);
 }
 
 export async function fetchStatuses(): Promise<PlatformState[]> {
@@ -281,6 +286,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "INVALID_UCAMPUS_CONFIG": return "U校园配置不符合要求：仅支持官方 HTTPS 域名与正确格式的登录会话。";
+    case "UCAMPUS_CREDENTIAL_STORAGE_FAILED": return "U校园登录信息未能写入 Windows 凭据管理器。";
     case "XUEXITONG_TASK_STOP_TIMEOUT": return "学习通任务尚未安全停止，请稍后重试退出或切换账号。";
     case "INVALID_XUEXITONG_SETTINGS": return "学习通参数超出允许范围，原设置未修改。";
     case "XUEXITONG_SETTINGS_UNAVAILABLE": return "学习通本机设置保存失败，请检查本地文件权限。";

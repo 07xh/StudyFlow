@@ -1,4 +1,4 @@
-export type Platform = "zhidao" | "yuketang" | "xuexitong";
+export type Platform = "zhidao" | "yuketang" | "xuexitong" | "ucampus";
 export type ConnectionStatus = "not_connected" | "connecting" | "connected" | "error";
 
 /** Explicitly sourced evidence; never infer completion from a local playback counter. */
