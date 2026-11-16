@@ -25,15 +25,19 @@ class UCampusConfig:
     catalog_url: str
     cookie: str
     authorization: str = ""
+    annotator_token: str = ""
+    school_id: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> "UCampusConfig":
-        if not isinstance(data, dict) or set(data) - {"variant", "catalog_url", "cookie", "authorization"}:
+        if not isinstance(data, dict) or set(data) - {"variant", "catalog_url", "cookie", "authorization", "annotator_token", "school_id"}:
             raise ValueError("INVALID_UCAMPUS_CONFIG")
         variant, url, cookie = data.get("variant"), data.get("catalog_url"), data.get("cookie")
         if variant == "ai" and (url is None or url == ""):
             url = AI_HOME_COURSES_URL
         auth = data.get("authorization", "")
+        annotator = data.get("annotator_token", "")
+        school = data.get("school_id", "")
         if variant not in ALLOWED_HOSTS or not isinstance(url, str) or not 10 <= len(url) <= 2048:
             raise ValueError("INVALID_UCAMPUS_CONFIG")
         try:
@@ -55,7 +59,14 @@ class UCampusConfig:
             raise ValueError("INVALID_UCAMPUS_CONFIG")
         if not isinstance(auth, str) or len(auth) > 8192 or any(c in auth for c in "\r\n"):
             raise ValueError("INVALID_UCAMPUS_CONFIG")
-        return cls(variant=variant, catalog_url=url, cookie=cookie, authorization=auth)
+        if (not isinstance(annotator, str) or len(annotator) > 4096
+                or any(c in annotator for c in "\r\n")):
+            raise ValueError("INVALID_UCAMPUS_CONFIG")
+        if (not isinstance(school, str) or len(school) > 24
+                or (school and not (school.isascii() and school.isdigit()))):
+            raise ValueError("INVALID_UCAMPUS_CONFIG")
+        return cls(variant=variant, catalog_url=url, cookie=cookie,
+                   authorization=auth, annotator_token=annotator, school_id=school)
 
 
 def load() -> UCampusConfig | None:

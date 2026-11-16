@@ -4,7 +4,7 @@ import type {OriginalYktOptions,ZhsStoredOptions} from "./legacyPlayback";
 
 export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
-export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string};
+export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string;annotator_token?:string;school_id?:string};
 export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null};
 export type UCampusUnit = {id:string;title:string;completed:boolean|null};
 export type UCampusTask = {id:string;unit_id:string;title:string;type:string;required:boolean|null;completed:boolean|null};

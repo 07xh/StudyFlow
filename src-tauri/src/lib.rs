@@ -245,14 +245,18 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong" | "ucampus")) => Ok(()),
         "ucampus.session.configure" if request.get("configuration").and_then(|v| v.as_object())
-            .is_some_and(|data| data.len() >= 2 && data.len() <= 4
+            .is_some_and(|data| data.len() >= 2 && data.len() <= 6
                 && matches!(data.get("variant").and_then(|v| v.as_str()), Some("ai" | "classic"))
                 && data.get("cookie").and_then(|v| v.as_str()).is_some_and(|s|
                     !s.is_empty() && s.len() <= 8192 && !s.contains('\r') && !s.contains('\n'))
                 && data.get("catalog_url").map_or(true, |v| v.as_str().is_some_and(|s|
                     s.len() <= 2048 && !s.contains('\r') && !s.contains('\n')))
                 && data.get("authorization").map_or(true, |v| v.as_str().is_some_and(|s|
-                    s.len() <= 8192 && !s.contains('\r') && !s.contains('\n')))) => Ok(()),
+                    s.len() <= 8192 && !s.contains('\r') && !s.contains('\n')))
+                && data.get("annotator_token").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 4096 && !s.contains('\r') && !s.contains('\n')))
+                && data.get("school_id").map_or(true, |v| v.as_str().is_some_and(|s|
+                    s.len() <= 24 && s.bytes().all(|c| c.is_ascii_digit())))) => Ok(()),
         "ucampus.units.list" | "ucampus.unit.tasks" if request.get("course_id")
             .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
                 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))

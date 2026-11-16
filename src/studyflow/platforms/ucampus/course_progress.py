@@ -64,6 +64,10 @@ def _headers(config: UCampusConfig, open_id: str) -> dict[str, str]:
               for part in config.cookie.split(";") if "=" in part).get("jwt", "")
     if token:
         headers["Authorization"] = token
+    if config.annotator_token:
+        headers["x-annotator-auth-token"] = config.annotator_token
+    if config.school_id:
+        headers["u-school"] = config.school_id
     return headers
 
 

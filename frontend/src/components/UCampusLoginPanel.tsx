@@ -7,6 +7,8 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
   const [url,setUrl]=useState("");
   const [cookie,setCookie]=useState("");
   const [authorization,setAuthorization]=useState("");
+  const [annotator,setAnnotator]=useState("");
+  const [schoolId,setSchoolId]=useState("");
   const [status,setStatus]=useState<UCampusSessionInfo|null>(null);
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState("");
@@ -22,9 +24,10 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     if(!desktop||busy||(variant==="classic"&&!url.trim())||!cookie.trim())return;
     setBusy(true);setNotice("");
     try{
-      const configuration:UCampusConfig={variant,catalog_url:url.trim(),cookie:cookie.trim(),authorization:authorization.trim()};
+      const configuration:UCampusConfig={variant,catalog_url:url.trim(),cookie:cookie.trim(),
+        authorization:authorization.trim(),annotator_token:annotator.trim(),school_id:schoolId.trim()};
       await request<{saved:boolean}>({operation:"ucampus.session.configure",configuration});
-      setCookie("");setAuthorization("");
+      setCookie("");setAuthorization("");setAnnotator("");setSchoolId("");
       setStatus({configured:true,variant});
       setNotice("已保存本地会话；正在尝试开源项目中已知的 U校园课程接口。是否可用以真实账号返回为准。");
       onChanged();
@@ -36,7 +39,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     setBusy(true);setNotice("");
     try{
       await request<{cleared:boolean}>({operation:"ucampus.session.clear"});
-      setCookie("");setAuthorization("");setUrl("");setStatus({configured:false,variant:null});
+      setCookie("");setAuthorization("");setAnnotator("");setSchoolId("");setUrl("");setStatus({configured:false,variant:null});
       setNotice("已清除学序保存的 U校园会话。");
       onChanged();
     }catch(error){setNotice(friendlyBridgeError(error));}
@@ -65,6 +68,16 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     <input id="ucampus-auth" type="password" autoComplete="off" spellCheck={false}
       placeholder="仅实际请求确实需要时填写" value={authorization}
       onChange={e=>setAuthorization(e.target.value)} disabled={!desktop||busy}/>
+    {variant==="ai"&&<>
+      <label htmlFor="ucampus-annotator">U校园内容授权令牌（可选）</label>
+      <input id="ucampus-annotator" type="password" autoComplete="off" spellCheck={false}
+        placeholder="仅内容接口要求时填写，保存在本机" value={annotator}
+        onChange={e=>setAnnotator(e.target.value)} disabled={!desktop||busy}/>
+      <label htmlFor="ucampus-school">学校编号（可选）</label>
+      <input id="ucampus-school" type="text" autoComplete="off" inputMode="numeric"
+        placeholder="仅内容接口要求时填写" value={schoolId}
+        onChange={e=>setSchoolId(e.target.value)} disabled={!desktop||busy}/>
+    </>}
     <div className="actions">
       <button type="button" disabled={!desktop||busy||(variant==="classic"&&!url.trim())||!cookie.trim()} onClick={()=>void save()}>保存并检测连接</button>
       <button type="button" className="secondary" disabled={!desktop||busy||!status?.configured} onClick={()=>void clear()}>退出并清除</button>
