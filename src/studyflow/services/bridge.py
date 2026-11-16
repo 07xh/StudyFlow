@@ -54,6 +54,20 @@ ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter(),
             "xuexitong": XuexitongAdapter(), "ucampus": UCampusAdapter()}
 
 
+def _clear_ucampus_monitor_safely() -> bool:
+    """After changing login, protect the account even if its old checkpoint is locked.
+
+    The stored checkpoint has an account fingerprint, so a failed delete is
+    fail-closed. Surface a warning separately; never call successful login
+    "credential save failed" merely because checkpoint cleanup failed.
+    """
+    try:
+        ucampus_monitor.configure(None, None, False)
+        return True
+    except Exception:
+        return False
+
+
 def _course_payload(course):
     payload = {
         "platform": course.platform.value, "course_id": course.course_id, "title": course.title,
@@ -249,8 +263,9 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.save(config.__dict__)
-            ucampus_monitor.configure(None, None, False)
-            return {"id": request_id, "ok": True, "data": {"saved": True, "variant": "ai"}}
+            monitor_reset = _clear_ucampus_monitor_safely()
+            return {"id": request_id, "ok": True, "data": {
+                "saved": True, "variant": "ai", "monitor_reset": monitor_reset}}
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "ucampus.session.configure":
@@ -258,8 +273,9 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.save(request.get("configuration"))
-            ucampus_monitor.configure(None, None, False)
-            return {"id": request_id, "ok": True, "data": {"saved": True}}
+            monitor_reset = _clear_ucampus_monitor_safely()
+            return {"id": request_id, "ok": True, "data": {
+                "saved": True, "monitor_reset": monitor_reset}}
         except ValueError:
             return {"id": request_id, "ok": False, "error": "INVALID_UCAMPUS_CONFIG"}
         except Exception:
@@ -269,8 +285,9 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.clear()
-            ucampus_monitor.configure(None, None, False)
-            return {"id": request_id, "ok": True, "data": {"cleared": True}}
+            monitor_reset = _clear_ucampus_monitor_safely()
+            return {"id": request_id, "ok": True, "data": {
+                "cleared": True, "monitor_reset": monitor_reset}}
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "xuexitong.settings.get":
