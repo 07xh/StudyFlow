@@ -190,9 +190,14 @@ class FabricatedRunner:
         if self._store is None:
             return
         with self._lock:
+            # The long-lived service may be shut down before its first run.
+            # Never try to persist an empty run id during reset/atexit.
+            if not self._run_id:
+                return
+            run_id = self._run_id
             record = {"course_id": self._course_id, "unit_id": self._unit_id,
                       "phase": self._phase, "tasks": dict(self._tasks)}
-        self._store.save(self._run_id, record)
+        self._store.save(run_id, record)
 
     def control(self, action: str, run_id: str) -> dict:
         with self._lock:
