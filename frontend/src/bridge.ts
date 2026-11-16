@@ -231,6 +231,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "UCAMPUS_TASK_ALREADY_RUNNING", "UCAMPUS_TASK_NOT_RUNNING",
                              "UCAMPUS_RUN_ID_MISMATCH", "UCAMPUS_RUNTIME_UNAVAILABLE",
                              "UCAMPUS_SESSION_MISSING", "UCAMPUS_SESSION_EXPIRED",
+                              "UCAMPUS_CATALOG_UNAVAILABLE", "UCAMPUS_CATALOG_FORMAT_UNVERIFIED",
                              "UCAMPUS_AI_ONLY", "UCAMPUS_OPEN_ID_REQUIRED",
                              "UCAMPUS_PROGRESS_UNAVAILABLE", "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED",
                              "UCAMPUS_INVALID_FABRICATED_PARAMETER", "UCAMPUS_INVALID_FABRICATED_TARGET",
@@ -371,6 +372,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_AI_ONLY": return "目前单元与任务读取仅支持 U校园5.0 AI版。";
     case "UCAMPUS_SESSION_MISSING": return "请先配置 U校园登录会话。";
     case "UCAMPUS_SESSION_EXPIRED": return "U校园会话已失效，请重新登录。";
+    case "UCAMPUS_CATALOG_UNAVAILABLE": return "U校园课程接口请求失败，请检查网络、账号与接口版本。";
+    case "UCAMPUS_CATALOG_FORMAT_UNVERIFIED": return "U校园课程接口返回了未知数据格式；未生成任何模拟课程，请核验平台版本。";
     case "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED": return "U校园返回的数据结构与已知开源接口不一致，未推断任何进度。";
     case "UCAMPUS_PROGRESS_UNAVAILABLE": return "U校园单元/任务进度接口请求失败，请检查账号、网络和课程。";
     case "INVALID_UCAMPUS_CONFIG": return "U校园配置不符合要求：仅支持官方 HTTPS 域名与正确格式的登录会话。";
