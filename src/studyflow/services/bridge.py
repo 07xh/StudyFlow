@@ -33,6 +33,8 @@ from studyflow.platforms.xuexitong import settings as xuexitong_settings
 from studyflow.services.xuexitong_heartbeat_bridge import dispatch as xuexitong_heartbeat_dispatch
 from studyflow.services import xuexitong_heartbeat_bridge
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
+from studyflow.platforms.ucampus.adapter import UCampusAdapter
+from studyflow.platforms.ucampus import credentials as ucampus_credentials
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
 from studyflow.services import update_manager
@@ -40,7 +42,7 @@ from studyflow.platforms.yuketang.legacy_config import read_settings as get_orig
 
 MAX_LINE = 600000
 ADAPTERS = {"zhidao": ZhidaoAdapter(), "yuketang": YuketangAdapter(),
-            "xuexitong": XuexitongAdapter()}
+            "xuexitong": XuexitongAdapter(), "ucampus": UCampusAdapter()}
 
 
 def _course_payload(course):
@@ -135,6 +137,22 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "PLATFORM_NOT_READY"}
         return {"id": request_id, "ok": True, "data": [_course_payload(c) for c in courses]}
+    if operation == "ucampus.session.info":
+        return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
+    if operation == "ucampus.session.configure":
+        try:
+            ucampus_credentials.save(request.get("configuration"))
+            return {"id": request_id, "ok": True, "data": {"saved": True}}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_UCAMPUS_CONFIG"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
+    if operation == "ucampus.session.clear":
+        try:
+            ucampus_credentials.clear()
+            return {"id": request_id, "ok": True, "data": {"cleared": True}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "xuexitong.settings.get":
         return {"id": request_id, "ok": True, "data": xuexitong_settings.read()}
     if operation == "xuexitong.settings.save":
