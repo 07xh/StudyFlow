@@ -50,9 +50,9 @@ test('navigation preserves valid selection without leaking its heading to anothe
   act(()=>view.root.findByProps({'data-select-course':true}).props.onClick());
   assert.equal(shell.currentCourseTitle,'test course');
   assert.equal(shell.courseProgress,25);
-  act(()=>shell.onNavigate('settings'));
-  assert.equal(shell.headerTitle,undefined);
-  assert.equal(shell.currentCourseTitle,undefined);
+  act(()=>shell.onOpenSettings());
+  assert.equal(shell.currentCourseTitle,'test course','Opening settings must preserve the current course');
+  assert.equal(shell.courseProgress,25,'Opening settings must preserve verified progress');
   act(()=>shell.onNavigate('platform-yuketang'));
   assert.equal(shell.currentPlatform,'雨课堂');
   assert.equal(shell.currentCourseTitle,undefined);
