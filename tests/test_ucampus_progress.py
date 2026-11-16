@@ -1,0 +1,80 @@
+"""Offline contract tests for upstream U校园AI read-only progress shapes."""
+from __future__ import annotations
+
+import base64
+import json
+import pytest
+
+from studyflow.platforms.ucampus.credentials import UCampusConfig
+from studyflow.platforms.ucampus.course_progress import (
+    UCampusProgressReader, UCampusProgressError, parse_tasks, parse_units,
+)
+
+
+def _config():
+    payload = base64.urlsafe_b64encode(json.dumps({"openId": "my-open-id"}).encode()).decode().rstrip("=")
+    return UCampusConfig.from_dict({"variant": "ai", "cookie": f"jwt=header.{payload}.signature"})
+
+
+def test_course_units_only_use_upstream_map():
+    assert parse_units({"units": {"unit2": {"strategies": {}}, "unit1": {}}}) == [
+        {"id": "unit1", "title": "", "completed": None},
+        {"id": "unit2", "title": "", "completed": None}]
+    with pytest.raises(UCampusProgressError):
+        parse_units({"bad": {"unit1": {}}})
+
+
+def test_task_state_is_distinct_from_local_learning_time():
+    tasks = parse_tasks({"leafs": {
+        "video1": {"tab_type": "video", "strategies": {"required": True}, "state": {"pass": 1}},
+        "audio1": {"tab_type": "audio", "state": {"pass": 0}},
+        "quiz1": {"tab_type": "task", "state": None},
+    }}, "unit1")
+    by_id = {row["id"]: row for row in tasks}
+    assert by_id["video1"]["completed"] is True and by_id["video1"]["required"] is True
+    assert by_id["audio1"]["completed"] is False
+    assert by_id["quiz1"]["completed"] is None
+    assert all(row["title"] == "" and "progress_percent" not in row for row in tasks)
+
+
+def test_reader_builds_only_first_party_urls_and_requires_jwt_open_id(monkeypatch):
+    cfg = _config()
+    seen = []
+    class Response:
+        status_code = 200
+        is_redirect = False
+        headers = {"content-type": "application/json"}
+        content = b'{"rt":{"units":{"1":{}}}}'
+        def json(self): return {"rt": {"units": {"1": {}}}}
+    def get(url, **kwargs):
+        seen.append((url, kwargs))
+        return Response()
+    monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get", get)
+    reader = UCampusProgressReader(credentials_loader=lambda: cfg)
+    assert reader.list_units("course123")[0]["id"] == "1"
+    assert len(seen) == 1
+    assert "/course_progress/course123/my-open-id/default" in seen[0][0]
+    assert seen[0][1]["allow_redirects"] is False
+    assert seen[0][1]["headers"]["u-openid"] == "my-open-id"
+    assert seen[0][1]["headers"]["Authorization"].startswith("header.")
+    with pytest.raises(UCampusProgressError, match="INVALID_REQUEST"):
+        reader.list_units("../other")
+    assert len(seen) == 1
+    missing = UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=only"})
+    with pytest.raises(UCampusProgressError, match="UCAMPUS_OPEN_ID_REQUIRED"):
+        UCampusProgressReader(credentials_loader=lambda: missing).list_units("course123")
+    assert len(seen) == 1
+
+
+def test_rejects_unrecognized_server_format(monkeypatch):
+    cfg = _config()
+    class Response:
+        status_code = 200
+        is_redirect = False
+        headers = {"content-type": "application/json"}
+        content = b'{"data":[]}'
+        def json(self): return {"data": []}
+    monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get",
+                        lambda *args, **kwargs: Response())
+    with pytest.raises(UCampusProgressError, match="UCAMPUS_PROGRESS_FORMAT_UNVERIFIED"):
+        UCampusProgressReader(credentials_loader=lambda: cfg).list_units("course123")
