@@ -759,7 +759,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
-            <LegacyPlaybackPanel key={"zhs:"+course.course_id} platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
+            <LegacyPlaybackPanel platform="zhidao" key={"zhs:"+course.course_id} dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="xuexitong"?<>
