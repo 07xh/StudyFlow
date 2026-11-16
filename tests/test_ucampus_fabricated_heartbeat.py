@@ -638,3 +638,47 @@ def test_archive_refactor_keeps_migration_idempotent_and_readonly():
         entries=store.list_recent("course-v2:100")
         assert entries[0]["phase"]=="interrupted"
         assert entries[0]["resume_available"] is False
+
+
+def test_recent_history_uses_the_same_allowlist_as_archive_writes():
+    with tempfile.TemporaryDirectory() as folder:
+        file = Path(folder) / "history.json"
+        file.write_text(json.dumps({
+            "run_old": {
+                "course_id": "course-v2:100", "unit_id": "u1",
+                "phase": "running", "cookie": "HIDDEN_HISTORY_COOKIE",
+                "tasks": {"leaf1": {"generated": 2, "sent": 1, "confirmed": 0}},
+            },
+            "run_missing": {
+                "course_id": "course-v2:100", "phase": "failed",
+                "cookie": "HIDDEN_MALFORMED",
+            },
+            "run_new": {
+                "course_id": "course-v2:100", "unit_id": "u2",
+                "phase": "failed", "authorization": "HIDDEN_AUTH",
+                "tasks": {
+                    "leaf2": {
+                        "generated": True, "sent": 5, "confirmed": 1,
+                        "last_error": "HIDDEN_ERROR",
+                    },
+                    "../unsafe": {"generated": 900},
+                },
+            },
+            "other": {
+                "course_id": "course-v2:200", "unit_id": "u1",
+                "phase": "stopped", "tasks": {},
+            },
+        }), encoding="utf-8")
+        store = fh.FabricatedStateStore(file)
+        rows = store.list_recent("course-v2:100")
+        assert [row["run_id"] for row in rows] == ["run_new", "run_old"]
+        assert rows[0]["resources"] == 1
+        assert rows[0]["generated"] == 0  # bool must not count as an integer
+        assert rows[0]["sent"] == 5
+        assert rows[0]["server_readback_passed"] == 1
+        assert rows[1]["phase"] == "interrupted"
+        assert rows[1]["resume_available"] is False
+        assert all(row["progress_causality"] == "unverified" for row in rows)
+        for secret in ("HIDDEN_HISTORY_COOKIE", "HIDDEN_AUTH", "HIDDEN_ERROR"):
+            assert secret not in repr(rows)
+        assert store.list_recent("course-v2:100", limit=1) == rows[:1]
