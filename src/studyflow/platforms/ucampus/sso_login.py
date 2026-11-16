@@ -13,6 +13,8 @@ import requests
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
+from dataclasses import replace
+
 from .credentials import UCampusConfig
 
 _SSO_LOGIN_URL = "https://sso.unipus.cn/sso/0.1/sso/cip/login"
@@ -100,3 +102,49 @@ def authenticate(username: str, password: str) -> UCampusConfig:
 
     # Store only a JWT session. No account password or SSO refresh token.
     return UCampusConfig.from_dict({"variant": "ai", "cookie": "jwt=" + jwt})
+
+
+# Observed in the public UnipusAI implementation, course.rs (read-only).
+_ACCOUNT_USER_INFO_URL = "https://uai.unipus.cn/api/account/user/info"
+
+
+def enrich_school_from_account(config: UCampusConfig) -> UCampusConfig:
+    """Best-effort, read-only account profile lookup on the fixed first-party host.
+
+    Missing/malformed/expired profile data never changes the valid SSO JWT session
+    or invents a school identifier. This may be unavailable for some accounts.
+    """
+    if config.variant != "ai" or config.school_id:
+        return config
+    cookie_fields = dict(part.strip().split("=", 1)
+                         for part in config.cookie.split(";") if "=" in part)
+    jwt = cookie_fields.get("jwt", "")
+    if not jwt or not _JWT.fullmatch(jwt):
+        return config
+    try:
+        response = requests.get(
+            _ACCOUNT_USER_INFO_URL,
+            headers={"Accept": "application/json", "Cookie": config.cookie,
+                     "Authorization": jwt, "u-app-id": "39", "u-platform": "2",
+                     "Origin": _SERVICE, "Referer": _SERVICE + "/"},
+            timeout=(5, 10), allow_redirects=False,
+        )
+        if response.status_code != 200 or response.is_redirect:
+            return config
+        if (len(response.content) > 200_000
+                or "json" not in response.headers.get("content-type", "").lower()):
+            return config
+        data = response.json()
+    except (requests.RequestException, ValueError):
+        return config
+    if not isinstance(data, dict) or (
+            str(data.get("code")) != "1" and data.get("success") is not True):
+        return config
+    value = data.get("value")
+    info = value.get("userInfo") if isinstance(value, dict) else None
+    school = info.get("school") if isinstance(info, dict) else None
+    if type(school) is int:
+        school = str(school)
+    if not isinstance(school, str) or not school.isascii() or not school.isdigit() or len(school) > 24:
+        return config
+    return replace(config, school_id=school)
