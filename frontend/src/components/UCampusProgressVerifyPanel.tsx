@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from "react";
 import type {Course} from "../types";
-import {request,friendlyBridgeError,type UCampusUnit,type UCampusSocketDiagnostic,type UCampusVerifiedProgress} from "../bridge";
+import {request,friendlyBridgeError,type UCampusUnit,type UCampusSocketDiagnostic,type UCampusVerifiedProgress,type UCampusMonitorStatus} from "../bridge";
 import "./XuexitongHeartbeatPanel.css";
 
 /** Read-only U校园 server progress. No local heartbeat runner or event upload. */
@@ -18,6 +18,9 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
   const [socketDiagnostic,setSocketDiagnostic]=useState<UCampusSocketDiagnostic|null>(null);
   const [socketError,setSocketError]=useState("");
   const verificationToken=useRef(0);
+  const [monitor,setMonitor]=useState<UCampusMonitorStatus|null>(null);
+  const [monitorBusy,setMonitorBusy]=useState(false);
+  const [monitorError,setMonitorError]=useState("");
 
   useEffect(()=>{
     let active=true;
@@ -25,7 +28,11 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
     setUnits([]);setUnitId("");setUnitsError("");setUnitsBusy(false);
     setServerBusy(false);setServerProgress(null);setPreviousProgress(null);setServerError("");
     setSocketDiagnostic(null);setSocketError("");setSocketBusy(false);
+    setMonitor(null);setMonitorBusy(false);setMonitorError("");
     if(!desktop)return()=>{active=false;verificationToken.current++;};
+    void request<UCampusMonitorStatus>({operation:"ucampus.monitor.status"})
+      .then(value=>{if(active)setMonitor(value);})
+      .catch(error=>{if(active)setMonitorError(friendlyBridgeError(error));});
     setUnitsBusy(true);
     void request<UCampusUnit[]>({operation:"ucampus.units.list",course_id:courseId})
       .then(value=>{
@@ -64,6 +71,25 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
     }
   }
 
+  async function toggleMonitor(){
+    if(!desktop||monitorBusy||(!unitId&&!monitor?.enabled))return;
+    const enabled=!(monitor?.enabled&&monitor.course_id===courseId&&monitor.unit_id===unitId);
+    setMonitorBusy(true);setMonitorError("");
+    try{
+      const value=await request<UCampusMonitorStatus>({
+        operation:"ucampus.monitor.configure",enabled,
+        ...(enabled?{course_id:courseId,unit_id:unitId}:{})
+      });
+      setMonitor(value);
+      if(enabled){
+        // A first server read is opt-in. Subsequent GETs are restored on launch.
+        const first=await request<UCampusMonitorStatus>({operation:"ucampus.monitor.tick"});
+        setMonitor(first);
+      }
+    }catch(error){setMonitorError(friendlyBridgeError(error));}
+    finally{setMonitorBusy(false);}
+  }
+
   async function diagnoseSocket(){
     if(!desktop||socketBusy)return;
     setSocketBusy(true);setSocketDiagnostic(null);setSocketError("");
@@ -94,6 +120,32 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
         onClick={()=>void verifyServer()}>
         {serverBusy?"正在核验服务器进度…":"核验服务器进度"}
       </button>
+    </div>
+    <div className="sf-xxt-evidence-note">
+      <strong>重启后续核验（只读）</strong>
+      <p className="sf-muted">启用后仅保存当前课程、单元和匿名会话标记。学序重新打开后自动恢复服务器进度查询；不会恢复或补发本地模拟心跳，也不等同于 Windows 开机自启动。</p>
+      <div className="actions">
+        <button type="button" className="secondary"
+          disabled={!desktop||monitorBusy||(!unitId&&!monitor?.enabled)}
+          onClick={()=>void toggleMonitor()}>
+          {monitorBusy?"正在更新…":monitor?.enabled?"停止自动核验":"启用重启后自动核验"}
+        </button>
+        <button type="button" className="secondary" disabled={!desktop||monitorBusy}
+          onClick={()=>void request<UCampusMonitorStatus>({operation:"ucampus.monitor.status"})
+            .then(setMonitor).catch(error=>setMonitorError(friendlyBridgeError(error)))}>
+          查看恢复状态
+        </button>
+      </div>
+      {monitorError&&<p role="alert">{monitorError}</p>}
+      {monitor?.state==="account_changed"&&<p role="status">当前账号与原核验记录不匹配，已停止自动查询。</p>}
+      {monitor?.enabled&&<p role="status">
+        自动核验：{monitor.state==="verified"?"已读取真实服务器状态":monitor.state==="pending"?"等待首次读取":"上次读取未成功"} ·
+        {monitor.course_id===courseId?"本课程":"另一门 U校园课程"} ·
+        单元 {monitor.unit_id} ·
+        已通过 {monitor.passed}/{monitor.total} 项，
+        未知 {monitor.unknown} 项 ·
+        {monitor.checked_at?"上次核验 "+monitor.checked_at:"暂无核验时间"}
+      </p>}
     </div>
     {unitsBusy&&<p role="status">正在读取真实课程单元…</p>}
     {unitsError&&<p role="alert">{unitsError}</p>}
