@@ -22,6 +22,10 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "xuexitong.settings.save"; settings: XuexitongSettings}
   | {id: string; version: 1; operation: "xuexitong.chapter.tasks"; course_id: string; chapter_id: string}
   | {id: string; version: 1; operation: "xuexitong.chapters.list"; course_id: string}
+  | {id: string; version: 1; operation: "xuexitong.heartbeat.start"; course_id: string; speed?: number; jobs?: number; instant_complete?: boolean; settings?: XuexitongSettings}
+  | {id: string; version: 1; operation: "xuexitong.heartbeat.status"; course_id?: string}
+  | {id: string; version: 1; operation: "xuexitong.heartbeat.logs"; limit?: number}
+  | {id: string; version: 1; operation: "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume" | "xuexitong.heartbeat.stop"; run_id?: string}
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"; course_id?: string}
   | {id: string; version: 1; operation: "yuketang.course.detail"; course_id: string; offset: number; limit: number}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}

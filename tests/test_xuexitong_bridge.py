@@ -60,6 +60,17 @@ class TestHeartbeatBridge(unittest.TestCase):
         })
         self.assertEqual(self.fake.calls[0][1]["run_id"], "run-abc")
 
+    def test_main_dispatch_uses_persistent_heartbeat_service(self) -> None:
+        from studyflow.services.bridge import dispatch as app_dispatch
+        response = app_dispatch({
+            "id": "hb-ipc-1", "version": 1,
+            "operation": "xuexitong.heartbeat.status",
+            "course_id": "100001:200002:300003",
+        })
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["id"], "hb-ipc-1")
+        self.assertEqual(self.fake.calls[0][0], "xuexitong.heartbeat.status")
+
     def test_shutdown_stops_and_waits(self) -> None:
         bridge.shutdown()
         operations = [name for name, _payload in self.fake.calls]

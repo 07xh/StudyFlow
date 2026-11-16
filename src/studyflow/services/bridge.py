@@ -30,6 +30,7 @@ atexit.register(qr_runtime.cancel)
 from studyflow.platforms.xuexitong.adapter import XuexitongAdapter
 from studyflow.platforms.xuexitong import credentials as xuexitong_credentials
 from studyflow.platforms.xuexitong import settings as xuexitong_settings
+from studyflow.services import xuexitong_heartbeat_bridge
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
@@ -63,6 +64,13 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("version") != 1:
         return {"id": request_id, "ok": False, "error": "UNSUPPORTED_VERSION"}
     operation = request.get("operation")
+    if isinstance(operation, str):
+        heartbeat = xuexitong_heartbeat_bridge.dispatch(operation, request)
+        if heartbeat is not None:
+            if heartbeat.get("ok") is True:
+                return {"id": request_id, "ok": True, "data": heartbeat}
+            return {"id": request_id, "ok": False,
+                    "error": str(heartbeat.get("error") or "XUEXITONG_INTERNAL_ERROR")}
     if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download", "updates.changelog", "updates.latest"):
         try:
             if operation == "updates.latest":

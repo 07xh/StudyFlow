@@ -256,6 +256,28 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 || request.get("chapter_id").and_then(|v| v.as_str()).is_some_and(|id|
                     !id.is_empty() && id.len() <= 24
                     && id.bytes().all(|c| c.is_ascii_digit()))) => Ok(()),
+        "xuexitong.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|value| {
+                let parts: Vec<&str> = value.split(':').collect();
+                parts.len() == 3 && parts.iter().all(|part|
+                    !part.is_empty() && part.len() <= 24
+                    && part.bytes().all(|c| c.is_ascii_digit()))
+            })
+            && request.get("settings").map_or(true, |value| value.is_object())
+            && request.get("speed").map_or(true, |v| v.as_f64().is_some_and(|n| (0.25..=2.0).contains(&n)))
+            && request.get("jobs").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=4).contains(&n))) => Ok(()),
+        "xuexitong.heartbeat.status" if request.get("course_id").map_or(true, |v| v.as_str()
+            .is_some_and(|key| key.len() <= 96 && {
+                let parts: Vec<&str> = key.split(':').collect();
+                parts.len() == 3 && parts.iter().all(|part|
+                    !part.is_empty() && part.len() <= 24
+                    && part.bytes().all(|c| c.is_ascii_digit()))
+            })) => Ok(()),
+        "xuexitong.heartbeat.logs" if request.get("limit").map_or(true, |v| v.as_u64()
+            .is_some_and(|n| n <= 500)) => Ok(()),
+        "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume" | "xuexitong.heartbeat.stop"
+            if request.get("run_id").map_or(true, |v| v.as_str().is_some_and(|id|
+                !id.is_empty() && id.len() <= 64 && id.bytes().all(|c| c.is_ascii_hexdigit()))) => Ok(()),
         "xuexitong.settings.save" if request.get("settings").and_then(|v| v.as_object())
             .is_some_and(|value| value.len() == 4
                 && value.get("playback_speed").and_then(|v| v.as_f64()).is_some_and(|n| (0.25..=2.0).contains(&n))
@@ -322,11 +344,12 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     message.push(b'\n');
     let expected_id = request.get("id").and_then(|value| value.as_str())
         .ok_or("Invalid request id")?.to_string();
-    let is_qr = request.get("operation").and_then(|x| x.as_str())
-        .map_or(false, |op| op.starts_with("zhidao.qr."));
-    if is_qr {
-        // QR start/status/cancel must share the same Python process; ordinary
-        // requests intentionally retain the existing one-shot behavior.
+    let is_persistent = request.get("operation").and_then(|x| x.as_str())
+        .map_or(false, |op| op.starts_with("zhidao.qr.")
+            || op.starts_with("xuexitong.heartbeat."));
+    if is_persistent {
+        // Both QR operations and the long-running learning task share the existing
+        // persistent JSONL worker. One-shot requests must not own a daemon thread.
         let shared = app.state::<QrBridgeState>().inner().clone();
         return tauri::async_runtime::spawn_blocking(move || {
             let mut slot = shared.lock().map_err(|_| "QR service lock failed")?;
@@ -385,7 +408,13 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
     app.state::<zhidao_player::ZhidaoPlayerManager>().shutdown();
     let qr_worker = app.state::<QrBridgeState>();
     if let Ok(mut guard) = qr_worker.lock() {
-        // Drop sends QR cancellation and reaps its child, when present.
+        if let Some(worker) = guard.as_mut() {
+            // Stop the learning queue before Drop terminates this process.
+            let _ = worker.request(
+                b"{\"id\":\"hb-shutdown\",\"version\":1,\"operation\":\"xuexitong.heartbeat.stop\"}\n",
+                "hb-shutdown",
+            );
+        }
         guard.take();
     };
 }
