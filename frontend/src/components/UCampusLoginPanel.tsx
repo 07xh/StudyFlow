@@ -5,6 +5,8 @@ import type {Course} from "../types";
 /** No credentials enter localStorage, diagnostics or course state. */
 export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged:()=>void}){
   const [variant,setVariant]=useState<"ai"|"classic">("ai");
+  const [username,setUsername]=useState("");
+  const [password,setPassword]=useState("");
   const [url,setUrl]=useState("");
   const [cookie,setCookie]=useState("");
   const [authorization,setAuthorization]=useState("");
@@ -24,6 +26,23 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       .catch(()=>{if(active)setStatus(null);});
     return ()=>{active=false;};
   },[desktop]);
+  const login=async()=>{
+    if(!desktop||busy||variant!=="ai"||!username.trim()||!password)return;
+    setBusy(true);setNotice("");
+    try{
+      await request<{saved:boolean;variant:"ai"}>({
+        operation:"ucampus.session.login",username:username.trim(),password
+      });
+      setStatus({configured:true,variant:"ai"});
+      setUsername("");
+      setNotice("U校园 SSO 已返回登录会话，并已保存到本机。请继续验证真实课程读取；尚未确认单元和学习进度可用。");
+      onChanged();
+    }catch(error){
+      setNotice(friendlyBridgeError(error));
+    }finally{
+      setPassword("");setBusy(false);
+    }
+  };
   const save=async()=>{
     if(!desktop||busy||(variant==="classic"&&!url.trim())||!cookie.trim())return;
     setBusy(true);setNotice("");
@@ -58,7 +77,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     setBusy(true);setNotice("");
     try{
       await request<{cleared:boolean}>({operation:"ucampus.session.clear"});
-      clearSensitiveInputs();setUrl("");setStatus({configured:false,variant:null});
+      clearSensitiveInputs();setUsername("");setPassword("");setUrl("");setStatus({configured:false,variant:null});
       setNotice("已清除学序保存的 U校园会话。");
       onChanged();
     }catch(error){setNotice(friendlyBridgeError(error));}
@@ -75,6 +94,24 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
         <option value="classic">U校园普通版</option>
       </select>
     </div>
+    {variant==="ai"&&<div className="sf-platform-settings-view" aria-label="U校园 SSO 账号密码登录">
+      <p className="sf-muted">账号密码登录（实验接入）：由学序本机请求 U校园 SSO；不保存账号密码，仅将服务端返回的会话写入 Windows 凭据管理器。若出现验证码，请转到官方页面完成。</p>
+      <label htmlFor="ucampus-username">U校园账号</label>
+      <input id="ucampus-username" type="text" autoComplete="username" spellCheck={false}
+        value={username} onChange={e=>setUsername(e.target.value)} disabled={!desktop||busy}
+        maxLength={128} placeholder="输入本人 U校园账号"/>
+      <label htmlFor="ucampus-password">登录密码</label>
+      <input id="ucampus-password" type="password" autoComplete="new-password"
+        value={password} onChange={e=>setPassword(e.target.value)} disabled={!desktop||busy}
+        maxLength={256} placeholder="密码仅用于本次认证"/>
+      <div className="actions">
+        <button type="button" disabled={!desktop||busy||!username.trim()||!password}
+          onClick={()=>void login()}>账号密码登录</button>
+      </div>
+    </div>}
+    <details>
+      <summary>高级：手动导入现有会话</summary>
+      <p className="sf-muted">账号密码登录无法完成时，可从本人已登录的官方页面导入有效会话。敏感信息只应在本机输入。</p>
     <label htmlFor="ucampus-catalog-url">{variant==="ai"?"课程接口 URL（留空使用开源项目已知首页接口）":"普通版课程接口 URL（必须使用本人已核验地址）"}</label>
     <input id="ucampus-catalog-url" type="url" autoComplete="off" spellCheck={false}
       placeholder={variant==="ai"?"默认使用 U校园AI版首页课程接口":"仅支持 U校园官方 HTTPS JSON 接口"} value={url}
@@ -99,6 +136,9 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     </>}
     <div className="actions">
       <button type="button" disabled={!desktop||busy||(variant==="classic"&&!url.trim())||!cookie.trim()} onClick={()=>void save()}>保存会话</button>
+    </div>
+    </details>
+    <div className="actions">
       <button type="button" className="secondary" disabled={!desktop||busy||!status?.configured} onClick={()=>void verify()}>验证课程读取</button>
       <button type="button" className="secondary" disabled={!desktop||busy||!status?.configured} onClick={()=>void clear()}>退出并清除</button>
     </div>
