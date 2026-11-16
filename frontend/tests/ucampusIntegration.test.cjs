@@ -47,3 +47,12 @@ test("U校园 legacy socket diagnostic cannot send learning events",()=>{
   assert.match(bridge,/operation: "ucampus\.socket\.diagnose"/);
   assert.doesNotMatch(panel,/ucampus\.socket\.send/);
 });
+
+test("U校园 verifies server progress separately from local event counters",()=>{
+  const panel=read("components/UCampusHeartbeatPanel.tsx");
+  const bridge=read("bridge.ts");
+  assert.ok(panel.includes('operation:"ucampus.progress.verify"'));
+  assert.match(panel,/服务器实际记录/);
+  assert.match(panel,/与本地心跳计数无关/);
+  assert.match(bridge,/ucampus\.progress\.verify/);
+});
