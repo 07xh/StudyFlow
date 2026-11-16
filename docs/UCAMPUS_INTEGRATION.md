@@ -341,3 +341,15 @@ POST 时补 `Content-Type: application/json; charset=UTF-8`（与 `hunaol/u_ai::
   状态接口返回 `restart_resume_supported=false`。
 - Python 回归和前端测试只能证明本机代码行为，无法代替 U校园5.0 真实账号及
   服务器进度验收。实验性写入不能作为已完成课程的证据。
+
+
+## 本地历史记录的最小化落盘（2026-11-16）
+
+`FabricatedStateStore.save()` 不再把运行器收到的字典原样序列化。
+落盘只保留合法课程/单元标识、终态和每个资源的
+`generated/sent/accepted/confirmed` 数量；不写入资源标题、
+Cookie、Authorization、JWT、Socket 应答、错误正文或其他请求元数据。
+更新历史文件时会对已存在的记录执行相同字段白名单，
+避免通过后续存档继续保留旧版本可能写入的敏感字段。
+`load()` 也只返回同一受限结构，`history` 只读展示和
+`restart_resume_supported=false` 不变。此次改动不支持跨重启补发事件。
