@@ -1,10 +1,10 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {RefreshCw} from "lucide-react";
-import {friendlyBridgeError,request,type ZhidaoCourseDetail} from "../bridge";
+import {friendlyBridgeError,request,type ZhidaoCourseDetail,type ZhidaoProgressSnapshot} from "../bridge";
 import type {Course} from "../types";
 import {CourseChapterGroup,CourseRecordToolbar} from "../ui/CourseRecordViews";
 
-type Props={course:Course;desktop:boolean};
+type Props={course:Course;desktop:boolean;onCoursesUpdated?:(courses:Course[])=>void};
 type StatusFilter="all"|"incomplete"|"completed"|"unverified";
 type Lesson=ZhidaoCourseDetail["items"][number];
 
@@ -27,12 +27,14 @@ function seconds(value:number|undefined){
 }
 
 /** Real Zhidao course records; course-level metric remains in the workspace header. */
-export function ZhidaoCourseDetailPanel({course,desktop}:Props){
+export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated}:Props){
   const [detail,setDetail]=useState<ZhidaoCourseDetail|null>(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const revision=useRef(0);
   const detailCourseKey=useRef(course.course_id);
+  const onCoursesUpdatedRef=useRef(onCoursesUpdated);
+  onCoursesUpdatedRef.current=onCoursesUpdated;
   const [statusFilter,setStatusFilter]=useState<StatusFilter>("all");
   const [search,setSearch]=useState("");
   const [chapterFilter,setChapterFilter]=useState("");
@@ -41,24 +43,48 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
     setStatusFilter("all");setSearch("");setChapterFilter("");setExpanded({});
   },[course.course_id]);
 
-  const load=useCallback(async()=>{
+  const load=useCallback(async(verifyServer=false)=>{
     if(!desktop)return;
     const current=++revision.current;
     setBusy(true);setMessage("");
-    // Same course may keep visible evidence while refreshing; never cross courses.
     if(detailCourseKey.current!==course.course_id){
       detailCourseKey.current=course.course_id;
       setDetail(null);
     }
+    let cached:ZhidaoCourseDetail|null=null;
     try{
-      const result=await request<ZhidaoCourseDetail>({
+      cached=await request<ZhidaoCourseDetail>({
         operation:"zhidao.course.detail",course_key:course.course_id
       });
-      if(current===revision.current)setDetail(result);
+      if(current!==revision.current)return;
+      if(cached.course_key!==course.course_id)throw new Error("COURSE_NOT_FOUND");
+      setDetail(cached);
+      // The detail endpoint reads a local cache. On a newly selected course with
+      // no usable chapter evidence, query the real server before declaring it empty.
+      // A manual refresh always requests new server evidence.
+      const missingEvidence=!cached.verified||cached.stale||cached.items.length===0;
+      if(!verifyServer&&(!missingEvidence||course.stale))return;
+      const snapshot=await request<ZhidaoProgressSnapshot>({
+        operation:"zhidao.progress.verify",course_key:course.course_id
+      });
+      if(current!==revision.current)return;
+      const target=snapshot.courses.find(item=>item.platform==="zhidao"&&
+        item.course_id===course.course_id&&!item.stale);
+      if(!target)throw new Error("COURSE_NOT_FOUND");
+      onCoursesUpdatedRef.current?.(snapshot.courses);
+      const updated=await request<ZhidaoCourseDetail>({
+        operation:"zhidao.course.detail",course_key:course.course_id
+      });
+      if(current!==revision.current)return;
+      if(updated.course_key!==course.course_id)throw new Error("COURSE_NOT_FOUND");
+      setDetail(updated);
+      if(!updated.verified)setMessage("已重新读取课程，但服务器尚未提供可核验的章节进度。");
     }catch(error){
       if(current===revision.current){
-        setDetail(null);
-        setMessage(friendlyBridgeError(error));
+        // Keep valid cache evidence on a transient verification failure, without
+        // claiming the failed request supplied fresh server progress.
+        if(!cached||cached.course_key!==course.course_id)setDetail(null);
+        setMessage("当前课程读取或服务器核验失败："+friendlyBridgeError(error));
       }
     }finally{if(current===revision.current)setBusy(false);}
   },[desktop,course.course_id,course.verified_at,course.stale]);
@@ -118,7 +144,7 @@ export function ZhidaoCourseDetailPanel({course,desktop}:Props){
         <h3>章节进度</h3>
         {currentDetail?.verified_at&&<small className="sf-record-verification-meta">最近核验：{new Date(currentDetail.verified_at).toLocaleString()}</small>}
       </div>
-      <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void load()}>
+      <button className="secondary" type="button" disabled={!desktop||busy} onClick={()=>void load(true)}>
         <RefreshCw size={14}/>{busy?"核验中…":"刷新章节"}
       </button>
     </div>
