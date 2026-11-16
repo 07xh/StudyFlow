@@ -276,7 +276,14 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && part.bytes().all(|c| c.is_ascii_digit()))
             })) => Ok(()),
         "xuexitong.heartbeat.logs" if request.get("limit").map_or(true, |v| v.as_u64()
-            .is_some_and(|n| n <= 500)) => Ok(()),
+            .is_some_and(|n| n <= 500))
+            && request.get("course_id").map_or(true, |v| v.as_str()
+                .is_some_and(|key| key.len() <= 96 && {
+                    let parts: Vec<&str> = key.split(':').collect();
+                    parts.len() == 3 && parts.iter().all(|part|
+                        !part.is_empty() && part.len() <= 24
+                        && part.bytes().all(|c| c.is_ascii_digit()))
+                })) => Ok(()),
         "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume" | "xuexitong.heartbeat.stop"
             if request.get("graceful").is_none()
                 && request.get("run_id").and_then(|v| v.as_str()).is_some_and(|id|
@@ -613,6 +620,31 @@ mod ipc_validation_tests {
             request.as_object_mut().unwrap().remove("graceful");
             request["run_id"] = json!("old-run");
             assert!(validate(&request).is_err(), "non-hex run accepted: {operation}");
+        }
+    }
+
+    #[test]
+    fn xuexitong_logs_require_bounded_count_and_valid_course_scope() {
+        let base = json!({"id":"xxt-log","version":1,
+            "operation":"xuexitong.heartbeat.logs","limit":30,
+            "course_id":"100001:200002:300003"});
+        assert!(validate(&base).is_ok());
+        let unscoped = json!({"id":"xxt-log","version":1,
+            "operation":"xuexitong.heartbeat.logs","limit":30});
+        assert!(validate(&unscoped).is_ok());
+        for invalid in [
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","limit":501}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","limit":-1}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","course_id":"../other"}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","course_id":null}),
+            json!({"id":"xxt-log","version":1,
+                "operation":"xuexitong.heartbeat.logs","course_id":"1:2"}),
+        ] {
+            assert!(validate(&invalid).is_err(), "invalid log query accepted: {invalid}");
         }
     }
 
