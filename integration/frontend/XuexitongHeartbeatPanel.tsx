@@ -14,7 +14,7 @@ export type HeartbeatTaskView={
 };
 
 export type HeartbeatStatus={
-  ok:boolean;running:boolean;run_id:string;course_key:string;
+  ok:boolean;running:boolean;paused:boolean;run_id:string;course_key:string;
   config:{speed:number;jobs:number;instant_complete:boolean;randomize_interval:boolean};
   task_count:number;tasks:HeartbeatTaskView[];
   heartbeats:{sent:number;server_confirmed:number};
@@ -119,8 +119,9 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   };
 
   const running=Boolean(status?.running);
+  const paused=Boolean(status?.paused);
   const tasks=status?.tasks||[];
-  const canControl=Boolean(status?.queue_controls?.pause);
+  const controls=status?.queue_controls;
 
   return <section className="sf-platform-settings-view" aria-label="学习通本地心跳任务">
     <p className="sf-hint">
@@ -155,16 +156,16 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
 
     <div className="sf-actions">
       <button type="button" disabled={busy||!desktop||running} onClick={()=>void control("start")}>开始</button>
-      <button type="button" disabled={busy||!desktop||!canControl||!running} onClick={()=>void control("pause")}>暂停</button>
-      <button type="button" disabled={busy||!desktop||!canControl||!running} onClick={()=>void control("resume")}>继续</button>
-      <button type="button" disabled={busy||!desktop||!canControl} onClick={()=>void control("stop")}>停止</button>
+      <button type="button" disabled={busy||!desktop||!controls?.pause} onClick={()=>void control("pause")}>暂停</button>
+      <button type="button" disabled={busy||!desktop||!controls?.resume} onClick={()=>void control("resume")}>继续</button>
+      <button type="button" disabled={busy||!desktop||!controls?.stop} onClick={()=>void control("stop")}>停止</button>
       <button type="button" disabled={busy} onClick={()=>void refresh()}>刷新</button>
     </div>
 
     {message?<p className="sf-message">{message}</p>:null}
 
     <dl className="sf-stat-grid">
-      <div><dt>运行状态</dt><dd>{running?"运行中":"空闲"}</dd></div>
+      <div><dt>运行状态</dt><dd>{running?(paused?"已暂停":"运行中"):"空闲"}</dd></div>
       <div><dt>本地已申报</dt><dd>{status?.heartbeats.sent??0}</dd></div>
       <div><dt>服务端确认</dt><dd>{status?.heartbeats.server_confirmed??0}</dd></div>
       <div><dt>任务数</dt><dd>{status?.task_count??0}</dd></div>
