@@ -363,6 +363,10 @@ class FabricatedStateStore:
             return {}
 
     @staticmethod
+    def _safe_count(value: Any) -> int:
+        return value if type(value) is int and 0 <= value <= 1_000_000 else 0
+
+    @staticmethod
     def _safe_snapshot(record: Any) -> dict[str, Any] | None:
         """Persist only local counters; reject credentials, raw errors and metadata.
 
@@ -373,8 +377,6 @@ class FabricatedStateStore:
             return None
         def safe_id(value: Any) -> str:
             return value if isinstance(value, str) and _ID_RE.fullmatch(value) else ""
-        def safe_count(value: Any) -> int:
-            return value if type(value) is int and 0 <= value <= 1_000_000 else 0
         phase = record.get("phase")
         if phase not in ("idle", "queued", "running", "paused", "stopping",
                          "finished_locally", "failed", "stopped"):
@@ -388,7 +390,7 @@ class FabricatedStateStore:
                         or not isinstance(row, dict)):
                     continue
                 tasks[resource_id] = {
-                    key: safe_count(row.get(key))
+                    key: FabricatedStateStore._safe_count(row.get(key))
                     for key in ("generated", "sent", "accepted", "confirmed")
                 }
         return {
@@ -398,44 +400,54 @@ class FabricatedStateStore:
             "tasks": tasks,
         }
 
-    def sanitize_existing(self) -> bool:
-        """Scrub legacy local archives without starting or resuming any run.
+    @classmethod
+    def _sanitized_entries(cls, entries: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+        """One allowlist for save, delete and legacy migration."""
+        clean: dict[str, dict[str, Any]] = {}
+        for run_id, record in entries.items():
+            if not isinstance(run_id, str) or not _ID_RE.fullmatch(run_id):
+                continue
+            safe = cls._safe_snapshot(record)
+            if safe is not None:
+                clean[run_id] = safe
+        return clean
 
-        Returns whether a pre-existing JSON file required sanitization.
-        Corrupt/unparseable files are left untouched rather than destroyed.
+    def _write_atomic(self, entries: Mapping[str, Any]) -> None:
+        """Same durable, credential-free write path for every archive mutation."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps(entries, ensure_ascii=False, separators=(",", ":"))
+        fd, tmp = tempfile.mkstemp(prefix=".ucampus-", dir=str(self.path.parent))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp, self.path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+
+    def sanitize_existing(self) -> bool:
+        """Redact legacy local archives without starting or replaying network events.
+
+        Unparseable files remain untouched, rather than being destroyed.
         """
         with self._lock:
             if not self.path.exists():
                 return False
             try:
-                raw = self.path.read_text(encoding="utf-8")
-                previous = json.loads(raw)
-                if not isinstance(previous, dict):
-                    return False
+                previous = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 return False
-            clean = {
-                key: sanitized
-                for key, value in previous.items()
-                if isinstance(key, str) and _ID_RE.fullmatch(key)
-                for sanitized in (self._safe_snapshot(value),)
-                if sanitized is not None
-            }
+            if not isinstance(previous, dict):
+                return False
+            clean = self._sanitized_entries(previous)
             if previous == clean:
                 return False
-            fd, tmp = tempfile.mkstemp(prefix=".ucampus-", dir=str(self.path.parent))
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump(clean, handle, ensure_ascii=False, separators=(",", ":"))
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(tmp, self.path)
-            except BaseException:
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-                raise
+            self._write_atomic(clean)
             return True
 
     def save(self, run_id: str, record: Mapping[str, Any]) -> None:
@@ -443,30 +455,12 @@ class FabricatedStateStore:
         if not isinstance(record, dict):
             raise ValueError("UCAMPUS_INVALID_HISTORY_RECORD")
         with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            # Scrub legacy entries as well when rewriting the archive.
-            data = {
-                key: sanitized
-                for key, value in self._read().items()
-                if isinstance(key, str) and _ID_RE.fullmatch(key)
-                for sanitized in (self._safe_snapshot(value),)
-                if sanitized is not None
-            }
-            data[run_id] = self._safe_snapshot(record)
-            payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-            fd, tmp = tempfile.mkstemp(prefix=".ucampus-", dir=str(self.path.parent))
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    handle.write(payload)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(tmp, self.path)
-            except BaseException:
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-                raise
+            data = self._sanitized_entries(self._read())
+            safe = self._safe_snapshot(record)
+            if safe is None:
+                raise ValueError("UCAMPUS_INVALID_HISTORY_RECORD")
+            data[run_id] = safe
+            self._write_atomic(data)
 
     def load(self, run_id: str) -> dict[str, Any] | None:
         _identifier(run_id)
@@ -479,8 +473,6 @@ class FabricatedStateStore:
         _identifier(course_id)
         if type(limit) is not int or not 1 <= limit <= 10:
             raise ValueError("UCAMPUS_INVALID_HISTORY_LIMIT")
-        def count(value: Any) -> int:
-            return value if type(value) is int and 0 <= value <= 1_000_000 else 0
         with self._lock:
             results: list[dict[str, Any]] = []
             for run_id, record in reversed(list(self._read().items())):
@@ -502,9 +494,9 @@ class FabricatedStateStore:
                     "unit_id": unit_id if isinstance(unit_id, str) and
                         _ID_RE.fullmatch(unit_id) else "",
                     "phase": phase, "resources": len(rows),
-                    "generated": sum(count(row.get("generated")) for row in rows),
-                    "sent": sum(count(row.get("sent")) for row in rows),
-                    "server_readback_passed": sum(count(row.get("confirmed")) for row in rows),
+                    "generated": sum(self._safe_count(row.get("generated")) for row in rows),
+                    "sent": sum(self._safe_count(row.get("sent")) for row in rows),
+                    "server_readback_passed": sum(self._safe_count(row.get("confirmed")) for row in rows),
                     "resume_available": False,
                     "progress_causality": "unverified",
                 })
@@ -515,24 +507,6 @@ class FabricatedStateStore:
     def clear(self, run_id: str) -> None:
         _identifier(run_id)
         with self._lock:
-            # Removing one entry also scrubs any legacy sensitive fields.
-            data = {
-                key: sanitized
-                for key, value in self._read().items()
-                if isinstance(key, str) and _ID_RE.fullmatch(key)
-                for sanitized in (self._safe_snapshot(value),)
-                if sanitized is not None
-            }
+            data = self._sanitized_entries(self._read())
             if data.pop(run_id, None) is not None and self.path.exists():
-                payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-                fd, tmp = tempfile.mkstemp(prefix=".ucampus-", dir=str(self.path.parent))
-                try:
-                    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                        handle.write(payload)
-                    os.replace(tmp, self.path)
-                except BaseException:
-                    try:
-                        os.unlink(tmp)
-                    except OSError:
-                        pass
-                    raise
+                self._write_atomic(data)
