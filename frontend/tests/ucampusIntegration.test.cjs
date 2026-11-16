@@ -27,3 +27,14 @@ test("U校园 reads only supported task and server status",()=>{
   assert.doesNotMatch(login,/localStorage\.(?:getItem|setItem)/);
   assert.doesNotMatch(login,/demoCourse|fakeCourse/);
 });
+
+test("U校园 local heartbeat is independent of official player",()=>{
+  const app=read("App.tsx");
+  const panel=read("components/UCampusHeartbeatPanel.tsx");
+  assert.ok(app.includes("<UCampusHeartbeatPanel course={course} desktop={desktop}/>"));
+  assert.ok(panel.includes('operation:"ucampus.heartbeat.start"'));
+  assert.match(panel,/本地已生成/);
+  assert.match(panel,/实际发送/);
+  assert.match(panel,/平台确认/);
+  assert.doesNotMatch(panel,/ZhidaoOfficialPlayerPanel|LegacyPlaybackPanel/);
+});

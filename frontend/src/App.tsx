@@ -10,6 +10,7 @@ import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} f
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
 import {UCampusLoginPanel} from "./components/UCampusLoginPanel";
 import {UCampusCourseDetailPanel} from "./components/UCampusCourseDetailPanel";
+import {UCampusHeartbeatPanel} from "./components/UCampusHeartbeatPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -769,7 +770,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="ucampus"?<>
-          <p className="sf-muted">U校园课程、单元和任务读取已接入实验性接口；本地心跳调度内核已实现，但播放器观测和 U校园发送协议尚未验证。这里不会把本机运行记录当作平台已完成。</p>
+          <UCampusHeartbeatPanel course={course} desktop={desktop}/>
         </>:course.platform==="xuexitong"?<>
           <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
