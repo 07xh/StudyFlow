@@ -36,8 +36,6 @@
 .sf-settings-menu{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sf-settings-menu button{border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:12px;color:var(--text);background:var(--panel);cursor:pointer}
 .sf-settings-menu button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent-text);background:var(--soft-accent)}
-.sf-settings-modal-body .sf-platform-settings-heading{margin:0;padding:0}
-.sf-settings-modal-body .sf-platform-settings-heading p{margin:0}
 .sf-settings-modal-body .sf-platform-settings-view>.sf-fold{margin:8px 0}
 .sf-settings-modal-body .sf-inline-settings,.sf-settings-modal-body .legacy-playback-panel{margin:0}
 .sf-shell .sf-settings-modal-body .sf-zd-progress-grid>label{min-height:0;padding:12px}
