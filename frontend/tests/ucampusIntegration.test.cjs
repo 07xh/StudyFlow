@@ -101,7 +101,7 @@ test("U校园 local exercise shows event progress without claiming watched progr
   assert.match(panel,/localTotal=.*targetPerResource/);
   assert.match(panel,/与视频播放、平台学时或课程完成状态无关/);
   assert.match(panel,/aria-label="本地模拟事件进度"/);
-  assert.match(panel,/task\.generated\/targetPerResource/);
+  assert.match(panel,/\{task\.generated\}\/\{targetPerResource\}/);
   assert.match(bridge,/pulses_per_resource:number/);
   assert.doesNotMatch(panel,/ucampus\.fabricated\.start/);
 });
