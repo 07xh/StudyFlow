@@ -64,3 +64,14 @@ test("U校园 compares two real server snapshots, never local tick count",()=>{
   assert.match(panel,/已记录本次服务器状态为基准/);
   assert.match(panel,/不能推断由本地心跳引起/);
 });
+
+
+test("U校园 separates local training from unverified synthetic write status",()=>{
+  const local=read("components/UCampusHeartbeatPanel.tsx");
+  const synthetic=read("components/UCampusFabricatedPanel.tsx");
+  assert.match(local,/本地心跳练习模式/);
+  assert.match(local,/仅在本机生成 · 不上传/);
+  assert.match(synthetic,/实验性虚构事件模块/);
+  assert.match(synthetic,/回读已通过（归因未知）/);
+  assert.match(synthetic,/不证明本次事件造成该结果/);
+});

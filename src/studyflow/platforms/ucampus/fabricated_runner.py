@@ -156,10 +156,12 @@ class FabricatedRunner:
                     if row["state"] == "running":
                         row["state"] = "stopped" if self._stop.is_set() else "reported"
             self._persist()
-        except Exception as exc:
+        except Exception:
             failed = True
             with self._lock:
-                self._last_error = f"UCAMPUS_RUN_FAILED:{type(exc).__name__}:{exc}"[:200]
+                # Exception bodies may contain URLs, headers, or credentials.
+                # The UI and persisted state must only receive a stable code.
+                self._last_error = "UCAMPUS_RUN_FAILED"
         finally:
             if transport is not None:
                 transport.close()
@@ -244,4 +246,8 @@ class FabricatedRunner:
                 "sender_connected": bool(own and self._transport is not None
                                          and self._transport.connected),
                 "last_error": self._last_error if own else "",
+                # Readback can observe a pass flag, but cannot attribute
+                # that change to this particular outgoing request.
+                "progress_causality": "unverified",
+                "source_kind": "synthetic_activity",
             }

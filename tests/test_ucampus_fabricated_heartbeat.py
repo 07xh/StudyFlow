@@ -419,3 +419,23 @@ class BridgeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_uncaught_transport_exception_never_leaks_message_to_status():
+    class SecretFailingTransport:
+        connected = False
+        def open(self):
+            pass
+        def send_result(self, pulse, target=None):
+            raise RuntimeError("Cookie=PRIVATE_SECRET Authorization:Bearer PRIVATE_SECRET")
+        def close(self):
+            pass
+    runner = FabricatedRunner(transport_factory=SecretFailingTransport)
+    runner.start("course-v2:100", "u1", [target()], pulses=1,
+                 heartbeat_interval=0.01)
+    assert runner.wait(3)
+    state = runner.status("course-v2:100")
+    assert state["last_error"] == "UCAMPUS_RUN_FAILED"
+    assert "PRIVATE_SECRET" not in repr(state)
+    assert state["progress_causality"] == "unverified"
+    assert state["source_kind"] == "synthetic_activity"

@@ -92,7 +92,8 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
     finally{setBusy(false);}
   }
 
-  return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="U校园本地心跳">
+  return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="U校园本地心跳练习模式">
+    <div className="sf-xxt-section-heading">本地心跳练习模式 <span>仅在本机生成 · 不上传</span></div>
     <p className="sf-hint">使用学序<strong>本地自定义心跳生成器</strong>，不依赖官方播放器。
       目前是本机运行模式：U校园发送协议未验收，不会向平台发送，也不会显示已完成。</p>
     <div className="sf-settings-row">

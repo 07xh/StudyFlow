@@ -70,11 +70,12 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
   }
 
   return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="U校园虚构心跳刷完成">
-    <div className="sf-xxt-section-heading">虚构心跳刷完成 <span>本地生成 · 无需观看</span></div>
+    <div className="sf-xxt-section-heading">实验性虚构事件模块 <span>模拟记录 · 非正式验收</span></div>
+    <p className="sf-muted">本模块独立于下方“本地练习模式”。它包含远端写入请求，且未通过 U校园5.0 真实账号验收；请勿把模拟进度视为实际学习记录。</p>
     <p className="sf-hint">不打开官方播放器、不解码视频：本机按虚拟播放位置递增生成心跳，
       中间包走本地 Socket.IO 活动事件，末包按上游 <code>submitType=2</code> 申报完成，
       再只读回读 <code>course_progress</code> 的 <code>pass</code> 标记确认。
-      <strong>「已申报」只代表服务端返回 code=0，「平台确认完成」才代表回读到通过。</strong></p>
+      <strong>“已申报”只是响应分类；“回读已通过”仅表示读取时服务器状态，不证明本次事件造成该结果。</strong></p>
     <div className="sf-settings-row">
       <label>真实课程单元
         <select value={unitId} onChange={e=>setUnitId(e.target.value)}
@@ -127,7 +128,7 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
       <div><dt>本地生成</dt><dd>{status?.generated??0}</dd></div>
       <div><dt>实际发送</dt><dd>{status?.sent??0}</dd></div>
       <div><dt>已申报（code=0）</dt><dd>{status?.transport_accepted??0}</dd></div>
-      <div><dt>平台确认完成</dt><dd>{status?.server_confirmed??0}</dd></div>
+      <div><dt>回读已通过（归因未知）</dt><dd>{status?.server_confirmed??0}</dd></div>
       <div><dt>通道已连接</dt><dd>{status?.sender_connected?"是":"否"}</dd></div>
     </dl>
     <div className="sf-xxt-section-heading">资源记录 <span>{status?.tasks.length??0} 项</span></div>
