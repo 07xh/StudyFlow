@@ -22,10 +22,6 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "xuexitong.settings.save"; settings: XuexitongSettings}
   | {id: string; version: 1; operation: "xuexitong.chapter.tasks"; course_id: string; chapter_id: string}
   | {id: string; version: 1; operation: "xuexitong.chapters.list"; course_id: string}
-  | {id: string; version: 1; operation: "xuexitong.heartbeat.start"; course_id: string; speed?: number; jobs?: number; instant_complete?: boolean; settings?: XuexitongSettings}
-  | {id: string; version: 1; operation: "xuexitong.heartbeat.status"; course_id?: string}
-  | {id: string; version: 1; operation: "xuexitong.heartbeat.logs"; limit?: number}
-  | {id: string; version: 1; operation: "xuexitong.heartbeat.pause" | "xuexitong.heartbeat.resume" | "xuexitong.heartbeat.stop"; run_id?: string}
   | {id: string; version: 1; operation: "videos.list"; platform: "yuketang"; course_id?: string}
   | {id: string; version: 1; operation: "yuketang.course.detail"; course_id: string; offset: number; limit: number}
   | {id: string; version: 1; operation: "yuketang.configure"; configuration: Config}
@@ -47,9 +43,38 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
   | {id: string; version: 1; operation: "studyflow.consent.status" | "studyflow.consent.accept"}
-  | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"};
+  | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.start";course_id:string;
+     speed?:number;jobs?:number;instant_complete?:boolean;settings?:XuexitongSettings;
+     heartbeat_interval_video_seconds?:number;max_wall_seconds?:number;
+     max_unconfirmed_rounds?:number;completion_rounds?:number;max_ticks?:number;
+     dtype?:"Video"|"Audio"}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.status"}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.logs";limit?:number}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.pause";run_id?:string}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.resume";run_id?:string}
+  | {id:string;version:1;operation:"xuexitong.heartbeat.stop";run_id?:string};
 
 export type XuexitongSettings = {playback_speed:number;concurrency:number;skip_completed:boolean;verify_after_run:boolean};
+export type HeartbeatTaskView={
+  task_id:string;run_id:string;course_key:string;chapter:string;title:string;
+  state:string;playing_time:number;duration:number;speed:number;
+  last_send_state:string;sent_count:number;server_confirmed:boolean;
+  server_play_time:number;end_reason:string;confirmed:boolean;resumable:boolean;
+};
+export type HeartbeatStatus={
+  ok:boolean;running:boolean;run_id:string;course_key:string;
+  config:{speed:number;jobs:number;instant_complete:boolean;randomize_interval:boolean};
+  task_count:number;tasks:HeartbeatTaskView[];
+  heartbeats:{sent:number;server_confirmed:number};
+  queue_controls:{pause:boolean;resume:boolean;stop:boolean};
+};
+export type HeartbeatLog={event:string;at:number;[key:string]:unknown};
+export type HeartbeatControlResult={ok:boolean;action?:string;run_id?:string;error?:string};
+export type HeartbeatStartResult={
+  ok:boolean;started:boolean;run_id:string;course_key:string;
+  task_count:number;chapter_count:number;speed:number;jobs:number;instant_complete:boolean;
+};
 export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean|null};
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
 export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"};
@@ -135,7 +160,12 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
                              "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHIDAO_DIAGNOSE_FAILED",
-                             "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED"]);
+                             "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED",
+                             "XUEXITONG_COURSE_REQUIRED", "XUEXITONG_TASK_ALREADY_RUNNING",
+                             "XUEXITONG_INVALID_PARAMETER", "XUEXITONG_INVALID_TARGET",
+                             "XUEXITONG_SESSION_MISSING", "XUEXITONG_INTERNAL_ERROR",
+                             "XUEXITONG_UNKNOWN_OPERATION", "XUEXITONG_TASK_NOT_RUNNING",
+                             "XUEXITONG_RUN_ID_MISMATCH", "XUEXITONG_NO_TARGET_FOR_DTYPE"]);
     throw new Error(allowed.has(result.error) ? result.error : "PLATFORM_NOT_READY");
   }
   return result.data;
@@ -277,6 +307,16 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_DOCUMENT": return "请求的说明文档不存在。";
     case "DOCUMENT_UNAVAILABLE": return "说明文档暂不可读取。";
     case "CONSENT_STORAGE_FAILED": return "首次使用声明状态无法保存，请检查本机应用数据目录。";
+    case "XUEXITONG_COURSE_REQUIRED": return "请先选择课程再启动本地心跳任务。";
+    case "XUEXITONG_TASK_ALREADY_RUNNING": return "已有心跳任务在运行，请先停止。";
+    case "XUEXITONG_INVALID_PARAMETER": return "心跳参数无效，检查速度与并发范围。";
+    case "XUEXITONG_INVALID_TARGET": return "任务点信息不完整，请重新读取章节任务。";
+    case "XUEXITONG_SESSION_MISSING": return "学习通会话未配置，请先登录。";
+    case "XUEXITONG_TASK_NOT_RUNNING": return "当前没有运行中的心跳任务。";
+    case "XUEXITONG_RUN_ID_MISMATCH": return "运行 ID 不匹配，请刷新状态后重试。";
+    case "XUEXITONG_INTERNAL_ERROR": return "本地心跳服务内部错误，请查看运行日志。";
+    case "XUEXITONG_UNKNOWN_OPERATION": return "不支持的心跳操作。";
+    case "XUEXITONG_NO_TARGET_FOR_DTYPE": return "所选任务类型下没有可运行的任务点。";
     case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
     default: return "本机服务调用失败，请检查运行环境。";
   }

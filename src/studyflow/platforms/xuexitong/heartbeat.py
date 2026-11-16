@@ -97,6 +97,7 @@ class VideoTarget:
     att_duration: int = 0
     userid: str = ""
     fid: str = "1024"
+    dtype: str = "Video"
 
     @property
     def task_id(self) -> str:
@@ -124,6 +125,7 @@ class VideoTarget:
             att_duration_enc=getattr(task, "att_duration_enc", ""),
             userid=userid,
             fid=fid,
+            dtype=str(getattr(task, "dtype", "Video")),
         )
 
     def validate(self) -> None:
@@ -133,6 +135,8 @@ class VideoTarget:
         )
         if not all(isinstance(v, str) and v for v in required):
             raise ValueError("INCOMPLETE_XUEXITONG_TARGET")
+        if self.dtype not in ("Video", "Audio"):
+            raise ValueError("INVALID_XUEXITONG_DTYPE")
         if self.duration <= 0:
             raise ValueError("INVALID_XUEXITONG_DURATION")
         if not 0 <= self.initial_seconds <= self.duration:

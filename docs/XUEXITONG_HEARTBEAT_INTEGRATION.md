@@ -253,7 +253,47 @@ cargo test --manifest-path src-tauri/Cargo.toml
   课程总进度与章节任务状态是另一套只读口径。
 - `sent`（本地请求已发出）与 `server_confirmed`（服务端确认）严格分离；
   UI 不得把 `reported` 显示成已完成。
-- 音频任务已能被 `taskparse.iter_media_cards()` 识别，但 `adapter.list_video_tasks()`
-  仍只返回视频任务；音频心跳需要 `dtype="Audio"` 单独分流，尚未接线。
+- 音频任务已按 `dtype="Audio"` 分流：卡解析 → 目标 → 发包 → UI 筛选全链路已接通；
+  音频与视频共用 `/ananas/status` 取 `dtoken` / `duration`，真实账号下的服务端行为未验证。
 - 上游 `Samueli924/chaoxing` 的验证码 OCR / 自动重登录 / tqdm 进度条**没有复用**；
   403 只做只读 status 刷新 + rt 回退，验证码与会话失效直接判终态。
+
+---
+
+## 7. 合入状态（2026-11-16）
+
+四处增量已直接合入 `feat/xuexitong-unified-platform-20261116`，不再需要手工复制补丁：
+
+| 文件 | 合入内容 |
+| --- | --- |
+| `src/studyflow/services/bridge.py` | import 心跳桥 + `dispatch()` 内 6 个 operation 路由到长驻服务单例 |
+| `src-tauri/src/lib.rs` | `validate()` 白名单（含 `dtype` 限定）、`bridge_request()` 长驻通道判定、退出前发 `stop` 刷盘 |
+| `frontend/src/bridge.ts` | 心跳视图类型 + `BridgeRequest` 6 个成员 + 公开错误码与中文提示 |
+| `frontend/src/components/XuexitongPanels.tsx` | 课程详情下方挂载 `XuexitongHeartbeatPanel` |
+| `frontend/src/components/XuexitongHeartbeatPanel.tsx` | 任务面板（新增），含速度 / 并发 / 首包申报 / 任务类型筛选 |
+
+### 视频与音频 dtype 分流
+
+`taskparse.iter_media_cards()` 识别的音频卡不再被丢弃：`adapter.VideoTask` 与
+`heartbeat.VideoTarget` 携带 `dtype`，`runner` 发包按目标自身 `dtype` 选择
+`VIDEO_HEADERS` / `AUDIO_HEADERS` 与 `enc` 参数；`service.start()` 在显式传入
+`dtype` 时按类型过滤任务，无匹配返回 `XUEXITONG_NO_TARGET_FOR_DTYPE`。
+UI 的「任务类型」下拉提供「视频 + 音频 / 仅视频 / 仅音频」，默认全跑。
+
+### 验证
+
+```text
+Ran 58 tests in 0.18s — OK（连续 3 次）
+COMPILE_OK
+Python / Rust / TypeScript 三方 operation 集合一致：6 / 6 / 6
+```
+
+新增 `tests/test_xuexitong_audio_dtype.py`：卡解析双类型、目标 dtype 继承、
+音频 headers、runner 按目标发包、服务按 dtype 过滤与空集合错误码。
+
+### 仍未执行
+
+- 真实学习通账号发包、`isPassed` 实际返回、`dtoken` 有效期与 403 风控阈值。
+- `cargo test` / `npm run build`：本机没有 Rust 与 TypeScript 工具链。
+- Windows NSIS 安装包内 Sidecar 依赖（`requests` / `bs4`）与心跳模块联调。
+

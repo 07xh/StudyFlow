@@ -288,9 +288,9 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
         </div>}
       </article>)}
     </div>
-    <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
     <p className="sf-muted sf-xxt-evidence-note">
       章节与任务状态来自学习通页面返回的标记，不等于官方课程总进度。
     </p>
+    <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
   </section>;
 }

@@ -42,6 +42,7 @@ class VideoTask:
     rt: float
     face_enc: str = ""
     att_duration_enc: str = ""
+    dtype: str = "Video"
 
 
 def _session() -> requests.Session:
@@ -274,9 +275,9 @@ class XuexitongAdapter:
                     if not payload:
                         continue
                     for card in iter_media_cards(payload):
-                        # 音频任务需要 Audio dtype，单独分流；此处只处理视频心跳
-                        if card["type"] != "video":
-                            continue
+                        # 视频 / 音频共用 /ananas/status 取 dtoken 与 duration；
+                        # dtype 随任务卡下传，发包时按目标自身类型选择 headers。
+                        dtype = "Audio" if card["type"] == "audio" else "Video"
                         object_id = card["object_id"]
                         job_id = card["job_id"]
                         video_response = session.get(STATUS_URL + quote(object_id, safe=""),
@@ -304,6 +305,7 @@ class XuexitongAdapter:
                             dtoken=dtoken, rt=card["rt"],
                             face_enc=card["face_enc"],
                             att_duration_enc=card["att_duration_enc"],
+                            dtype=dtype,
                         ))
             return results
         finally:

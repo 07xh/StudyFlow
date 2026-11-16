@@ -40,6 +40,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const [speed,setSpeed]=useState(1);
   const [jobs,setJobs]=useState(2);
   const [instant,setInstant]=useState(true);
+  const [mediaType,setMediaType]=useState<"all"|"Video"|"Audio">("all");
   const [status,setStatus]=useState<HeartbeatStatus|null>(null);
   const [logs,setLogs]=useState<HeartbeatLog[]>([]);
   const [message,setMessage]=useState("");
@@ -71,16 +72,18 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
         await request<{ok:boolean;run_id:string}>({
           operation:"xuexitong.heartbeat.start",course_id:course.course_id,
           speed,jobs,instant_complete:instant,
+          ...(mediaType!=="all"?{dtype:mediaType}:{}),
         });
         setMessage("本地心跳任务已启动。");
       }else{
-        const operation=action==="pause"?"xuexitong.heartbeat.pause"
-          :action==="resume"?"xuexitong.heartbeat.resume"
-          :"xuexitong.heartbeat.stop";
-        await request<{ok:boolean}>({
-          operation,
-          ...(status?.run_id?{run_id:status.run_id}:{}),
-        });
+        const runId=status?.run_id?{run_id:status.run_id}:{};
+        if(action==="pause"){
+          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.pause",...runId});
+        }else if(action==="resume"){
+          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.resume",...runId});
+        }else{
+          await request<{ok:boolean}>({operation:"xuexitong.heartbeat.stop",...runId});
+        }
       }
       await refresh();
     }catch(error){setMessage(friendlyBridgeError(error));}
@@ -96,6 +99,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     <p className="sf-hint">
       心跳包由本机生成并发送，不依赖网页播放器。
       「本地已申报」只表示请求发出，「服务端确认」表示平台返回任务通过标记，两者分开统计。
+      视频与音频任务按 dtype 分别构造心跳包，可单独筛选运行。
     </p>
 
     <div className="sf-settings-row">
@@ -108,6 +112,14 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
         <input type="number" min={1} max={4} step={1} value={jobs}
           disabled={running||!desktop}
           onChange={event=>setJobs(Number(event.target.value))}/>
+      </label>
+      <label>任务类型
+        <select value={mediaType} disabled={running||!desktop}
+          onChange={event=>setMediaType(event.target.value as "all"|"Video"|"Audio")}>
+          <option value="all">视频 + 音频</option>
+          <option value="Video">仅视频</option>
+          <option value="Audio">仅音频</option>
+        </select>
       </label>
       <label className="sf-check">
         <input type="checkbox" checked={instant} disabled={running||!desktop}
