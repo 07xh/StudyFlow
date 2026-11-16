@@ -129,3 +129,23 @@ def test_optional_content_auth_is_bounded_and_never_required_for_catalog():
                   {"annotator_token": "x" * 4097}, {"school_id": "832O"}):
         with pytest.raises(ValueError):
             UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=local", **extra})
+
+
+def test_empty_catalog_is_not_reported_as_authenticated(monkeypatch):
+    config = UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=secret"})
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.credentials.load", lambda: config)
+    monkeypatch.setattr(UCampusAdapter, "list_courses", lambda self: [])
+    result = UCampusAdapter().connection_info()
+    assert result.platform == Platform.UCAMPUS
+    assert result.connected is False
+    assert "空列表" in result.message
+
+
+def test_connection_status_preserves_safe_known_catalog_failure(monkeypatch):
+    config = UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=secret"})
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.credentials.load", lambda: config)
+    def expired(self):
+        raise UCampusCatalogError("UCAMPUS_SESSION_EXPIRED")
+    monkeypatch.setattr(UCampusAdapter, "list_courses", expired)
+    status = UCampusAdapter().connection_info()
+    assert not status.connected and "会话已失效" in status.message
