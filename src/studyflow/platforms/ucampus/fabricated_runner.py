@@ -155,7 +155,6 @@ class FabricatedRunner:
                     row = self._tasks[target.resource_id]
                     if row["state"] == "running":
                         row["state"] = "stopped" if self._stop.is_set() else "reported"
-            self._persist()
         except Exception:
             failed = True
             with self._lock:
@@ -177,6 +176,14 @@ class FabricatedRunner:
                 self._phase = ("failed" if failed else
                                "stopped" if self._stop.is_set() else
                                "finished_locally")
+            # Persist the terminal phase (not the stale 'running' snapshot).
+            # Snapshot I/O failures must not leak path or token information.
+            try:
+                self._persist()
+            except Exception:
+                with self._lock:
+                    if not self._last_error:
+                        self._last_error = "UCAMPUS_LOCAL_HISTORY_UNAVAILABLE"
 
     def _resume_gate(self) -> bool:
         while not self._stop.is_set():
