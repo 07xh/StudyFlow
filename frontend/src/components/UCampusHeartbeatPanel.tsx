@@ -15,6 +15,7 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   const [socketError,setSocketError]=useState("");
   const [serverBusy,setServerBusy]=useState(false);
   const [serverProgress,setServerProgress]=useState<UCampusVerifiedProgress|null>(null);
+  const [previousProgress,setPreviousProgress]=useState<UCampusVerifiedProgress|null>(null);
   const [serverError,setServerError]=useState("");
   const courseId=course.course_id;
   const refresh=useCallback(async()=>{
@@ -26,7 +27,7 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   },[courseId]);
   useEffect(()=>{
     let live=true;
-    setUnits([]);setUnitId("");setStatus(null);setMessage("");setServerProgress(null);setServerError("");
+    setUnits([]);setUnitId("");setStatus(null);setMessage("");setServerProgress(null);setPreviousProgress(null);setServerError("");
     if(!desktop)return()=>{live=false;};
     void request<UCampusUnit[]>({operation:"ucampus.units.list",course_id:courseId})
       .then(value=>{
@@ -41,15 +42,21 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
   },[desktop,courseId,refresh]);
 
   const active=Boolean(status?.active);
+  const newlyPassed=previousProgress&&serverProgress
+    ? serverProgress.tasks.filter(task=>task.completed===true
+        && previousProgress.tasks.some(previous=>previous.id===task.id&&previous.completed===false))
+    : [];
   async function verifyServer(){
     if(!desktop||serverBusy||!unitId)return;
-    setServerBusy(true);setServerProgress(null);setServerError("");
+    setServerBusy(true);setServerError("");
+    const baseline=serverProgress;
     try{
       const result=await request<UCampusVerifiedProgress>({
         operation:"ucampus.progress.verify",course_id:courseId,unit_id:unitId
       });
       if(result.course_id!==courseId||result.unit_id!==unitId||!Array.isArray(result.tasks))
         throw Error("INVALID_IPC_RESPONSE");
+      setPreviousProgress(baseline&&baseline.unit_id===result.unit_id?baseline:null);
       setServerProgress(result);
     }catch(error){setServerError(friendlyBridgeError(error));}
     finally{setServerBusy(false);}
@@ -104,7 +111,7 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
     </div>
     <div className="sf-settings-row">
       <label>真实课程单元
-        <select value={unitId} onChange={e=>{setUnitId(e.target.value);setServerProgress(null);setServerError("");}}
+        <select value={unitId} onChange={e=>{setUnitId(e.target.value);setServerProgress(null);setPreviousProgress(null);setServerError("");}}
           disabled={!desktop||active||busy}>
           <option value="">请选择</option>
           {units.map(unit=><option key={unit.id} value={unit.id}>{unit.title||unit.id}</option>)}
@@ -142,6 +149,14 @@ export function UCampusHeartbeatPanel({course,desktop}:{course:Course;desktop:bo
       <p className="sf-muted">
         {serverProgress.verified_at} 核验 · 与本地心跳计数无关
       </p>
+      {previousProgress&&<p className="sf-muted">
+        相较上一次服务器核验：{newlyPassed.length} 项从未通过变为已通过。
+        {newlyPassed.length>0&&` 资源：${newlyPassed.map(item=>item.id).join("、")}`}
+        此变化仅代表服务器状态差异，不能推断由本地心跳引起。
+      </p>}
+      {!previousProgress&&<p className="sf-muted">
+        已记录本次服务器状态为基准，下一次核验将显示差异。
+      </p>}
     </div>}
     <dl className="sf-stat-grid">
       <div><dt>本地运行状态</dt><dd>{status?.phase||"尚未读取"}</dd></div>
