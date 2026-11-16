@@ -41,6 +41,7 @@ from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.ucampus.adapter import UCampusAdapter, UCampusCatalogError
 from studyflow.platforms.ucampus.course_progress import UCampusProgressReader, UCampusProgressError
 from studyflow.platforms.ucampus import credentials as ucampus_credentials
+from studyflow.platforms.ucampus import readonly_monitor as ucampus_monitor
 from studyflow.platforms.ucampus.sso_login import (authenticate as ucampus_authenticate,
     enrich_school_from_account as ucampus_enrich_school, UCampusLoginError)
 from studyflow.platforms.yuketang import credentials
@@ -208,6 +209,25 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": str(exc)}
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_PROGRESS_UNAVAILABLE"}
+    if operation in ("ucampus.monitor.status", "ucampus.monitor.tick", "ucampus.monitor.configure"):
+        try:
+            if operation == "ucampus.monitor.status":
+                data = ucampus_monitor.status()
+            elif operation == "ucampus.monitor.tick":
+                data = ucampus_monitor.tick()
+            else:
+                data = ucampus_monitor.configure(
+                    request.get("course_id"), request.get("unit_id"),
+                    request.get("enabled"))
+            return {"id": request_id, "ok": True, "data": data}
+        except ucampus_monitor.UCampusMonitorError as exc:
+            allowed = {"INVALID_REQUEST", "UCAMPUS_SESSION_MISSING",
+                       "UCAMPUS_MONITOR_STORAGE_FAILED"}
+            code = str(exc)
+            return {"id": request_id, "ok": False,
+                    "error": code if code in allowed else "UCAMPUS_MONITOR_UNAVAILABLE"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_MONITOR_UNAVAILABLE"}
     if operation == "ucampus.session.info":
         return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
     if operation == "ucampus.session.login":
@@ -229,6 +249,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.save(config.__dict__)
+            ucampus_monitor.configure(None, None, False)
             return {"id": request_id, "ok": True, "data": {"saved": True, "variant": "ai"}}
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
@@ -237,6 +258,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.save(request.get("configuration"))
+            ucampus_monitor.configure(None, None, False)
             return {"id": request_id, "ok": True, "data": {"saved": True}}
         except ValueError:
             return {"id": request_id, "ok": False, "error": "INVALID_UCAMPUS_CONFIG"}
@@ -247,6 +269,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.clear()
+            ucampus_monitor.configure(None, None, False)
             return {"id": request_id, "ok": True, "data": {"cleared": True}}
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
