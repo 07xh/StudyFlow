@@ -78,3 +78,30 @@ def test_rejects_unrecognized_server_format(monkeypatch):
                         lambda *args, **kwargs: Response())
     with pytest.raises(UCampusProgressError, match="UCAMPUS_PROGRESS_FORMAT_UNVERIFIED"):
         UCampusProgressReader(credentials_loader=lambda: cfg).list_units("course123")
+
+
+def test_user_owned_content_headers_are_only_sent_to_fixed_ucontent(monkeypatch):
+    original = _config()
+    cfg = UCampusConfig.from_dict({
+        "variant": "ai", "cookie": original.cookie,
+        "annotator_token": "user-owned-token", "school_id": "8320"
+    })
+    observed = []
+    class Response:
+        status_code = 200
+        is_redirect = False
+        headers = {"content-type": "application/json"}
+        content = b'{"rt":{"units":{}}}'
+        def json(self):
+            return {"rt": {"units": {}}}
+    def get(url, **kwargs):
+        observed.append((url, kwargs))
+        return Response()
+    monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get", get)
+    assert UCampusProgressReader(credentials_loader=lambda: cfg).list_units("course1") == []
+    assert len(observed) == 1
+    url, args = observed[0]
+    assert url.startswith("https://ucontent.unipus.cn/course/api/v2/course_progress/")
+    assert args["headers"]["x-annotator-auth-token"] == "user-owned-token"
+    assert args["headers"]["u-school"] == "8320"
+    assert args["allow_redirects"] is False

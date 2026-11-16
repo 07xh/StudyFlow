@@ -637,7 +637,8 @@ mod ipc_validation_tests {
             "platform":"ucampus"})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,
             "operation":"ucampus.session.configure","configuration":{
-            "variant":"ai","catalog_url":"","cookie":"sid=test","authorization":""}})).is_ok());
+            "variant":"ai","catalog_url":"","cookie":"sid=test","authorization":"",
+            "annotator_token":"local-token","school_id":"8320"}})).is_ok());
         for config in [json!({}), json!({"variant":"ai","cookie":""}),
             json!({"variant":"unknown","cookie":"sid=test"}),
             json!({"variant":"ai","cookie":"bad\nheader"})] {

@@ -117,3 +117,15 @@ def test_ai_home_empty_falls_back_to_upstream_bookshelf(monkeypatch):
 def test_classic_requires_explicit_endpoint():
     with pytest.raises(ValueError):
         UCampusConfig.from_dict({"variant": "classic", "cookie": "sid=secret"})
+
+
+def test_optional_content_auth_is_bounded_and_never_required_for_catalog():
+    cfg = UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=local",
+                                    "annotator_token": "user-provided-token", "school_id": "8320"})
+    assert cfg.annotator_token == "user-provided-token"
+    assert cfg.school_id == "8320"
+    assert UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=local"}).school_id == ""
+    for extra in ({"annotator_token": "bad\nheader"}, {"school_id": "../school"},
+                  {"annotator_token": "x" * 4097}, {"school_id": "832O"}):
+        with pytest.raises(ValueError):
+            UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=local", **extra})

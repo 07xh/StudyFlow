@@ -49,3 +49,15 @@
 - `ucampus.unit.tasks`：按上游单元级 `course_progress/{course}/{unit}/{openId}/default/` 读取 `rt.leafs`；复用 `tab_type`、`strategies.required`、`state.pass` 语义。任务标题缺失时仅显示资源 ID。
 - `openId` 仅在本机从会话 JWT 的 `openId` 声明提取，不能当作已认证凭据；会话缺失则返回 `UCAMPUS_OPEN_ID_REQUIRED`，不从别的账号猜测。
 - 真实接口需 U校园AI 登录会话和服务端认可的请求头。当前不预制完整播放器会话，也不直接生成心跳；未确认的服务器进度留空。
+
+## 可选内容接口会话头
+
+`Zzj-klwgxdz/UnipusAI` 的 `src/api/session.rs` 对 U校园AI 内容接口使用
+`u-openid`、`x-csrftoken`，以及在有值时使用的
+`x-annotator-auth-token`、`u-school`。本次只引入**用户持有的可选值**，
+在 Windows Credential Manager 中与当前会话一起保存；前端不持久化或回显这些字段。
+只向固定的 `https://ucontent.unipus.cn` 只读进度接口发出，不跟随重定向；
+未配置时不签发、推断或伪造额外授权标识。
+
+这些头是上游实现参考，学序仍未使用本人的真实账号验证成功，
+不意味着 U校园已支持本地心跳发送或学习完成状态写入。
