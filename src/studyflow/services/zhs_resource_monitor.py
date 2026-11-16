@@ -17,10 +17,10 @@ import time
 # shared courses print "playing VIDEO_ID [bar] 12.3%". The immutable vendor
 # observer recognizes the former; this adapter observes only the latter.
 _SHARED_VIDEO_PROGRESS = re.compile(
-    r"^playing\\s+([1-9][0-9]{0,19})\\s+\\[[^\\r\\n]{0,512}\\]\\s*"
-    r"(\\d{1,3}(?:\\.\\d)?)%", re.IGNORECASE,
+    r"^playing\s+([1-9][0-9]{0,19})\s+\[[^\r\n]{0,512}\]\s*"
+    r"(\d{1,3}(?:\.\d)?)%", re.IGNORECASE,
 )
-_ANSI_SGR = re.compile(r"\\x1b\\[[0-9;]*m")
+_ANSI_SGR = re.compile(r"\x1b\[[0-9;]*m")
 
 ALLOWED_KINDS = frozenset(("video", "ppt", "article", "other"))
 PRIVATE_MARKERS = ("http:", "https:", "cookie", "token", "authorization", "password", "secret", "apikey", "api_key")
