@@ -229,9 +229,11 @@ class XuexitongHeartbeatService:
             active_course = self._course_key
             run_id = self._run_id
             active_account = self._account_marker
+            queue = self._queue
         active_scope = ((course_key is None or course_key == active_course)
                         and active_account == account_marker and bool(run_id))
         running = bool(active_scope and thread is not None and thread.is_alive())
+        paused = bool(running and queue is not None and queue.paused)
         selected_course = course_key or active_course
         if active_scope:
             snapshots = self.store.list_by_run(run_id, account_marker)
@@ -241,7 +243,7 @@ class XuexitongHeartbeatService:
             snapshots = []
         tasks = [self._public_snapshot(item) for item in snapshots]
         return {
-            "ok": True, "running": running,
+            "ok": True, "running": running, "paused": paused,
             "run_id": run_id if active_scope else "",
             "course_key": selected_course,
             "config": {
@@ -255,7 +257,11 @@ class XuexitongHeartbeatService:
                 "sent": sum(item.sent_count for item in snapshots),
                 "server_confirmed": sum(1 for item in snapshots if item.server_confirmed),
             },
-            "queue_controls": {"pause": running, "resume": running, "stop": running},
+            "queue_controls": {
+                "pause": running and not paused,
+                "resume": paused,
+                "stop": running,
+            },
         }
 
     def pause(self, run_id: str | None = None) -> dict[str, Any]:
