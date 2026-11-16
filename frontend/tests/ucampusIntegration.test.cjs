@@ -105,3 +105,18 @@ test("U校园 local exercise shows event progress without claiming watched progr
   assert.match(bridge,/pulses_per_resource:number/);
   assert.doesNotMatch(panel,/ucampus\.fabricated\.start/);
 });
+
+test("U校园 read-only UI keeps unit selection and account copy precise",()=>{
+  const detail=read("components/UCampusCourseDetailPanel.tsx");
+  const login=read("components/UCampusLoginPanel.tsx");
+  assert.doesNotMatch(detail,/const selected=units\.find/);
+  assert.match(detail,/unit\.title\|\|"单元 "/);
+  assert.match(detail,/const normalizedSearch=search\.trim\(\)\.toLowerCase\(\)/);
+  assert.doesNotMatch(detail,/search\.toLowerCase\(\)/);
+  assert.match(login,/const clearSensitiveInputs=\(\)=>/);
+  assert.equal((login.match(/clearSensitiveInputs\(\);/g)||[]).length,2);
+  assert.match(login,/>保存会话<\/button>/);
+  assert.match(login,/保存成功不表示已登录或接口可用/);
+  assert.match(login,/服务器进度只读核验已接入/);
+  assert.doesNotMatch(login,/暂不支持课程学习运行与服务器进度/);
+});
