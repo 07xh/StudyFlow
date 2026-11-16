@@ -341,7 +341,7 @@ def classify_progress_leaf(leaf: Any) -> bool | None:
 
 
 class FabricatedStateStore:
-    """Atomic JSON persistence for resumable fabricated runs.
+    """Atomic local-only snapshots for historical inspection, never replay.
 
     Never stores cookies, tokens, JWTs or annotator secrets; only ids and
     counters. Writes go through a same-directory temp file + os.replace().

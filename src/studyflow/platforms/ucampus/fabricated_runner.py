@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import math
 import threading
-import time
 import uuid
 from typing import Any, Callable
 
@@ -25,15 +24,13 @@ class FabricatedRunError(RuntimeError):
 class FabricatedRunner:
     def __init__(self, *, interval: float = fh.DEFAULT_HEARTBEAT_INTERVAL,
                  transport_factory: Callable[[], FabricatedTransport] | None = None,
-                 state_store: fh.FabricatedStateStore | None = None,
-                 clock: Callable[[], float] = time.monotonic):
+                 state_store: fh.FabricatedStateStore | None = None):
         if (not isinstance(interval, (int, float)) or not math.isfinite(interval)
                 or not 0.01 <= interval <= 3600):
             raise ValueError("UCAMPUS_INVALID_FABRICATED_PARAMETER")
         self._interval = float(interval)
         self._transport_factory = transport_factory or FabricatedTransport
         self._store = state_store
-        self._clock = clock
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -45,7 +42,6 @@ class FabricatedRunner:
         self._paused = False
         self._tasks: dict[str, dict[str, Any]] = {}
         self._transport: FabricatedTransport | None = None
-        self._started_at = 0.0
         self._last_error = ""
 
     def start(self, course_id: str, unit_id: str,
@@ -77,7 +73,6 @@ class FabricatedRunner:
             self._phase = "running"
             self._paused = False
             self._last_error = ""
-            self._started_at = self._clock()
             self._tasks = {target.resource_id: {
                 "resource_id": target.resource_id, "title": target.title,
                 "dtype": target.dtype,

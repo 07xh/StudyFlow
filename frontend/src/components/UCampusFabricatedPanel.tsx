@@ -3,7 +3,7 @@ import type {Course} from "../types";
 import {request,friendlyBridgeError,type UCampusFabricatedStatus,type UCampusUnit,type UCampusFabricatedHistory} from "../bridge";
 import "./XuexitongHeartbeatPanel.css";
 
-/** 虚构心跳刷完成：不打开官方播放器，不解码视频，虚拟播放位置由本机生成。 */
+/** Experimental activity panel; remote status must not imply causality or actual viewing. */
 export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:boolean}){
   const [units,setUnits]=useState<UCampusUnit[]>([]);
   const [unitId,setUnitId]=useState("");
@@ -86,7 +86,7 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
 
   return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="U校园虚构心跳刷完成">
     <div className="sf-xxt-section-heading">实验性虚构事件模块 <span>模拟记录 · 非正式验收</span></div>
-    <p className="sf-muted">本模块独立于下方“本地练习模式”。它包含远端写入请求，且未通过 U校园5.0 真实账号验收；请勿把模拟进度视为实际学习记录。</p>
+    <p className="sf-muted">本模块独立于上方“本地练习模式”。它包含远端写入请求，且未通过 U校园5.0 真实账号验收；请勿把模拟进度视为实际学习记录。</p>
     <p className="sf-hint">不打开官方播放器、不解码视频：本机按虚拟播放位置递增生成心跳，
       中间包走本地 Socket.IO 活动事件，末包按上游 <code>submitType=2</code> 申报完成，
       再只读回读 <code>course_progress</code> 的 <code>pass</code> 标记确认。

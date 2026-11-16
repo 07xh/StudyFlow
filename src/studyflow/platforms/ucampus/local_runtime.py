@@ -62,7 +62,6 @@ class UCampusLocalRunner:
         self._phase = "idle"
         self._paused = False
         self._tasks: dict[str, dict] = {}
-        self._started_at = 0.0
         self._pulses_per_resource = 0
 
     def start(self, course_id: str, tasks: list[MediaTask], *,
@@ -86,7 +85,6 @@ class UCampusLocalRunner:
             self._course_id = course_id
             self._phase = "running"
             self._paused = False
-            self._started_at = time.monotonic()
             self._pulses_per_resource = pulses_per_resource
             self._tasks = {task.resource_id: {
                 "resource_id": task.resource_id, "chapter_id": task.chapter_id,

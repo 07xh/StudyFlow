@@ -146,7 +146,6 @@ class FabricatedTransport:
         self._max_retries = max_retries
         self._readback = bool(readback)
         self._socket: HeartbeatSocket | None = None
-        self._socket_open_id: str = ""
         self._headers: dict[str, str] = dict(headers or {})
         self._open_id: str = open_id
         self._last_error = ""
@@ -171,7 +170,6 @@ class FabricatedTransport:
             return False
         try:
             self._socket = self._socket_factory(self._open_id, token)
-            self._socket_open_id = self._open_id
             return True
         except Exception:
             self._close_socket()
