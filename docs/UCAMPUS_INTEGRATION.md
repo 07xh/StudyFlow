@@ -12,7 +12,7 @@
 ## 下一步真实验收
 
 1. 从用户本人已登录的 U校园5.0 课程列表网络请求中获取打码的 HAR（不要将登录口令、Cookie、Authorization 或学号提交到仓库）。
-2. 验证实际请求方法（GET/POST）、域名、参数、返回结构、分页/课程分类与会话过期特征。当前试验适配器**仅支持 GET JSON**，若真实接口不是该形式必须修改适配器，不能套用假接口。
+2. 验证实际请求方法（GET/POST）、域名、参数、返回结构、分页/课程分类与会话过期特征。当前**只读课程及进度适配器**仅支持 GET JSON；仓库另有未经账号验收的实验性写入实现，两者不可混为一谈。若真实接口不是该形式必须修改适配器，不能套用假接口。
 3. 增加经过脱敏的 fixture 和契约测试，再接入真实会话并读取课程、单元/章节、作业与服务器进度；不使用伪造完成率。
 4. 通过 Python、前端、CI、Windows 打包门禁后再发布安装包。
 
@@ -35,7 +35,7 @@
 参考了 GPL-3.0 [Zzj-klwgxdz/UnipusAI](https://github.com/Zzj-klwgxdz/UnipusAI)
 的 `src/api/course.rs`。本仓库的 Python 实现只提取可靠的只读字段
 `value.courseList[].courseResourceList[].instanceId/name` 以及书架 `value.groups`。
-首页读到空列表才走已知书架接口；不复用自动答题、提交或虚报进度代码。
+首页读到空列表才走已知书架接口；这个只读课程列表模块不发送学习行为。仓库另有独立的实验性写入模块，不能据此宣称平台认可虚构学习记录。
 
 - AI版默认首页课程 API 已有可审核的开源来源，无须猜测或手动粘贴 URL。
 - 使用者仍须在本机提供有效且由本人持有的会话。是否适用于该账号必须经 Windows 真机验证。
@@ -48,7 +48,7 @@
 - `ucampus.units.list`：按上游 `course_progress/{course}/{openId}/default` 读取 `rt.units` 键集合；仅标记“单元状态待核验”，不以单元存在推断完成。
 - `ucampus.unit.tasks`：按上游单元级 `course_progress/{course}/{unit}/{openId}/default/` 读取 `rt.leafs`；复用 `tab_type`、`strategies.required`、`state.pass` 语义。任务标题缺失时仅显示资源 ID。
 - `openId` 仅在本机从会话 JWT 的 `openId` 声明提取，不能当作已认证凭据；会话缺失则返回 `UCAMPUS_OPEN_ID_REQUIRED`，不从别的账号猜测。
-- 真实接口需 U校园AI 登录会话和服务端认可的请求头。当前不预制完整播放器会话，也不直接生成心跳；未确认的服务器进度留空。
+- 真实接口需 U校园AI 登录会话和服务端认可的请求头。本节只读适配器不生成心跳；未确认的服务器进度留空。独立本地事件与实验性写入模块另见后文。
 
 ## 可选内容接口会话头
 
@@ -56,7 +56,7 @@
 `u-openid`、`x-csrftoken`，以及在有值时使用的
 `x-annotator-auth-token`、`u-school`。本次只引入**用户持有的可选值**，
 在 Windows Credential Manager 中与当前会话一起保存；前端不持久化或回显这些字段。
-只向固定的 `https://ucontent.unipus.cn` 只读进度接口发出，不跟随重定向；
+本节所述只读进度请求仅发送到固定的 `https://ucontent.unipus.cn`，不跟随重定向；
 未配置时不签发、推断或伪造额外授权标识。
 
 这些头是上游实现参考，学序仍未使用本人的真实账号验证成功，
@@ -275,9 +275,9 @@ POST 时补 `Content-Type: application/json; charset=UTF-8`（与 `hunaol/u_ai::
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/studyflow/platforms/ucampus/fabricated_heartbeat.py` | 虚构时间线 0→duration、活动事件包、完成包、响应分类、原子状态持久化 |
+| `src/studyflow/platforms/ucampus/fabricated_heartbeat.py` | 虚构时间线 0→duration、活动事件包、完成包、响应分类、可选的原子快照存储类（未接入默认运行） |
 | `src/studyflow/platforms/ucampus/fabricated_transport.py` | 双通道发送器：Socket.IO 中间包 + HTTP 完成包 + 只读回读；限频冷却 |
-| `src/studyflow/platforms/ucampus/fabricated_runner.py` | 本地队列、倍速/间隔、暂停/恢复/停止、统计与断点 |
+| `src/studyflow/platforms/ucampus/fabricated_runner.py` | 本地队列、倍速/间隔、进程内暂停/恢复/停止、统计（当前无跨重启续跑） |
 | `src/studyflow/services/ucampus_fabricated_bridge.py` | 6 个 `ucampus.fabricated.*` IPC operation，复用长驻 JSONL Sidecar |
 | `frontend/src/components/UCampusFabricatedPanel.tsx` | 工作台：包数 / 虚构时长 / 倍速 / 间隔 / 直接申报完成 |
 | `tests/test_ucampus_fabricated_heartbeat.py` | 离线回归（注入 socket / post / get / clock，无真实账号与网络） |
@@ -306,7 +306,7 @@ POST 时补 `Content-Type: application/json; charset=UTF-8`（与 `hunaol/u_ai::
 ### 5. 验证边界（如实记录）
 
 已验证：离线注入回归（时间线、包字段、限频重试、`sent`/`accepted`/`confirmed` 分离、
-断点持久化、暂停/恢复/停止、IPC 参数守卫）、Python `py_compile`、前端 TypeScript 类型检查与构建。
+可选状态快照类、进程内暂停/恢复/停止、IPC 参数守卫）、Python `py_compile`、前端 TypeScript 类型检查与构建。
 
 **未验证**：真实账号发包（`code=0` 后 `submitType=2` 是否确实置 `pass=1`）、
 旧版 Socket.IO 在 AI 5.0 是否仍计入学时、`x-annotator-auth-token` 有效期、
@@ -324,3 +324,18 @@ POST 时补 `Content-Type: application/json; charset=UTF-8`（与 `hunaol/u_ai::
 生产安全门禁：原始异常文本不得暴露给 IPC、状态文件和 UI，统一映射固定错误码。历史任务快照只能只读查看；不应因进程重启自动补发模拟学习事件。新旧模块应在界面中分别标识本地练习与实验性写入，避免状态混淆。
 
 旧有章节中“只读接入”“不发送学习行为”“尚未开发发送”等措辞是历史开发阶段描述，请以本节的最新代码审计状态为准。
+
+## 2026-11-16 运行状态核验与剩余限制
+
+- **已修正异常泄露**：调度执行、Socket 关闭阶段的异常文本不通过 IPC、
+  用户界面或状态字段显示，只使用固定错误码。
+- **已澄清服务器结果**：通过标志只是读取时服务器的快照，
+  变量 `server_confirmed` 为兼容历史保留，不能证明当前发送导致状态变化。
+- **已区分界面**：本地练习模块不会向平台发送，实验性写入模块可能进行网络请求。
+  两套模块各有独立状态、任务与操作区域，不能合并计数或称作正式学习完成。
+- **跨重启恢复未实现**：`FabricatedStateStore` 只是一个可选 JSON 快照存储工具；
+  默认的 `FabricatedRunner` 没有注入它，也没有从 `load()` 读取任务重建运行。
+  UI 的“恢复”仅指**同一进程内解除暂停**，绝不代表跨进程续传。
+  状态接口返回 `restart_resume_supported=false`；不自动重放网络学习事件。
+- Python 回归和前端测试只能证明本机代码行为，无法代替 U校园5.0 真实账号及
+  服务器进度验收。实验性写入不能作为已完成课程的证据。

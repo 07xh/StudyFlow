@@ -109,6 +109,7 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
           onChange={e=>setInstant(e.target.checked)}/>
       </label>
     </div>
+    <p className="sf-muted">暂停后的“恢复”只适用于当前运行进程；状态快照不代表应用重启后能断点续传，也不证明平台认可观看进度。</p>
     <div className="sf-actions actions">
       <button type="button" className="primary" disabled={!desktop||busy||active||!unitId}
         onClick={()=>void control("start")}>开始虚构刷完成</button>
@@ -126,10 +127,11 @@ export function UCampusFabricatedPanel({course,desktop}:{course:Course;desktop:b
     <dl className="sf-stat-grid">
       <div><dt>运行状态</dt><dd>{status?.phase||"尚未读取"}</dd></div>
       <div><dt>本地生成</dt><dd>{status?.generated??0}</dd></div>
-      <div><dt>实际发送</dt><dd>{status?.sent??0}</dd></div>
+      <div><dt>发送帧/尝试次数</dt><dd>{status?.sent??0}</dd></div>
       <div><dt>已申报（code=0）</dt><dd>{status?.transport_accepted??0}</dd></div>
       <div><dt>回读已通过（归因未知）</dt><dd>{status?.server_confirmed??0}</dd></div>
       <div><dt>通道已连接</dt><dd>{status?.sender_connected?"是":"否"}</dd></div>
+      <div><dt>重启后自动续跑</dt><dd>不支持</dd></div>
     </dl>
     <div className="sf-xxt-section-heading">资源记录 <span>{status?.tasks.length??0} 项</span></div>
     <div className="sf-xxt-table-scroll" role="region" aria-label="虚构心跳资源列表" tabIndex={0}>

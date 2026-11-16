@@ -75,3 +75,13 @@ test("U校园 separates local training from unverified synthetic write status",(
   assert.match(synthetic,/回读已通过（归因未知）/);
   assert.match(synthetic,/不证明本次事件造成该结果/);
 });
+
+test("U校园 synthetic module reports no restart recovery and no causal proof",()=>{
+  const panel=read("components/UCampusFabricatedPanel.tsx");
+  const bridge=read("bridge.ts");
+  assert.match(panel,/重启后自动续跑/);
+  assert.match(panel,/状态快照不代表应用重启后能断点续传/);
+  assert.match(panel,/发送帧\/尝试次数/);
+  assert.match(bridge,/restart_resume_supported:boolean/);
+  assert.match(panel,/归因未知/);
+});

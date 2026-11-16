@@ -164,7 +164,15 @@ class FabricatedRunner:
                 self._last_error = "UCAMPUS_RUN_FAILED"
         finally:
             if transport is not None:
-                transport.close()
+                try:
+                    transport.close()
+                except Exception:
+                    # Cleanup failures may carry sensitive socket messages.
+                    # Never expose exception text or a traceback via worker IPC.
+                    failed = True
+                    with self._lock:
+                        if not self._last_error:
+                            self._last_error = "UCAMPUS_CLEANUP_FAILED"
             with self._lock:
                 self._phase = ("failed" if failed else
                                "stopped" if self._stop.is_set() else
@@ -250,4 +258,7 @@ class FabricatedRunner:
                 # that change to this particular outgoing request.
                 "progress_causality": "unverified",
                 "source_kind": "synthetic_activity",
+                # A state-store class exists but no restart/replay flow exists.
+                "restart_resume_supported": False,
+                "snapshot_store_configured": self._store is not None,
             }

@@ -439,3 +439,27 @@ def test_uncaught_transport_exception_never_leaks_message_to_status():
     assert "PRIVATE_SECRET" not in repr(state)
     assert state["progress_causality"] == "unverified"
     assert state["source_kind"] == "synthetic_activity"
+
+
+def test_socket_cleanup_exception_is_redacted_and_run_terminates():
+    class SecretCloseTransport:
+        connected = False
+        def open(self): pass
+        def send_result(self, pulse, target=None):
+            from studyflow.platforms.ucampus.fabricated_transport import FabricatedReceipt
+            return FabricatedReceipt(
+                state="accepted", delivery="mark_seen_submit", accepted=True,
+                server_confirmed=None, attempts=1,
+                position_seconds=float(pulse.position_seconds), completion=True,
+                socket_reply="")
+        def close(self):
+            raise RuntimeError("Authorization=VERY_PRIVATE_CREDENTIAL")
+    runner=FabricatedRunner(transport_factory=SecretCloseTransport)
+    runner.start("course-v2:100","u1",[target()],pulses=1,heartbeat_interval=0.01)
+    assert runner.wait(3)
+    state=runner.status("course-v2:100")
+    assert state["phase"]=="failed"
+    assert state["last_error"]=="UCAMPUS_CLEANUP_FAILED"
+    assert "VERY_PRIVATE_CREDENTIAL" not in repr(state)
+    assert state["restart_resume_supported"] is False
+    assert state["snapshot_store_configured"] is False

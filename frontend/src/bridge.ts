@@ -21,6 +21,8 @@ export type UCampusFabricatedStatus={
   run_id:string;course_id:string;unit_id:string;phase:string;active:boolean;paused:boolean;
   generated:number;sent:number;transport_accepted:number;server_confirmed:number;
   completed:number;reported:number;sender_connected:boolean;last_error:string;
+  progress_causality:"unverified";source_kind:"synthetic_activity";
+  restart_resume_supported:boolean;snapshot_store_configured:boolean;
   tasks:Array<{resource_id:string;title:string;dtype:string;duration_seconds:number;
     state:string;generated:number;sent:number;accepted:number;confirmed:number;
     position_seconds:number;server_completed:boolean|null;last_error:string}>;
