@@ -11,6 +11,7 @@ import sys
 import tempfile
 import types
 import unittest
+import pytest
 from pathlib import Path
 from unittest import mock
 
@@ -585,3 +586,55 @@ def test_corrupt_legacy_archive_is_not_overwritten_by_sanitizer():
         store=fh.FabricatedStateStore(path)
         assert store.sanitize_existing() is False
         assert path.read_text(encoding="utf-8")=="not valid JSON"
+
+
+def test_history_clear_uses_shared_privacy_filter_and_keeps_unrelated_records():
+    with tempfile.TemporaryDirectory() as folder:
+        path=Path(folder)/"history.json"
+        path.write_text(json.dumps({
+            "remove":{"course_id":"course-v2:100","unit_id":"u1",
+                      "phase":"stopped","cookie":"OLD_REMOVE_SECRET",
+                      "tasks":{"leaf1":{"sent":1}}},
+            "keep":{"course_id":"course-v2:200","unit_id":"u2",
+                    "phase":"failed","authorization":"OLD_KEEP_SECRET",
+                    "tasks":{"leaf2":{"generated":2,"sent":True}}}
+        }),encoding="utf-8")
+        store=fh.FabricatedStateStore(path)
+        store.clear("remove")
+        raw=path.read_text(encoding="utf-8")
+        assert "OLD_REMOVE_SECRET" not in raw
+        assert "OLD_KEEP_SECRET" not in raw
+        assert store.load("remove") is None
+        kept=store.load("keep")
+        assert kept["course_id"]=="course-v2:200"
+        assert kept["tasks"]["leaf2"]["generated"]==2
+        assert kept["tasks"]["leaf2"]["sent"]==0
+
+
+def test_sanitized_history_write_failure_keeps_existing_archive_and_no_tmp():
+    with tempfile.TemporaryDirectory() as folder:
+        path=Path(folder)/"history.json"
+        store=fh.FabricatedStateStore(path)
+        store.save("run1",{"course_id":"course-v2:100","unit_id":"u1",
+                           "phase":"stopped","tasks":{}})
+        previous=path.read_bytes()
+        with mock.patch.object(fh.os,"replace",side_effect=OSError("SENSITIVE_PATH")):
+            with pytest.raises(OSError):
+                store.save("run2",{"course_id":"course-v2:100","unit_id":"u1",
+                                   "phase":"failed","tasks":{}})
+        assert path.read_bytes()==previous
+        assert not list(Path(folder).glob(".ucampus-*"))
+
+
+def test_archive_refactor_keeps_migration_idempotent_and_readonly():
+    with tempfile.TemporaryDirectory() as folder:
+        path=Path(folder)/"history.json"
+        store=fh.FabricatedStateStore(path)
+        store.save("run1",{"course_id":"course-v2:100","unit_id":"u1",
+                           "phase":"running","tasks":{"leaf1":{"generated":3}}})
+        original=path.read_bytes()
+        assert store.sanitize_existing() is False
+        assert path.read_bytes()==original
+        entries=store.list_recent("course-v2:100")
+        assert entries[0]["phase"]=="interrupted"
+        assert entries[0]["resume_available"] is False
