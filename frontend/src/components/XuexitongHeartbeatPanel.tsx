@@ -123,11 +123,8 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const canControl=Boolean(status?.queue_controls?.pause);
 
   return <section className="sf-platform-settings-view" aria-label="学习通本地心跳任务">
-    <h3>本地心跳任务</h3>
     <p className="sf-hint">
-      心跳包由本机生成并发送，不依赖网页播放器。
-      「本地已申报」只表示请求发出，「服务端确认」表示平台返回任务通过标记，两者分开统计。
-      视频与音频任务按 dtype 分别构造心跳包，可单独筛选运行。
+      本地任务记录与平台核验分别统计；未经确认的任务不显示为已完成。
     </p>
 
     <div className="sf-settings-row">

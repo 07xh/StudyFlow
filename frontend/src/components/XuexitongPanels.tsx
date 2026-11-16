@@ -6,7 +6,6 @@ import {
   type XuexitongChapter,type ChapterFilter,type TaskFilter,type CompletionFilter
 } from "../xuexitongCatalog";
 import "./XuexitongPanels.css";
-import {XuexitongHeartbeatPanel} from "./XuexitongHeartbeatPanel";
 
 type Chapter = XuexitongChapter;
 const initialSettings:XuexitongSettings={
@@ -89,7 +88,7 @@ export function XuexitongSettingsPanel({desktop}:{
     finally{setBusy(false);}
   };
   return <section className="sf-platform-settings-view" aria-label="学习通参数预设">
-    <p className="sf-muted">此处只保存独立运行器的参数预设。心跳执行模块由你自行接入，当前设置不会启动任何任务。</p>
+    <p className="sf-muted">保存本机任务参数预设；课程工作台中可查看运行状态和平台核验结果。</p>
     <div className="sf-settings-line">
       <label htmlFor="xxt-speed">播放速度预设</label>
       <select id="xxt-speed" disabled={!desktop||!loaded||busy}
@@ -291,6 +290,5 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
     <p className="sf-muted sf-xxt-evidence-note">
       章节与任务状态来自学习通页面返回的标记，不等于官方课程总进度。
     </p>
-    <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
   </section>;
 }

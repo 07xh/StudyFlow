@@ -7,6 +7,7 @@ import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
+import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -741,12 +742,12 @@ export default function App(){
       <div className="sf-course-playback-heading">
         <span className="eyebrow">{platformNames[course.platform]} / {catalogOnly?"课程与任务":"播放工作台"}</span>
         <h2>{course.title}</h2>
-        <p>{catalogOnly?"查看真实章节与任务点，执行器未接入统一控制前不会显示无效按钮。":"在这里管理播放与查看真实章节；平台账号、默认参数和历史记录不再占用首屏。"}</p>
+        <p>{catalogOnly?"查看章节任务、本机运行状态与平台核验结果。":"在这里管理播放与查看真实章节；平台账号、默认参数和历史记录不再占用首屏。"}</p>
       </div>
       <section className="sf-course-playback-stage" aria-label={catalogOnly?"任务模块状态":"播放控制"}>
         <div className="sf-course-player-heading">
           <h3>{catalogOnly?"任务模块状态":"播放控制"}</h3>
-          <span>{catalogOnly?"当前仅提供真实课程与任务点读取":"运行状态与课程进度分别显示，互不替代"}</span>
+          <span>{catalogOnly?"本机执行记录与服务端核验分开展示":"运行状态与课程进度分别显示，互不替代"}</span>
         </div>
         {course.platform==="zhidao"?<>
           {renderZhidaoModeSwitch(course)}
@@ -759,7 +760,7 @@ export default function App(){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="xuexitong"?<>
-          <p className="sf-muted">课程与章节任务可在下方查看；本平台的任务执行控制尚未连接至统一任务中心。</p>
+          <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
           <p className="sf-course-scope-note">
             雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。
