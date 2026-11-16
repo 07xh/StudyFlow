@@ -120,10 +120,14 @@ def _public(data: dict[str, Any] | None) -> dict[str, Any]:
     def count(field: str) -> int:
         value = data.get(field)
         return value if type(value) is int and 0 <= value <= 100000 else 0
+    # Do not display a stale pass count as if the latest server GET succeeded.
+    # The last successful snapshot remains on disk for historical diagnostics.
+    verified = state == "verified"
     return {"enabled": True, "course_id": data["course_id"], "unit_id": data["unit_id"],
-            "state": state, "checked_at": checked_at,
-            "total": count("total"), "passed": count("passed"),
-            "unknown": count("unknown")}
+            "state": state, "checked_at": checked_at if verified else "",
+            "total": count("total") if verified else 0,
+            "passed": count("passed") if verified else 0,
+            "unknown": count("unknown") if verified else 0}
 
 
 def status() -> dict[str, Any]:
