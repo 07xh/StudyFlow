@@ -6,6 +6,13 @@ export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
 export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string;annotator_token?:string;school_id?:string};
 export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null};
+export type UCampusLocalStatus={
+  run_id:string;course_id:string;phase:string;active:boolean;paused:boolean;
+  generated:number;sent:number;transport_accepted:number;server_confirmed:number|null;
+  sender_connected:boolean;
+  tasks:Array<{resource_id:string;chapter_id:string;title:string;state:string;
+    generated:number;attempted:number;accepted:number;local_elapsed_seconds:number;server_completed:boolean|null}>;
+};
 export type UCampusUnit = {id:string;title:string;completed:boolean|null};
 export type UCampusTask = {id:string;unit_id:string;title:string;type:string;required:boolean|null;completed:boolean|null};
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
@@ -22,6 +29,10 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
   | {id: string; version: 1; operation: "ucampus.units.list"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.unit.tasks"; course_id: string; unit_id: string}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.capabilities"}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.start"; course_id: string; unit_id: string; pulses?: number}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.status"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"; course_id: string; run_id: string}
   | {id: string; version: 1; operation: "ucampus.session.info"}
   | {id: string; version: 1; operation: "ucampus.session.configure"; configuration: UCampusConfig}
   | {id: string; version: 1; operation: "ucampus.session.clear"}
@@ -290,6 +301,14 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "UCAMPUS_COURSE_REQUIRED": return "请先选择 U校园真实课程。";
+    case "UCAMPUS_INVALID_PARAMETER": return "本地心跳参数不符合要求。";
+    case "UCAMPUS_INVALID_MEDIA_TASK": return "课程资源标识不正确。";
+    case "UCAMPUS_NO_MEDIA_TASKS": return "本单元没有可识别的待学习视频或音频资源。";
+    case "UCAMPUS_TASK_ALREADY_RUNNING": return "当前已有 U校园本地运行任务。";
+    case "UCAMPUS_TASK_NOT_RUNNING": return "当前没有正在运行的 U校园本地任务。";
+    case "UCAMPUS_RUN_ID_MISMATCH": return "运行 ID 或课程不匹配，请刷新。";
+    case "UCAMPUS_RUNTIME_UNAVAILABLE": return "U校园本地任务服务不可用。";
     case "UCAMPUS_OPEN_ID_REQUIRED": return "当前 U校园会话缺少可核验的 openId，无法读取单元与任务。请重新登录或更新本机会话。";
     case "UCAMPUS_AI_ONLY": return "目前单元与任务读取仅支持 U校园5.0 AI版。";
     case "UCAMPUS_SESSION_MISSING": return "请先配置 U校园登录会话。";

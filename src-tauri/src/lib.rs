@@ -211,7 +211,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
         | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
-        | "ucampus.session.info" | "ucampus.session.clear" => Ok(()),
+        | "ucampus.session.info" | "ucampus.session.clear"
+        | "ucampus.heartbeat.capabilities" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
             && matches!(value.get("mode").and_then(|v| v.as_str()), Some("notify" | "download"))) => Ok(()),
@@ -264,6 +265,25 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
                 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')))
                 => Ok(()),
+        "ucampus.heartbeat.status" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')) => Ok(()),
+        "ucampus.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+            && request.get("unit_id").and_then(|v| v.as_str())
+            .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+            && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
+            => Ok(()),
+        "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"
+            if request.get("graceful").is_none()
+                && request.get("course_id").and_then(|v| v.as_str())
+                    .is_some_and(|v| !v.is_empty() && v.len() <= 128
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+                && request.get("run_id").and_then(|v| v.as_str())
+                    .is_some_and(|id| id.len() == 32
+                        && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
         "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
             .is_some_and(|value| !value.is_empty() && value.len() <= 8192
                 && !value.contains('\r') && !value.contains('\n')) => Ok(()),
@@ -381,6 +401,7 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     let is_persistent = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr.")
                         || op.starts_with("xuexitong.heartbeat.")
+                        || op.starts_with("ucampus.heartbeat.")
                         || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"));
     if is_persistent {
         // QR start/status/cancel must share the same Python process; ordinary
@@ -665,6 +686,24 @@ mod ipc_validation_tests {
         ] {
             assert!(validate(&bad).is_err());
         }
+    }
+
+    #[test]
+    fn ucampus_heartbeat_operation_guard() {
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.start","course_id":"c1",
+            "unit_id":"u1","pulses":5})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.start","course_id":"c1",
+            "unit_id":"u1","pulses":101})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.stop","course_id":"c1"})).is_err());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.pause","course_id":"c1",
+            "run_id":"abcdef0123456789abcdef0123456789"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.heartbeat.stop","course_id":"c1",
+            "run_id":"abcdef0123456789abcdef0123456789","graceful":true})).is_err());
     }
 
     #[test]

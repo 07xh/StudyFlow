@@ -72,6 +72,8 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
         except Exception:
             return {"ok": False, "error": "UCAMPUS_RUNTIME_UNAVAILABLE"}
     run_id = request.get("run_id")
+    if runner.status(course_id).get("run_id") != run_id:
+        return {"ok": False, "error": "UCAMPUS_RUN_ID_MISMATCH"}
     if not isinstance(run_id, str) or len(run_id) != 32 or not all(x in "0123456789abcdef" for x in run_id):
         return {"ok": False, "error": "UCAMPUS_RUN_ID_MISMATCH"}
     try:

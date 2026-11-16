@@ -31,6 +31,8 @@ from studyflow.platforms.xuexitong.adapter import XuexitongAdapter
 from studyflow.platforms.xuexitong import credentials as xuexitong_credentials
 from studyflow.platforms.xuexitong import settings as xuexitong_settings
 from studyflow.services.xuexitong_heartbeat_bridge import dispatch as xuexitong_heartbeat_dispatch
+from studyflow.services.ucampus_runtime_bridge import dispatch as ucampus_heartbeat_dispatch
+from studyflow.services import ucampus_runtime_bridge
 from studyflow.services import xuexitong_heartbeat_bridge
 from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.ucampus.adapter import UCampusAdapter
@@ -99,6 +101,12 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": heartbeat}
         return {"id": request_id, "ok": False,
                 "error": str(heartbeat.get("error") or "XUEXITONG_INTERNAL_ERROR")}
+    uc_heartbeat = ucampus_heartbeat_dispatch(operation, request)
+    if uc_heartbeat is not None:
+        if uc_heartbeat.get("ok") is True:
+            return {"id": request_id, "ok": True, "data": uc_heartbeat}
+        return {"id": request_id, "ok": False,
+                "error": str(uc_heartbeat.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
     if operation in ("zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"):
@@ -160,6 +168,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
     if operation == "ucampus.session.configure":
         try:
+            ucampus_runtime_bridge.shutdown()
             ucampus_credentials.save(request.get("configuration"))
             return {"id": request_id, "ok": True, "data": {"saved": True}}
         except ValueError:
@@ -168,6 +177,7 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "ucampus.session.clear":
         try:
+            ucampus_runtime_bridge.shutdown()
             ucampus_credentials.clear()
             return {"id": request_id, "ok": True, "data": {"cleared": True}}
         except Exception:
