@@ -55,7 +55,8 @@ test("runtime shows real active and queued counts without equating local time to
     const check=view.root.findAllByType("input").find(item=>item.props.type==="checkbox");
     assert.equal(check.props.checked,false,"instant-complete opt-in must default unchecked");
     const metrics=view.root.findByProps({className:"sf-stat-grid"});
-    assert.match(JSON.stringify(metrics.toJSON()),/1 \/ 2/);
+    const values=metrics.findAllByType("dd").flatMap(node=>node.children.filter(value=>typeof value==="string"));
+    assert.ok(values.includes("1 / 2"),"active count must reflect actual running chapters");
   }finally{
     if(view)await act(async()=>{view.unmount();});
   }
