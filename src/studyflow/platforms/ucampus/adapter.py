@@ -172,9 +172,32 @@ class UCampusAdapter:
             "Accept": "application/json",
             "Cookie": config.cookie,
             "User-Agent": "StudyFlow UCampus read-only client",
+            "u-app-id": "39",
+            "u-platform": "2",
+            "appid": "undefined",
+            "Origin": "https://ucontent.unipus.cn",
+            "Referer": "https://ucontent.unipus.cn/_explorationpc_default/pc.html",
         }
-        if config.authorization:
-            headers["Authorization"] = config.authorization
+        # U校园AI sends its SSO JWT as both cookie and Authorization.
+        # Restrict these headers to the caller-validated first-party URL only.
+        cookie_fields = dict(part.strip().split("=", 1) for part in config.cookie.split(";") if "=" in part)
+        jwt = cookie_fields.get("jwt", "")
+        authorization = config.authorization or jwt
+        if authorization:
+            headers["Authorization"] = authorization
+        if config.variant == "ai" and (jwt or config.authorization):
+            from .course_progress import _jwt_open_id, UCampusProgressError
+            try:
+                open_id = _jwt_open_id(config)
+                headers["u-openid"] = open_id
+                headers["x-csrftoken"] = open_id
+            except UCampusProgressError:
+                # An opaque manually imported session may still support catalog GET.
+                pass
+        if config.annotator_token:
+            headers["x-annotator-auth-token"] = config.annotator_token
+        if config.school_id:
+            headers["u-school"] = config.school_id
         courses = self._fetch(config.catalog_url, headers)
         # A second fixed, documented first-party GET is allowed only for the
         # upstream AI homepage route; never follow a server-provided URL.
