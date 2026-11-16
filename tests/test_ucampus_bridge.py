@@ -108,8 +108,9 @@ def test_sso_login_persists_only_session_and_no_password(monkeypatch):
     monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda value: changes.append(value))
+    monkeypatch.setattr(bridge.ucampus_monitor, "configure", lambda course, unit, enabled: {"enabled": False})
     result = call("ucampus.session.login", username="student", password="not-persisted")
-    assert result == {"id": "ucampus-test", "ok": True, "data": {"saved": True, "variant": "ai"}}
+    assert result == {"id": "ucampus-test", "ok": True, "data": {"saved": True, "variant": "ai", "monitor_reset": True}}
     assert len(changes) == 1
     assert changes[0]["cookie"] == "jwt=header.payload.signature"
     assert "password" not in changes[0]
@@ -170,3 +171,22 @@ def test_monitor_errors_are_fixed_codes(monkeypatch):
                   course_id="course-v2:real+1", unit_id="U1")
     assert result["error"] == "UCAMPUS_MONITOR_UNAVAILABLE"
     assert "Authorization" not in str(result)
+
+
+def test_sso_success_does_not_mask_optional_monitor_cleanup_failure(monkeypatch):
+    from studyflow.platforms.ucampus.credentials import UCampusConfig
+    from studyflow.platforms.ucampus.readonly_monitor import UCampusMonitorError
+    config = UCampusConfig.from_dict({"variant": "ai", "cookie": "jwt=head.payload.sign"})
+    stored = []
+    monkeypatch.setattr(bridge, "ucampus_authenticate", lambda user, pw: config)
+    monkeypatch.setattr(bridge, "ucampus_enrich_school", lambda incoming: incoming)
+    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda data: stored.append(data))
+    def cleanup_failure(*args):
+        raise UCampusMonitorError("UCAMPUS_MONITOR_STORAGE_FAILED")
+    monkeypatch.setattr(bridge.ucampus_monitor, "configure", cleanup_failure)
+    result = call("ucampus.session.login", username="student", password="secret")
+    assert result["ok"] and result["data"]["saved"] is True
+    assert result["data"]["monitor_reset"] is False
+    assert len(stored) == 1
