@@ -105,3 +105,9 @@ test("U校园 read-only UI keeps unit selection and account copy precise",()=>{
   assert.match(login,/服务器进度只读核验已接入/);
   assert.doesNotMatch(login,/暂不支持课程学习运行与服务器进度/);
 });
+
+test("U校园 SSO login uses the same persistent sidecar as session resets",()=>{
+  const tauri=fs.readFileSync(path.join(__dirname,"..","..","src-tauri","src","lib.rs"),"utf8");
+  assert.match(tauri,/ucampus\.session\.login" \| "ucampus\.session\.configure"/);
+  assert.match(tauri,/ucampus\.fabricated\./);
+});
