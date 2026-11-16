@@ -215,10 +215,23 @@ class HeartbeatTaskRunner:
             state=TaskState.PENDING.value,
             updated_at=clock(),
         )
+        # UI-only estimate, never written to the resume state file.
+        self._runtime_playing_time = float(self._snapshot.playing_time)
 
     @property
     def snapshot(self) -> TaskSnapshot:
         return TaskSnapshot(**self._snapshot.__dict__.copy())
+
+    @property
+    def status_snapshot(self) -> TaskSnapshot:
+        """Live local-time view, not evidence of playback or server completion."""
+        item = self.snapshot
+        if item.state in (TaskState.RUNNING.value, TaskState.PAUSED.value):
+            item.playing_time = max(
+                item.playing_time,
+                min(item.duration, int(self._runtime_playing_time)),
+            )
+        return item
 
     @property
     def state(self) -> str:
@@ -280,6 +293,7 @@ class HeartbeatTaskRunner:
                 return self.snapshot
 
         play_time = float(self._snapshot.playing_time)
+        self._runtime_playing_time = play_time
         last_log_time = play_time
         self._last_iter = self._clock()
         start_wall = self._clock()
@@ -295,6 +309,7 @@ class HeartbeatTaskRunner:
 
             now = self._clock()
             play_time = min(duration, play_time + (now - self._last_iter) * self.config.speed)
+            self._runtime_playing_time = play_time
             self._last_iter = now
             # 墙钟总时限只统计实际运行时间，暂停等待不计入（审计 P1）
             if now - start_wall - self._paused_wall > self.config.max_wall_seconds:
@@ -630,7 +645,7 @@ class ChapterQueue:
             for target in targets:
                 runner = runners.get(target.task_id)
                 if runner is not None:
-                    snapshot = runner.snapshot
+                    snapshot = runner.status_snapshot
                     # A terminated queue must not appear to be still running.
                     if not running and snapshot.state in ("running", "paused", "pending"):
                         snapshot.state = "interrupted"
