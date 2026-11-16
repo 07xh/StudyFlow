@@ -1,7 +1,6 @@
-// 统一 UI 内的学习通本地心跳任务面板。不新建窗口、不新建平台导航，
-// 只通过 frontend/src/bridge.ts 的统一 IPC 调用 Sidecar 长驻服务。
-// 合入前先应用 docs/XUEXITONG_HEARTBEAT_INTEGRATION.md 的 bridge.ts 类型补丁。
-// 合入位置：frontend/src/components/XuexitongHeartbeatPanel.tsx
+// 统一课程工作台内已接线的本地任务面板；沿用现有自定义后端模块。
+// 通过 frontend/src/bridge.ts 的 IPC 访问 Tauri 长驻 Python Sidecar。
+// 本组件只显示本地任务与服务器返回值，不把本地申报计为平台已完成。
 import {useCallback,useEffect,useRef,useState} from "react";
 import type {Course} from "../types";
 import {friendlyBridgeError,request,type XuexitongSettings} from "../bridge";
@@ -46,42 +45,44 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const [logs,setLogs]=useState<HeartbeatLog[]>([]);
   const [message,setMessage]=useState("");
   const [busy,setBusy]=useState(false);
-  const timer=useRef<number|null>(null);
-  const refreshInFlight=useRef(false);
+  const refreshInFlight=useRef(new Set<number>());
+  const courseRevision=useRef(0);
   const selectedCourse=useRef(course.course_id);
   selectedCourse.current=course.course_id;
 
   const refresh=useCallback(async()=>{
-    if(refreshInFlight.current)return;
-    refreshInFlight.current=true;
+    // A slow response for course A must never block the first refresh for course B.
+    // Guard each polling generation independently, including A -> B -> A navigation.
+    const revision=courseRevision.current;
+    if(refreshInFlight.current.has(revision))return;
+    refreshInFlight.current.add(revision);
+    const isCurrent=()=>courseRevision.current===revision&&selectedCourse.current===course.course_id;
     try{
       const [nextStatus,nextLogs]=await Promise.all([
         request<HeartbeatStatus>({operation:"xuexitong.heartbeat.status",course_id:course.course_id}),
         request<{ok:boolean;events:HeartbeatLog[]}>({operation:"xuexitong.heartbeat.logs",limit:30,course_id:course.course_id}),
       ]);
-      if(selectedCourse.current!==course.course_id)return;
-      if(nextStatus.course_key===course.course_id){
-        setStatus(nextStatus);
-        setLogs(nextStatus.run_id?(nextLogs.events||[]).filter(entry=>entry.run_id===nextStatus.run_id):[]);
-      }
+      if(!isCurrent())return;
+      if(nextStatus.course_key!==course.course_id)throw new Error("INVALID_IPC_RESPONSE");
+      setStatus(nextStatus);
+      setLogs(nextStatus.run_id?(nextLogs.events||[]).filter(entry=>entry.run_id===nextStatus.run_id):[]);
     }catch(error){
-      if(selectedCourse.current===course.course_id)setMessage(friendlyBridgeError(error));
-    }finally{refreshInFlight.current=false;}
+      if(isCurrent())setMessage(friendlyBridgeError(error));
+    }finally{refreshInFlight.current.delete(revision);}
   },[course.course_id]);
 
   useEffect(()=>{
+    courseRevision.current++;
     setStatus(null);setLogs([]);setMessage("");
-    void refresh();
+    if(desktop)void refresh();
     // React's Node-based test renderer has no window. The desktop app does.
-    if(typeof window==="undefined")return;
-    timer.current=window.setInterval(()=>{void refresh();},2000);
+    if(typeof window==="undefined"||!desktop)return ()=>{courseRevision.current++;};
+    const timer=window.setInterval(()=>{void refresh();},2000);
     return ()=>{
-      if(timer.current!==null){
-        window.clearInterval(timer.current);
-        timer.current=null;
-      }
+      courseRevision.current++;
+      window.clearInterval(timer);
     };
-  },[refresh]);
+  },[refresh,desktop]);
 
   useEffect(()=>{
     if(!desktop)return;
@@ -141,7 +142,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
 
   return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="学习通本地心跳任务">
     <p className="sf-hint">
-      本地任务记录与平台核验分别统计；未经确认的任务不显示为已完成。速度、并发在启动时保存；其他选项仅本次生效。
+      已连接学序本地自定义任务服务（实验性）；本地记录与平台核验分别统计，未经平台确认不显示为已完成。速度、并发在启动时保存；其他选项仅本次生效。
     </p>
 
     <div className="sf-settings-row">
