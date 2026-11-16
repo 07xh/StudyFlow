@@ -45,6 +45,10 @@ export type UCampusVerifiedProgress={
   required_total:number;required_passed:number;
   tasks:Array<{id:string;type:string;required:boolean|null;completed:boolean|null}>;
 };
+export type UCampusMonitorStatus={
+  enabled:boolean;course_id:string;unit_id:string;
+  state:string;checked_at:string;total:number;passed:number;unknown:number
+};
 export type UCampusUnit = {id:string;title:string;completed:boolean|null};
 export type UCampusTask = {id:string;unit_id:string;title:string;type:string;required:boolean|null;completed:boolean|null};
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
@@ -62,6 +66,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ucampus.units.list"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.unit.tasks"; course_id: string; unit_id: string}
   | {id: string; version: 1; operation: "ucampus.progress.verify"; course_id: string; unit_id: string}
+  | {id: string; version: 1; operation: "ucampus.monitor.status" | "ucampus.monitor.tick"}
+  | {id: string; version: 1; operation: "ucampus.monitor.configure"; enabled: boolean; course_id?: string; unit_id?: string}
   | {id: string; version: 1; operation: "ucampus.socket.diagnose"}
   | {id: string; version: 1; operation: "ucampus.heartbeat.capabilities"}
   | {id: string; version: 1; operation: "ucampus.fabricated.capabilities"}
@@ -235,6 +241,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                               "INVALID_UCAMPUS_LOGIN", "UCAMPUS_LOGIN_UNAVAILABLE", "UCAMPUS_LOGIN_REJECTED",
                               "UCAMPUS_LOGIN_FORMAT_UNVERIFIED", "UCAMPUS_LOGIN_VERIFICATION_REQUIRED", "UCAMPUS_LOGIN_RATE_LIMITED",
                               "UCAMPUS_CATALOG_UNAVAILABLE", "UCAMPUS_CATALOG_FORMAT_UNVERIFIED",
+                              "UCAMPUS_MONITOR_STORAGE_FAILED", "UCAMPUS_MONITOR_UNAVAILABLE",
                              "UCAMPUS_AI_ONLY", "UCAMPUS_OPEN_ID_REQUIRED",
                              "UCAMPUS_PROGRESS_UNAVAILABLE", "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED",
                              "UCAMPUS_INVALID_FABRICATED_PARAMETER", "UCAMPUS_INVALID_FABRICATED_TARGET",
@@ -375,6 +382,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_AI_ONLY": return "目前单元与任务读取仅支持 U校园5.0 AI版。";
     case "UCAMPUS_SESSION_MISSING": return "请先配置 U校园登录会话。";
     case "UCAMPUS_SESSION_EXPIRED": return "U校园会话已失效，请重新登录。";
+    case "UCAMPUS_MONITOR_STORAGE_FAILED": return "U校园断点核验记录保存失败，请检查本机权限与存储空间。";
+    case "UCAMPUS_MONITOR_UNAVAILABLE": return "U校园进度核验任务暂不可用。";
     case "INVALID_UCAMPUS_LOGIN": return "请输入有效的 U校园账号和密码。";
     case "UCAMPUS_LOGIN_UNAVAILABLE": return "U校园 SSO 登录接口请求失败，请检查网络或稍后再试。";
     case "UCAMPUS_LOGIN_REJECTED": return "U校园未接受本次登录，请检查账号密码及平台账号状态。";
