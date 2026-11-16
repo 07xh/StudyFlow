@@ -69,7 +69,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   },[course.course_id]);
 
   useEffect(()=>{
-    setStatus(null);setLogs([]);
+    setStatus(null);setLogs([]);setMessage("");
     void refresh();
     // React's Node-based test renderer has no window. The desktop app does.
     if(typeof window==="undefined")return;
@@ -92,11 +92,17 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     return ()=>{active=false;};
   },[desktop]);
 
+  const validConfig=Number.isFinite(speed)&&speed>=0.25&&speed<=2
+    &&Number.isInteger(jobs)&&jobs>=1&&jobs<=4;
+  // Do not expose controls for a previous course during navigation.
+  const currentStatus=status?.course_key===course.course_id?status:null;
   const control=async(action:"start"|"pause"|"resume"|"stop")=>{
     if(busy||!desktop)return;
+    const actionCourse=course.course_id;
     setBusy(true);setMessage("");
     try{
       if(action==="start"){
+        if(!validConfig)throw new Error("请输入有效的速度（0.25–2）与章节并发数（1–4）。");
         // Reuse the same validated settings contract as the platform settings page.
         // Only saved speed/concurrency are updated; verification preferences survive.
         const defaults=await request<XuexitongSettings>({operation:"xuexitong.settings.get"});
@@ -105,13 +111,13 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
           settings:{...defaults,playback_speed:speed,concurrency:jobs},
         });
         await request<{ok:boolean;run_id:string}>({
-          operation:"xuexitong.heartbeat.start",course_id:course.course_id,
+          operation:"xuexitong.heartbeat.start",course_id:actionCourse,
           speed,jobs,instant_complete:instant,
           ...(mediaType!=="all"?{dtype:mediaType}:{}),
         });
-        setMessage("本地心跳任务已启动。");
+        if(selectedCourse.current===actionCourse)setMessage("本地任务已启动，实际完成状态以平台核验为准。");
       }else{
-        const runId=status?.run_id;
+        const runId=currentStatus?.run_id;
         if(!runId)throw new Error("XUEXITONG_RUN_ID_REQUIRED");
         if(action==="pause"){
           await request<{ok:boolean}>({operation:"xuexitong.heartbeat.pause",run_id:runId});
@@ -122,14 +128,15 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
         }
       }
       await refresh();
-    }catch(error){setMessage(friendlyBridgeError(error));}
-    finally{setBusy(false);}
+    }catch(error){
+      if(selectedCourse.current===actionCourse)setMessage(friendlyBridgeError(error));
+    }finally{setBusy(false);}
   };
 
-  const running=Boolean(status?.running);
-  const paused=Boolean(status?.paused);
-  const tasks=status?.tasks||[];
-  const controls=status?.queue_controls;
+  const running=Boolean(currentStatus?.running);
+  const paused=Boolean(currentStatus?.paused);
+  const tasks=currentStatus?.tasks||[];
+  const controls=currentStatus?.queue_controls;
 
   return <section className="sf-platform-settings-view" aria-label="学习通本地心跳任务">
     <p className="sf-hint">
@@ -139,16 +146,16 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     <div className="sf-settings-row">
       <label>速度
         <input type="number" min={0.25} max={2} step={0.25} value={speed}
-          disabled={running||!desktop}
+          disabled={running||busy||!desktop}
           onChange={event=>setSpeed(Number(event.target.value))}/>
       </label>
       <label>并发章节
         <input type="number" min={1} max={4} step={1} value={jobs}
-          disabled={running||!desktop}
+          disabled={running||busy||!desktop}
           onChange={event=>setJobs(Number(event.target.value))}/>
       </label>
       <label>任务类型
-        <select value={mediaType} disabled={running||!desktop}
+        <select value={mediaType} disabled={running||busy||!desktop}
           onChange={event=>setMediaType(event.target.value as "all"|"Video"|"Audio")}>
           <option value="all">视频 + 音频</option>
           <option value="Video">仅视频</option>
@@ -156,14 +163,14 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
         </select>
       </label>
       <label className="sf-check">
-        <input type="checkbox" checked={instant} disabled={running||!desktop}
+        <input type="checkbox" checked={instant} disabled={running||busy||!desktop}
           onChange={event=>setInstant(event.target.checked)}/>
         首包申报整段完成
       </label>
     </div>
 
     <div className="sf-actions">
-      <button type="button" disabled={busy||!desktop||running} onClick={()=>void control("start")}>开始</button>
+      <button type="button" disabled={busy||!desktop||running||!validConfig} onClick={()=>void control("start")}>开始</button>
       <button type="button" disabled={busy||!desktop||!controls?.pause} onClick={()=>void control("pause")}>暂停</button>
       <button type="button" disabled={busy||!desktop||!controls?.resume} onClick={()=>void control("resume")}>继续</button>
       <button type="button" disabled={busy||!desktop||!controls?.stop} onClick={()=>void control("stop")}>停止</button>
@@ -173,16 +180,16 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     {message?<p className="sf-message">{message}</p>:null}
 
     <dl className="sf-stat-grid">
-      <div><dt>运行状态</dt><dd>{!status?"尚未读取":running?(paused?"已暂停":"运行中"):tasks.length?"历史记录（未运行）":"空闲"}</dd></div>
-      <div><dt>本地已申报</dt><dd>{status?.heartbeats.sent??0}</dd></div>
-      <div><dt>服务端确认</dt><dd>{status?.heartbeats.server_confirmed??0}</dd></div>
-      <div><dt>任务数</dt><dd>{status?.task_count??0}</dd></div>
-      <div><dt>运行 ID</dt><dd>{status?.run_id||"—"}</dd></div>
-      <div><dt>当前配置</dt><dd>{running&&status?`${status.config.speed}x / ${status.config.jobs} 并发`:"—"}</dd></div>
+      <div><dt>运行状态</dt><dd>{!currentStatus?"尚未读取":running?(paused?"已暂停":"运行中"):tasks.length?"历史记录（未运行）":"空闲"}</dd></div>
+      <div><dt>本地已申报</dt><dd>{currentStatus?.heartbeats.sent??0}</dd></div>
+      <div><dt>服务端确认</dt><dd>{currentStatus?.heartbeats.server_confirmed??0}</dd></div>
+      <div><dt>任务数</dt><dd>{currentStatus?.task_count??0}</dd></div>
+      <div><dt>运行 ID</dt><dd>{currentStatus?.run_id||"—"}</dd></div>
+      <div><dt>当前配置</dt><dd>{running&&currentStatus?`${currentStatus.config.speed}x / ${currentStatus.config.jobs} 并发`:"—"}</dd></div>
     </dl>
 
     <table className="sf-task-table" aria-label="心跳任务状态">
-      <thead><tr><th>任务</th><th>状态</th><th>本地进度</th><th>服务端进度</th><th>最近一次请求</th></tr></thead>
+      <thead><tr><th>任务</th><th>状态</th><th>本地记录（非播放证明）</th><th>服务端进度</th><th>最近一次请求</th></tr></thead>
       <tbody>
         {tasks.length===0?<tr><td colSpan={5}>暂无任务记录</td></tr>:tasks.map(task=>
           <tr key={task.task_id}>
