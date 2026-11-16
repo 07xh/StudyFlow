@@ -522,6 +522,11 @@ class ChapterQueue:
             self._chapters[chapter_id] = list(targets)
             return True
 
+    @property
+    def paused(self) -> bool:
+        """Expose queue-wide suspension without allowing callers to mutate it."""
+        return self._paused.is_set()
+
     def pause_all(self) -> None:
         # The queue-wide flag prevents not-yet-started chapters from running.
         self._paused.set()
