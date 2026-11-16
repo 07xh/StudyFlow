@@ -46,6 +46,26 @@ const server=http.createServer((req,res)=>{
    await page.screenshot({path:path.join(output,'settings-'+theme+'-'+width+'.png')});
    await page.keyboard.press('Escape');
    assert.equal(await dialog.count(),0);await trigger.waitFor();assert.equal(await trigger.evaluate(e=>e===document.activeElement),true,'Escape restores focus to the opener');
+   const settingsButton=page.getByRole('button',{name:'设置',exact:true});
+   await settingsButton.click();
+   const global=page.getByRole('dialog',{name:'设置',exact:true});
+   assert.equal(await global.count(),1,'Global settings must float above the workspace');
+   assert.equal(await page.locator('.sf-platform-courses').count(),1,'The underlying workspace stays mounted');
+   const globalRect=await global.boundingBox();
+   assert.ok(globalRect.x>=0&&globalRect.y>=0&&globalRect.x+globalRect.width<=width+1&&globalRect.y+globalRect.height<=height+1,'Floating settings fits');
+   assert.equal(await global.getByRole('navigation',{name:'设置分类'}).count(),1);
+   await global.getByRole('button',{name:'版本与更新'}).click();
+   assert.equal(await global.getByRole('heading',{name:'版本与更新'}).count(),1);
+   await global.getByRole('button',{name:'关于与开源'}).click();
+   assert.equal(await global.getByRole('heading',{name:'关于与开源'}).count(),1);
+   await global.getByRole('button',{name:'通用设置'}).click();
+   assert.equal(await global.getByRole('group',{name:'主题模式'}).count(),1);
+   assert.equal(await global.evaluate(e=>e.scrollWidth>e.clientWidth),false,'Global settings must fit horizontally');
+   await page.screenshot({path:path.join(output,'settings-global-'+theme+'-'+width+'.png')});
+   await page.keyboard.press('Escape');
+   await global.waitFor({state:'detached'});
+   assert.equal(await settingsButton.evaluate(e=>e===document.activeElement),true,'Settings restores focus to the opener');
+   assert.equal(await page.locator('.sf-platform-courses').count(),1,'Closing settings preserves platform content');
    await context.close();
   }
   assert.deepEqual(errors,[]);console.log('Settings browser regression passed: light/dark at 1280, 960 and 720px (125% scale).');

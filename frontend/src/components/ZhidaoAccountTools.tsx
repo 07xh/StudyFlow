@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect,useRef,useState,type KeyboardEvent} from "react";
 import {invoke} from "@tauri-apps/api/core";
 import {BookOpen,Database,FileText,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoDiagnostic,type ZhidaoDocument} from "../bridge";
@@ -35,6 +35,18 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:P
   const [diagnostic,setDiagnostic]=useState<ZhidaoDiagnostic|null>(null);
   const [document,setDocument]=useState<ZhidaoDocument|null>(null);
   const [documentBusy,setDocumentBusy]=useState(false);
+  const documentCloseRef=useRef<HTMLButtonElement>(null);
+  const documentOpenerRef=useRef<HTMLElement|null>(null);
+  useEffect(()=>{
+    if(!document)return;
+    documentOpenerRef.current=window.document.activeElement instanceof HTMLElement
+      ?window.document.activeElement:null;
+    const frame=window.requestAnimationFrame(()=>documentCloseRef.current?.focus());
+    return ()=>{
+      window.cancelAnimationFrame(frame);
+      if(documentOpenerRef.current?.isConnected)documentOpenerRef.current.focus();
+    };
+  },[document]);
 
   async function runAction(){
     if(action==="none")return;
@@ -120,9 +132,12 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:P
       if(event.target===event.currentTarget)setDocument(null);
     }}>
       <section className="sf-document-dialog" role="dialog" aria-modal="true"
-        aria-label={document.title}>
+        aria-label={document.title} onKeyDown={(event:KeyboardEvent<HTMLElement>)=>{
+          if(event.key==="Escape"){event.preventDefault();event.stopPropagation();setDocument(null);}
+          if(event.key==="Tab"){event.preventDefault();documentCloseRef.current?.focus();}
+        }}>
         <header><h3>{document.title}</h3>
-          <button className="secondary" type="button" onClick={()=>setDocument(null)}>关闭</button>
+          <button ref={documentCloseRef} className="secondary" type="button" onClick={()=>setDocument(null)}>关闭</button>
         </header>
         <div className="sf-document-body"><pre>{document.content}</pre></div>
       </section>
