@@ -1,5 +1,6 @@
 import {useEffect,useState} from "react";
 import {friendlyBridgeError,request,type UCampusConfig,type UCampusSessionInfo} from "../bridge";
+import type {Course} from "../types";
 
 /** No credentials enter localStorage, diagnostics or course state. */
 export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged:()=>void}){
@@ -32,8 +33,23 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       await request<{saved:boolean}>({operation:"ucampus.session.configure",configuration});
       clearSensitiveInputs();
       setStatus({configured:true,variant});
-      setNotice("已在本机保存会话。保存成功不表示已登录或接口可用，请通过课程列表和服务器状态读取进行核验。");
+      setNotice("已在本机保存会话。保存成功不表示已登录或接口可用，请点击“验证课程读取”核验当前账号。");
       onChanged();
+    }catch(error){setNotice(friendlyBridgeError(error));}
+    finally{setBusy(false);}
+  };
+  const verify=async()=>{
+    if(!desktop||busy||!status?.configured)return;
+    setBusy(true);setNotice("");
+    try{
+      const courses=await request<Course[]>({operation:"courses.list",platform:"ucampus"});
+      if(!Array.isArray(courses)||!courses.every(course=>
+        course&&course.platform==="ucampus"&&typeof course.course_id==="string"&&
+        course.course_id.length>0&&typeof course.title==="string"&&course.title.length>0
+      ))throw Error("INVALID_IPC_RESPONSE");
+      setNotice(courses.length>0
+        ?`课程接口已验证：实际读取到 ${courses.length} 门 U校园课程。`
+        :"课程接口返回空列表：请求成功，但尚不能确认该账号已有课程或已完成登录验收。");
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
   };
@@ -83,6 +99,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     </>}
     <div className="actions">
       <button type="button" disabled={!desktop||busy||(variant==="classic"&&!url.trim())||!cookie.trim()} onClick={()=>void save()}>保存会话</button>
+      <button type="button" className="secondary" disabled={!desktop||busy||!status?.configured} onClick={()=>void verify()}>验证课程读取</button>
       <button type="button" className="secondary" disabled={!desktop||busy||!status?.configured} onClick={()=>void clear()}>退出并清除</button>
     </div>
     {notice&&<p role="status">{notice}</p>}
