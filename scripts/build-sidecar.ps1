@@ -11,7 +11,7 @@ $flags = @('--noconfirm','--clean','--onefile','--console',
   '--add-data',"$((Resolve-Path 'legacy/yuketang/main.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/yuketang/exe_entry.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/zhidao').Path);legacy/zhidao",
-  '--hidden-import','dotenv',
+  '--hidden-import','dotenv','--hidden-import','websocket',
   '--distpath','packaging/sidecar','--workpath','build/pyinstaller',
   '--specpath','build/specs','packaging/bridge_entry.py')
 $previousPythonPath = $env:PYTHONPATH
@@ -45,6 +45,15 @@ if ($ping.id -cne 'packaging-probe' -or -not $ping.ok -or $ping.data.service -cn
   throw 'Frozen StudyFlow ping contract mismatch'
 }
 
+# Validate that the new local Socket.IO client is truly packaged in the frozen
+# Python sidecar, without opening a socket or using a real school account.
+$ucSocket = Invoke-JsonlProbe '{"id":"packaging-ucampus","version":1,"operation":"ucampus.heartbeat.capabilities"}'
+if ($ucSocket.id -cne 'packaging-ucampus' -or -not $ucSocket.ok -or
+    -not $ucSocket.data.local_generation -or
+    -not $ucSocket.data.socket_transport_available -or
+    $ucSocket.data.sender_connected -or $ucSocket.data.server_verified) {
+  throw 'Frozen UCampus local heartbeat and socket dependency contract mismatch'
+}
 # Exercise a real local settings handler as well; this checks the request/response
 # contract without requiring school credentials or contacting a remote platform.
 $settings = Invoke-JsonlProbe '{"id":"packaging-settings","version":1,"operation":"zhidao.player.settings.get"}'

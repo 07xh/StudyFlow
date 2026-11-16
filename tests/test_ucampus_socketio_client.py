@@ -47,7 +47,7 @@ def test_socketio_connection_pong_and_ack_never_imply_completion():
     assert "own-token" not in repr(SESSION)
     client.connect()
     result = client.emit("local_event", {"seq": 1, "elapsed_local": 2})
-    assert result == "event"
+    assert result == "unsolicited_event"
     assert fake.writes[1] == "3"
     assert fake.writes[-1] == "3"
     assert fake.writes[2].startswith("42/userActivities,")
@@ -84,3 +84,45 @@ def test_response_failure_does_not_claim_acceptance():
     with pytest.raises(SocketProtocolError, match="UCAMPUS_SOCKET_TRANSPORT_UNKNOWN"):
         client.emit("local_event", {"seq": 1})
     client.close()
+
+
+def test_unrelated_frames_are_not_treated_as_delivery_acks():
+    for reply, expected in (
+        ('42/userActivities,["notice",{"ok":true}]', "unsolicited_event"),
+        ('43/userActivities,["ok"]', "unmatched_ack"),
+        ("40/userActivities", "unknown"),
+    ):
+        socket = FakeSocket(['0{"sid":"socket-id"}', "40/userActivities", reply])
+        client = UCampusLegacySocket(SESSION, connect=lambda _url: socket)
+        with client:
+            assert client.emit("local_event", {"seq": 1}) == expected
+        assert socket.closed
+
+
+def test_engine_io_noop_and_pong_frames_are_ignored():
+    socket = FakeSocket(['0{"sid":"id"}', "6", "3", "40/userActivities",
+                         "6", "3", '42/userActivities,["notice",{}]'])
+    client = UCampusLegacySocket(SESSION, connect=lambda _: socket)
+    with client:
+        assert client.emit("local_event", {"seq": 1}) == "unsolicited_event"
+
+
+def test_engine_io_close_and_namespace_rejection_disconnect():
+    for close_frame in ("1", "44/userActivities,{\"message\":\"forbidden\"}",
+                        "41/userActivities"):
+        socket = FakeSocket(['0{"sid":"id"}', "40/userActivities", close_frame])
+        client = UCampusLegacySocket(SESSION, connect=lambda _: socket)
+        client.connect()
+        with pytest.raises(SocketProtocolError):
+            client.emit("local_event", {"seq": 1})
+        assert socket.closed
+
+
+def test_bad_sid_and_unbounded_frames_are_rejected():
+    for frame in ('0{"sid":""}', '0{"sid":"x","pingInterval":true}',
+                  "0" + "x"*65537):
+        socket = FakeSocket([frame])
+        client = UCampusLegacySocket(SESSION, connect=lambda _: socket)
+        with pytest.raises(SocketProtocolError):
+            client.connect()
+        assert socket.closed

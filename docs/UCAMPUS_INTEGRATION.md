@@ -152,3 +152,14 @@ StudyFlow 的 `socketio_client.py` 为独立实现，提供：
 - 只返回 `handshake=namespace_joined`、`learning_events_sent=0`、
   `progress_verified=false` 和 `ai5_compatible=null`，不输出凭据、原始请求、服务器消息。
 - 握手成功只证明旧版传输/认证当时成功，**无法证明 U校园AI5.0 允许旧版心跳消息或认可学习时长**。
+
+## Socket.IO 传输校验和 Windows sidecar 依赖门禁
+
+客户端将 Engine.IO ping、pong、noop、关闭帧和命名空间拒绝分开处理，
+服务器主动事件与未经关联的 ack 不再归类为“已接受”，不会据此更新课程完成率。
+新增断线、错误握手、超长响应和异常处理单测。
+
+Windows 构建加入 frozen sidecar `ucampus.heartbeat.capabilities` 探测：
+必须确认本地生成器和 `websocket-client` 均可加载，同时
+`sender_connected=false`、`server_verified=false`。
+这是无账号、无网络的**打包检查**，不是 U校园5.0 真实协议验收。

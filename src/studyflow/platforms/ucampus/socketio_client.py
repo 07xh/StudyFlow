@@ -89,6 +89,15 @@ class UCampusLegacySocket:
                 except Exception:
                     raise SocketProtocolError("UCAMPUS_SOCKET_TRANSPORT_UNKNOWN") from None
                 continue
+            if frame in ("3", "6"):
+                # Engine.IO pong and noop are not application acknowledgements.
+                continue
+            if frame == "1":
+                self.close()
+                raise SocketProtocolError("UCAMPUS_SOCKET_REMOTE_CLOSED")
+            if frame.startswith("44" + _NAMESPACE) or frame.startswith("41" + _NAMESPACE):
+                self.close()
+                raise SocketProtocolError("UCAMPUS_SOCKET_NAMESPACE_REJECTED")
             return frame
         raise SocketProtocolError("UCAMPUS_SOCKET_NO_ACK")
 
@@ -105,7 +114,11 @@ class UCampusLegacySocket:
             if not opening.startswith("0{"):
                 raise SocketProtocolError("UCAMPUS_SOCKET_HANDSHAKE_UNVERIFIED")
             packet = json.loads(opening[1:])
-            if not isinstance(packet, dict) or not isinstance(packet.get("sid"), str):
+            if (not isinstance(packet, dict)
+                    or not isinstance(packet.get("sid"), str)
+                    or not 1 <= len(packet["sid"]) <= 256
+                    or type(packet.get("pingInterval")) not in (int, type(None))
+                    or type(packet.get("pingTimeout")) not in (int, type(None))):
                 raise SocketProtocolError("UCAMPUS_SOCKET_HANDSHAKE_UNVERIFIED")
             # Legacy namespace connection; never echo credential-bearing frames.
             credentials = urlencode({"uuid": self._session.open_id,
@@ -118,7 +131,7 @@ class UCampusLegacySocket:
         except SocketProtocolError:
             self.close()
             raise
-        except (TypeError, ValueError, Exception):
+        except Exception:
             self.close()
             raise SocketProtocolError("UCAMPUS_SOCKET_TRANSPORT_UNKNOWN") from None
 
@@ -148,12 +161,13 @@ class UCampusLegacySocket:
             raise
         except Exception:
             raise SocketProtocolError("UCAMPUS_SOCKET_TRANSPORT_UNKNOWN") from None
-        # Return a coarse frame classification only. No raw server payload
-        # or secrets enter logs and no reply is treated as study credit.
+        # A server-initiated event ("42") is not a delivery receipt.
+        # Even an uncorrelated ack frame ("43") is not proof of study credit:
+        # this sender deliberately does not attach Socket.IO ack IDs.
         if response.startswith("42" + _NAMESPACE + ","):
-            return "event"
+            return "unsolicited_event"
         if response.startswith("43" + _NAMESPACE + ","):
-            return "ack_unverified"
+            return "unmatched_ack"
         return "unknown"
 
     def close(self) -> None:

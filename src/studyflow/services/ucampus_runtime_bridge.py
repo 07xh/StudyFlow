@@ -72,9 +72,17 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
     if operation == "ucampus.socket.diagnose":
         return diagnose_legacy_socket()
     if operation == "ucampus.heartbeat.capabilities":
+        # A dependency check only: no credentials, player, or network request.
+        try:
+            import websocket
+            socket_available = callable(getattr(websocket, "create_connection", None))
+        except ImportError:
+            socket_available = False
         return {"ok": True, "local_generation": True,
+                "socket_transport_available": socket_available,
+                "legacy_protocol_verified": False,
                 "sender_connected": False, "server_verified": False,
-                "message": "本地心跳生成已接入；U校园平台发送协议未验证"}
+                "message": "本地心跳生成及旧版 Socket.IO 传输可独立加载；U校园5.0 上报尚未验收"}
     runner = get_runner()
     if operation == "ucampus.heartbeat.stop" and request.get("graceful") is True:
         runner.shutdown()
