@@ -291,12 +291,14 @@ COMPILE_OK
 npm ci                       -> 74 packages installed
 npx tsc -b                   -> type check OK (exit 0)
 npx vite build               -> 1672 modules, dist 395 kB JS / 113 kB CSS
-npm test                     -> 188 tests / 175 pass / 13 fail
+npm test                     -> 189 tests / 176 pass / 13 fail
   13 项为仓库既有 ZHS（知到）与 classroom scope 用例；用提交前基底
-  c466574f 的 bridge.ts 对照同为 188 / 175 / 13，失败项完全一致，与心跳改动无关
+  c466574f 的 bridge.ts 对照同为 188 / 175 / 13（对照时尚无 copy-sync 用例），
+  失败项完全一致，与心跳改动无关
 node --test tests/xuexitongHeartbeatPlacement.test.cjs \
              tests/xuexitongCatalog.test.cjs \
-             tests/xuexitongChapterUI.test.cjs   -> 6 / 6 PASS
+             tests/xuexitongChapterUI.test.cjs \
+             tests/xuexitongHeartbeatCopySync.test.cjs  -> 7 / 7 PASS
 ```
 
 覆盖：47 项心跳模块与审计整改用例（含账号隔离恢复、真实发送计数、队列级暂停）
