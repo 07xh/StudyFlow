@@ -57,7 +57,7 @@ export type BridgeRequest =
 
 export type XuexitongSettings = {playback_speed:number;concurrency:number;skip_completed:boolean;verify_after_run:boolean};
 export type HeartbeatTaskView={
-  task_id:string;run_id:string;course_key:string;chapter:string;title:string;
+  task_id:string;run_id:string;course_key:string;chapter_id?:string;chapter:string;title:string;
   state:string;playing_time:number;duration:number;speed:number;
   last_send_state:string;sent_count:number;server_confirmed:boolean;
   server_play_time:number;end_reason:string;confirmed:boolean;resumable:boolean;
@@ -66,6 +66,8 @@ export type HeartbeatStatus={
   ok:boolean;running:boolean;paused:boolean;run_id:string;course_key:string;
   config:{speed:number;jobs:number;instant_complete:boolean;randomize_interval:boolean};
   task_count:number;tasks:HeartbeatTaskView[];
+  queue?:{total_chapters:number;active_chapters:number;paused_chapters:number;
+    queued_chapters:number;pending_tasks:number;running_tasks:number}|null;
   heartbeats:{sent:number;server_confirmed:number};
   queue_controls:{pause:boolean;resume:boolean;stop:boolean};
 };
