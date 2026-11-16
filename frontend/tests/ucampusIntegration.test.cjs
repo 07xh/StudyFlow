@@ -93,3 +93,15 @@ test("U校园 saved local history is inspectable but does not auto-replay",()=>{
   assert.match(panel,/不会自动续发或补交模拟事件/);
   assert.match(bridge,/UCampusFabricatedHistory/);
 });
+
+test("U校园 local exercise shows event progress without claiming watched progress",()=>{
+  const panel=read("components/UCampusHeartbeatPanel.tsx");
+  const bridge=read("bridge.ts");
+  assert.match(panel,/本地模拟事件进度/);
+  assert.match(panel,/localTotal=.*targetPerResource/);
+  assert.match(panel,/与视频播放、平台学时或课程完成状态无关/);
+  assert.match(panel,/aria-label="本地模拟事件进度"/);
+  assert.match(panel,/task\.generated\/targetPerResource/);
+  assert.match(bridge,/pulses_per_resource:number/);
+  assert.doesNotMatch(panel,/ucampus\.fabricated\.start/);
+});
