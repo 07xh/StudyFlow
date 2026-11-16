@@ -629,7 +629,7 @@ mod ipc_validation_tests {
             "variant":"ai","catalog_url":"","cookie":"sid=test","authorization":""}})).is_ok());
         for config in [json!({}), json!({"variant":"ai","cookie":""}),
             json!({"variant":"unknown","cookie":"sid=test"}),
-            json!({"variant":"ai","cookie":"bad\\nheader"})] {
+            json!({"variant":"ai","cookie":"bad\nheader"})] {
             assert!(validate(&json!({"id":"u","version":1,
                 "operation":"ucampus.session.configure","configuration":config})).is_err());
         }
