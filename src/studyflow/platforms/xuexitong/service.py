@@ -90,7 +90,7 @@ class XuexitongHeartbeatService:
             if operation == "xuexitong.heartbeat.stop":
                 return self.stop(request.get("run_id"))
             if operation == "xuexitong.heartbeat.logs":
-                return self.logs(int(request.get("limit", 50)))
+                return self.logs(int(request.get("limit", 50)), request.get("course_id"))
             raise ServiceError("XUEXITONG_UNKNOWN_OPERATION")
         except ServiceError as exc:
             return {"ok": False, "error": exc.code}
@@ -267,9 +267,16 @@ class XuexitongHeartbeatService:
     def stop(self, run_id: str | None = None) -> dict[str, Any]:
         return self._control("stop", run_id)
 
-    def logs(self, limit: int = 50) -> dict[str, Any]:
+    def logs(self, limit: int = 50, course_key: str | None = None) -> dict[str, Any]:
+        # Isolate diagnostics by account and course; account marker is never exposed.
+        account_marker = self._current_account_marker()
         with self._lock:
-            events = list(self._events)
+            events = [
+                {key: value for key, value in event.items() if key != "_account_marker"}
+                for event in self._events
+                if event.get("_account_marker") == account_marker
+                and (course_key is None or event.get("course_key") == course_key)
+            ]
         return {"ok": True, "events": events[-max(0, min(limit, 500)):]}
 
     def _control(self, action: str, run_id: str | None = None) -> dict[str, Any]:
@@ -330,7 +337,9 @@ class XuexitongHeartbeatService:
 
     def _record(self, event: str, payload: dict[str, Any]) -> None:
         with self._lock:
-            self._events.append({"event": event, "at": round(self._clock(), 3), **payload})
+            self._events.append({"event": event, "at": round(self._clock(), 3), **payload,
+                                 "run_id": self._run_id, "course_key": self._course_key,
+                                 "_account_marker": self._account_marker})
 
     @staticmethod
     def _public_snapshot(snapshot: Any) -> dict[str, Any]:
