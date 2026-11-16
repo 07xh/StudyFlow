@@ -7,7 +7,7 @@ import {friendlyBridgeError,request,type XuexitongSettings} from "../bridge";
 import "./XuexitongHeartbeatPanel.css";
 
 export type HeartbeatTaskView={
-  task_id:string;run_id:string;course_key:string;chapter:string;title:string;
+  task_id:string;run_id:string;course_key:string;chapter_id?:string;chapter:string;title:string;
   state:string;playing_time:number;duration:number;speed:number;
   last_send_state:string;sent_count:number;server_confirmed:boolean;
   server_play_time:number;end_reason:string;confirmed:boolean;resumable:boolean;
@@ -17,6 +17,8 @@ export type HeartbeatStatus={
   ok:boolean;running:boolean;paused:boolean;run_id:string;course_key:string;
   config:{speed:number;jobs:number;instant_complete:boolean;randomize_interval:boolean};
   task_count:number;tasks:HeartbeatTaskView[];
+  queue?:{total_chapters:number;active_chapters:number;paused_chapters:number;
+    queued_chapters:number;pending_tasks:number;running_tasks:number}|null;
   heartbeats:{sent:number;server_confirmed:number};
   queue_controls:{pause:boolean;resume:boolean;stop:boolean};
 };
@@ -24,9 +26,18 @@ export type HeartbeatStatus={
 export type HeartbeatLog={event:string;at:number;[key:string]:unknown};
 
 const stateLabels:Record<string,string>={
-  pending:"等待中",running:"运行中",paused:"已暂停",succeeded:"服务端已确认",
+  pending:"排队中",not_started:"未启动",running:"运行中",paused:"已暂停",succeeded:"服务端已确认",
   failed:"失败",stopped:"已停止",interrupted:"中断待续"
 };
+
+const formatDuration=(seconds:number):string=>{
+  const safe=Math.max(0,Math.floor(Number.isFinite(seconds)?seconds:0));
+  return `${Math.floor(safe/60)}:${String(safe%60).padStart(2,"0")}`;
+};
+const localPercent=(task:HeartbeatTaskView):number|null=>
+  task.duration>0&&Number.isFinite(task.playing_time)&&Number.isFinite(task.duration)
+    ?Math.max(0,Math.min(100,Math.round(task.playing_time/task.duration*100)))
+    :null;
 
 const sendLabels:Record<string,string>={
   confirmed:"服务端确认",reported:"已发出未确认",forbidden:"风控拒绝(403)",
@@ -39,7 +50,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
 }){
   const [speed,setSpeed]=useState(1);
   const [jobs,setJobs]=useState(2);
-  const [instant,setInstant]=useState(true);
+  const [instant,setInstant]=useState(false);
   const [mediaType,setMediaType]=useState<"all"|"Video"|"Audio">("all");
   const [status,setStatus]=useState<HeartbeatStatus|null>(null);
   const [logs,setLogs]=useState<HeartbeatLog[]>([]);
@@ -138,11 +149,12 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const running=Boolean(currentStatus?.running);
   const paused=Boolean(currentStatus?.paused);
   const tasks=currentStatus?.tasks||[];
+  const queue=currentStatus?.queue;
   const controls=currentStatus?.queue_controls;
 
   return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="学习通本地心跳任务">
     <p className="sf-hint">
-      已连接学序本地自定义任务服务（实验性）；本地记录与平台核验分别统计，未经平台确认不显示为已完成。速度、并发在启动时保存；其他选项仅本次生效。
+      本地计时不代表学习通已确认完成。运行章节数来自执行器实时状态，排队任务不会算作正在运行；速度、并发在启动时保存。
     </p>
 
     <div className="sf-settings-row">
@@ -186,6 +198,9 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
       <div><dt>运行状态</dt><dd>{!currentStatus?"尚未读取":running?(paused?"已暂停":"运行中"):tasks.length?"历史记录（未运行）":"空闲"}</dd></div>
       <div><dt>本地已申报</dt><dd>{currentStatus?.heartbeats.sent??0}</dd></div>
       <div><dt>服务端确认</dt><dd>{currentStatus?.heartbeats.server_confirmed??0}</dd></div>
+      <div><dt>正在运行章节</dt><dd>{queue?`${queue.active_chapters} / ${queue.total_chapters}`:"—"}</dd></div>
+      <div><dt>排队章节</dt><dd>{queue?queue.queued_chapters:"—"}</dd></div>
+      <div><dt>排队任务</dt><dd>{queue?queue.pending_tasks:"—"}</dd></div>
       <div><dt>任务数</dt><dd>{currentStatus?.task_count??0}</dd></div>
       <div><dt>运行 ID</dt><dd>{currentStatus?.run_id||"—"}</dd></div>
       <div><dt>当前配置</dt><dd>{running&&currentStatus?`${currentStatus.config.speed}x / ${currentStatus.config.jobs} 并发`:"—"}</dd></div>
@@ -195,16 +210,34 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     {tasks.length===0?<div className="sf-xxt-empty" role="status">暂无任务记录，开始后将在这里显示执行状态。</div>:
     <div className="sf-xxt-table-scroll" role="region" aria-label="学习通任务状态表" tabIndex={0}>
     <table className="sf-task-table" aria-label="心跳任务状态">
-      <thead><tr><th>任务</th><th>状态</th><th>本地记录（非播放证明）</th><th>服务端进度</th><th>最近一次请求</th></tr></thead>
+      <thead><tr><th>任务与章节</th><th>运行状态</th><th>本地计时（非平台进度）</th><th>学习通返回状态</th><th>最近一次请求</th></tr></thead>
       <tbody>
-        {tasks.map(task=>
-          <tr key={task.task_id}>
-            <td>{task.title||task.task_id}</td>
-            <td>{stateLabels[task.state]||task.state}</td>
-            <td>{task.playing_time}/{task.duration}s（{task.sent_count} 次）</td>
-            <td>{task.server_confirmed?"已确认":"未确认"}{task.server_play_time?` · ${task.server_play_time}s`:""}</td>
+        {tasks.map(task=>{
+          const percent=localPercent(task);
+          return <tr key={task.task_id}>
+            <td><strong>{task.title||task.task_id}</strong><small className="sf-xxt-task-chapter">{task.chapter||"未知章节"}</small></td>
+            <td><span className={`sf-xxt-task-state sf-xxt-task-state--${task.state}`}>{stateLabels[task.state]||task.state}</span></td>
+            <td>
+              <div className="sf-xxt-local-time">
+                <span>{formatDuration(task.playing_time)} / {task.duration>0?formatDuration(task.duration):"未知"}</span>
+                <span>{percent===null?"—":`${percent}%`}</span>
+              </div>
+              {percent!==null?<div className="sf-xxt-progress" role="progressbar"
+                aria-label={`本地计时：${task.title||task.task_id}`}
+                aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+                <span style={{width:`${percent}%`}}/>
+              </div>:<small className="sf-xxt-progress-unknown">时长未知，暂不显示进度</small>}
+              <small className="sf-xxt-task-chapter">本地记录 · 已发送 {task.sent_count} 次</small>
+            </td>
+            <td>
+              <strong>{task.server_confirmed?"已确认完成":task.last_send_state?"未确认完成":"待核验"}</strong>
+              <small className="sf-xxt-task-chapter">
+                {task.server_play_time>0?`平台返回 ${formatDuration(task.server_play_time)}`:"未获取可确认的平台观看时长"}
+              </small>
+            </td>
             <td>{sendLabels[task.last_send_state]||task.last_send_state}</td>
-          </tr>)}
+          </tr>;
+        })}
       </tbody>
     </table>
     </div>}
