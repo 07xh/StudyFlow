@@ -92,6 +92,10 @@ test("U校园 read-only UI keeps unit selection and account copy precise",()=>{
   assert.ok(login.includes('setPassword("");'));
 
   assert.match(login,/operation:"courses.list",platform:"ucampus"/);
+  assert.match(login,/const verifyCatalog=async\(\)/);
+  assert.match(login,/const summary=await verifyCatalog\(\)/);
+  assert.match(login,/SSO 会话已保存，但课程读取失败/);
+
   assert.match(login,/尚不能确认该账号已有课程/);
   const bridge=read("bridge.ts");
   for(const code of ["UCAMPUS_CATALOG_UNAVAILABLE","UCAMPUS_CATALOG_FORMAT_UNVERIFIED"]){
