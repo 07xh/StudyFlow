@@ -5,8 +5,8 @@ import {Download,FolderOpen,History,RefreshCw} from "lucide-react";
 import {friendlyUpdateError,request,type AvailableUpdate,type UpdateSettings} from "../bridge";
 import {OFFICIAL_RELEASES_URL,openOfficialReleases,openLatestRelease} from "../releaseNavigation";
 
-export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog}:{
-  desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;onOpenChangelog:()=>void;
+export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedded=false}:{
+  desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;onOpenChangelog:()=>void;embedded?:boolean;
 }){
   const [settings,setSettings]=useState<UpdateSettings>({channel:"beta",mode:"download"});
   const [current,setCurrent]=useState("");
@@ -74,7 +74,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog}:{
   }
 
   return <section className="settings-card" hidden={!visible}>
-    <div className="section-head"><h3>版本与更新</h3><span>{current?"v"+current:"Windows 桌面版"}</span></div>
+    <div className="section-head">{!embedded&&<h3>版本与更新</h3>}<span>{current?"v"+current:"Windows 桌面版"}</span></div>
     <div className="sf-settings-line"><label htmlFor="update-channel">更新通道</label>
       <select id="update-channel" value={settings.channel} disabled={!desktop||busy||!loaded}
         onChange={e=>void save({...settings,channel:e.target.value as UpdateSettings["channel"]})}>

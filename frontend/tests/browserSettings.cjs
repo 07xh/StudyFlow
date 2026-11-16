@@ -57,7 +57,7 @@ const server=http.createServer((req,res)=>{
    await global.getByRole('button',{name:'版本与更新'}).click();
    assert.equal(await global.getByRole('heading',{name:'版本与更新'}).count(),1);
    await global.getByRole('button',{name:'关于与开源'}).click();
-   assert.equal(await global.getByRole('heading',{name:'关于与开源'}).count(),1);
+   assert.equal(await global.getByRole('heading',{name:'关于与开源',exact:true}).count(),1);
    await global.getByRole('button',{name:'通用设置'}).click();
    assert.equal(await global.getByRole('group',{name:'主题模式'}).count(),1);
    assert.equal(await global.evaluate(e=>e.scrollWidth>e.clientWidth),false,'Global settings must fit horizontally');

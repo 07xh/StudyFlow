@@ -926,8 +926,9 @@ export default function App(){
           <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
         </div>
       </section>}
-      {globalSettingsTab==="updates"&&<UpdatePanel desktop={desktop&&consentAccepted}
-        visible={globalSettingsOpen} onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>}
+      <UpdatePanel desktop={desktop&&consentAccepted}
+        visible={globalSettingsOpen&&globalSettingsTab==="updates"} embedded
+        onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
       {globalSettingsTab==="about"&&<ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>}
     </GlobalSettingsModal>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
