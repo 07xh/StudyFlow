@@ -17,7 +17,12 @@ test("U校园 reads no invented courses or progress",()=>{
   const app=read("App.tsx");
   const login=read("components/UCampusLoginPanel.tsx");
   assert.match(app,/renderPlatformDetail\("ucampus"\)/);
-  assert.match(app,/等待完成 U校园5\.0 真实章节与作业接口验收/);
+  assert.match(app,/<UCampusCourseDetailPanel course=\\{course\\} desktop=\\{desktop\\}\\/>/);
+  const detail=read("components/UCampusCourseDetailPanel.tsx");
+  assert.match(detail,/ucampus\\.units\\.list/);
+  assert.match(detail,/ucampus\\.unit\\.tasks/);
+  assert.match(detail,/待核验/);
+  assert.doesNotMatch(detail,/Math\\.random\\(\\)|fakeCourse|demoCourse/);
   assert.match(login,/type="password"/);
   assert.doesNotMatch(login,/localStorage\.(?:getItem|setItem)/);
   assert.doesNotMatch(login,/demoCourse|fakeCourse/);
