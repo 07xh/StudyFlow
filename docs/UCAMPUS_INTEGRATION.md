@@ -10,6 +10,7 @@
 | AI版课程/书架读取 | `platforms/ucampus/adapter.py` | 真实 API 只读实现，待账号验收 |
 | 单元、资源、通过状态 | `platforms/ucampus/course_progress.py` | 真实 API 只读实现，待账号验收 |
 | 凭据保存、状态查询和删除 | `platforms/ucampus/credentials.py` | Windows Credential Manager；不回传原始凭据 |
+| 应用内 SSO 账号密码登录 | `platforms/ucampus/sso_login.py` → `ucampus.session.login` → `UCampusLoginPanel.tsx` | 使用参考项目记录的 U校园AI 官方 SSO 登录接口；本机登录、仅保存返回的 JWT 会话，**待真实账号验收**；验证码/限流不绕过 |
 | 账号页验证课程接口 | `UCampusLoginPanel.tsx` → `courses.list` | 主动执行一次真实目录 GET；识别会话过期、格式不匹配及空课程，**不把配置成功当成登录成功** |
 | 本地模拟事件 | `platforms/ucampus/local_runtime.py`、`services/ucampus_runtime_bridge.py` | 不发送学习事件；与课程完成无关 |
 | 旧版 Socket.IO 诊断 | `platforms/ucampus/socketio_client.py` | 手动认证握手，不发送学习事件 |
@@ -19,6 +20,14 @@
 
 `services/bridge.py` 提供统一 JSONL IPC；`src-tauri/src/lib.rs` 对操作与请求范围进行校验。
 `App.tsx` 现在挂载独立的**服务器只读进度核验**及实验性事件模块；旧版 `UCampusHeartbeatPanel.tsx` 本地练习 UI 已删除。`local_runtime.py`、`ucampus_runtime_bridge.py` 目前保留为后端兼容代码，不在前端展示，也不能用于判定观看完成。
+
+## 账号登录边界
+
+- U校园5.0 / AI版的账号密码登录通过固定 `https://sso.unipus.cn/sso/0.1/sso/cip/login` 执行；AES-CBC/PKCS7 字段封装来自已登记的 GPL-3.0 参考实现。**协议可用性须经本人账号验收**。
+- 不保存密码、用户名或 SSO refresh token；成功时仅保存 SSO 返回的 JWT Cookie 到 Windows 凭据管理器，不把密码返回前端或日志。会话过期后需要重新登录；不承诺自动续期。
+- 对验证码、滑块、登录限流仅显示固定状态码，不模拟用户验证、不绕过或无限重试。
+- 账号密码登录与手动导入 Cookie 都不会直接算作课程通过；需要再点击“验证课程读取”，进入真实课程核验。
+- 实际 U校园AI `course-v2` ID 可包含 `+` 分隔符：Python 和 Rust 只读 IPC 已支持字面 `+`，仍拒绝斜杠、百分号、查询字符及控制字符。
 
 ## 本地练习与服务器状态的区别
 
