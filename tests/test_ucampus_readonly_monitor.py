@@ -88,3 +88,17 @@ def test_damaged_checkpoint_fails_closed(store):
     assert monitor.status()["enabled"] is False
     store.write_text("{invalid json")
     assert monitor.status()["enabled"] is False
+
+
+def test_failed_refresh_hides_previously_verified_counts(store):
+    monitor.configure("course-v2:eng+course+1", "U1", True)
+    class First:
+        def list_tasks(self, course_id, unit_id):
+            return [{"id": "v", "completed": True}]
+    assert monitor.tick(clock=lambda: 2_000_000, reader_factory=First)["passed"] == 1
+    class Fails:
+        def list_tasks(self, course_id, unit_id):
+            raise UCampusProgressError("UCAMPUS_SESSION_EXPIRED")
+    result = monitor.tick(clock=lambda: 2_000_070, reader_factory=Fails)
+    assert result["state"] == "UCAMPUS_SESSION_EXPIRED"
+    assert (result["total"], result["passed"], result["checked_at"]) == (0, 0, "")
