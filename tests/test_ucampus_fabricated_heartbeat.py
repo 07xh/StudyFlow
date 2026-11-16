@@ -496,3 +496,20 @@ def test_shutdown_before_first_run_never_writes_invalid_snapshot():
         assert state["phase"]=="idle"
         assert state["snapshot_store_configured"] is True
         assert state["restart_resume_supported"] is False
+
+def test_saved_local_history_uses_terminal_phase_without_replay():
+    with tempfile.TemporaryDirectory() as folder:
+        store = fh.FabricatedStateStore(Path(folder) / "state.json")
+        runner = FabricatedRunner(
+            transport_factory=FakeTransport, state_store=store
+        )
+        started = runner.start("course-v2:100", "u1", [target()], pulses=1,
+                               heartbeat_interval=0.01)
+        assert runner.wait(3)
+        saved = store.load(started["run_id"])
+        assert saved is not None
+        assert saved["phase"] == "finished_locally"
+        records = store.list_recent("course-v2:100")
+        assert records[0]["phase"] == "finished_locally"
+        assert records[0]["resume_available"] is False
+        runner.shutdown()
