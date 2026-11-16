@@ -71,6 +71,13 @@ class TestHeartbeatBridge(unittest.TestCase):
         self.assertEqual(response["id"], "hb-ipc-1")
         self.assertEqual(self.fake.calls[0][0], "xuexitong.heartbeat.status")
 
+    def test_credentials_change_resets_persistent_worker(self) -> None:
+        self.assertTrue(bridge.reset_for_credentials_change())
+        self.assertIsNone(bridge._SERVICE)
+        operations = [name for name, _payload in self.fake.calls]
+        self.assertIn("xuexitong.heartbeat.stop", operations)
+        self.assertIn("__wait__", operations)
+
     def test_shutdown_stops_and_waits(self) -> None:
         bridge.shutdown()
         operations = [name for name, _payload in self.fake.calls]

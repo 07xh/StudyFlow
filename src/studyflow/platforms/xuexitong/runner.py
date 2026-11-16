@@ -80,6 +80,7 @@ class RunConfig:
     rng: random.Random | None = None
     # 归属与只读核验
     run_id: str = ""
+    account_marker: str = ""
     status_provider: Callable[[VideoTarget], VideoStatus | None] | None = None
     skip_completed: bool = True
     verify_after_run: bool = True
@@ -95,7 +96,7 @@ class RunConfig:
             raise ValueError("INVALID_XUEXITONG_TICK")
         if self.dtype not in ("Video", "Audio"):
             raise ValueError("INVALID_XUEXITONG_DTYPE")
-        if self.max_workers < 1:
+        if not 1 <= self.max_workers <= 4:
             raise ValueError("INVALID_XUEXITONG_JOBS")
         if self.max_network_retries < 0 or self.max_forbidden_retries < 0:
             raise ValueError("INVALID_XUEXITONG_RETRY")
@@ -197,6 +198,7 @@ class HeartbeatTaskRunner:
         self._snapshot = TaskSnapshot(
             task_id=target.task_id,
             run_id=config.run_id,
+            account_marker=config.account_marker,
             course_key=target.course_key,
             chapter_id=target.chapter_id,
             chapter=target.chapter,
@@ -367,10 +369,10 @@ class HeartbeatTaskRunner:
         result = self.sender.send(packet)
         if result.state is SendState.FORBIDDEN:
             result = self._recover_after_forbidden(packet, result)
-        self._snapshot.sent_count += 1
+        self._snapshot.sent_count += int(result.sent)
         self._snapshot.attempts += result.attempts
         self._snapshot.last_send_state = result.state.value
-        self._snapshot.server_confirmed = result.server_confirmed
+        self._snapshot.server_confirmed = self._snapshot.server_confirmed or result.server_confirmed
         if apply_progress:
             self._snapshot.playing_time = max(self._snapshot.playing_time, result.playing_time)
         self._persist()
@@ -559,7 +561,7 @@ class ChapterQueue:
             if self._cancelled.is_set():
                 break
             target.validate()
-            resumed = self.store.load(target.task_id) if self.store is not None else None
+            resumed = self.store.load(target.task_id, self.config.account_marker) if self.store is not None else None
             # 断点只在同一课程内恢复，禁止把别的课程/批次的进度带进本任务
             resume_at = (
                 resumed.playing_time

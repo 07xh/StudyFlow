@@ -346,7 +346,8 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         .ok_or("Invalid request id")?.to_string();
     let is_persistent = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr.")
-            || op.starts_with("xuexitong.heartbeat."));
+            || op.starts_with("xuexitong.heartbeat.")
+            || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"));
     if is_persistent {
         // Both QR operations and the long-running learning task share the existing
         // persistent JSONL worker. One-shot requests must not own a daemon thread.

@@ -62,6 +62,22 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
     return get_service().handle(operation, payload)
 
 
+def reset_for_credentials_change() -> bool:
+    """Stop and release the in-memory session before account switch/logout."""
+    global _SERVICE
+    with _LOCK:
+        service = _SERVICE
+    if service is None:
+        return True
+    service.handle("xuexitong.heartbeat.stop", {})
+    if not service.wait(20.0):
+        return False
+    with _LOCK:
+        if _SERVICE is service:
+            _SERVICE = None
+    return True
+
+
 def shutdown() -> None:
     """stdin EOF / 进程退出前：停止队列、等待线程收尾、确保状态落盘。"""
     with _LOCK:

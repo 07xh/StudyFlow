@@ -10,6 +10,7 @@ IPC 输出遵循 docs/IPC_CONTRACT.md：只给公开错误码和状态，
 """
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
 import uuid
@@ -72,6 +73,7 @@ class XuexitongHeartbeatService:
         self._config: RunConfig | None = None
         self._course_key = ""
         self._run_id = ""
+        self._account_marker = ""
 
     def handle(self, operation: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         """JSONL IPC 分发入口。由 services/bridge.py 的 operation 白名单调用。"""
@@ -80,7 +82,7 @@ class XuexitongHeartbeatService:
             if operation == "xuexitong.heartbeat.start":
                 return self.start(request)
             if operation == "xuexitong.heartbeat.status":
-                return self.status()
+                return self.status(request.get("course_id") or request.get("course_key"))
             if operation == "xuexitong.heartbeat.pause":
                 return self.pause(request.get("run_id"))
             if operation == "xuexitong.heartbeat.resume":
@@ -131,6 +133,10 @@ class XuexitongHeartbeatService:
             raise ServiceError("XUEXITONG_INVALID_PARAMETER") from exc
 
         session = self._make_session()
+        # Bind persisted progress to the logged-in account without writing raw
+        # user IDs or credentials into the state file.
+        account_marker = self._current_account_marker()
+        config.account_marker = account_marker
         config.status_provider = self._resolve_status_provider(session)
         raw_targets = self._discover_targets(course_key)
         targets: list[VideoTarget] = []
@@ -165,6 +171,7 @@ class XuexitongHeartbeatService:
             self._config = config
             self._course_key = course_key
             self._run_id = run_id
+            self._account_marker = account_marker
             self._thread = threading.Thread(target=self._run, args=(queue,), daemon=True)
             self._thread.start()
 
@@ -197,43 +204,60 @@ class XuexitongHeartbeatService:
         thread.join(timeout)
         return not thread.is_alive()
 
-    def status(self) -> dict[str, Any]:
+    def _current_account_marker(self) -> str:
+        if self._session_factory is not None:
+            # Offline tests use injected sessions, not a real user identity.
+            return ""
+        try:
+            userid, _fid = self._identity()
+        except (ServiceError, ValueError):
+            return "__not_signed_in__"
+        return hashlib.sha256(("studyflow-xuexitong-state-v1:" + userid).encode()).hexdigest()
+
+    def status(self, course_key: str | None = None) -> dict[str, Any]:
+        if course_key is not None and (not isinstance(course_key, str) or
+                                       not 1 <= len(course_key) <= 96):
+            raise ServiceError("XUEXITONG_INVALID_PARAMETER")
+        account_marker = self._current_account_marker()
         with self._lock:
             queue = self._queue
             config = self._config
             thread = self._thread
-            course_key = self._course_key
+            active_course = self._course_key
             run_id = self._run_id
-        running = bool(thread is not None and thread.is_alive())
-        # 审计 P2：统计只归属当前运行批次；无批次时按当前课程过滤，
-        # 避免不同课程、不同批次的旧状态混入任务中心。
-        if run_id:
-            snapshots = self.store.list_by_run(run_id)
-        elif course_key:
-            snapshots = self.store.list_by_course(course_key)
+            active_account = self._account_marker
+
+        # A course switch or credential change must never surface another
+        # course/account's run ID, queue controls or previous task snapshots.
+        is_active_scope = ((course_key is None or course_key == active_course)
+                           and active_account == account_marker and bool(run_id))
+        running = bool(is_active_scope and thread is not None and thread.is_alive())
+        selected_course = course_key or active_course
+        if is_active_scope:
+            snapshots = self.store.list_by_run(run_id, account_marker)
+        elif selected_course:
+            snapshots = self.store.list_by_course(selected_course, account_marker)
         else:
-            snapshots = self.store.list_all()
+            snapshots = []
         tasks = [self._public_snapshot(item) for item in snapshots]
         sent = sum(item.sent_count for item in snapshots)
         confirmed = sum(1 for item in snapshots if item.server_confirmed)
         return {
             "ok": True,
             "running": running,
-            "run_id": run_id,
-            "course_key": course_key,
+            "run_id": run_id if is_active_scope else "",
+            "course_key": selected_course,
             "config": {
-                "speed": config.speed if config else 1.0,
-                "jobs": config.max_workers if config else 2,
-                "instant_complete": config.instant_complete if config else True,
-                "randomize_interval": config.randomize_interval if config else False,
+                "speed": config.speed if is_active_scope and config else 1.0,
+                "jobs": config.max_workers if is_active_scope and config else 2,
+                "instant_complete": config.instant_complete if is_active_scope and config else True,
+                "randomize_interval": config.randomize_interval if is_active_scope and config else False,
             },
             "task_count": len(tasks),
             "tasks": tasks,
             "heartbeats": {"sent": sent, "server_confirmed": confirmed},
             "queue_controls": {
-                "pause": queue is not None,
-                "resume": queue is not None,
-                "stop": queue is not None,
+                "pause": running, "resume": running, "stop": running,
             },
         }
 

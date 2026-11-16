@@ -319,7 +319,7 @@ class TestRunner(unittest.TestCase):
         for bad in (dict(speed=0.1), dict(speed=2.5),
                     dict(heartbeat_interval_video_seconds=10),
                     dict(heartbeat_interval_video_seconds=120),
-                    dict(max_workers=0), dict(dtype="Slides")):
+                    dict(max_workers=0), dict(max_workers=5), dict(dtype="Slides")):
             with self.subTest(bad=bad):
                 with self.assertRaises(ValueError):
                     RunConfig(**bad).validate()
@@ -348,6 +348,31 @@ class TestRunner(unittest.TestCase):
         thread.join(timeout=3)
         self.assertEqual(runner.state, TaskState.STOPPED.value)
         self.assertFalse(runner.snapshot.confirmed)
+
+    def test_failed_network_call_is_not_counted_as_sent(self) -> None:
+        target = make_target()
+        session = FakeSession([OSError("offline")])
+        runner = HeartbeatTaskRunner(target, make_sender(session), RunConfig(instant_complete=False))
+        runner._send(build_packet(target, 12))
+        self.assertEqual(runner.snapshot.sent_count, 0)
+        self.assertEqual(runner.snapshot.last_send_state, SendState.NETWORK_ERROR.value)
+
+    def test_state_persistence_is_scoped_by_account(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            store = StateStore(os.path.join(folder, "state.json"))
+            first = TaskSnapshot(task_id="same", account_marker="account-a",
+                                 course_key="course", run_id="r1", playing_time=40)
+            second = TaskSnapshot(task_id="same", account_marker="account-b",
+                                  course_key="course", run_id="r2", playing_time=4)
+            store.save(first)
+            store.save(second)
+            self.assertEqual(store.load("same", "account-a").playing_time, 40)
+            self.assertEqual(store.load("same", "account-b").playing_time, 4)
+            self.assertIsNone(store.load("same", "unknown"))
+            self.assertEqual(len(store.list_by_course("course", "account-a")), 1)
+            self.assertEqual(len(store.list_by_run("r2", "account-a")), 0)
+            raw = Path(store.path).read_text(encoding="utf-8")
+            self.assertNotIn("dtoken", raw)
 
     def test_state_persistence_and_resume(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
