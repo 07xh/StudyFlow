@@ -56,12 +56,12 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     try{
       const [nextStatus,nextLogs]=await Promise.all([
         request<HeartbeatStatus>({operation:"xuexitong.heartbeat.status",course_id:course.course_id}),
-        request<{ok:boolean;events:HeartbeatLog[]}>({operation:"xuexitong.heartbeat.logs",limit:30}),
+        request<{ok:boolean;events:HeartbeatLog[]}>({operation:"xuexitong.heartbeat.logs",limit:30,course_id:course.course_id}),
       ]);
       if(selectedCourse.current!==course.course_id)return;
       if(nextStatus.course_key===course.course_id){
         setStatus(nextStatus);
-        setLogs(nextStatus.run_id?(nextLogs.events||[]):[]);
+        setLogs(nextStatus.run_id?(nextLogs.events||[]).filter(entry=>entry.run_id===nextStatus.run_id):[]);
       }
     }catch(error){
       if(selectedCourse.current===course.course_id)setMessage(friendlyBridgeError(error));
