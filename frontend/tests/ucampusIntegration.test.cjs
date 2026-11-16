@@ -13,16 +13,16 @@ test("U校园 is registered as a separate fourth platform",()=>{
   assert.match(bridge,/result.size !== 4/);
   assert.match(bridge,/ucampus\.session\.configure/);
 });
-test("U校园 reads no invented courses or progress",()=>{
+test("U校园 reads only supported task and server status",()=>{
   const app=read("App.tsx");
   const login=read("components/UCampusLoginPanel.tsx");
-  assert.match(app,/renderPlatformDetail\("ucampus"\)/);
-  assert.match(app,/<UCampusCourseDetailPanel course=\\{course\\} desktop=\\{desktop\\}\\/>/);
   const detail=read("components/UCampusCourseDetailPanel.tsx");
-  assert.match(detail,/ucampus\\.units\\.list/);
-  assert.match(detail,/ucampus\\.unit\\.tasks/);
+  assert.match(app,/renderPlatformDetail\("ucampus"\)/);
+  assert.ok(app.includes("<UCampusCourseDetailPanel course={course} desktop={desktop}/>"));
+  assert.ok(detail.includes('operation:"ucampus.units.list"'));
+  assert.ok(detail.includes('operation:"ucampus.unit.tasks"'));
   assert.match(detail,/待核验/);
-  assert.doesNotMatch(detail,/Math\\.random\\(\\)|fakeCourse|demoCourse/);
+  assert.doesNotMatch(detail,/Math\.random\(\)|fakeCourse|demoCourse/);
   assert.match(login,/type="password"/);
   assert.doesNotMatch(login,/localStorage\.(?:getItem|setItem)/);
   assert.doesNotMatch(login,/demoCourse|fakeCourse/);
