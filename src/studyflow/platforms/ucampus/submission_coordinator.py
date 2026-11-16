@@ -92,8 +92,8 @@ class UCampusSubmissionCoordinator:
             receipt = self._transport.send_result(pulse)
             if not isinstance(receipt, SendResult):
                 raise UCampusSubmissionError("UCAMPUS_SEND_RECEIPT_UNVERIFIED")
-        except UCampusSendError:
-            # An expired session or rejected evidence is not an accepted send.
+        except (UCampusSendError, UCampusSubmissionError):
+            # Preserve precise errors for rejected evidence or invalid receipts.
             raise
         except Exception:
             raise UCampusSubmissionError("UCAMPUS_SEND_UNAVAILABLE") from None
