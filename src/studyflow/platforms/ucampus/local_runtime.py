@@ -63,6 +63,7 @@ class UCampusLocalRunner:
         self._paused = False
         self._tasks: dict[str, dict] = {}
         self._started_at = 0.0
+        self._pulses_per_resource = 0
 
     def start(self, course_id: str, tasks: list[MediaTask], *,
               transport: PulseTransport | None = None,
@@ -86,6 +87,7 @@ class UCampusLocalRunner:
             self._phase = "running"
             self._paused = False
             self._started_at = time.monotonic()
+            self._pulses_per_resource = pulses_per_resource
             self._tasks = {task.resource_id: {
                 "resource_id": task.resource_id, "chapter_id": task.chapter_id,
                 "title": task.title, "state": "queued", "generated": 0,
@@ -216,6 +218,9 @@ class UCampusLocalRunner:
                 "phase": self._phase if own else "idle",
                 "active": active,
                 "paused": bool(active and self._paused),
+                # Display-only target for the local exercise, not a media
+                # duration or server-side learning-progress denominator.
+                "pulses_per_resource": self._pulses_per_resource if own else 0,
                 "tasks": rows,
                 "generated": sum(row["generated"] for row in rows),
                 "sent": sum(row["attempted"] for row in rows),
