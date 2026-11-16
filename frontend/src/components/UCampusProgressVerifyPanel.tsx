@@ -72,7 +72,7 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
   }
 
   async function toggleMonitor(){
-    if(!desktop||monitorBusy||(!unitId&&!monitor?.enabled))return;
+    if(!desktop||monitorBusy||!unitId)return;
     const enabled=!(monitor?.enabled&&monitor.course_id===courseId&&monitor.unit_id===unitId);
     setMonitorBusy(true);setMonitorError("");
     try{
@@ -126,9 +126,9 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
       <p className="sf-muted">启用后仅保存当前课程、单元和匿名会话标记。学序重新打开后自动恢复服务器进度查询；不会恢复或补发本地模拟心跳，也不等同于 Windows 开机自启动。</p>
       <div className="actions">
         <button type="button" className="secondary"
-          disabled={!desktop||monitorBusy||(!unitId&&!monitor?.enabled)}
+          disabled={!desktop||monitorBusy||!unitId}
           onClick={()=>void toggleMonitor()}>
-          {monitorBusy?"正在更新…":monitor?.enabled?"停止自动核验":"启用重启后自动核验"}
+          {monitorBusy?"正在更新…":monitor?.enabled&&monitor.course_id===courseId&&monitor.unit_id===unitId?"停止自动核验":monitor?.enabled?"切换核验到当前单元":"启用重启后自动核验"}
         </button>
         <button type="button" className="secondary" disabled={!desktop||monitorBusy}
           onClick={()=>void request<UCampusMonitorStatus>({operation:"ucampus.monitor.status"})
