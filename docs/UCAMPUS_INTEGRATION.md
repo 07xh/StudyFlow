@@ -77,7 +77,7 @@
 章节内资源顺序执行，底层支持按章节分组的受控并发；
 UI 当前只允许选一个单元，不对用户展示伪造课程、资源或进度。
 
-**当前生产发送尚未上线**：`PulseTransport` 只是明确的适配器接口，
+**旧版本地练习入口的生产发送未启用**：`local_runtime.py` 的 `PulseTransport` 仅为适配器接口；新增的 `fabricated_*` 实验性写入模块另行存在，尚未通过真实账号验证。
 `ucampus_runtime_bridge` 仍以 `transport=None` 启动，
 所以能够实际生成本地事件，但不会向 U校园发请求：
 `generated` 可增长，`sent` 必须为 0，
