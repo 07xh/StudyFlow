@@ -15,6 +15,8 @@ test("release rc.28 metadata, installer, bundled notes and publisher are aligned
  const workflow=repo(".github/workflows/build-windows.yml");
  assert.ok(workflow.includes("Publish verified "+version+" pre-release"));
  assert.ok(workflow.includes("gh release create v"+version));
+ assert.ok(workflow.includes('current_main=$(git ls-remote origin refs/heads/main'));
+ assert.ok(workflow.includes('if gh release view v'+version+' --repo'));
  assert.ok(workflow.includes("docs/RELEASE_CANDIDATE_0.1.1_RC28.md"));
  assert.ok(repo("docs/RELEASE_CANDIDATE_0.1.1_RC28.md").includes("搜索"));
 });
