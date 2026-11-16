@@ -156,15 +156,20 @@ class UCampusLocalRunner:
                         row = self._tasks[task.resource_id]
                         row["local_elapsed_seconds"] = pulse.local_elapsed_seconds
                         row["generated"] += 1
+                        # Bookkeeping is protected, but never hold the global
+                        # scheduler lock across potentially blocking I/O.
                         if transport is not None:
-                            try:
-                                accepted = transport.send(pulse) is True
-                            except Exception:
-                                row["state"] = "failed"
-                                return
                             row["attempted"] += 1
-                            row["accepted"] += int(accepted)
-                        break
+                    if transport is not None:
+                        try:
+                            accepted = transport.send(pulse) is True
+                        except Exception:
+                            with self._lock:
+                                self._tasks[task.resource_id]["state"] = "failed"
+                            return
+                        with self._lock:
+                            self._tasks[task.resource_id]["accepted"] += int(accepted)
+                    break
                 if self._stop.is_set():
                     break
             with self._lock:

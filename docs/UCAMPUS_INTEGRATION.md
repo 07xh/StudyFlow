@@ -163,3 +163,13 @@ Windows 构建加入 frozen sidecar `ucampus.heartbeat.capabilities` 探测：
 必须确认本地生成器和 `websocket-client` 均可加载，同时
 `sender_connected=false`、`server_verified=false`。
 这是无账号、无网络的**打包检查**，不是 U校园5.0 真实协议验收。
+
+## 多章节并发调度锁修复
+
+`local_runtime.py` 不再在全局 `RLock` 内等待通信层返回：
+不同章节任务的模拟网络 I/O 可以并发，
+暂停/停止状态查询也不再被某一项阻塞的通信操作卡住。
+锁内只更新本地生成、发送尝试和结果计数；
+发送尝试计数在调用前记录，异常不会被统计成服务器认可。
+新增双章节同时进入模拟慢发送器的离线回归测试，
+不连接 U校园服务器、不生成学习完成状态。

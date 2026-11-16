@@ -78,3 +78,37 @@ def test_input_validation():
         runner.start("course1", [task(), task()])
     with pytest.raises(ValueError):
         runner.start("course1", [task()], pulses_per_resource=0)
+
+
+def test_blocked_transport_does_not_serialize_other_chapters():
+    """A slow local fake sender must not hold the global scheduler lock."""
+    import threading
+    count = 0
+    gate = threading.Lock()
+    both_inside = threading.Event()
+    release = threading.Event()
+
+    class SlowLocalSender:
+        def send(self, _pulse):
+            nonlocal count
+            with gate:
+                count += 1
+                if count == 2:
+                    both_inside.set()
+            release.wait(timeout=2)
+            return True
+
+    runner = UCampusLocalRunner(interval=0.01)
+    try:
+        runner.start("course1", [task("U1", "A"), task("U2", "B")],
+                     transport=SlowLocalSender(), concurrency=2, pulses_per_resource=1)
+        assert both_inside.wait(timeout=1), "chapters were accidentally serialized"
+        # The UI-facing status path must also remain responsive while both
+        # transport adapters are intentionally blocked by the fixture.
+        assert runner.status("course1")["sent"] == 2
+    finally:
+        release.set()
+        runner.shutdown()
+    status = runner.status("course1")
+    assert status["sent"] == status["transport_accepted"] == 2
+    assert status["server_confirmed"] is None
