@@ -10,6 +10,61 @@ use uuid::Uuid;
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
+// Windows Job Objects own the exact child-process tree created by StudyFlow.
+// KILL_ON_JOB_CLOSE also releases descendant workers after an unexpected app exit.
+// Unrelated ZHS instances are never terminated.
+#[cfg(windows)]
+mod process_job {
+    use std::ffi::c_void;
+    use std::os::windows::io::AsRawHandle;
+    use std::process::Child;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+
+    // HANDLE is OS-wide, not tied to a Rust thread. Keeping it as usize allows
+    // the guarded LegacyTasks state to move between Tauri worker threads.
+    pub(super) struct WindowsJob(usize);
+
+    impl WindowsJob {
+        pub(super) fn attach(child: &Child) -> Option<Self> {
+            unsafe {
+                let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+                if handle.is_null() { return None; }
+                let job = Self(handle as usize);
+                let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+                limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                if SetInformationJobObject(handle, JobObjectExtendedLimitInformation,
+                    &limits as *const _ as *const c_void,
+                    std::mem::size_of_val(&limits) as u32) == 0 {
+                    return None;
+                }
+                if AssignProcessToJobObject(handle, child.as_raw_handle() as HANDLE) == 0 {
+                    // Some Windows environments forbid nested jobs. Preserve the
+                    // original PID-scoped taskkill fallback rather than abort launch.
+                    return None;
+                }
+                Some(job)
+            }
+        }
+
+        pub(super) fn terminate(&self) -> bool {
+            unsafe { TerminateJobObject(self.0 as HANDLE, 1) != 0 }
+        }
+    }
+
+    impl Drop for WindowsJob {
+        fn drop(&mut self) {
+            unsafe { CloseHandle(self.0 as HANDLE); }
+        }
+    }
+}
+#[cfg(windows)]
+use process_job::WindowsJob;
+
 #[derive(serde::Deserialize)]
 pub struct OriginalYktOptions {
     video_speed: f64,
@@ -108,6 +163,8 @@ pub struct LegacyTasks {
 
 struct LegacyJob {
     child: Option<Child>,
+    #[cfg(windows)]
+    process_job: Option<WindowsJob>,
     state: String,
     exit_code: Option<i32>,
     run_id: Option<String>,
@@ -301,6 +358,8 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
         task.last_diagnostic_code = task.monitor_token.as_deref().and_then(read_zhs_diagnostic);
         task.state = "exited".into();
         task.child = None;
+        #[cfg(windows)]
+        { task.process_job = None; } // closes the job and any surviving descendants
         remove_zhs_snapshot(task.monitor_token.as_deref());
         remove_zhs_diagnostic(task.monitor_token.as_deref());
         if let Some(token) = task.monitor_token.as_deref() { crate::zhs_queue::cleanup(token); }
@@ -353,20 +412,33 @@ fn status_of(platform: &str, task: &mut LegacyJob) -> Result<LegacyStatus, Strin
     })
 }
 
-fn terminate_tree(child: &mut Child) {
+fn terminate_tree(child: &mut Child, #[cfg(windows)] process_job: Option<&WindowsJob>) -> Result<(), String> {
     #[cfg(windows)]
     {
-        let pid = child.id().to_string();
-        // The original .cmd script can create a child ZHS Python process.
-        // Stop the entire task tree, never an unrelated process.
-        use std::os::windows::process::CommandExt;
-        let _ = Command::new("taskkill")
-            .args(["/PID", &pid, "/T", "/F"])
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-            .stdout(Stdio::null()).stderr(Stdio::null()).status();
+        // The Job Object covers spawned descendants even when the initial
+        // sidecar has already exited. Use PID-scoped taskkill as a fallback.
+        let stopped_by_job = process_job.is_some_and(WindowsJob::terminate);
+        if !stopped_by_job {
+            use std::os::windows::process::CommandExt;
+            let result = Command::new("taskkill")
+                .args(["/PID", &child.id().to_string(), "/T", "/F"])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .stdout(Stdio::null()).stderr(Stdio::null()).status()
+                .map_err(|_| "TASK_STOP_FAILED".to_owned())?;
+            // Never report 'stopped' after a failed taskkill.
+            if !result.success() { return Err("TASK_STOP_FAILED".into()); }
+        }
+        child.wait().map_err(|_| "TASK_STOP_FAILED".to_owned())?;
+        Ok(())
     }
-    let _ = child.kill();
-    let _ = child.wait();
+    #[cfg(not(windows))]
+    {
+        if child.try_wait().map_err(|_| "TASK_STOP_FAILED".to_owned())?.is_none() {
+            child.kill().map_err(|_| "TASK_STOP_FAILED".to_owned())?;
+        }
+        child.wait().map_err(|_| "TASK_STOP_FAILED".to_owned())?;
+        Ok(())
+    }
 }
 
 impl LegacyTasks {
@@ -374,9 +446,14 @@ impl LegacyTasks {
         if let Ok(mut guard) = self.jobs.lock() {
             for (_, task) in guard.iter_mut() {
                 if let Some(mut child) = task.child.take() {
-                    terminate_tree(&mut child);
-                    task.state = "stopped".into();
+                    #[cfg(windows)]
+                    let finished = terminate_tree(&mut child, task.process_job.as_ref()).is_ok();
+                    #[cfg(not(windows))]
+                    let finished = terminate_tree(&mut child).is_ok();
+                    if finished { task.state = "stopped".into(); }
                 }
+                #[cfg(windows)]
+                { task.process_job = None; } // guaranteed kill on close if the fallback failed
                 remove_zhs_snapshot(task.monitor_token.as_deref());
                 remove_zhs_diagnostic(task.monitor_token.as_deref());
                 if let Some(token) = task.monitor_token.as_deref() { crate::zhs_queue::cleanup(token); }
@@ -477,11 +554,16 @@ fn legacy_start_blocking(
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
     let child = command.spawn().map_err(|_| "LEGACY_LAUNCH_FAILED")?;
+    #[cfg(windows)]
+    let process_job = WindowsJob::attach(&child);
     let wallclock_limit = if platform == "zhidao" {
         zhs_options.as_ref().map(|x| x.limit_minutes).unwrap_or(0)
     } else { 0 };
     guard.insert(platform.clone(), LegacyJob {
-        child: Some(child), state: "running".into(), exit_code: None,
+        child: Some(child),
+        #[cfg(windows)]
+        process_job,
+        state: "running".into(), exit_code: None,
         run_id: run_id.clone(),
         course_id: if platform == "zhidao" { course_id.clone() } else { None },
         monitor_token,
@@ -501,12 +583,21 @@ fn legacy_start_blocking(
                 if let Some(task) = tasks.get_mut("zhidao") {
                     if task.run_id == expected &&
                        status_of("zhidao", task).map(|s| s.state == "running").unwrap_or(false) {
-                        if let Some(mut process) = task.child.take() {
-                            terminate_tree(&mut process);
-                            task.exit_code = Some(12);
-                            task.state = "exited".into();
-                            remove_zhs_snapshot(task.monitor_token.as_deref());
-                            remove_zhs_diagnostic(task.monitor_token.as_deref());
+                        if let Some(process) = task.child.as_mut() {
+                            #[cfg(windows)]
+                            let finished = terminate_tree(process, task.process_job.as_ref()).is_ok();
+                            #[cfg(not(windows))]
+                            let finished = terminate_tree(process).is_ok();
+                            if finished {
+                                task.child = None;
+                                #[cfg(windows)]
+                                { task.process_job = None; }
+                                task.exit_code = Some(12);
+                                task.state = "exited".into();
+                                remove_zhs_snapshot(task.monitor_token.as_deref());
+                                remove_zhs_diagnostic(task.monitor_token.as_deref());
+                                if let Some(token) = task.monitor_token.as_deref() { crate::zhs_queue::cleanup(token); }
+                            }
                         }
                     }
                 }
@@ -558,10 +649,15 @@ fn legacy_stop_blocking(state: &LegacyTasks, platform: String, expected_run_id: 
         crate::run_identity::verify_expected_run(expected_run_id.as_deref(), job.run_id.as_deref())
             .map_err(|code| code.to_owned())?;
         if status_of(&platform, job)?.state == "running" {
-            if let Some(mut child) = job.child.take() {
-                terminate_tree(&mut child);
-                job.state = "stopped".into();
-            }
+            let child = job.child.as_mut().ok_or("TASK_STATE_UNAVAILABLE")?;
+            #[cfg(windows)]
+            terminate_tree(child, job.process_job.as_ref())?;
+            #[cfg(not(windows))]
+            terminate_tree(child)?;
+            job.child = None;
+            #[cfg(windows)]
+            { job.process_job = None; }
+            job.state = "stopped".into();
             remove_zhs_snapshot(job.monitor_token.as_deref());
             remove_zhs_diagnostic(job.monitor_token.as_deref());
             if let Some(token) = job.monitor_token.as_deref() { crate::zhs_queue::cleanup(token); }
@@ -614,7 +710,10 @@ mod tests {
             resource_kind: Some("video".into()), resource_name: Some("示例视频".into()),
         };
         let mut task = LegacyJob {
-            child: None, state: "running".into(), exit_code: None, run_id: None,
+            child: None,
+            #[cfg(windows)]
+            process_job: None,
+            state: "running".into(), exit_code: None, run_id: None,
             course_id: Some("a".repeat(64)), monitor_token: None,
             last_zhs_progress: Some(progress),
             last_diagnostic_code: None,
@@ -747,6 +846,24 @@ mod tests {
         assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
         options.richtext_skip_delay = -0.1;
         assert_eq!(options.validate().unwrap_err(), "INVALID_SETTINGS");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn stopping_owned_windows_job_releases_worker_for_restart() {
+        use std::os::windows::process::CommandExt;
+        // Two successive worker launches must each be fully reaped. No global
+        // process-name kill and no dependency on the user's account.
+        for _ in 0..2 {
+            let mut child = Command::new("cmd.exe")
+                .args(["/C", "ping -n 30 127.0.0.1 > NUL"])
+                .creation_flags(0x08000000)
+                .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
+                .spawn().expect("spawn test-owned child");
+            let job = WindowsJob::attach(&child).expect("attach test-owned Windows Job Object");
+            terminate_tree(&mut child, Some(&job)).expect("stop entire job");
+            assert!(child.try_wait().unwrap().is_some());
+        }
     }
 
     #[test]
