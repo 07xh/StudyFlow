@@ -9,6 +9,7 @@ import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
 import {UCampusLoginPanel} from "./components/UCampusLoginPanel";
+import {UCampusCourseDetailPanel} from "./components/UCampusCourseDetailPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
@@ -797,7 +798,7 @@ export default function App(){
         </CollapsibleSection>
       </>:course.platform==="ucampus"?<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习任务" defaultExpanded={true}>
-          <p className="sf-muted">等待完成 U校园5.0 真实章节与作业接口验收。此处不使用示例章节或虚构进度。</p>
+          <UCampusCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
       </>:course.platform==="xuexitong"?<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>

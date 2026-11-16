@@ -253,6 +253,13 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     s.len() <= 2048 && !s.contains('\r') && !s.contains('\n')))
                 && data.get("authorization").map_or(true, |v| v.as_str().is_some_and(|s|
                     s.len() <= 8192 && !s.contains('\r') && !s.contains('\n')))) => Ok(()),
+        "ucampus.units.list" | "ucampus.unit.tasks" if request.get("course_id")
+            .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+            && (operation == "ucampus.units.list" || request.get("unit_id")
+                .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')))
+                => Ok(()),
         "xuexitong.session.configure" if request.get("cookie").and_then(|v| v.as_str())
             .is_some_and(|value| !value.is_empty() && value.len() <= 8192
                 && !value.contains('\r') && !value.contains('\n')) => Ok(()),
@@ -635,6 +642,24 @@ mod ipc_validation_tests {
         }
         assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.heartbeat.start",
             "course_id":"123"})).is_err());
+    }
+
+    #[test]
+    fn ucampus_progress_reads_validate_resource_scope() {
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.units.list",
+            "course_id":"course123"})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+            "course_id":"course123","unit_id":"U-123"})).is_ok());
+        for bad in [
+            json!({"id":"u","version":1,"operation":"ucampus.units.list",
+                "course_id":"../etc"}),
+            json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+                "course_id":"course123","unit_id":"../other"}),
+            json!({"id":"u","version":1,"operation":"ucampus.unit.tasks",
+                "course_id":"course123"})
+        ] {
+            assert!(validate(&bad).is_err());
+        }
     }
 
     #[test]

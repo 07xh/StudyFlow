@@ -6,6 +6,8 @@ export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
 export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string};
 export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null};
+export type UCampusUnit = {id:string;title:string;completed:boolean|null};
+export type UCampusTask = {id:string;unit_id:string;title:string;type:string;required:boolean|null;completed:boolean|null};
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
 export type YuketangSessionMarker = {marker:string};
 export type BridgeRequest =
@@ -18,6 +20,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
+  | {id: string; version: 1; operation: "ucampus.units.list"; course_id: string}
+  | {id: string; version: 1; operation: "ucampus.unit.tasks"; course_id: string; unit_id: string}
   | {id: string; version: 1; operation: "ucampus.session.info"}
   | {id: string; version: 1; operation: "ucampus.session.configure"; configuration: UCampusConfig}
   | {id: string; version: 1; operation: "ucampus.session.clear"}
@@ -286,6 +290,12 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
+    case "UCAMPUS_OPEN_ID_REQUIRED": return "当前 U校园会话缺少可核验的 openId，无法读取单元与任务。请重新登录或更新本机会话。";
+    case "UCAMPUS_AI_ONLY": return "目前单元与任务读取仅支持 U校园5.0 AI版。";
+    case "UCAMPUS_SESSION_MISSING": return "请先配置 U校园登录会话。";
+    case "UCAMPUS_SESSION_EXPIRED": return "U校园会话已失效，请重新登录。";
+    case "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED": return "U校园返回的数据结构与已知开源接口不一致，未推断任何进度。";
+    case "UCAMPUS_PROGRESS_UNAVAILABLE": return "U校园单元/任务进度接口请求失败，请检查账号、网络和课程。";
     case "INVALID_UCAMPUS_CONFIG": return "U校园配置不符合要求：仅支持官方 HTTPS 域名与正确格式的登录会话。";
     case "UCAMPUS_CREDENTIAL_STORAGE_FAILED": return "U校园登录信息未能写入 Windows 凭据管理器。";
     case "XUEXITONG_TASK_STOP_TIMEOUT": return "学习通任务尚未安全停止，请稍后重试退出或切换账号。";

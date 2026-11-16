@@ -42,3 +42,10 @@
 - 章节、资源、学习活动、发送协议及服务端进度尚未接入，**不得视为已交付心跳能力**。
 - 章节任务状态研究优先参考 `YSJohnson/UnipusAI-Helper`；通用 UI 与任务调度优先复用学序内部实现。
 - 账号、会话、接口错误不上传日志或仓库；无需在聊天里共享 Cookie。
+
+## 单元和任务只读读取（基于上游 937725e）
+
+- `ucampus.units.list`：按上游 `course_progress/{course}/{openId}/default` 读取 `rt.units` 键集合；仅标记“单元状态待核验”，不以单元存在推断完成。
+- `ucampus.unit.tasks`：按上游单元级 `course_progress/{course}/{unit}/{openId}/default/` 读取 `rt.leafs`；复用 `tab_type`、`strategies.required`、`state.pass` 语义。任务标题缺失时仅显示资源 ID。
+- `openId` 仅在本机从会话 JWT 的 `openId` 声明提取，不能当作已认证凭据；会话缺失则返回 `UCAMPUS_OPEN_ID_REQUIRED`，不从别的账号猜测。
+- 真实接口需 U校园AI 登录会话和服务端认可的请求头。当前不预制完整播放器会话，也不直接生成心跳；未确认的服务器进度留空。
