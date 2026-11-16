@@ -46,14 +46,14 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
     return()=>{active=false;};
   },[course.course_id,desktop,expanded,revision]);
 
-  const selected=units.find(unit=>unit.id===expanded);
+  const normalizedSearch=search.trim().toLowerCase();
   const visible=tasks.filter(t=>(filter==="all"||
     (filter==="completed"&&t.completed===true)||
     (filter==="pending"&&t.completed===false)||
     (filter==="unknown"&&t.completed===null))&&
-    (t.id.toLowerCase().includes(search.toLowerCase())||
-     (t.title||"").toLowerCase().includes(search.toLowerCase())||
-     labelType(t.type).toLowerCase().includes(search.toLowerCase())));
+    (t.id.toLowerCase().includes(normalizedSearch)||
+     (t.title||"").toLowerCase().includes(normalizedSearch)||
+     labelType(t.type).toLowerCase().includes(normalizedSearch)));
 
   return <section aria-label="U校园真实单元与任务" className="sf-xxt-catalog">
     <div className="section-head sf-xxt-heading">
@@ -97,7 +97,7 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
               </select>
             </label>
           </div>
-          {selected&&<p className="sf-muted">{selected.title||"单元 "+(index+1)} · 任务按服务器返回的资源标识展示</p>}
+          <p className="sf-muted">{unit.title||"单元 "+(index+1)} · 任务按服务器返回的资源标识展示</p>
           {taskBusy&&<p role="status">正在读取本单元任务…</p>}
           {taskError&&<p role="alert">{taskError}</p>}
           {!taskBusy&&!taskError&&tasks.length===0&&<p className="sf-muted" role="status">本单元未返回任务。</p>}
