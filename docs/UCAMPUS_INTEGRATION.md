@@ -33,7 +33,7 @@
 - Cookie、Authorization、annotator token 与账号关联材料不进入前端本地存储、运行结果或用户界面。
 - 网络请求应使用固定第一方域名、有效会话、TLS 验证、超时及禁止重定向的约束。
 - 原始网络异常正文不能写入 IPC 状态或历史文件；异常只对外返回固定错误码。
-- `FabricatedStateStore` 持久化只保留合法的课程/单元 ID、运行阶段和有限范围的 `generated/sent/accepted/confirmed` 计数，不保留视频标题、会话令牌或原始异常。
+- `FabricatedStateStore` 的保存、旧文件迁移、删除和历史列表读取**共用字段白名单**，只保留合法的课程/单元 ID、运行阶段和有限范围的 `generated/sent/accepted/confirmed` 计数；不保留视频标题、会话令牌或原始异常。
 - 旧 JSON 历史会在存储器初始化时按同一白名单脱敏；无法解析的旧文件保留，不擅自删除用户数据。
 - `ucampus.fabricated.history` 只读列出历史快照。状态为“运行中”的旧记录显示为“中断”；**不自动恢复、不补发网络事件**。进程内“恢复”仅指解除暂停。
 - 凭据切换时分别重置两套运行器，防止旧账号状态穿透新会话。
