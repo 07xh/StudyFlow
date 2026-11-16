@@ -333,9 +333,11 @@ POST 时补 `Content-Type: application/json; charset=UTF-8`（与 `hunaol/u_ai::
   变量 `server_confirmed` 为兼容历史保留，不能证明当前发送导致状态变化。
 - **已区分界面**：本地练习模块不会向平台发送，实验性写入模块可能进行网络请求。
   两套模块各有独立状态、任务与操作区域，不能合并计数或称作正式学习完成。
-- **跨重启恢复未实现**：`FabricatedStateStore` 只是一个可选 JSON 快照存储工具；
-  默认的 `FabricatedRunner` 没有注入它，也没有从 `load()` 读取任务重建运行。
+- **跨重启恢复未实现**：`FabricatedStateStore` 提供 JSON 快照存储；
+  `ucampus_fabricated_bridge.get_runner()` 现已在长驻服务中注入状态存储器，
+  并提供只读 `ucampus.fabricated.history` 查询。但 `FabricatedRunner` **不会调用
+  `load()` 重建任务，也不会在应用重启后重新发送网络事件**。
   UI 的“恢复”仅指**同一进程内解除暂停**，绝不代表跨进程续传。
-  状态接口返回 `restart_resume_supported=false`；不自动重放网络学习事件。
+  状态接口返回 `restart_resume_supported=false`。
 - Python 回归和前端测试只能证明本机代码行为，无法代替 U校园5.0 真实账号及
   服务器进度验收。实验性写入不能作为已完成课程的证据。
