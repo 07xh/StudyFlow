@@ -104,7 +104,7 @@ test('manual chapter refresh verifies current server state instead of reading ca
   assert.ok(button);
   await act(async()=>{button.props.onClick();});
   assert.deepEqual(calls,['zhidao.course.detail','zhidao.course.detail',
-   'zhidao.progress.verify','zhidao.course.detail'].slice(1));
+   'zhidao.progress.verify','zhidao.course.detail']);
  }finally{if(view)act(()=>view.unmount());}
 });
 
