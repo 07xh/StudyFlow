@@ -17,6 +17,12 @@ export type UCampusSocketDiagnostic={
   transport:"legacy_socketio_v3";handshake:"namespace_joined";
   learning_events_sent:0;progress_verified:false;ai5_compatible:null;
 };
+export type UCampusVerifiedProgress={
+  course_id:string;unit_id:string;verified_at:string;
+  total:number;passed:number;not_passed:number;unknown:number;
+  required_total:number;required_passed:number;
+  tasks:Array<{id:string;type:string;required:boolean|null;completed:boolean|null}>;
+};
 export type UCampusUnit = {id:string;title:string;completed:boolean|null};
 export type UCampusTask = {id:string;unit_id:string;title:string;type:string;required:boolean|null;completed:boolean|null};
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
@@ -33,6 +39,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
   | {id: string; version: 1; operation: "ucampus.units.list"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.unit.tasks"; course_id: string; unit_id: string}
+  | {id: string; version: 1; operation: "ucampus.progress.verify"; course_id: string; unit_id: string}
   | {id: string; version: 1; operation: "ucampus.socket.diagnose"}
   | {id: string; version: 1; operation: "ucampus.heartbeat.capabilities"}
   | {id: string; version: 1; operation: "ucampus.heartbeat.start"; course_id: string; unit_id: string; pulses?: number}
