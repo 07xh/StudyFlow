@@ -59,6 +59,14 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
         course_id = payload.pop("course_id", None)
         if isinstance(course_id, str) and course_id:
             payload["course_key"] = course_id
+    # Public controls must target a specific run. The graceful path is used
+    # only by the Rust-owned worker shutdown (not accepted by Rust's UI validator).
+    if operation in {"xuexitong.heartbeat.pause", "xuexitong.heartbeat.resume",
+                     "xuexitong.heartbeat.stop"} and request.get("graceful") is not True:
+        run_id = payload.get("run_id")
+        if (not isinstance(run_id, str) or not 1 <= len(run_id) <= 64
+                or any(char not in "0123456789abcdefABCDEF" for char in run_id)):
+            return {"ok": False, "error": "XUEXITONG_RUN_ID_REQUIRED"}
     service = get_service()
     result = service.handle(operation, payload)
     if operation == "xuexitong.heartbeat.stop" and request.get("graceful") is True:
