@@ -20,8 +20,9 @@ if TYPE_CHECKING:
 
 CONTENT_ORIGIN = "https://ucontent.unipus.cn"
 # Upstream U校园AI course identifiers include the course-v2: prefix.
-# Slash, percent escapes, queries, and control characters remain prohibited.
-_ID = re.compile(r"^[A-Za-z0-9_:-]{1,128}$")
+# A literal plus separates components in real course-v2 IDs. Slash, percent
+# escapes, queries, and control characters remain prohibited.
+_ID = re.compile(r"^[A-Za-z0-9_:+-]{1,128}$")
 
 
 class UCampusProgressError(RuntimeError):
@@ -157,13 +158,13 @@ class UCampusProgressReader:
     def list_units(self, course_id: str) -> list[dict[str, Any]]:
         course = _identifier(course_id)
         config, open_id = self._session()
-        url = f"{CONTENT_ORIGIN}/course/api/v2/course_progress/{quote(course, safe=':')}/{quote(open_id, safe='')}/default"
+        url = f"{CONTENT_ORIGIN}/course/api/v2/course_progress/{quote(course, safe=':+')}/{quote(open_id, safe='')}/default"
         return parse_units(_request(url, config, open_id))
 
     def list_tasks(self, course_id: str, unit_id: str) -> list[dict[str, Any]]:
         course = _identifier(course_id)
         unit = _identifier(unit_id)
         config, open_id = self._session()
-        url = (f"{CONTENT_ORIGIN}/course/api/v2/course_progress/{quote(course, safe=':')}/"
-               f"{quote(unit, safe=':')}/{quote(open_id, safe='')}/default/")
+        url = (f"{CONTENT_ORIGIN}/course/api/v2/course_progress/{quote(course, safe=':+')}/"
+               f"{quote(unit, safe=':+')}/{quote(open_id, safe='')}/default/")
         return parse_tasks(_request(url, config, open_id), unit)
