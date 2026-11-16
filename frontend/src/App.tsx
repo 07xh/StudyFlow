@@ -50,6 +50,7 @@ import {Switch} from "./ui/Switch";
 import {EmptyState} from "./ui/EmptyState";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
 import {SettingsDialog} from "./ui/SettingsDialog";
+import {GlobalSettingsModal,type GlobalSettingsTab} from "./ui/GlobalSettingsModal";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const ACTIVITY_KEY="studyflow.activity.v1";
@@ -73,6 +74,12 @@ function readActivity():ActivityEntry[]{
 
 export default function App(){
   const [page,setPage]=useState<Page>("home");
+  const [globalSettingsOpen,setGlobalSettingsOpen]=useState(false);
+  const [globalSettingsTab,setGlobalSettingsTab]=useState<GlobalSettingsTab>("general");
+  function openGlobalSettings(tab:GlobalSettingsTab="general"){
+    setGlobalSettingsTab(tab);
+    setGlobalSettingsOpen(true);
+  }
   const {dark,mode,setMode,toggleTheme}=useAppearance();
   const [compactCards,setCompactCards]=useState(()=>{
     try{return window.localStorage.getItem("studyflow.cards.compact")==="true";}
@@ -751,12 +758,12 @@ export default function App(){
             <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
+        </>:course.platform==="xuexitong"?<>
+          <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
             <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
-        </>:course.platform==="xuexitong"?<>
-          <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
           <div className="sf-course-scope-note" role="note">
             <span>按已保存的课堂范围执行，可能包含其他课程。</span>
@@ -775,15 +782,15 @@ export default function App(){
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
           <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
+      </>:course.platform==="xuexitong"?<>
+        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
+          <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
+        </CollapsibleSection>
         <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
             autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
             onAutoVerifyChange={configureAutoVerify}
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-        </CollapsibleSection>
-      </>:course.platform==="xuexitong"?<>
-        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
-          <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
       </>:<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习进度" defaultExpanded={true}>
@@ -883,7 +890,7 @@ export default function App(){
   </section>;
 
   return <>
-    <AppShell page={page} onNavigate={next=>{
+    <AppShell page={page} settingsOpen={globalSettingsOpen} onOpenSettings={()=>openGlobalSettings()} onNavigate={next=>{
       if(next==="platform-zhidao"){goPlatform("zhidao");return;}
       if(next==="platform-yuketang"){goPlatform("yuketang");return;}
       if(next==="platform-xuexitong"){goPlatform("xuexitong");return;}
@@ -921,26 +928,29 @@ export default function App(){
       {page==="platform-xuexitong"&&renderPlatformDetail("xuexitong")}
       {page==="records"&&renderRecords()}
       {page==="logs"&&renderLogs()}
-      {page==="settings"&&<>
-        <section className="settings-card">
-          <h3>外观</h3>
-          <div className="sf-settings-line">
-            <div><strong>界面主题</strong></div>
-            <ThemeModeSelector mode={mode} onChange={setMode}/>
-          </div>
-          <div className="sf-settings-line">
-            <div><strong>紧凑卡片</strong></div>
-            <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
-          </div>
-        </section>
-        <ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>
-      </>}
-      <UpdatePanel desktop={desktop&&consentAccepted} visible={page==="settings"} onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
     </AppShell>
+    <GlobalSettingsModal open={globalSettingsOpen} dark={dark}
+      activeTab={globalSettingsTab} onTabChange={setGlobalSettingsTab} onClose={()=>setGlobalSettingsOpen(false)}>
+      {globalSettingsTab==="general"&&<section className="settings-card">
+        <h3>外观</h3>
+        <div className="sf-settings-line">
+          <div><strong>界面主题</strong></div>
+          <ThemeModeSelector mode={mode} onChange={setMode}/>
+        </div>
+        <div className="sf-settings-line">
+          <div><strong>紧凑卡片</strong></div>
+          <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
+        </div>
+      </section>}
+      <UpdatePanel desktop={desktop&&consentAccepted}
+        visible={globalSettingsOpen&&globalSettingsTab==="updates"} embedded
+        onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
+      {globalSettingsTab==="about"&&<ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>}
+    </GlobalSettingsModal>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
     <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}
       onRetry={releaseChangelog.retry}
-      onOpenUpdates={()=>{releaseChangelog.close();setPage("settings");}}/>
+      onOpenUpdates={()=>{releaseChangelog.close();openGlobalSettings("updates");}}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
       onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}

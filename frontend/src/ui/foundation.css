@@ -824,7 +824,7 @@
 }
 .sf-shell .sf-floating-nav .sf-subnav .nav svg{width:15px;height:15px}
 .sf-shell .sf-floating-nav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.sf-shell .sf-settings-button[aria-current="page"]{
+.sf-shell .sf-settings-button[aria-expanded="true"]{
   color:var(--accent-text);
   border-color:rgba(19,217,146,.28);
   background:var(--soft-accent);
