@@ -26,6 +26,16 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       .catch(()=>{if(active)setStatus(null);});
     return ()=>{active=false;};
   },[desktop]);
+  const verifyCatalog=async():Promise<string>=>{
+    const courses=await request<Course[]>({operation:"courses.list",platform:"ucampus"});
+    if(!Array.isArray(courses)||!courses.every(course=>
+      course&&course.platform==="ucampus"&&typeof course.course_id==="string"&&
+      course.course_id.length>0&&typeof course.title==="string"&&course.title.length>0
+    ))throw Error("INVALID_IPC_RESPONSE");
+    return courses.length>0
+      ?`课程接口已验证：实际读取到 ${courses.length} 门 U校园课程。`
+      :"课程接口返回空列表：请求成功，但尚不能确认该账号已有课程或已完成登录验收。";
+  };
   const login=async()=>{
     if(!desktop||busy||variant!=="ai"||!username.trim()||!password)return;
     setBusy(true);setNotice("");
@@ -35,8 +45,13 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       });
       setStatus({configured:true,variant:"ai"});
       setUsername("");
-      setNotice("U校园 SSO 已返回登录会话，并已保存到本机。请继续验证真实课程读取；尚未确认单元和学习进度可用。");
       onChanged();
+      try{
+        const summary=await verifyCatalog();
+        setNotice("U校园 SSO 会话已保存。"+summary+"单元和学习进度仍需分别核验。");
+      }catch(catalogError){
+        setNotice("U校园 SSO 会话已保存，但课程读取失败："+friendlyBridgeError(catalogError));
+      }
     }catch(error){
       setNotice(friendlyBridgeError(error));
     }finally{
@@ -61,14 +76,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     if(!desktop||busy||!status?.configured)return;
     setBusy(true);setNotice("");
     try{
-      const courses=await request<Course[]>({operation:"courses.list",platform:"ucampus"});
-      if(!Array.isArray(courses)||!courses.every(course=>
-        course&&course.platform==="ucampus"&&typeof course.course_id==="string"&&
-        course.course_id.length>0&&typeof course.title==="string"&&course.title.length>0
-      ))throw Error("INVALID_IPC_RESPONSE");
-      setNotice(courses.length>0
-        ?`课程接口已验证：实际读取到 ${courses.length} 门 U校园课程。`
-        :"课程接口返回空列表：请求成功，但尚不能确认该账号已有课程或已完成登录验收。");
+      setNotice(await verifyCatalog());
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
   };
