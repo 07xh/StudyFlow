@@ -288,7 +288,7 @@ UI 的「任务类型」下拉提供「视频 + 音频 / 仅视频 / 仅音频�
 ### 验证
 
 ```text
-Ran 65 tests in 0.387s — OK（连续 2 次）
+Ran 68 tests in 0.391s — OK（当前分支快照）
 COMPILE_OK
 Python / Rust / TypeScript 三方 operation 集合一致：6 / 6 / 6
 （校验统计各文件中全部 `xuexitong.heartbeat.*` 字面量，不受 TS 把
@@ -309,7 +309,9 @@ node --test tests/xuexitongHeartbeatPlacement.test.cjs \
 用例分布：`test_xuexitong_heartbeat.py` 47 项（含账号隔离恢复、真实发送计数、
 队列级暂停）、`test_xuexitong_bridge.py` 8 项（含登出安全 worker）、
 `tests/test_xuexitong_audio_dtype.py` 10 项（卡解析双类型、目标 dtype 继承、
-音频 headers、runner 按目标发包、服务按 dtype 过滤与空集合错误码）。
+音频 headers、runner 按目标发包、服务按 dtype 过滤与空集合错误码）、
+`tests/test_xuexitong_runtime_scopes.py` 3 项（账号 / 课程 / 运行日志隔离），共 68 项。
+`tests/test_xuexitong_platform.py` 依赖 `pytest`，本机未安装，未纳入离线回归。
 另有 `frontend/tests/xuexitongHeartbeatCopySync.test.cjs` 保证 `integration/frontend`
 副本与正式组件逐字节一致。
 

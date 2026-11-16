@@ -286,7 +286,7 @@ python -m unittest discover -s tests -p "test_xuexitong*.py" -v
 ### 验证
 
 ```text
-Ran 65 tests in 0.387s — OK（连续 2 次）
+Ran 68 tests in 0.391s — OK（当前分支快照）
 COMPILE_OK
 npm ci                       -> 74 packages installed
 npx tsc -b                   -> type check OK (exit 0)
@@ -302,7 +302,8 @@ node --test tests/xuexitongHeartbeatPlacement.test.cjs \
 ```
 
 覆盖：47 项心跳模块与审计整改用例（含账号隔离恢复、真实发送计数、队列级暂停）
-+ 8 项长驻桥接层用例（含登出安全 worker）+ 10 项视频 / 音频 dtype 分流入库用例，共 65 项；
++ 8 项长驻桥接层用例（含登出安全 worker）+ 10 项视频 / 音频 dtype 分流入库用例
++ 3 项运行作用域隔离用例，共 68 项（`test_xuexitong_platform.py` 需 `pytest`，本机未装）；
 全部使用假 session / 假时钟，未对真实账号发包。
 四处应用级接线已合入并通过三方 operation 一致性校验（Python / Rust / TypeScript 各 6 个）；
 `npx tsc -b` 类型检查与 `npx vite build` 生产构建已通过；Rust 工具链残缺
