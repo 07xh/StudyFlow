@@ -734,12 +734,19 @@ class TestRunnerAuditFixes(unittest.TestCase):
         clock = FakeClock()
         config = RunConfig(instant_complete=False, tick_seconds=100, max_ticks=3,
                            max_wall_seconds=50, heartbeat_interval_video_seconds=30)
+
+        def resume_after_two_waits(seconds: float) -> None:
+            clock.sleep(seconds)
+            if clock.t >= 1200.0:
+                runner._paused.clear()
+
         runner = HeartbeatTaskRunner(make_target(), make_sender(FakeSession([]), clock=clock),
-                                     config, clock=clock, sleeper=clock.sleep)
+                                     config, clock=clock, sleeper=resume_after_two_waits)
         runner._started = True
         runner._paused.set()
-        self.assertFalse(runner._wait_while_paused())
+        self.assertTrue(runner._wait_while_paused())
         self.assertEqual(runner._paused_wall, 200.0)
+        self.assertEqual(runner._ticks, 0, "pausing must not use active-tick limits")
 
     def test_unconfirmed_round_limit_ends_loop(self) -> None:
         session = FakeSession([FakeResponse(payload={"isPassed": False}) for _ in range(20)])
