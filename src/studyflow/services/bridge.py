@@ -41,6 +41,7 @@ from studyflow.platforms.yuketang.adapter import YuketangAdapter
 from studyflow.platforms.ucampus.adapter import UCampusAdapter, UCampusCatalogError
 from studyflow.platforms.ucampus.course_progress import UCampusProgressReader, UCampusProgressError
 from studyflow.platforms.ucampus import credentials as ucampus_credentials
+from studyflow.platforms.ucampus.sso_login import authenticate as ucampus_authenticate, UCampusLoginError
 from studyflow.platforms.yuketang import credentials
 from studyflow.services.yuketang_progress import RUN_ID, read_session_progress
 from studyflow.services import update_manager
@@ -208,6 +209,27 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_PROGRESS_UNAVAILABLE"}
     if operation == "ucampus.session.info":
         return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
+    if operation == "ucampus.session.login":
+        try:
+            # The username/password only live inside this one request. Persist
+            # exclusively the returned provider JWT, never either plaintext field.
+            config = ucampus_authenticate(request.get("username"), request.get("password"))
+        except UCampusLoginError as exc:
+            allowed = {"INVALID_UCAMPUS_LOGIN", "UCAMPUS_LOGIN_UNAVAILABLE",
+                       "UCAMPUS_LOGIN_REJECTED", "UCAMPUS_LOGIN_FORMAT_UNVERIFIED",
+                       "UCAMPUS_LOGIN_VERIFICATION_REQUIRED", "UCAMPUS_LOGIN_RATE_LIMITED"}
+            code = str(exc)
+            return {"id": request_id, "ok": False,
+                    "error": code if code in allowed else "UCAMPUS_LOGIN_UNAVAILABLE"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_LOGIN_UNAVAILABLE"}
+        try:
+            ucampus_runtime_bridge.reset_runner()
+            ucampus_fabricated_bridge.reset_runner()
+            ucampus_credentials.save(config.__dict__)
+            return {"id": request_id, "ok": True, "data": {"saved": True, "variant": "ai"}}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "ucampus.session.configure":
         try:
             ucampus_runtime_bridge.reset_runner()
