@@ -111,3 +111,19 @@ test("U校园 SSO login uses the same persistent sidecar as session resets",()=>
   assert.match(tauri,/ucampus\.session\.login" \| "ucampus\.session\.configure"/);
   assert.match(tauri,/ucampus\.fabricated\./);
 });
+
+
+test("U校园 read-only progress monitor resumes on app startup and requires opt-in",()=>{
+  const app=read("App.tsx");
+  const panel=read("components/UCampusProgressVerifyPanel.tsx");
+  const bridge=read("bridge.ts");
+  const tauri=fs.readFileSync(path.join(__dirname,"..","..","src-tauri","src","lib.rs"),"utf8");
+  assert.match(app,/operation:"ucampus.monitor.tick"/);
+  assert.match(app,/90_000/);
+  assert.match(panel,/operation:"ucampus.monitor.configure",enabled/);
+  assert.match(panel,/启用重启后自动核验/);
+  assert.match(panel,/不会恢复或补发本地模拟心跳/);
+  assert.match(bridge,/UCampusMonitorStatus/);
+  assert.match(bridge,/ucampus.monitor.status" \| "ucampus.monitor.tick"/);
+  assert.match(tauri,/op.starts_with\("ucampus.monitor."\)/);
+});
