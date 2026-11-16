@@ -758,12 +758,12 @@ export default function App(){
             <ZhidaoOfficialPlayerPanel courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
-        </>:course.platform==="xuexitong"?<>
-          <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
             <LegacyPlaybackPanel platform="zhidao" dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
+        </>:course.platform==="xuexitong"?<>
+          <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
           <div className="sf-course-scope-note" role="note">
             <span>按已保存的课堂范围执行，可能包含其他课程。</span>
@@ -782,15 +782,15 @@ export default function App(){
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
           <ZhidaoCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
-      </>:course.platform==="xuexitong"?<>
-        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
-          <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
-        </CollapsibleSection>
         <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode
             autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
             onAutoVerifyChange={configureAutoVerify}
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
+        </CollapsibleSection>
+      </>:course.platform==="xuexitong"?<>
+        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
+          <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
       </>:<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习进度" defaultExpanded={true}>
