@@ -552,3 +552,36 @@ def test_history_snapshot_disk_whitelist_strips_nested_secrets_and_legacy_fields
         assert len(rows)==2
         assert rows[0]["generated"]==4 and rows[1]["generated"]==2
         assert all(row["resume_available"] is False for row in rows)
+
+
+def test_legacy_history_is_scrubbed_on_startup_without_replaying_events():
+    with tempfile.TemporaryDirectory() as folder:
+        path=Path(folder)/"history.json"
+        path.write_text(json.dumps({"run1":{
+            "course_id":"course-v2:100","unit_id":"u1",
+            "phase":"running","cookie":"LEGACY_COOKIE_SECRET",
+            "tasks":{"leaf1":{"generated":2,"sent":1,
+                              "last_error":"LEGACY_AUTH_SECRET"}},
+        }}), encoding="utf-8")
+        store=fh.FabricatedStateStore(path)
+        bridge.reset_runner()
+        with mock.patch.object(bridge.fh,"FabricatedStateStore",return_value=store):
+            runner=bridge.get_runner()
+            assert runner.status("course-v2:100")["phase"]=="idle"
+            assert runner.status("course-v2:100")["restart_resume_supported"] is False
+            assert not runner.status("course-v2:100")["active"]
+        clean=path.read_text(encoding="utf-8")
+        assert "LEGACY_COOKIE_SECRET" not in clean
+        assert "LEGACY_AUTH_SECRET" not in clean
+        assert store.list_recent("course-v2:100")[0]["phase"]=="interrupted"
+        assert store.sanitize_existing() is False
+        bridge.reset_runner()
+
+
+def test_corrupt_legacy_archive_is_not_overwritten_by_sanitizer():
+    with tempfile.TemporaryDirectory() as folder:
+        path=Path(folder)/"history.json"
+        path.write_text("not valid JSON",encoding="utf-8")
+        store=fh.FabricatedStateStore(path)
+        assert store.sanitize_existing() is False
+        assert path.read_text(encoding="utf-8")=="not valid JSON"
