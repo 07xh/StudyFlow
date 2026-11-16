@@ -54,3 +54,26 @@ test('stale or failed polling hides all percentages and disables row controls',a
   }finally{if(view)act(()=>view.unmount());}
  }
 });
+
+test('reading resources show execution state without a fake video sampling failure',async()=>{
+ const Panel=load('components/ZhsQueuePanel.tsx',{'legacyPlayback.ts':{
+  stopZhsVideo:async()=>{},legacyError:String,legacyExitMessage:()=>''
+ }}).ZhsQueuePanel;
+ const makeStatus=(kind,stale)=>({...status,zhs_queue:{...status.zhs_queue,tasks:[
+  {...status.zhs_queue.tasks[0],kind,percent:null,stale}
+ ]}});
+ for(const [kind,stale,expected] of [
+  ['ppt',false,/非视频资源 · 不提供视频位置百分比/],
+  ['article',false,/非视频资源 · 不提供视频位置百分比/],
+  ['video',false,/正在等待本视频的有效采样/],
+  ['video',true,/视频采样暂不可用/]
+ ]){
+  let view;
+  try{
+   await act(async()=>{view=create(React.createElement(Panel,{status:makeStatus(kind,stale),onRefresh:async()=>{}}));});
+   assert.match(words(view.root),expected);
+   if(kind!=='video')assert.doesNotMatch(words(view.root),/视频采样暂不可用/);
+   assert.equal(view.root.findAllByProps({role:'progressbar'}).filter(x=>x.props['aria-valuenow']!==undefined).length,0);
+  }finally{if(view)act(()=>view.unmount());}
+ }
+});

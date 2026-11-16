@@ -59,8 +59,10 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       </div>}
       <small className="sf-muted">{task.state==="exited"?"进程已退出，学习记录待平台核验":
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
-        stale||task.stale?"进度采样暂不可用 · 不沿用前一视频百分比":
-        percent==null?(task.state==="queued"?"等待本章节的上一资源结束":"当前资源加载或切换中 · 等待有效采样"):"本地观测 · 非服务器完成进度"}</small>
+        stale?"队列状态暂不可用 · 请重新读取任务状态":
+        task.state==="running"&&task.kind!=="video"?"非视频资源 · 不提供视频位置百分比":
+        task.stale?"视频采样暂不可用 · 未收到有效数值或已有采样过期":
+        percent==null?(task.state==="queued"?"等待本章节的上一资源结束":"正在等待本视频的有效采样"):"本地观测 · 非服务器完成进度"}</small>
     </article>;
   }
   function grouped(rows:Row[]){

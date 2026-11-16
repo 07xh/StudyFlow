@@ -162,6 +162,18 @@ def local_percent(directory: Path, token: str) -> float | None:
         return None
 
 
+def sampling_is_stale(kind: str, percent: float | None, *, had_sample: bool,
+                      running_seconds: float) -> bool:
+    """No numeric video sample is different from stale video telemetry.
+
+    Articles/PPTs never require a video percentage. A newly started video
+    gets a brief loading window; a formerly observed or long-unobserved video
+    reports an unavailable local sample, never a fabricated percentage.
+    """
+    return (kind == "video" and percent is None
+            and (had_sample or running_seconds >= 25.0))
+
+
 def terminate(child: subprocess.Popen) -> None:
     if child.poll() is None:
         if os.name == "nt":
@@ -205,6 +217,8 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
              "state": "queued", "percent": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
+    started_at: dict[int, float] = {}
+    had_sample: set[int] = set()
     deadline = time.monotonic() + limit_seconds if limit_seconds else None
     exit_code = 0
     fatal = None
@@ -243,7 +257,16 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
             for index, (child, child_token) in list(running.items()):
                 code = child.poll()
                 percent = local_percent(directory, child_token)
-                rows[index].update(percent=percent, stale=percent is None)
+                if percent is not None and targets[index].kind == "video":
+                    had_sample.add(index)
+                stale = sampling_is_stale(
+                    targets[index].kind, percent, had_sample=index in had_sample,
+                    running_seconds=time.monotonic() - started_at.get(index, time.monotonic()),
+                )
+                rows[index].update(
+                    percent=percent if targets[index].kind == "video" else None,
+                    stale=stale,
+                )
                 if code is not None:
                     rows[index].update(state="exited" if code == 0 else "failed", exit_code=code,
                                        percent=None, stale=True)
@@ -283,6 +306,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
                 child_token = uuid.uuid4().hex
                 try:
                     running[index] = (launch(target, child_token), child_token)
+                    started_at[index] = time.monotonic()
                     rows[index]["state"] = "running"
                     busy_lanes.add(lane)
                 except OSError:

@@ -43,6 +43,6 @@ test("Xuexitong panel does not control a different course",()=>{
     "Speed and chapter counts require validation before starting");
   assert.ok(source.includes("disabled={busy||!desktop||running||!validConfig}"),
     "Invalid settings must not enable start");
-  assert.ok(source.includes("本地记录（非播放证明）"),
+  assert.ok(source.includes("本地计时（非平台进度）")&&source.includes("学习通返回状态"),
     "Local scheduling estimates must be distinct from verified playback");
 });
