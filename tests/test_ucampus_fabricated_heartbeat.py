@@ -463,3 +463,22 @@ def test_socket_cleanup_exception_is_redacted_and_run_terminates():
     assert "VERY_PRIVATE_CREDENTIAL" not in repr(state)
     assert state["restart_resume_supported"] is False
     assert state["snapshot_store_configured"] is False
+
+
+def test_local_history_whitelists_values_and_never_restarts_worker():
+    with tempfile.TemporaryDirectory() as folder:
+        store = fh.FabricatedStateStore(Path(folder) / "history.json")
+        store.save("run001", {"course_id":"course-v2:100","unit_id":"u1",
+                              "phase":"running","cookie":"PRIVATE_COOKIE",
+                              "tasks":{"v1":{"generated":4,"sent":2,"confirmed":1,
+                                             "authorization":"PRIVATE_TOKEN"}}})
+        store.save("run002", {"course_id":"other","tasks":{}})
+        history=store.list_recent("course-v2:100")
+        assert len(history)==1
+        assert history[0]["phase"]=="interrupted"
+        assert history[0]["resume_available"] is False
+        assert history[0]["progress_causality"]=="unverified"
+        assert history[0]["generated"]==4 and history[0]["sent"]==2
+        assert "PRIVATE_COOKIE" not in repr(history)
+        assert "PRIVATE_TOKEN" not in repr(history)
+        assert store.load("run001")["phase"]=="running"

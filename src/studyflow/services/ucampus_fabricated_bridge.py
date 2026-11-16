@@ -25,6 +25,7 @@ _OPERATIONS = frozenset({
     "ucampus.fabricated.capabilities", "ucampus.fabricated.start",
     "ucampus.fabricated.status", "ucampus.fabricated.pause",
     "ucampus.fabricated.resume", "ucampus.fabricated.stop",
+    "ucampus.fabricated.history",
 })
 _LOCK = threading.Lock()
 _RUNNER: FabricatedRunner | None = None
@@ -34,7 +35,8 @@ def get_runner() -> FabricatedRunner:
     global _RUNNER
     with _LOCK:
         if _RUNNER is None:
-            _RUNNER = FabricatedRunner()
+            # Save local-only snapshots, but never auto-replay on restart.
+            _RUNNER = FabricatedRunner(state_store=fh.FabricatedStateStore())
         return _RUNNER
 
 
@@ -73,6 +75,13 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
     course_id = request.get("course_id")
     if not isinstance(course_id, str) or not fh._ID_RE.fullmatch(course_id):
         return {"ok": False, "error": "UCAMPUS_COURSE_REQUIRED"}
+    if operation == "ucampus.fabricated.history":
+        try:
+            return {"ok": True,
+                    "records": fh.FabricatedStateStore().list_recent(course_id),
+                    "resume_available": False}
+        except (ValueError, OSError):
+            return {"ok": False, "error": "UCAMPUS_HISTORY_UNAVAILABLE"}
     runner = get_runner()
     if operation == "ucampus.fabricated.status":
         return {"ok": True, **runner.status(course_id)}

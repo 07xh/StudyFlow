@@ -389,6 +389,44 @@ class FabricatedStateStore:
             record = self._read().get(run_id)
             return dict(record) if isinstance(record, dict) else None
 
+    def list_recent(self, course_id: str, *, limit: int = 5) -> list[dict[str, Any]]:
+        """Inspect local snapshots with a fixed safe schema. Never replay events."""
+        _identifier(course_id)
+        if type(limit) is not int or not 1 <= limit <= 10:
+            raise ValueError("UCAMPUS_INVALID_HISTORY_LIMIT")
+        def count(value: Any) -> int:
+            return value if type(value) is int and 0 <= value <= 1_000_000 else 0
+        with self._lock:
+            results: list[dict[str, Any]] = []
+            for run_id, record in reversed(list(self._read().items())):
+                if (not isinstance(run_id, str) or not _ID_RE.fullmatch(run_id)
+                        or not isinstance(record, dict)
+                        or record.get("course_id") != course_id):
+                    continue
+                tasks = record.get("tasks")
+                if not isinstance(tasks, dict):
+                    continue
+                rows = [row for row in tasks.values() if isinstance(row, dict)]
+                phase = record.get("phase")
+                phase = ("interrupted" if phase in ("running", "paused", "stopping")
+                         else phase if phase in ("finished_locally", "failed", "stopped")
+                         else "historical")
+                unit_id = record.get("unit_id")
+                results.append({
+                    "run_id": run_id, "course_id": course_id,
+                    "unit_id": unit_id if isinstance(unit_id, str) and
+                        _ID_RE.fullmatch(unit_id) else "",
+                    "phase": phase, "resources": len(rows),
+                    "generated": sum(count(row.get("generated")) for row in rows),
+                    "sent": sum(count(row.get("sent")) for row in rows),
+                    "server_readback_passed": sum(count(row.get("confirmed")) for row in rows),
+                    "resume_available": False,
+                    "progress_causality": "unverified",
+                })
+                if len(results) >= limit:
+                    break
+            return results
+
     def clear(self, run_id: str) -> None:
         _identifier(run_id)
         with self._lock:
