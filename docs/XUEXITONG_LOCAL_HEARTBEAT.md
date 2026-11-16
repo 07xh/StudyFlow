@@ -288,10 +288,21 @@ python -m unittest discover -s tests -p "test_xuexitong*.py" -v
 ```text
 Ran 65 tests in 0.387s — OK（连续 2 次）
 COMPILE_OK
+npm ci                       -> 74 packages installed
+npx tsc -b                   -> type check OK (exit 0)
+npx vite build               -> 1672 modules, dist 395 kB JS / 113 kB CSS
+npm test                     -> 188 tests / 175 pass / 13 fail
+  13 项为仓库既有 ZHS（知到）与 classroom scope 用例；用提交前基底
+  c466574f 的 bridge.ts 对照同为 188 / 175 / 13，失败项完全一致，与心跳改动无关
+node --test tests/xuexitongHeartbeatPlacement.test.cjs \
+             tests/xuexitongCatalog.test.cjs \
+             tests/xuexitongChapterUI.test.cjs   -> 6 / 6 PASS
 ```
 
 覆盖：47 项心跳模块与审计整改用例（含账号隔离恢复、真实发送计数、队列级暂停）
 + 8 项长驻桥接层用例（含登出安全 worker）+ 10 项视频 / 音频 dtype 分流入库用例，共 65 项；
 全部使用假 session / 假时钟，未对真实账号发包。
 四处应用级接线已合入并通过三方 operation 一致性校验（Python / Rust / TypeScript 各 6 个）；
-Rust / TypeScript 编译与 NSIS 打包在本机缺工具链，仍未执行。
+`npx tsc -b` 类型检查与 `npx vite build` 生产构建已通过；Rust 工具链残缺
+（缺 `rustc.exe`，报 Win32 错误 193）导致 `cargo check` 无法执行，
+Windows NSIS 安装包与真实账号联调仍未做。

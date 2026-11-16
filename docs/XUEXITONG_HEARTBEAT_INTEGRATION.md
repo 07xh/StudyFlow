@@ -273,7 +273,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 | `src/studyflow/services/bridge.py` | import 心跳桥 + `dispatch()` 内 6 个 operation 路由到长驻服务单例 |
 | `src-tauri/src/lib.rs` | `validate()` 白名单（`dtype` / `speed` / `jobs` / `course_id` / `limit` / `run_id` 校验）、`bridge_request()` 长驻通道判定、退出前发 `stop` 刷盘 |
 | `frontend/src/bridge.ts` | 心跳视图类型 + `BridgeRequest` 6 个成员 + 公开错误码与中文提示 |
-| `frontend/src/components/XuexitongPanels.tsx` | 课程详情下方挂载 `XuexitongHeartbeatPanel` |
+| `frontend/src/App.tsx` | 课程播放舞台挂载 `XuexitongHeartbeatPanel`（`c466574f` 由 `XuexitongPanels.tsx` 迁入，并有 `frontend/tests/xuexitongHeartbeatPlacement.test.cjs` 回归） |
 | `frontend/src/components/XuexitongHeartbeatPanel.tsx` | 任务面板（新增），含速度 / 并发 / 首包申报 / 任务类型筛选 / 防重入刷新 / 课程切换防串台 |
 | `integration/frontend/XuexitongHeartbeatPanel.tsx` | 可复制组件副本，与 `frontend/src/components/` 下正式组件逐字节一致 |
 
@@ -293,6 +293,15 @@ COMPILE_OK
 Python / Rust / TypeScript 三方 operation 集合一致：6 / 6 / 6
 （校验统计各文件中全部 `xuexitong.heartbeat.*` 字面量，不受 TS 把
 `pause | resume | stop` 写成单个并集成员的影响）
+npm ci                       -> 74 packages installed
+npx tsc -b                   -> type check OK (exit 0)
+npx vite build               -> 1672 modules, dist 395 kB JS / 113 kB CSS
+npm test                     -> 188 tests / 175 pass / 13 fail
+  13 项为仓库既有 ZHS（知到）与 classroom scope 用例；用提交前基底
+  c466574f 的 bridge.ts 对照同为 188 / 175 / 13，失败项完全一致，与心跳改动无关
+node --test tests/xuexitongHeartbeatPlacement.test.cjs \
+             tests/xuexitongCatalog.test.cjs \
+             tests/xuexitongChapterUI.test.cjs   -> 6 / 6 PASS
 ```
 
 用例分布：`test_xuexitong_heartbeat.py` 47 项（含账号隔离恢复、真实发送计数、
@@ -303,6 +312,9 @@ Python / Rust / TypeScript 三方 operation 集合一致：6 / 6 / 6
 ### 仍未执行
 
 - 真实学习通账号发包、`isPassed` 实际返回、`dtoken` 有效期与 403 风控阈值。
-- `cargo test` / `npm run build`：本机没有 Rust 与 TypeScript 工具链。
+- `cargo check` / `cargo test`：本机 Rust 工具链残缺（`~/.rustup/toolchains/
+  stable-x86_64-pc-windows-gnu/bin/` 只有 `cargo.exe`，缺 `rustc.exe`，执行报
+  Win32 错误 193），无法编译 `src-tauri`。
+- `npm test` 中 13 项 ZHS / classroom scope 既有失败，与心跳模块无关，非本次引入。
 - Windows NSIS 安装包内 Sidecar 依赖（`requests` / `bs4`）与心跳模块联调。
 
