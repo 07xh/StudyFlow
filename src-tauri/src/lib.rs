@@ -531,6 +531,15 @@ fn ucampus_open_official_site(mode: String) -> Result<(), String> {
 // Auth happens on the provider's actual site. The remote page is never given
 // a Tauri capability, and tokens are exchanged only through native code/sidecar.
 const UCAMPUS_AUTH_WINDOW: &str = "ucampus-official-auth";
+const UCAMPUS_QR_WINDOW: &str = "ucampus-official-qr";
+
+fn ucampus_login_window_target(mode: Option<&str>) -> Result<(&'static str, &'static str), String> {
+    match mode.unwrap_or("ai") {
+        "ai" => Ok((UCAMPUS_AUTH_WINDOW, "https://uai.unipus.cn/")),
+        "qr" => Ok((UCAMPUS_QR_WINDOW, "https://sso.unipus.cn/sso/login")),
+        _ => Err("UCAMPUS_LOGIN_MODE_INVALID".to_string()),
+    }
+}
 
 fn ucampus_auth_destination_allowed(url: &tauri::Url) -> bool {
     url.scheme() == "https"
@@ -539,7 +548,7 @@ fn ucampus_auth_destination_allowed(url: &tauri::Url) -> bool {
         && url.port().is_none()
         && matches!(url.host_str(), Some(
             "sso.unipus.cn" | "uai.unipus.cn" | "ucontent.unipus.cn" |
-            "ucloud.unipus.cn" | "passport.unipus.cn"
+            "ucloud.unipus.cn" | "passport.unipus.cn" | "birdflock.unipus.cn"
         ))
 }
 
@@ -572,36 +581,45 @@ fn ucampus_jwt_cookie_valid(value: &str) -> bool {
 }
 
 #[tauri::command]
-fn ucampus_login_window_start(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window(UCAMPUS_AUTH_WINDOW) {
-        window.show().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
-        window.set_focus().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
-        return Ok(());
-    }
-    let url = "https://uai.unipus.cn/".parse()
-        .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
-    let profile = app.path().app_local_data_dir()
-        .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?
-        .join("ucampus-official-auth");
-    tauri::WebviewWindowBuilder::new(
-        &app, UCAMPUS_AUTH_WINDOW, tauri::WebviewUrl::External(url))
-        .title("U校园 · 官方登录（扫码 / 验证码）")
-        .inner_size(970.0, 710.0)
-        .min_inner_size(660.0, 480.0)
-        .data_directory(profile)
-        // Closing with the titlebar X must not leave a reusable login session.
-        // On Windows, WebView2 supports private profiles on modern runtimes.
-        .incognito(true)
-        .on_navigation(ucampus_auth_destination_allowed)
-        .build()
-        .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
-    Ok(())
+async fn ucampus_login_window_start(app: tauri::AppHandle, mode: Option<String>) -> Result<(), String> {
+    let (label, destination) = ucampus_login_window_target(mode.as_deref())?;
+    // WebView2 initialization and show/focus can block on native work.
+    // Run that work off the frontend IPC thread so a slow/failed QR page
+    // cannot freeze the main StudyFlow window.
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        if let Some(window) = app.get_webview_window(label) {
+            window.show().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+            window.set_focus().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+            return Ok(());
+        }
+        let url = destination.parse()
+            .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+        let profile = app.path().app_local_data_dir()
+            .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?
+            .join(label);
+        tauri::WebviewWindowBuilder::new(
+            &app, label, tauri::WebviewUrl::External(url))
+            .title(if label == UCAMPUS_QR_WINDOW {
+                "U校园 · 官方二维码登录"
+            } else {
+                "U校园 · 官方账号登录（图片/数字验证码）"
+            })
+            .inner_size(970.0, 710.0)
+            .min_inner_size(660.0, 480.0)
+            .data_directory(profile)
+            .incognito(true)
+            .on_navigation(ucampus_auth_destination_allowed)
+            .build()
+            .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+        Ok(())
+    }).await.map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?
 }
 
 #[tauri::command]
-async fn ucampus_login_window_import(app: tauri::AppHandle)
+async fn ucampus_login_window_import(app: tauri::AppHandle, mode: Option<String>)
     -> Result<serde_json::Value, String> {
-    let window = app.get_webview_window(UCAMPUS_AUTH_WINDOW)
+    let (label, _) = ucampus_login_window_target(mode.as_deref())?;
+    let window = app.get_webview_window(label)
         .ok_or_else(|| "UCAMPUS_LOGIN_WINDOW_MISSING".to_string())?;
     // Windows WebView2 cookie access must not execute in a synchronous IPC
     // handler: Tauri documents a deadlock on the UI thread.
@@ -638,23 +656,32 @@ async fn ucampus_login_window_import(app: tauri::AppHandle)
     }
     // Successful import must not leave another persistent copy of the
     // bearer token in the embedded browser profile.
-    if let Some(window) = app.get_webview_window(UCAMPUS_AUTH_WINDOW) {
-        let _ = window.clear_all_browsing_data();
-        let _ = window.close();
+    // Browser-data operations are synchronous on Windows/WebView2.
+    // Never execute them directly on the asynchronous IPC/UI executor.
+    if let Some(window) = app.get_webview_window(label) {
+        let _ = tauri::async_runtime::spawn_blocking(move || {
+            let _ = window.clear_all_browsing_data();
+            let _ = window.close();
+        }).await;
     }
     Ok(serde_json::json!({"saved": true}))
 }
 
 #[tauri::command]
-async fn ucampus_login_window_close(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window(UCAMPUS_AUTH_WINDOW) {
-        let _ = tauri::async_runtime::spawn_blocking({
-            let window = window.clone();
-            move || window.clear_all_browsing_data()
-        }).await;
-        window.close().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
-    }
-    Ok(())
+async fn ucampus_login_window_close(app: tauri::AppHandle, mode: Option<String>) -> Result<(), String> {
+    let labels: Vec<&'static str> = match mode.as_deref() {
+        None => vec![UCAMPUS_AUTH_WINDOW, UCAMPUS_QR_WINDOW],
+        Some(value) => vec![ucampus_login_window_target(Some(value))?.0],
+    };
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        for label in labels {
+            if let Some(window) = app.get_webview_window(label) {
+                let _ = window.clear_all_browsing_data();
+                window.close().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+            }
+        }
+        Ok(())
+    }).await.map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?
 }
 
 // An explicit Exit IPC command does not necessarily destroy the main window
@@ -864,6 +891,11 @@ mod ipc_validation_tests {
             &"https://sso.unipus.cn/sso/login".parse().unwrap()));
         assert!(super::ucampus_auth_destination_allowed(
             &"https://uai.unipus.cn/".parse().unwrap()));
+        assert_eq!(super::ucampus_login_window_target(Some("qr")).unwrap(),
+            (super::UCAMPUS_QR_WINDOW, "https://sso.unipus.cn/sso/login"));
+        assert_eq!(super::ucampus_login_window_target(None).unwrap().0,
+            super::UCAMPUS_AUTH_WINDOW);
+        assert!(super::ucampus_login_window_target(Some("external")).is_err());
         for url in [
             "https://evil.example/", "http://uai.unipus.cn/",
             "https://uai.unipus.cn.evil.example/",
