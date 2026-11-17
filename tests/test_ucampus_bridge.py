@@ -190,3 +190,42 @@ def test_sso_success_does_not_mask_optional_monitor_cleanup_failure(monkeypatch)
     assert result["ok"] and result["data"]["saved"] is True
     assert result["data"]["monitor_reset"] is False
     assert len(stored) == 1
+
+
+def test_webview_import_enriches_school_for_content_read_without_password(monkeypatch):
+    from dataclasses import replace
+    from studyflow.platforms.ucampus.credentials import UCampusConfig
+
+    saved = []
+    enriched = []
+    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
+    monkeypatch.setattr(bridge.ucampus_monitor, "configure",
+                        lambda course, unit, enabled: {"enabled": False})
+    monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda data: saved.append(data))
+
+    def enrich(config):
+        enriched.append(config.variant)
+        return replace(config, school_id="8320")
+
+    monkeypatch.setattr(bridge, "ucampus_enrich_school", enrich)
+    result = call("ucampus.session.configure",
+                  configuration={"variant": "ai", "cookie": "jwt=header.payload.signature"})
+    assert result["ok"] and result["data"]["saved"] is True
+    assert enriched == ["ai"]
+    assert saved == [{
+        "variant": "ai",
+        "catalog_url": "https://uai.unipus.cn/api/cmgt/course/getHomeCourseListByStudent",
+        "cookie": "jwt=header.payload.signature",
+        "authorization": "",
+        "annotator_token": "",
+        "school_id": "8320",
+    }]
+    assert "jwt=" not in repr(result)
+
+    monkeypatch.setattr(bridge, "ucampus_enrich_school", lambda config: (_ for _ in ()).throw(RuntimeError("optional lookup offline")))
+    still_saved = call("ucampus.session.configure",
+                       configuration={"variant": "ai", "cookie": "jwt=header.payload.signature"})
+    assert still_saved["ok"] and still_saved["data"]["saved"] is True
+    assert len(saved) == 2
+    assert saved[1]["school_id"] == ""
