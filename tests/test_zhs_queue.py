@@ -303,6 +303,51 @@ def test_sampling_freshness_is_video_only_and_never_invents_a_percentage():
     assert not sampling_is_stale("video", 37.5, had_sample=True, running_seconds=120)
 
 
+def test_two_real_child_processes_report_independent_live_video_samples(tmp_path, monkeypatch):
+    """Both running chapters must have separate numeric telemetry, not only lane one."""
+    from studyflow.services import zhs_queue
+
+    snapshots = []
+    write = zhs_queue.atomic_json
+
+    def collect(path, data):
+        if path.name.startswith("zhs-queue-"):
+            snapshots.append(json.loads(json.dumps(data)))
+        write(path, data)
+
+    monkeypatch.setattr(zhs_queue, "atomic_json", collect)
+    targets = [
+        zhs_queue.QueueTarget(1, None, "video", "3.5", "shared-3", "第三章"),
+        zhs_queue.QueueTarget(2, None, "video", "4.6", "shared-4", "第四章"),
+    ]
+    script = (
+        "import json,pathlib,sys,time;"
+        "p=pathlib.Path(sys.argv[1]);"
+        "p.write_text(json.dumps({'v':1,'token':sys.argv[2],"
+        "'at':time.time(),'videoSegmentPercent':float(sys.argv[3])}));"
+        "time.sleep(.45)"
+    )
+
+    def launch(target, token):
+        return subprocess.Popen(
+            [sys.executable, "-c", script,
+             str(tmp_path / f"monitor-zhs-{token}.json"), token,
+             "24.5" if target.resource_id == 1 else "76.5"],
+            stdin=subprocess.PIPE,
+        )
+
+    assert zhs_queue.supervise(targets, 2, "7" * 32, tmp_path, launch) == 0
+    paired = [data["tasks"] for data in snapshots
+              if len(data["tasks"]) == 2 and all(
+                  row["state"] == "running" and not row["stale"]
+                  for row in data["tasks"]
+              ) and [row["percent"] for row in data["tasks"]] == [24.5, 76.5]]
+    assert paired, "both independent live samples must coexist in a queue snapshot"
+    final = json.loads((tmp_path / ("zhs-queue-" + "7" * 32 + ".json")).read_text())
+    assert [row["state"] for row in final["tasks"]] == ["exited", "exited"]
+    assert all(row["percent"] is None for row in final["tasks"])
+
+
 def test_running_ppt_does_not_report_unavailable_video_sampling(tmp_path, monkeypatch):
     from studyflow.services import zhs_queue
     snapshots = []
