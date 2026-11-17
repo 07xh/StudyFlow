@@ -39,5 +39,5 @@ test("mirror controls expose only packaged sources and safe failover",()=>{
   assert.ok(code.includes('operation:"updates.sources"'));
   assert.ok(code.includes('id="update-source"'));
   assert.ok(code.includes('id="update-fallback"'));
-  assert.ok(code.includes('<option value="proxy">国内公共 GitHub 代理</option>'));
+  assert.ok(code.includes('<option value="proxy" disabled={!sources.proxy}>国内公共 GitHub 代理</option>'));
 });
