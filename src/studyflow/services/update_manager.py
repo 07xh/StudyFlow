@@ -29,7 +29,7 @@ def _validated(value: object) -> dict:
     result = {**DEFAULTS, **value}
     if (result["channel"] not in ("stable", "beta")
             or result["mode"] not in ("notify", "download")
-            or result["source"] not in ("auto", "github", "r2")
+            or result["source"] not in ("auto", "github", "mirror")
             or type(result["fallback"]) is not bool):
         raise ValueError("INVALID_UPDATE_SETTINGS")
     return result
@@ -115,7 +115,7 @@ def changelog(current: str, previous: str | None = None, history: bool = False) 
 
 def sources() -> dict:
     """UI capabilities only; never accepts an arbitrary mirror URL."""
-    return {"github": True, "r2": bool(update_sources.mirror_base())}
+    return {"github": True, "mirror": bool(update_sources.mirror_base())}
 
 
 def download(current: str, version: str) -> dict:
@@ -148,7 +148,7 @@ def download(current: str, version: str) -> dict:
     last_error = None
     for source in order:
         try:
-            if source == "r2":
+            if source == "mirror":
                 assert mirror_url is not None
                 host = update_sources.mirror_base().removeprefix("https://")
                 updater.verified_download(mirror_url, checksum, target, mirror_host=host)
