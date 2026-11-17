@@ -73,6 +73,29 @@ const OFFICIAL_MONITOR_REPORT_OLD: &str =
 const OFFICIAL_MONITOR_REPORT_NEW: &str =
     "    const shouldReport = force || state !== monitor.lastState ||\n      time - monitor.lastReport >= MONITOR_INTERVAL_MS;";
 const LOCAL_OBSERVER_INTERVAL_MS: u64 = 6000;
+const PLAYER_SPEED_OLD: &str = "[ValidateSet('1','1.25','1.5','2')][string]$Speed = '1.5'";
+const PLAYER_SPEED_NEW: &str =
+    "[ValidatePattern('^(?:0\\.[5-9][0-9]?|[1-3](?:\\.[0-9]{1,2})?|4(?:\\.0{1,2})?)$')][string]$Speed = '1.5'";
+
+fn valid_playback_speed(value: &str) -> bool {
+    let parts: Vec<&str> = value.split('.').collect();
+    if parts.is_empty() || parts.len() > 2
+        || !matches!(parts[0], "0" | "1" | "2" | "3" | "4")
+        || (parts.len() == 2 && (parts[1].is_empty() || parts[1].len() > 2
+            || !parts[1].bytes().all(|b| b.is_ascii_digit()))) {
+        return false;
+    }
+    matches!(value.parse::<f64>(), Ok(rate) if (0.5..=4.0).contains(&rate))
+}
+
+fn local_player_copy(source: &str) -> Result<String, String> {
+    // Historical sources are never edited, only the isolated runtime copy.
+    let normalized = source.replace("\r\n", "\n");
+    if normalized.matches(PLAYER_SPEED_OLD).count() != 1 {
+        return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
+    }
+    Ok(normalized.replacen(PLAYER_SPEED_OLD, PLAYER_SPEED_NEW, 1))
+}
 
 fn local_observer_copy(source: &str) -> Result<String, String> {
     // Git's Windows checkout can use CRLF even though the pinned Git blob is
@@ -104,6 +127,11 @@ fn copy_player_assets(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
         fs::copy(from, to).map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
     }
     // The PowerShell host reads this isolated local copy, not the pinned source.
+    let host = root.join("Official-Player.ps1");
+    let original_host = fs::read_to_string(&host)
+        .map_err(|_| "PLAYER_RESOURCES_UNAVAILABLE")?;
+    fs::write(&host, local_player_copy(&original_host)?)
+        .map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
     let controller = root.join("Official-MediaController.js");
     let original = fs::read_to_string(&controller)
         .map_err(|_| "PLAYER_RESOURCES_UNAVAILABLE")?;
@@ -278,7 +306,7 @@ pub async fn zhidao_player_start(
     auto_start: bool,
     auto_next: bool,
 ) -> Result<OfficialPlayerStatus, String> {
-    if !valid_course_key(&course_key) || !["1", "1.25", "1.5", "2"].contains(&speed.as_str()) {
+    if !valid_course_key(&course_key) || !valid_playback_speed(&speed) {
         return Err("INVALID_PLAYER_REQUEST".into());
     }
     let request = json!({
@@ -487,5 +515,22 @@ mod local_observer_tests {
     #[test]
     fn official_observer_overlay_rejects_unknown_future_source() {
         assert!(local_observer_copy("new upstream controller").is_err());
+    }
+}
+
+#[cfg(test)]
+mod player_speed_tests {
+    use super::{local_player_copy, valid_playback_speed};
+    #[test]
+    fn speed_range_and_original_source_isolation() {
+        for value in ["0.5", "0.75", "1", "1.23", "2.75", "3.99", "4", "4.00"] {
+            assert!(valid_playback_speed(value), "{value}");
+        }
+        for value in ["0.49", "4.01", "1.234", "NaN", "1e2", "-1", "01.5", ""] {
+            assert!(!valid_playback_speed(value), "{value}");
+        }
+        let source = "[ValidateSet('1','1.25','1.5','2')][string]$Speed = '1.5'";
+        assert!(local_player_copy(source).unwrap().contains("ValidatePattern"));
+        assert!(source.contains("ValidateSet"));
     }
 }

@@ -197,11 +197,11 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               <option value={2}>2 · 双路并发（默认）</option>
               <option value={3}>3 · 三路并发</option>
             </select></label>
-          <label><span>请求倍速（1–2×）</span>
-            <input type="number" min={1} max={2} step={0.25} value={options.speed}
+          <label><span>请求倍速（1–2×，支持小数）</span>
+            <input type="number" min={1} max={2} step={0.01} value={options.speed}
               disabled={!desktop||busy} onChange={e=>update("speed",Number(e.target.value))}/></label>
-          <label><span>实际倍速上限（1–2×）</span>
-            <input type="number" min={1} max={2} step={0.25} value={options.speed_cap}
+          <label><span>倍速上限（1–2×）</span>
+            <input type="number" min={1} max={2} step={0.01} value={options.speed_cap}
               disabled={!desktop||busy} onChange={e=>update("speed_cap",Number(e.target.value))}/></label>
           <label><span>本次最多安排视频数（0 不限制）</span>
             <input type="number" min={0} max={1000} step={1} value={options.max_videos}

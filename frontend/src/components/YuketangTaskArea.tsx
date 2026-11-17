@@ -106,7 +106,7 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
         <h4 className="sf-settings-section-title">播放参数</h4>
         <div className="legacy-option-grid">
           {([
-            ["video_speed","视频倍速",0.1,4,0.1],
+            ["video_speed","视频倍速（0.1–4×）",0.1,4,0.01],
             ["heartbeat_interval","心跳间隔（秒）",1,120,1],
             ["max_concurrent_videos","并发数量",1,32,1],
             ["test_video_count","测试视频数量",1,10000,1],
