@@ -18,7 +18,7 @@ import time
 # observer recognizes the former; this adapter observes only the latter.
 _SHARED_VIDEO_PROGRESS = re.compile(
     r"^playing\s+([1-9][0-9]{0,19})\s+\[[^\r\n]{0,512}\]\s*"
-    r"(\d{1,3}(?:\.\d)?)%", re.IGNORECASE,
+    r"(\d{1,3}(?:\.\d{1,3})?)%", re.IGNORECASE,
 )
 # Terminals may repaint a worker's progress line with cursor/erase CSI
 # commands before `playing`. Strip CSI control sequences, not arbitrary
