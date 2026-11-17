@@ -391,7 +391,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_LOGIN_UNAVAILABLE": return "U校园 SSO 登录接口请求失败，请检查网络或稍后再试。";
     case "UCAMPUS_LOGIN_REJECTED": return "U校园未接受本次登录，请检查账号密码及平台账号状态。";
     case "UCAMPUS_LOGIN_FORMAT_UNVERIFIED": return "U校园 SSO 返回的数据结构与当前适配器不一致，未保存会话。";
-    case "UCAMPUS_LOGIN_VERIFICATION_REQUIRED": return "U校园要求图形、滑块等额外验证。请通过官方页面完成验证，不自动绕过。";
+    case "UCAMPUS_LOGIN_VERIFICATION_REQUIRED": return "U校园要求图片或数字验证码，请在官方登录窗口查看并手动填写。学序不会自动识别或绕过验证码。";
     case "UCAMPUS_LOGIN_RATE_LIMITED": return "U校园限制了本次登录请求，请遵循平台提示后再试。";
     case "UCAMPUS_CATALOG_UNAVAILABLE": return "U校园课程接口请求失败，请检查网络、账号与接口版本。";
     case "UCAMPUS_CATALOG_FORMAT_UNVERIFIED": return "U校园课程接口返回了未知数据格式；未生成任何模拟课程，请核验平台版本。";
