@@ -10,7 +10,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
 }){
   const [settings,setSettings]=useState<UpdateSettings>({channel:"beta",mode:"download",source:"auto",fallback:true});
   const [current,setCurrent]=useState("");
-  const [sources,setSources]=useState<{github:boolean;r2:boolean}>({github:true,r2:false});
+  const [sources,setSources]=useState<{github:boolean;mirror:boolean}>({github:true,mirror:false});
   const [release,setRelease]=useState<AvailableUpdate|null>(null);
   const [busy,setBusy]=useState(false);
   const [loaded,setLoaded]=useState(false);
@@ -20,10 +20,10 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
   notify.current=onDownloaded;
 
   async function download(version:string,update:AvailableUpdate){
-    const result=await request<{filename:string;sha256:string;source:"github"|"r2"|"cache"}>({operation:"updates.download",
+    const result=await request<{filename:string;sha256:string;source:"github"|"mirror"|"cache"}>({operation:"updates.download",
       current_version:version,release_version:update.version});
     setDownloaded(result.filename);
-    const used=result.source==="r2"?"Cloudflare R2 镜像":result.source==="github"?"GitHub 官方源":"已缓存的校验通过安装包";
+    const used=result.source==="mirror"?"备用 HTTPS 镜像":result.source==="github"?"GitHub 官方源":"已缓存的校验通过安装包";
     const text="新版本已下载并通过 SHA-256 校验（"+used+"），可在设置中打开更新目录安装。";
     setMessage(text);notify.current(text);
   }
@@ -49,7 +49,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
     if(!desktop)return;
     let active=true;
     setBusy(true);
-    void Promise.all([getVersion(),request<UpdateSettings>({operation:"updates.settings.get"}),request<{github:boolean;r2:boolean}>({operation:"updates.sources"})])
+    void Promise.all([getVersion(),request<UpdateSettings>({operation:"updates.settings.get"}),request<{github:boolean;mirror:boolean}>({operation:"updates.sources"})])
       .then(async([version,preference,available])=>{
         if(!active)return;
         setCurrent(version);setSettings(preference);setSources(available);setLoaded(true);
@@ -92,13 +92,13 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
         onChange={e=>void save({...settings,source:e.target.value as UpdateSettings["source"]})}>
         <option value="auto">自动（镜像优先，失败回退）</option>
         <option value="github">GitHub 官方源</option>
-        <option value="r2" disabled={!sources.r2}>Cloudflare R2 镜像{!sources.r2?"（未配置）":""}</option>
+        <option value="mirror" disabled={!sources.mirror}>备用 HTTPS 镜像{!sources.mirror?"（未配置）":""}</option>
       </select></div>
     <div className="sf-settings-line"><label htmlFor="update-fallback">故障切换</label>
       <label className="sf-inline-check"><input id="update-fallback" type="checkbox" checked={settings.fallback}
         disabled={!desktop||busy||!loaded}
         onChange={e=>void save({...settings,fallback:e.target.checked})}/>下载失败时自动尝试另一下载源</label></div>
-    {!sources.r2&&<p className="muted">当前发行版未配置 R2 镜像，下载仍使用 GitHub 官方源。</p>}
+    {!sources.mirror&&<p className="muted">当前发行版未配置 备用镜像，下载仍使用 GitHub 官方源。</p>}
     <div className="actions">
       <button className="secondary" disabled={!desktop||busy} onClick={()=>void perform(async()=>{
         const version=current||await getVersion();setCurrent(version);
