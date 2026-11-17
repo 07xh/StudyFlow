@@ -84,6 +84,34 @@ def test_exact_ai_target_never_runs_sibling_video_or_reading(monkeypatch):
     assert called == [22]
 
 
+def test_local_observation_handles_legacy_frames_and_rejects_fake_phase(tmp_path, monkeypatch):
+    from studyflow.services.zhs_queue import local_observation, local_percent
+    from studyflow.services import zhs_queue
+
+    token = "d" * 32
+    sample_path = tmp_path / f"monitor-zhs-{token}.json"
+    clock = [100.0]
+    monkeypatch.setattr(zhs_queue.time, "time", lambda: clock[0])
+    snapshot = {"v": 1, "token": token, "at": 100.0,
+                "videoSegmentPercent": 11.5}
+    sample_path.write_text(json.dumps(snapshot))
+    assert local_observation(tmp_path, token) == (11.5, None)
+    assert local_percent(tmp_path, token) == 11.5
+
+    snapshot["playbackPhase"] = "paused"
+    sample_path.write_text(json.dumps(snapshot))
+    assert local_observation(tmp_path, token) == (None, None)
+    snapshot["videoSegmentPercent"] = None
+    sample_path.write_text(json.dumps(snapshot))
+    assert local_observation(tmp_path, token) == (None, "paused")
+    clock[0] = 120.0
+    assert local_observation(tmp_path, token) == (None, None)
+    snapshot["at"] = 120.0
+    snapshot["playbackPhase"] = "unrecognized"
+    sample_path.write_text(json.dumps(snapshot))
+    assert local_observation(tmp_path, token) == (None, None)
+
+
 def test_real_process_queue_overlaps_refills_and_isolates_failure(tmp_path):
     from studyflow.services.zhs_queue import QueueTarget, supervise
     targets = [QueueTarget(i, None, "video", f"视频{i}") for i in (1, 2, 3)]
