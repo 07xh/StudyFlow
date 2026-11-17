@@ -215,9 +215,9 @@ def test_independent_video_phases_prevent_false_progress_and_resume(tmp_path):
     ]
     for index, mon in enumerate(monitors):
         mon.mark_resource("video", f"章节 {index + 1}")
-    outputs[0].write("\\rplaying [####------] 40.0%")
-    outputs[1].write("\\rpause [###-------] 36.0%")
-    outputs[2].write("\\ranswering [##--------] 20.0%")
+    outputs[0].write("\rplaying [####------] 40.0%")
+    outputs[1].write("\rpause [###-------] 36.0%")
+    outputs[2].write("\ranswering [##--------] 20.0%")
     a, b, c = [
         json.loads(m.path.read_text(encoding="utf-8"))
         for m in monitors
@@ -230,14 +230,14 @@ def test_independent_video_phases_prevent_false_progress_and_resume(tmp_path):
     assert local_observation(tmp_path, "3" * 32) == (None, "answering")
 
     # A pause after playback cannot make the last % look freshly sampled.
-    outputs[0].write("\\rpause [####------] 40.0%")
+    outputs[0].write("\rpause [####------] 40.0%")
     assert local_observation(tmp_path, "1" * 32) == (None, "paused")
-    outputs[0].write("\\rplaying [#####-----] 50.25%")
+    outputs[0].write("\rplaying [#####-----] 50.25%")
     assert local_observation(tmp_path, "1" * 32) == (50.25, "playing")
 
     # Non-anchored percent signs and invalid positions are never telemetry.
-    outputs[1].write("\\rlogin response 99.9%")
-    outputs[2].write("\\rplaying [#] 120.5%")
+    outputs[1].write("\rlogin response 99.9%")
+    outputs[2].write("\rplaying [#] 120.5%")
     assert local_observation(tmp_path, "2" * 32) == (None, "paused")
     assert local_observation(tmp_path, "3" * 32) == (None, "answering")
 
