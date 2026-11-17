@@ -23,7 +23,9 @@ test("Xuexitong task controls keep run identity and shared parameter defaults",(
     assert.ok(bridge.includes('operation:"xuexitong.heartbeat.'+operation+'";run_id:string'));
   }
   assert.ok(source.includes('operation:"xuexitong.settings.save"'));
-  assert.ok(source.includes('settings:{...defaults,playback_speed:speed,concurrency:jobs}'));
+  assert.ok(source.includes('settings:{...latest,playback_speed:launchSpeed,concurrency:launchJobs}'));
+  assert.ok(source.includes('if(speedEdited.current||jobsEdited.current)'),
+    "Only fields explicitly edited in the course view may override a newer saved preset");
   assert.ok(rust.includes('request.get("graceful").is_none()'));
   assert.ok(bridge.includes('case "XUEXITONG_RUN_ID_REQUIRED":'),
     "Missing run identity must have an actionable UI explanation");
