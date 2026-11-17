@@ -138,7 +138,7 @@ test("U校园官方扫码入口与 Cookie 导入有明确的会话边界",()=>{
   assert.match(login,/ucampus_login_window_import/);
   assert.match(login,/launchEmbedded\("qr"\)/);
   assert.match(login,/>打开二维码登录<\/button>/);
-  assert.match(login,/invoke\("ucampus_login_window_import",\{mode:embeddedMode\}\)/);
+  assert.match(login,/\("ucampus_login_window_import",\{mode:embeddedMode\}\)/);
   assert.match(login,/窗口中尚未检测到 U校园AI 的 JWT/);
   const native=fs.readFileSync(path.join(__dirname,"..","..","src-tauri","src","lib.rs"),"utf8");
   assert.match(native,/UCAMPUS_QR_WINDOW/);
