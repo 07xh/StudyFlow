@@ -92,7 +92,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
         onChange={e=>void save({...settings,source:e.target.value as UpdateSettings["source"]})}>
         <option value="auto">自动（公共代理优先，GitHub 兜底）</option>
         <option value="github">GitHub 官方源</option>
-        <option value="proxy">国内公共 GitHub 代理</option>
+        <option value="proxy" disabled={!sources.proxy}>国内公共 GitHub 代理</option>
       </select></div>
     <div className="sf-settings-line"><label htmlFor="update-fallback">故障切换</label>
       <label className="sf-inline-check"><input id="update-fallback" type="checkbox" checked={settings.fallback}
