@@ -69,9 +69,9 @@ fn source_root(app: &AppHandle) -> Result<PathBuf, String> {
 // read-only HTML5 state observations; never alter platform heartbeats.
 const OFFICIAL_MONITOR_INTERVAL_OLD: &str = "const MONITOR_INTERVAL_MS = 12000;";
 const OFFICIAL_MONITOR_REPORT_OLD: &str =
-    "const shouldReport = force || state !== monitor.lastState ||\n      (state === 'advancing' && time - monitor.lastReport >= 60000);";
+    "    const shouldReport = force || state !== monitor.lastState ||\n      (state === 'advancing' && time - monitor.lastReport >= 60000);";
 const OFFICIAL_MONITOR_REPORT_NEW: &str =
-    "const shouldReport = force || state !== monitor.lastState ||\n      time - monitor.lastReport >= MONITOR_INTERVAL_MS;";
+    "    const shouldReport = force || state !== monitor.lastState ||\n      time - monitor.lastReport >= MONITOR_INTERVAL_MS;";
 const LOCAL_OBSERVER_INTERVAL_MS: u64 = 6000;
 
 fn local_observer_copy(source: &str) -> Result<String, String> {
