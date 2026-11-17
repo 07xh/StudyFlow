@@ -181,7 +181,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     <p className="sf-muted">U校园5.0 / AI版优先接入。服务器进度只读核验已接入，课程与进度须以本人账号实际读取结果核验。</p>
     <p className="sf-muted">{status?.configured?"本机已有会话配置（不代表接口已登录成功）":"本机尚未配置 U校园会话"}</p>
     {status?.configured&&status.jwt_lifetime==="expired"&&
-      <p className="sf-ucampus-session-warning" role="status">本机 U校园 JWT 自报已过期，请重新完成官方登录。不会自动复用过期令牌。</p>}
+      <p className="sf-ucampus-session-warning" role="status">本机 U校园 JWT 自报已过期，请重新完成官方登录。课程与进度读取不会继续使用该过期令牌。</p>}
     {status?.configured&&status.jwt_lifetime==="expiring"&&
       <p className="sf-ucampus-session-warning" role="status">本机 U校园 JWT 自报即将过期，建议重新登录。实际是否可用仍以服务器读取为准。</p>}
     <div className="sf-settings-line">
