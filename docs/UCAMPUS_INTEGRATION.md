@@ -30,6 +30,9 @@
 - 官网 [Unipus SSO](https://sso.unipus.cn/sso/login) 提供二维码扫码登录。学序现在提供**独立的官方 WebView2 登录窗口**：用户自行完成官方扫码/验证码后，点击“导入并验证会话”时由 Rust 原生层检查该窗口在 `uai.unipus.cn` 下的 JWT Cookie，符合格式才传给本机 Python sidecar，保存到 Windows 凭据管理器；Cookie/JWT 不返回前端。首次使用、域名跳转及具体学校账号是否设置 JWT Cookie 仍待 Windows 实机验收，不能将打开窗口或扫码完成当成已登录。系统浏览器仍不能向学序自动同步 Cookie，可在本机手动导入本人 Cookie 作为备用。
 - 内嵌官方登录仅允许访问固定的 U校园第一方 HTTPS 域名，窗口标签不授予 Tauri IPC capability，令牌不会进入页面 JavaScript/日志。成功导入或主动关闭时尽力清理 WebView2 浏览数据。
 - 2026-11-17 UI 修复：原 `details` 内 `label` 与 `input` 默认行内布局造成长标签和输入框互相挤压，已改为表单字段上下排列、可换行的官方登录链接。手动导入支持清理粘贴的 `Cookie:` 请求头前缀。
+- 后续加固：官方 WebView2 登录窗使用 `incognito(true)`，在受支持的 WebView2 运行时中关闭即丢弃私密会话；主动退出时会调用原生清理并关闭官方窗口，异常时界面明确提示。原 `data_directory` 仍用于隔离，部分旧版 WebView2 可能不支持私密模式；需要 Windows 实机验证，不将本机清理声称为官方服务器注销。
+- 导入窗口会话时，Rust 只解析 JWT 的 `exp` 作为**未经签名验证的本地过期提示**；已过期会话拒绝导入且不替换 Windows 凭据。Python 的 `ucampus.session.info` 只向界面返回 `jwt_lifetime`（`expired/expiring/not_expired/unknown`），不包含原始令牌。课程、进度只读请求在本地已知过期时提前停止，服务端认证仍由实际接口响应判定。
+- 账号界面优先展示官方登录，高级手动 Cookie 表单默认折叠；设置里明确区分“保存会话”“JWT 自报有效期”和“课程接口读取成功”，不把本地令牌自报未过期等同于真实登录。
 - 账号密码登录或手动导入 Cookie 保存成功后，均自动执行一次**真实课程目录读取**并显示数量或失败原因；也可使用“验证课程读取”按钮复核。保存成功、HTTP 成功或课程空列表都不被误判为平台登录完成。
 - 实际 U校园AI `course-v2` ID 可包含 `+` 分隔符：Python 和 Rust 只读 IPC 已支持字面 `+`，仍拒绝斜杠、百分号、查询字符及控制字符。
 
