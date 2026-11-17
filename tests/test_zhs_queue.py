@@ -325,7 +325,7 @@ def test_two_real_child_processes_report_independent_live_video_samples(tmp_path
         "p=pathlib.Path(sys.argv[1]);"
         "p.write_text(json.dumps({'v':1,'token':sys.argv[2],"
         "'at':time.time(),'videoSegmentPercent':float(sys.argv[3])}));"
-        "time.sleep(.45)"
+        "time.sleep(.95)"
     )
 
     def launch(target, token):
