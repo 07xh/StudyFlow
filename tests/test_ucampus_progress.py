@@ -154,3 +154,52 @@ def test_real_plus_delimited_course_id_reads_unit_resource_without_rewriting_pat
     assert len(tasks) == 1 and tasks[0]["completed"] is False
     assert f"/course_progress/{course_id}/U1/" in calls[0][0]
     assert calls[0][1]["allow_redirects"] is False
+
+
+def test_authorized_content_client_token_matches_public_vector():
+    from studyflow.platforms.ucampus.content_auth import content_token
+    token = content_token("ad01959edee04ce89baebd12f5d3236e",
+                          exp_ms=1823157201685)
+    # Public frontend output test vector from UnipusAI login.rs.
+    assert token == (
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+        "eyJvcGVuX2lkIjoiYWQwMTk1OWVkZWUwNGNlODliYWViZDEyZjVkMzIzNmUiLCJuYW1lIjoiIiwiZW1haWwiOiIiwiYWRtaW5pc3RyYXRvciI6ZmFsc2UsImV4cCI6MTgyMzE1NzIwMTY4NSwiaXNzIjoiYzRmNzcyMDYzZGNmYTk4ZTljNTAsImF1ZCI6ImVkeC51bmlwdXMuY24ifQ."
+        "oIZR0OePtxO5XArHD6z16KIbbNJqpXUx2S32tsWNcqY"
+    )
+
+
+def test_content_headers_include_real_account_annotator_not_forced_relogin(monkeypatch):
+    from studyflow.platforms.ucampus.course_progress import _headers
+    import base64
+    import json
+    cfg = _config()
+    hdr = _headers(cfg, "my-open-id")
+    assert hdr["appid"] == "undefined"
+    assert hdr["Authorization"].startswith("header.")
+    assert hdr["x-annotator-auth-token"].count(".") == 2
+    payload = hdr["x-annotator-auth-token"].split(".")[1]
+    decoded = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    assert decoded["open_id"] == "my-open-id"
+    assert decoded["aud"] == "edx.unipus.cn"
+    assert "jwt=" not in str(decoded)
+
+    explicit = UCampusConfig.from_dict({"variant": "ai", "cookie": cfg.cookie,
+                                     "annotator_token": "current-provider-signed-token"})
+    assert _headers(explicit, "my-open-id")["x-annotator-auth-token"] == "current-provider-signed-token"
+
+
+@pytest.mark.parametrize(("http_status", "expected"), [
+    (401, "UCAMPUS_CONTENT_AUTH_REJECTED"),
+    (403, "UCAMPUS_CONTENT_ACCESS_DENIED"),
+])
+def test_content_401_403_do_not_misreport_expired_sso(monkeypatch, http_status, expected):
+    cfg = _config()
+    class Response:
+        status_code = http_status
+        is_redirect = False
+        content = b""
+        headers = {"content-type": "application/json"}
+    monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get",
+                        lambda *a, **kw: Response())
+    with pytest.raises(UCampusProgressError, match=expected):
+        UCampusProgressReader(credentials_loader=lambda: cfg).list_units("course-v2:real")
