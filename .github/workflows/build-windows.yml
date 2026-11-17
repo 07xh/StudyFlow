@@ -13,6 +13,7 @@ on:
       - 'packaging/**'
       - 'scripts/build-windows.ps1'
       - 'scripts/build-sidecar.ps1'
+      - 'scripts/embed-sourceforge-config.py'
       - '.github/workflows/build-windows.yml'
       - 'scripts/test-windows-install.ps1'
 
@@ -25,7 +26,7 @@ jobs:
     runs-on: windows-latest
     env:
       # Optional public HTTPS origin; never embed private download credentials.
-      STUDYFLOW_MIRROR_BASE_URL: ${{ vars.STUDYFLOW_MIRROR_BASE_URL }}
+      STUDYFLOW_SOURCEFORGE_PROJECT: ${{ vars.STUDYFLOW_SOURCEFORGE_PROJECT }}
     permissions:
       contents: read
     steps:
