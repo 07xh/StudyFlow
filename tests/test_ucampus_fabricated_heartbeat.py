@@ -82,6 +82,14 @@ class FakeTransport:
 
 
 class TimelineTests(unittest.TestCase):
+    def test_course_v2_plus_ids_match_read_only_contract(self):
+        """The backend accepts valid course/unit IDs already allowed by the reader."""
+        item = target(course_id="course-v2:eng+1", unit_id="unit+1")
+        item.validate()
+        self.assertIsNotNone(fh._ID_RE.fullmatch("course-v2:eng+1"))
+        for unsafe in ("course/v2:eng+1", "course%2Bv2", "course\\nheader"):
+            self.assertIsNone(fh._ID_RE.fullmatch(unsafe))
+
     def test_linear_positions_and_final_duration(self):
         line = fh.FabricatedTimeline(target(), 4)
         self.assertEqual([line.position(i) for i in range(1, 5)],
