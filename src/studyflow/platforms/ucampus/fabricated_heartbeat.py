@@ -44,7 +44,7 @@ PROGRESS_PATH = "/course/api/v2/course_progress/{course}/{unit}/{open_id}/defaul
 SOCKET_NAMESPACE = "/userActivities"
 MARK_SEEN_URL = CONTENT_ORIGIN + SUBMIT_PATH
 
-_ID_RE = re.compile(r"^[A-Za-z0-9_:-]{1,128}$")
+_ID_RE = re.compile(r"^[A-Za-z0-9_:+-]{1,128}$")
 RATE_LIMIT_CODES = frozenset((600001, 600002))
 RATE_LIMIT_MESSAGE = "操作过于频繁"
 SESSION_CODES = frozenset((401, 403, 100001, 100002))
