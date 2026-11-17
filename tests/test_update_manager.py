@@ -21,9 +21,9 @@ def test_stable_replaces_same_version_beta_and_beta_numbers_sort_numerically():
 def test_update_preferences_and_verified_download_use_only_app_directory(monkeypatch, tmp_path):
     from studyflow.services import update_manager as manager
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
-    assert manager.preferences() == {'channel': 'beta', 'mode': 'download'}
+    assert manager.preferences() == {'channel': 'beta', 'mode': 'download', 'source': 'auto', 'fallback': True}
     manager.save_preferences({'channel': 'beta', 'mode': 'notify'})
-    assert manager.preferences() == {'channel': 'beta', 'mode': 'notify'}
+    assert manager.preferences() == {'channel': 'beta', 'mode': 'notify', 'source': 'auto', 'fallback': True}
     with pytest.raises(ValueError):
         manager.save_preferences({'channel': 'external', 'mode': 'notify'})
     payload = b'Offline installer fixture'
