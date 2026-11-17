@@ -33,7 +33,7 @@ def test_update_preferences_and_verified_download_use_only_app_directory(monkeyp
         'browser_download_url': 'https://github.com/07xh/StudyFlow/releases/download/v0.2.0/setup.exe'}]}
     monkeypatch.setattr(updater, 'release_info', lambda *a, **k: release)
     seen = []
-    def download(url, checksum, destination):
+    def download(url, checksum, destination, **kwargs):
         seen.append((url, checksum, destination))
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(payload)
