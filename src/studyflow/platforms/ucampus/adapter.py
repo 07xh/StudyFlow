@@ -168,6 +168,8 @@ class UCampusAdapter:
         config = credentials.load()
         if config is None:
             raise UCampusCatalogError("UCAMPUS_SESSION_MISSING")
+        if credentials._jwt_lifetime_state(config) == "expired":
+            raise UCampusCatalogError("UCAMPUS_SESSION_EXPIRED")
         headers = {
             "Accept": "application/json",
             "Cookie": config.cookie,
