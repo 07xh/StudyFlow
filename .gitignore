@@ -26,5 +26,3 @@ src-tauri/icons/
 
 frontend/test-artifacts/
 
-# Build-time approved public update mirror config
-src/studyflow/services/_sourceforge_config.py
