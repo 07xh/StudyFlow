@@ -176,7 +176,7 @@ test("original ZHS exit triggers exactly scoped read-only course reconciliation"
   assert.match(panel, /setVerificationState\("unknown"\)/);
   assert.match(panel, /onCourseVerifiedRef\.current\?\.\(target\)/);
   assert.match(panel, /if \(!active \|\| currentPlatform\.current !== "zhidao"\) return/);
-  assert.match(app, /detailMode onCourseVerified=\{updateVerifiedZhidaoCourse\}/);
+  assert.match(app, /<LegacyPlaybackPanel platform="zhidao"[\s\S]*?detailMode[\s\S]*?onCourseVerified=\{updateVerifiedZhidaoCourse\}/);
   assert.match(app, /onCourseVerified=\{updateVerifiedZhidaoCourse\}/);
   assert.match(app, /courses:mergeZhidaoEvidence\(previous\.zhidao\.courses,previous\.zhidao\.courses\.map\(item=>/);
   // Reconcile is a read-only bridge operation, not a playback or heartbeat.
