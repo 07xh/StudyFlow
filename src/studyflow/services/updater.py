@@ -203,7 +203,7 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
                 status = getattr(response, "status", 200)
                 content_range = (response.getheader("Content-Range") if hasattr(response, "getheader") else None)
                 if offset and status == 206:
-                    match = re.fullmatch(r"bytes (\\d+)-(\\d+)/(\\d+|\\*)", content_range or "")
+                    match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+|\*)", content_range or "")
                     if not match or int(match.group(1)) != offset:
                         partial.unlink(missing_ok=True)
                         raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Invalid partial response")
