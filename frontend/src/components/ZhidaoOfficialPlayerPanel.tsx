@@ -16,6 +16,7 @@ export type PlayerStatus={
   durationSeconds:number|null;
   visible:boolean|null;
   observedAt:string|null;
+  rate:number|null;
   message:string;
 };
 type Props={
@@ -32,7 +33,7 @@ const defaults:ZhidaoPlayerSettings={
 };
 const initialStatus:PlayerStatus={
   state:"idle",courseKey:null,runId:null,exitCode:null,event:null,positionSeconds:null,
-  durationSeconds:null,visible:null,observedAt:null,message:"官方播放器尚未启动"
+  durationSeconds:null,visible:null,observedAt:null,rate:null,message:"官方播放器尚未启动"
 };
 function timeLabel(value:number|null){
   if(value===null||!Number.isFinite(value)||value<0)return "—";
@@ -123,13 +124,17 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     statusRevision.current++;
     setBusy("start");setMessage("");
     try{
+      // Reload the saved preferences at launch: the settings overlay may have changed them.
+      // Do not silently launch with stale cached preferences when the read fails.
+      const current=await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"});
+      setSettings(current);
       const next=await invoke<PlayerStatus>("zhidao_player_start",{
-        courseKey:selected,speed:settings.speed,allowMinimize:settings.allowMinimize,
-        autoStart:settings.autoStart,autoNext:settings.autoNext
+        courseKey:selected,speed:current.speed,allowMinimize:current.allowMinimize,
+        autoStart:current.autoStart,autoNext:current.autoNext
       });
       setStatus(next);
       const result="已启动原版官方 WebView2 播放器。请在网页内登录并进入课程；实际播放以页面状态为准。";
-      setMessage(result);onEvent?.("启动官方播放器","success",result,{courseId:selected,runId:next.runId??undefined,runner:"official",parameters:{speed:settings.speed,allowMinimize:settings.allowMinimize,autoStart:settings.autoStart,autoNext:settings.autoNext}});
+      setMessage(result);onEvent?.("启动官方播放器","success",result,{courseId:selected,runId:next.runId??undefined,runner:"official",parameters:{speed:current.speed,allowMinimize:current.allowMinimize,autoStart:current.autoStart,autoNext:current.autoNext}});
     }catch(error){
       const result=playerError(error);setMessage(result);
       onEvent?.("启动官方播放器","warning",result,{courseId:selected,runner:"official"});
@@ -157,6 +162,8 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
   }
 
   const current=courses.find(course=>course.course_id===selected);
+  const liveRate=ownsStatus&&status.rate!==null&&Number.isFinite(status.rate)&&status.rate>0
+    ?status.rate:null;
   const position=timeLabel(ownsStatus?status.positionSeconds:null);
   const duration=timeLabel(ownsStatus?status.durationSeconds:null);
   const localPercent=ownsStatus&&status.positionSeconds!==null&&status.durationSeconds!==null&&status.durationSeconds>0
@@ -208,6 +215,10 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
           <span style={{width:localPercent+"%"}}/>
         </div>}
         {ownsStatus&&<small>{status.message}</small>}
+        {ownsStatus&&<small className="sf-zd-playback-rate">
+          实际倍速：{liveRate===null?"等待有效播放器采样":`${Number(liveRate.toFixed(2))}×（HTML5 实测）`}
+        </small>}
+        {!active&&settingsLoaded&&<small>下次启动目标倍速：{settings.speed}×</small>}
       </div>
     </div>
 

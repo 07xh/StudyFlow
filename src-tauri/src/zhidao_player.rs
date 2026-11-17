@@ -35,6 +35,7 @@ pub struct OfficialPlayerStatus {
     duration_seconds: Option<u64>,
     visible: Option<bool>,
     observed_at: Option<String>,
+    rate: Option<f64>,
     message: String,
 }
 
@@ -76,6 +77,18 @@ const LOCAL_OBSERVER_INTERVAL_MS: u64 = 6000;
 const PLAYER_SPEED_OLD: &str = "[ValidateSet('1','1.25','1.5','2')][string]$Speed = '1.5'";
 const PLAYER_SPEED_NEW: &str =
     "[ValidatePattern('^(?:0\\.[5-9][0-9]?|[1-3](?:\\.[0-9]{1,2})?|4(?:\\.0{1,2})?)$')][string]$Speed = '1.5'";
+const PLAYER_OBSERVATION_FUNCTION_OLD: &str =
+    "function Write-OfficialPlaybackObservation([string]$eventName, [int]$position, [int]$duration, [bool]$pageVisible) {";
+const PLAYER_OBSERVATION_FUNCTION_NEW: &str =
+    "function Write-OfficialPlaybackObservation([string]$eventName, [int]$position, [int]$duration, [bool]$pageVisible, [double]$rate) {";
+const PLAYER_OBSERVATION_BODY_OLD: &str =
+    "position = $position; duration = $duration;\n            visible = $pageVisible; at = $now.ToString('o')";
+const PLAYER_OBSERVATION_BODY_NEW: &str =
+    "position = $position; duration = $duration;\n            visible = $pageVisible; at = $now.ToString('o'); rate = $rate";
+const PLAYER_OBSERVATION_CALL_OLD: &str =
+    "Write-OfficialPlaybackObservation $event $position $duration ([bool]$message.pageVisible)";
+const PLAYER_OBSERVATION_CALL_NEW: &str =
+    "Write-OfficialPlaybackObservation $event $position $duration ([bool]$message.pageVisible) ([double]$message.rate)";
 
 fn valid_playback_speed(value: &str) -> bool {
     let parts: Vec<&str> = value.split('.').collect();
@@ -91,10 +104,17 @@ fn valid_playback_speed(value: &str) -> bool {
 fn local_player_copy(source: &str) -> Result<String, String> {
     // Historical sources are never edited, only the isolated runtime copy.
     let normalized = source.replace("\r\n", "\n");
-    if normalized.matches(PLAYER_SPEED_OLD).count() != 1 {
+    if normalized.matches(PLAYER_SPEED_OLD).count() != 1
+        || normalized.matches(PLAYER_OBSERVATION_FUNCTION_OLD).count() != 1
+        || normalized.matches(PLAYER_OBSERVATION_BODY_OLD).count() != 1
+        || normalized.matches(PLAYER_OBSERVATION_CALL_OLD).count() != 1 {
         return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
     }
-    Ok(normalized.replacen(PLAYER_SPEED_OLD, PLAYER_SPEED_NEW, 1))
+    Ok(normalized
+        .replacen(PLAYER_SPEED_OLD, PLAYER_SPEED_NEW, 1)
+        .replacen(PLAYER_OBSERVATION_FUNCTION_OLD, PLAYER_OBSERVATION_FUNCTION_NEW, 1)
+        .replacen(PLAYER_OBSERVATION_BODY_OLD, PLAYER_OBSERVATION_BODY_NEW, 1)
+        .replacen(PLAYER_OBSERVATION_CALL_OLD, PLAYER_OBSERVATION_CALL_NEW, 1))
 }
 
 fn local_observer_copy(source: &str) -> Result<String, String> {
@@ -192,39 +212,41 @@ fn valid_route(value: &str) -> bool {
         && value.bytes().all(|b| b.is_ascii_alphanumeric() || b"_+./=:-".contains(&b))
 }
 
-fn read_observation(root: &Path, token: &str) -> (Option<String>, Option<u64>, Option<u64>, Option<bool>, Option<String>) {
+fn read_observation(root: &Path, token: &str) -> (Option<String>, Option<u64>, Option<u64>, Option<bool>, Option<String>, Option<f64>) {
     let path = root.join(format!("monitor-playback-{token}.json"));
-    let Ok(metadata) = fs::metadata(&path) else { return (None, None, None, None, None); };
+    let Ok(metadata) = fs::metadata(&path) else { return (None, None, None, None, None, None); };
     if !metadata.is_file() || metadata.len() < 2 || metadata.len() > 2048 {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
-    let Ok(modified) = metadata.modified() else { return (None, None, None, None, None); };
+    let Ok(modified) = metadata.modified() else { return (None, None, None, None, None, None); };
     let now = SystemTime::now();
     let age = now.duration_since(modified).unwrap_or(Duration::ZERO);
     if age > Duration::from_secs(18) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
-    let Ok(bytes) = fs::read(&path) else { return (None, None, None, None, None); };
-    let Ok(data) = serde_json::from_slice::<Value>(&bytes) else { return (None, None, None, None, None); };
+    let Ok(bytes) = fs::read(&path) else { return (None, None, None, None, None, None); };
+    let Ok(data) = serde_json::from_slice::<Value>(&bytes) else { return (None, None, None, None, None, None); };
     if data.get("v").and_then(Value::as_u64) != Some(1)
         || data.get("token").and_then(Value::as_str) != Some(token) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
     let event = data.get("event").and_then(Value::as_str).unwrap_or("");
     let allowed = ["observing", "advancing", "stalled", "paused", "buffering",
         "seeking", "position-jump", "sampling-gap", "visibility-changed", "ended"];
     if !allowed.contains(&event) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
     let position = data.get("position").and_then(Value::as_u64);
     let duration = data.get("duration").and_then(Value::as_u64);
     if position.map_or(true, |n| n > 864000) || duration.map_or(true, |n| n > 864000) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
     let visible = data.get("visible").and_then(Value::as_bool);
     let at = data.get("at").and_then(Value::as_str)
         .filter(|s| s.len() <= 64).map(str::to_owned);
-    (Some(event.to_owned()), position, duration, visible, at)
+    let rate = data.get("rate").and_then(Value::as_f64)
+        .filter(|value| value.is_finite() && *value > 0.0 && *value <= 16.0);
+    (Some(event.to_owned()), position, duration, visible, at, rate)
 }
 
 fn event_message(event: Option<&str>) -> String {
@@ -249,10 +271,10 @@ fn status_of(job: &mut ZhidaoPlayerJob) -> OfficialPlayerStatus {
             job.child = None;
         }
     }
-    let (event, position, duration, visible, at) = if job.state == "running" {
+    let (event, position, duration, visible, at, rate) = if job.state == "running" {
         read_observation(&player_root(&job.local_appdata), &job.token)
     } else {
-        (None, None, None, None, None)
+        (None, None, None, None, None, None)
     };
     OfficialPlayerStatus {
         state: job.state.clone(),
@@ -264,6 +286,7 @@ fn status_of(job: &mut ZhidaoPlayerJob) -> OfficialPlayerStatus {
         duration_seconds: duration,
         visible,
         observed_at: at,
+        rate,
         message: if job.state == "running" {
             event_message(event.as_deref())
         } else if job.exit_code == Some(22) {
@@ -396,7 +419,7 @@ pub fn zhidao_player_status(state: State<'_, ZhidaoPlayerManager>) -> Result<Off
         None => Ok(OfficialPlayerStatus {
             state: "idle".into(), course_key: None, run_id: None, exit_code: None,
             event: None, position_seconds: None, duration_seconds: None,
-            visible: None, observed_at: None, message: "官方播放器尚未启动".into(),
+            visible: None, observed_at: None, rate: None, message: "官方播放器尚未启动".into(),
         }),
     }
 }
@@ -408,7 +431,7 @@ pub fn zhidao_player_stop(state: State<'_, ZhidaoPlayerManager>, expected_run_id
         return Ok(OfficialPlayerStatus {
             state: "idle".into(), course_key: None, run_id: None, exit_code: None,
             event: None, position_seconds: None, duration_seconds: None,
-            visible: None, observed_at: None, message: "官方播放器尚未启动".into(),
+            visible: None, observed_at: None, rate: None, message: "官方播放器尚未启动".into(),
         });
     };
     crate::run_identity::verify_expected_run(expected_run_id.as_deref(), Some(job.token.as_str()))
@@ -529,8 +552,18 @@ mod player_speed_tests {
         for value in ["0.49", "4.01", "1.234", "NaN", "1e2", "-1", "01.5", ""] {
             assert!(!valid_playback_speed(value), "{value}");
         }
-        let source = "[ValidateSet('1','1.25','1.5','2')][string]$Speed = '1.5'";
-        assert!(local_player_copy(source).unwrap().contains("ValidatePattern"));
+        let source = format!(
+            "{}\n{}\n{}\n{}",
+            super::PLAYER_SPEED_OLD,
+            super::PLAYER_OBSERVATION_FUNCTION_OLD,
+            super::PLAYER_OBSERVATION_BODY_OLD,
+            super::PLAYER_OBSERVATION_CALL_OLD
+        );
+        let patched = local_player_copy(&source).unwrap();
+        assert!(patched.contains("ValidatePattern"));
+        assert!(patched.contains("rate = $rate"));
+        assert!(patched.contains("([double]$message.rate)"));
         assert!(source.contains("ValidateSet"));
+        assert!(local_player_copy("unexpected upstream change").is_err());
     }
 }

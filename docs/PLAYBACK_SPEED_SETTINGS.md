@@ -7,3 +7,9 @@
 - 设置值只代表目标速度，不代表平台确认已学习或已完成。
 
 验证建议：`pytest -q tests/test_zhidao_player_speed.py tests/test_zhidao_standalone.py tests/test_original_source_snapshot.py`；`cd frontend && npm test`；`cargo test`。Windows 真机另验证实际播放及状态上报。
+
+## 第二轮改进
+- 启动官方播放器之前再次读取服务端已保存的本机参数，避免设置弹窗修改后旧组件缓存导致目标倍速不更新；读取失败时不使用过时值启动。
+- 官方 WebView2 的只读采样新增 `rate` 字段（由页面真实 `video.playbackRate` 上报），原版 PowerShell 不改动，**仅在运行时副本严格注入**采样字段，Rust 对范围及 18 秒新鲜度校验后由前端显示“实际倍速”。
+- 目标倍速与实际倍速在显示中分开，不能将 WebView2 采样等同于平台确认学习进度。
+- 在 LightC 风格的设置容器中补齐数字输入框的边框、背景、焦点态与对齐。
