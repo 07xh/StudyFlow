@@ -155,6 +155,29 @@ def test_parallel_shared_redraw_frames_keep_independent_samples(tmp_path):
     assert json.loads(two.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 63.5
 
 
+def test_shared_progress_keeps_sampling_when_fractional_precision_changes(tmp_path):
+    """Video output may switch from one to two/three decimal places mid-run."""
+    from studyflow.services.zhs_resource_monitor import create_resource_monitor
+
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    monitor = create_resource_monitor(vendor["NumericTelemetry"], "9" * 32, tmp_path)
+    observer = vendor["StdoutObserver"](
+        io.StringIO(), legacy._RefreshingZhsSink(monitor)
+    )
+    monitor.mark_resource("video", "有效视频")
+    for frame, expected in [
+        ("\rplaying 719 [===-------] 39.9%", 39.9),
+        ("\r\x1b[2Kplaying 719 [=====-----] 50.25%", 50.25),
+        ("\r\x1b[1Gplaying 719 [=======---] 75.125%", 75.125),
+    ]:
+        observer.write(frame)
+        snapshot = json.loads(monitor.path.read_text(encoding="utf-8"))
+        assert snapshot["videoSegmentPercent"] == expected
+
+    observer.write("\rplaying 719 [==========] 120.125%")
+    assert json.loads(monitor.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 75.125
+
+
 def test_shared_output_preserves_resource_boundary_and_ignores_non_video_numbers(tmp_path):
     from studyflow.services.zhs_resource_monitor import create_resource_monitor
 
