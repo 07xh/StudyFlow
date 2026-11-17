@@ -244,3 +244,24 @@ def test_ucampus_local_jwt_expiration_hint_is_not_authentication(monkeypatch):
     assert result == {"configured": True, "variant": "ai", "jwt_lifetime": "expired"}
     assert "header." not in repr(result)
     assert "jwt=" not in repr(result)
+
+
+def test_expired_uai_jwt_never_sends_catalog_or_progress_requests(monkeypatch):
+    import base64
+    from studyflow.platforms.ucampus.course_progress import (
+        UCampusProgressReader, UCampusProgressError
+    )
+    payload = base64.urlsafe_b64encode(b'{"openId":"account1","exp":1}').decode().rstrip("=")
+    config = UCampusConfig.from_dict({
+        "variant": "ai", "cookie": f"jwt=header.{payload}.signature"
+    })
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.credentials.load", lambda: config)
+    monkeypatch.setattr("studyflow.platforms.ucampus.adapter.requests.get",
+                        lambda *a, **kw: pytest.fail("expired JWT must not be sent to the server"))
+    monkeypatch.setattr("studyflow.platforms.ucampus.course_progress.requests.get",
+                        lambda *a, **kw: pytest.fail("expired JWT must not be sent to progress API"))
+    with pytest.raises(UCampusCatalogError, match="UCAMPUS_SESSION_EXPIRED"):
+        UCampusAdapter().list_courses()
+    reader = UCampusProgressReader(credentials_loader=lambda: config)
+    with pytest.raises(UCampusProgressError, match="UCAMPUS_SESSION_EXPIRED"):
+        reader.list_units("course-v2:valid")
