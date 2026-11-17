@@ -100,7 +100,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     finally{setBusy(false);}
   };
   return <div className="sf-platform-settings-view sf-ucampus-login" aria-label="U校园账号与连接">
-    <p className="sf-muted">U校园5.0 / AI版优先接入。课程与服务器进度须以本人账号的实际读取结果核验。</p>
+    <p className="sf-muted">U校园5.0 / AI版优先接入。服务器进度只读核验已接入，课程与进度须以本人账号实际读取结果核验。</p>
     <p className="sf-muted">{status?.configured?"本机已有会话配置（不代表接口已登录成功）":"本机尚未配置 U校园会话"}</p>
     <div className="sf-settings-line">
       <label htmlFor="ucampus-variant">平台版本</label>
