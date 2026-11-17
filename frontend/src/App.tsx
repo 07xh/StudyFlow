@@ -578,7 +578,7 @@ export default function App(){
       {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
       {renderZhidaoModeSwitch()}
       <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-      <p className="sf-muted">ZHS 原版观看控制已移到课程播放区的独立参数弹窗；与官方播放器默认参数独立。</p>
+      <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「参数设置」中调整；此处仅管理官方播放器的默认参数。</p>
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
@@ -823,7 +823,7 @@ export default function App(){
             <span>按已保存的课堂范围执行，可能包含其他课程。</span>
             <details>
               <summary>范围说明</summary>
-              <p>雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。需要切换课堂范围或默认参数时，请使用「平台设置」。</p>
+              <p>雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。需要切换课堂范围或默认参数时，请使用课程页顶部「参数设置」。</p>
             </details>
           </div>
           <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
