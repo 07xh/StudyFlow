@@ -43,13 +43,20 @@ jobs:
         run: npm run build
       - name: Check course evidence and IPC boundary
         run: npm test
+      # Install Playwright outside the frontend package: a second npm install
+      # in frontend re-resolves unrelated dependencies despite npm test passing.
       - name: Install isolated browser smoke dependency
-        run: npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.62.1
+        run: npm install --prefix "$RUNNER_TEMP/studyflow-browser-tools" --no-audit --no-fund playwright@1.62.1
       - name: Prepare browser for layout checks
-        run: npx playwright install --with-deps chromium
+        run: |
+          "$RUNNER_TEMP/studyflow-browser-tools/node_modules/.bin/playwright" install --with-deps chromium
       - name: Verify hierarchy at desktop and minimum-window widths
+        env:
+          NODE_PATH: ${{ runner.temp }}/studyflow-browser-tools/node_modules
         run: node tests/browserHierarchy.cjs
       - name: Verify settings portal layout and keyboard interactions
+        env:
+          NODE_PATH: ${{ runner.temp }}/studyflow-browser-tools/node_modules
         run: node tests/browserSettings.cjs
       - name: Upload empty-account UI captures
         if: always()
