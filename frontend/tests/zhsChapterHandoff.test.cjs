@@ -17,7 +17,7 @@ const status=tasks=>({
   zhs_queue:{concurrency:2,state:"running",stale:false,tasks}
 });
 const words=n=>typeof n==="string"?n:(n.children??[]).map(words).join("");
-test("new chapter retains an indeterminate track until its first valid sample",async()=>{
+test("new chapter retains a neutral empty track until its first valid sample",async()=>{
   let view;
   try{
     await act(async()=>{view=create(React.createElement(Panel,{
@@ -28,7 +28,8 @@ test("new chapter retains an indeterminate track until its first valid sample",a
     const tracks=view.root.findAllByProps({role:"progressbar"});
     assert.equal(tracks.length,1);
     assert.equal(tracks[0].props["aria-valuenow"],undefined);
-    assert.match(tracks[0].props.className,/is-indeterminate/);
+    assert.match(tracks[0].props.className,/is-unverified/);
+    assert.equal(tracks[0].findAllByType("span")[0].props.style.width,"0%");
     assert.match(tracks[0].props["aria-valuetext"],/等待当前资源的有效进度采样/);
     assert.doesNotMatch(words(view.root),/100\.0%/);
     await act(async()=>{view.update(React.createElement(Panel,{
