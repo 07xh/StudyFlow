@@ -35,21 +35,21 @@ class Response:
 
 
 GITHUB = "https://github.com/07xh/StudyFlow/releases/download/v0.2.0/StudyFlow_0.2.0_x64-setup.exe"
-MIRROR = "https://downloads.example.org/releases/v0.2.0/StudyFlow_0.2.0_x64-setup.exe"
+MIRROR = "https://sourceforge.net/projects/studyflow/files/releases/v0.2.0/StudyFlow_0.2.0_x64-setup.exe/download"
 
 
 def test_mirror_paths_are_versioned_and_only_compiled_origin_is_used(monkeypatch):
-    monkeypatch.setattr(update_sources, "_MIRROR_BASE_URL", "https://downloads.example.org")
-    assert update_sources.mirror_base() == "https://downloads.example.org"
-    assert update_sources.mirror_asset_url(GITHUB) == MIRROR
-    assert update_sources.mirror_asset_url("https://evil.example.org/setup.exe") is None
-    assert update_sources.mirror_asset_url(GITHUB.replace("v0.2.0", "../etc")) is None
-    assert update_sources.source_order("auto", True, MIRROR) == ["mirror", "github"]
-    assert update_sources.source_order("auto", False, MIRROR) == ["mirror"]
+    monkeypatch.setattr(update_sources, "_PROJECT", "studyflow")
+    assert update_sources.sourceforge_project() == "studyflow"
+    assert update_sources.sourceforge_download_url(GITHUB) == MIRROR
+    assert update_sources.sourceforge_download_url("https://evil.example.org/setup.exe") is None
+    assert update_sources.sourceforge_download_url(GITHUB.replace("v0.2.0", "../etc")) is None
+    assert update_sources.source_order("auto", True, MIRROR) == ["sourceforge", "github"]
+    assert update_sources.source_order("auto", False, MIRROR) == ["sourceforge"]
     assert update_sources.source_order("github", False, MIRROR) == ["github"]
-    assert update_sources.source_order("mirror", True, None) == ["github"]
-    monkeypatch.setattr(update_sources, "_MIRROR_BASE_URL", "http://downloads.example.org")
-    assert update_sources.mirror_base() == ""
+    assert update_sources.source_order("sourceforge", True, None) == ["github"]
+    monkeypatch.setattr(update_sources, "_PROJECT", "bad slug!")
+    assert update_sources.sourceforge_project() == ""
 
 
 def test_old_settings_are_preserved_and_migrated(monkeypatch, tmp_path):
@@ -60,15 +60,15 @@ def test_old_settings_are_preserved_and_migrated(monkeypatch, tmp_path):
     assert update_manager.preferences() == {
         "channel": "stable", "mode": "notify", "source": "auto", "fallback": True}
     assert update_manager.save_preferences({
-        "channel": "stable", "mode": "notify", "source": "mirror", "fallback": False})["source"] == "mirror"
+        "channel": "stable", "mode": "notify", "source": "sourceforge", "fallback": False})["source"] == "sourceforge"
     with pytest.raises(ValueError):
         update_manager.save_preferences({
-            "channel": "stable", "mode": "notify", "source": "mirror", "fallback": "false"})
+            "channel": "stable", "mode": "notify", "source": "sourceforge", "fallback": "false"})
 
 
 def test_mirror_failure_falls_back_to_github_with_same_digest(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
-    monkeypatch.setattr(update_sources, "_MIRROR_BASE_URL", "https://downloads.example.org")
+    monkeypatch.setattr(update_sources, "_PROJECT", "studyflow")
     payload = b"verified installer bytes"
     digest = hashlib.sha256(payload).hexdigest()
     monkeypatch.setattr(updater, "release_info", lambda *args, **kwargs: {
@@ -126,9 +126,9 @@ def test_checksum_failure_removes_partial_and_does_not_publish(monkeypatch, tmp_
     checksum = "a" * 64
     partial = target.with_name(target.name + "." + checksum[:16] + ".part")
     monkeypatch.setattr(updater, "urlopen",
-                        lambda *_args, **_kwargs: Response(b"bad", "https://downloads.example.org/path"))
+                        lambda *_args, **_kwargs: Response(b"bad", "https://netix.dl.sourceforge.net/project/studyflow/file.exe"))
     with pytest.raises(updater.UpdateError) as caught:
-        updater.verified_download(MIRROR, checksum, target, mirror_host="downloads.example.org")
+        updater.verified_download(MIRROR, checksum, target, mirror_host="sourceforge.net")
     assert caught.value.code == "UPDATE_CHECKSUM_FAILED"
     assert not target.exists()
     assert not partial.exists()
@@ -151,7 +151,7 @@ def test_mirror_rejects_untrusted_redirect_even_if_digest_is_known(monkeypatch, 
     monkeypatch.setattr(updater, "urlopen", lambda *_args, **_kwargs:
                         Response(b"anything", "https://untrusted.example.org/installer"))
     with pytest.raises(updater.UpdateError) as caught:
-        updater.verified_download(MIRROR, "a" * 64, target, mirror_host="downloads.example.org")
+        updater.verified_download(MIRROR, "a" * 64, target, mirror_host="sourceforge.net")
     assert caught.value.code == "UPDATE_REDIRECT_REJECTED"
     assert not target.exists()
 
