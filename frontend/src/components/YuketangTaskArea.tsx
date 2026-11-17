@@ -83,6 +83,9 @@ export function YuketangTaskArea({courses,desktop,connected,onEvent,detailMode=f
         operation:"yuketang.settings.save",settings:{...options,completion_threshold:100}
       });
       if(!validateOriginalOptions(saved))throw new Error("INVALID_YUKETANG_SETTINGS");
+      const confirmed=await request<OriginalYktOptions>({operation:"yuketang.settings.get"});
+      if(!validateOriginalOptions(confirmed)||JSON.stringify(confirmed)!==JSON.stringify(saved))
+        throw new Error("YUKETANG_SETTINGS_VERIFY_FAILED");
       if(scope)saveYuketangCourseThreshold(scope.classroom_id,scope.university_id,thresholdOverride);
       setOptions({...saved,completion_threshold:100});setLoaded(true);
       setMessage("参数已保存；当前课堂执行阈值与平台确认完成状态分别判断。");
