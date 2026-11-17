@@ -199,6 +199,49 @@ def test_shared_output_preserves_resource_boundary_and_ignores_non_video_numbers
     observer.write("\rplaying 126 [##] 13.0%")
     assert json.loads(monitor.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 13.0
 
+def test_independent_video_phases_prevent_false_progress_and_resume(tmp_path):
+    """Only anchored playing frames supply a video %; pause/answering are separate."""
+    from studyflow.services.zhs_resource_monitor import create_resource_monitor
+    from studyflow.services.zhs_queue import local_observation
+
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    monitors = [
+        create_resource_monitor(vendor["NumericTelemetry"], f"{i}" * 32, tmp_path)
+        for i in ("1", "2", "3")
+    ]
+    outputs = [
+        vendor["StdoutObserver"](io.StringIO(), legacy._RefreshingZhsSink(m))
+        for m in monitors
+    ]
+    for index, mon in enumerate(monitors):
+        mon.mark_resource("video", f"章节 {index + 1}")
+    outputs[0].write("\\rplaying [####------] 40.0%")
+    outputs[1].write("\\rpause [###-------] 36.0%")
+    outputs[2].write("\\ranswering [##--------] 20.0%")
+    a, b, c = [
+        json.loads(m.path.read_text(encoding="utf-8"))
+        for m in monitors
+    ]
+    assert (a["videoSegmentPercent"], a["playbackPhase"]) == (40.0, "playing")
+    assert (b["videoSegmentPercent"], b["playbackPhase"]) == (None, "paused")
+    assert (c["videoSegmentPercent"], c["playbackPhase"]) == (None, "answering")
+    assert local_observation(tmp_path, "1" * 32) == (40.0, "playing")
+    assert local_observation(tmp_path, "2" * 32) == (None, "paused")
+    assert local_observation(tmp_path, "3" * 32) == (None, "answering")
+
+    # A pause after playback cannot make the last % look freshly sampled.
+    outputs[0].write("\\rpause [####------] 40.0%")
+    assert local_observation(tmp_path, "1" * 32) == (None, "paused")
+    outputs[0].write("\\rplaying [#####-----] 50.25%")
+    assert local_observation(tmp_path, "1" * 32) == (50.25, "playing")
+
+    # Non-anchored percent signs and invalid positions are never telemetry.
+    outputs[1].write("\\rlogin response 99.9%")
+    outputs[2].write("\\rplaying [#] 120.5%")
+    assert local_observation(tmp_path, "2" * 32) == (None, "paused")
+    assert local_observation(tmp_path, "3" * 32) == (None, "answering")
+
+
 def test_repeated_original_progress_output_refreshes_local_observation(monkeypatch, tmp_path):
     vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
     raw = vendor["NumericTelemetry"]("d" * 32, directory=tmp_path)
