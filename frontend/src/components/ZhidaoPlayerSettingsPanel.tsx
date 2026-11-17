@@ -17,12 +17,21 @@ export function ZhidaoPlayerSettingsPanel({desktop,onEvent}:{desktop:boolean;onE
   finally{if(current===revision.current)setBusy(false);}
  },[desktop]);
  useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
- const dirty=JSON.stringify(draft)!==JSON.stringify(saved);
+ // Compare the actual persistence fields, not JSON key order.
+ const dirty=!!draft&&!!saved&&(
+  draft.speed!==saved.speed||draft.allowMinimize!==saved.allowMinimize||
+  draft.autoStart!==saved.autoStart||draft.autoNext!==saved.autoNext||
+  draft.mode!==saved.mode
+ );
  const canonicalSpeed=draft?normalizePlayerSpeedInput(draft.speed):null;
  const speedValid=canonicalSpeed!==null;
- function update<K extends keyof ZhidaoPlayerSettings>(key:K,value:ZhidaoPlayerSettings[K]){setDraft(previous=>previous?{...previous,[key]:value}:null);}
+ function update<K extends keyof ZhidaoPlayerSettings>(key:K,value:ZhidaoPlayerSettings[K]){
+  setDraft(previous=>previous?{...previous,[key]:value}:null);
+  setMessage('');
+ }
  async function save(){
-  if(!draft||busy||!canonicalSpeed){setSpeedTouched(true);return;}
+  if(!draft||busy||!dirty)return;
+  if(!canonicalSpeed){setSpeedTouched(true);return;}
   setBusy(true);setMessage('');
   try{
    const current=await request<ZhidaoPlayerSettings>({operation:'zhidao.player.settings.get'});

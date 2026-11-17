@@ -1225,9 +1225,7 @@
 .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-auto strong{font-size:13px;line-height:1.4}
 .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-progress-auto small{font-size:11px;line-height:1.5}
 .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-player-settings{
-  grid-template-columns:repeat(4,minmax(0,1fr));
   align-items:stretch;
-  gap:10px;
 }
 .sf-shell :is(.main,.sf-settings-modal-body) .sf-zd-player-settings>label{
   min-width:0;

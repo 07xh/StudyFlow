@@ -41,3 +41,19 @@ test("keyboard editing does not coerce incomplete input or save invalid speed",(
   assert.match(ui,/settings:\{\.\.\.draft,speed:canonicalSpeed,mode:current.mode\}/);
   assert.match(ui,/!speedValid&&speedTouched/);
 });
+\ntest("player cleanup keeps fresh-start parameters and removes stale settings gate",()=>{
+  const player=source("components/ZhidaoOfficialPlayerPanel.tsx");
+  assert.doesNotMatch(player,/settingsLoaded/);
+  assert.doesNotMatch(player,/const defaults:ZhidaoPlayerSettings/);
+  assert.match(player,/useState<ZhidaoPlayerSettings\|null>\(null\)/);
+  assert.match(player,/const current=await request<ZhidaoPlayerSettings>\(\{operation:"zhidao\.player\.settings\.get"\}\)/);
+  assert.match(player,/!desktop\|\|!selected\|\|active\|\|busy!==null/);
+});
+test("settings dirty checks typed fields, and unchanged Enter does not save",()=>{
+  const editor=source("components/ZhidaoPlayerSettingsPanel.tsx");
+  assert.doesNotMatch(editor,/JSON\.stringify\(draft\)/);
+  for(const property of ["speed","allowMinimize","autoStart","autoNext","mode"])
+    assert.ok(editor.includes(`draft.${property}!==saved.${property}`),property);
+  assert.match(editor,/!draft\|\|busy\|\|!dirty/);
+  assert.match(editor,/setMessage\(''\);/);
+});\n
