@@ -82,7 +82,9 @@ export function XuexitongSettingsPanel({desktop}:{
     setBusy(true);setNotice("");
     try{
       const saved=await request<XuexitongSettings>({operation:"xuexitong.settings.save",settings});
-      setSettings(saved);
+      const confirmed=await request<XuexitongSettings>({operation:"xuexitong.settings.get"});
+      if(JSON.stringify(confirmed)!==JSON.stringify(saved))throw new Error("XUEXITONG_SETTINGS_VERIFY_FAILED");
+      setSettings(confirmed);
       setNotice("参数预设已保存在本机，后续课程任务会读取这些默认参数。");
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
