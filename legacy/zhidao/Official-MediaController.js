@@ -232,7 +232,8 @@
   // Passive, local-only playback heartbeat (not a ZHS platform heartbeat).
   // Observe the real HTML5 media clock; NEVER submit fabricated watch events,
   // seek the video, defeat background pausing, or call a progress endpoint.
-  const MONITOR_INTERVAL_MS = 12000;
+  // Refresh read-only local observations well inside the Windows 18-second freshness window.
+  const MONITOR_INTERVAL_MS = 6000;
   const monitor = {
     video: null, source: '', position: null, timestamp: null,
     stallSamples: 0, lastState: '', lastReport: 0, seekPending: false,
@@ -301,8 +302,10 @@
       monitor.stallSamples = 0;
     }
     // Never equate local movement to server-accepted study time.
+    // Every active primary-video state (including a genuine pause or stall) renews
+    // local evidence; this does not send a platform heartbeat or alter playback.
     const shouldReport = force || state !== monitor.lastState ||
-      (state === 'advancing' && time - monitor.lastReport >= 60000);
+      time - monitor.lastReport >= MONITOR_INTERVAL_MS;
     monitor.position = position;
     monitor.timestamp = time;
     monitor.lastVisibility = pageVisible;
