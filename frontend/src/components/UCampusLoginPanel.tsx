@@ -48,6 +48,50 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       ?`课程接口已验证：实际读取到 ${courses.length} 门 U校园课程。`
       :"课程接口返回空列表：请求成功，但尚不能确认该账号已有课程或已完成登录验收。";
   };
+  const completeSessionSave=async(
+    method:"official"|"password"|"manual",savedVariant:"ai"|"classic",monitorReset?:boolean
+  )=>{
+    setStatus({configured:true,variant:savedVariant,jwt_lifetime:"unknown"});
+    await refreshStoredExpiry();
+    if(method==="official")setVariant("ai");
+    onChanged();
+    const feedback={
+      official:{
+        ok:"已从官方登录窗口将会话保存到本机。",
+        fail:"已从官方登录窗口保存会话，但课程读取失败：",
+        suffix:"学习进度仍需独立核验。",
+        failSuffix:""
+      },
+      password:{
+        ok:"U校园 SSO 会话已保存。",
+        fail:"U校园 SSO 会话已保存，但课程读取失败：",
+        suffix:"单元和学习进度仍需分别核验。",
+        failSuffix:""
+      },
+      manual:{
+        ok:"会话已在本机保存。",
+        fail:"会话已保存，但课程读取失败：",
+        suffix:"课程读取成功不等于学习进度已核验。",
+        failSuffix:"。保存成功不表示已登录或接口可用。"
+      }
+    }[method];
+    const resetWarning=monitorReset===false?"旧自动核验记录未能清除，请检查本机存储权限。":"";
+    try{
+      const summary=await verifyCatalog();
+      setNotice(feedback.ok+summary+feedback.suffix+resetWarning);
+    }catch(error){
+      setNotice(feedback.fail+friendlyBridgeError(error)+feedback.failSuffix+resetWarning);
+    }
+  };
+  const openEmbeddedWindow=async(successMessage:string,failureMessage:string)=>{
+    try{
+      await invoke("ucampus_login_window_start");
+      setEmbeddedOpen(true);
+      setNotice(successMessage);
+    }catch{
+      setNotice(failureMessage);
+    }
+  };
   const openOfficial=(event:MouseEvent<HTMLAnchorElement>,mode:"ai"|"classic"|"qr")=>{
     if(!desktop)return;
     event.preventDefault();
@@ -58,29 +102,20 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     if(!desktop||busy||embeddedBusy)return;
     setEmbeddedBusy(true);setNotice("");
     try{
-      await invoke("ucampus_login_window_start");
-      setEmbeddedOpen(true);
-      setNotice("已打开 U校园官方登录窗口。如出现图片或数字验证码，请直接在官方页面查看并手动输入；也可按官方页面选择扫码。登录成功后返回学序，点击“导入并验证会话”。");
-    }catch{
-      setNotice("无法打开内置官方登录窗口。你仍可使用系统浏览器登录后手动导入 Cookie。");
+      await openEmbeddedWindow(
+        "已打开 U校园官方登录窗口。如出现图片或数字验证码，请直接在官方页面查看并手动输入；也可按官方页面选择扫码。登录成功后返回学序，点击“导入并验证会话”。",
+        "无法打开内置官方登录窗口。你仍可使用系统浏览器登录后手动导入 Cookie。"
+      );
     }finally{setEmbeddedBusy(false);}
   };
   const importEmbedded=async()=>{
     if(!desktop||busy||embeddedBusy||!embeddedOpen)return;
     setBusy(true);setNotice("");
     try{
-      await invoke<{saved:boolean}>("ucampus_login_window_import");
+      const result=await invoke<{saved:boolean}>("ucampus_login_window_import");
+      if(result?.saved!==true)throw Error("UCAMPUS_LOGIN_SAVE_FAILED");
       setEmbeddedOpen(false);
-      setStatus({configured:true,variant:"ai",jwt_lifetime:"unknown"});
-      await refreshStoredExpiry();
-      setVariant("ai");
-      onChanged();
-      try{
-        const summary=await verifyCatalog();
-        setNotice("已从官方登录窗口将会话保存到本机。"+summary+"学习进度仍需独立核验。");
-      }catch(error){
-        setNotice("已从官方登录窗口保存会话，但课程读取失败："+friendlyBridgeError(error));
-      }
+      await completeSessionSave("official","ai");
     }catch(error){
       if(error==="UCAMPUS_LOGIN_WINDOW_MISSING")setEmbeddedOpen(false);
       const message=typeof error==="string"?error:"";
@@ -110,27 +145,17 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       const saved=await request<{saved:boolean;variant:"ai";monitor_reset:boolean}>({
         operation:"ucampus.session.login",username:username.trim(),password
       });
-      setStatus({configured:true,variant:"ai",jwt_lifetime:"unknown"});
-      await refreshStoredExpiry();
+      if(saved.saved!==true)throw Error("UCAMPUS_CREDENTIAL_STORAGE_FAILED");
       setUsername("");
-      onChanged();
-      try{
-        const summary=await verifyCatalog();
-        setNotice("U校园 SSO 会话已保存。"+summary+"单元和学习进度仍需分别核验。"+(saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
-      }catch(catalogError){
-        setNotice("U校园 SSO 会话已保存，但课程读取失败："+friendlyBridgeError(catalogError)+(saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
-      }
+      await completeSessionSave("password","ai",saved.monitor_reset);
     }catch(error){
       if(error instanceof Error&&error.message==="UCAMPUS_LOGIN_VERIFICATION_REQUIRED"){
         // The direct SSO request cannot show the provider's challenge.
         // Let the user enter image/numeric CAPTCHA on the actual provider page.
-        try{
-          await invoke("ucampus_login_window_start");
-          setEmbeddedOpen(true);
-          setNotice("U校园要求图片或数字验证码。已打开官方登录窗口，请在官方页面重新输入账号密码、查看验证码并手动填写。完成登录后返回学序，点击“导入并验证会话”。");
-        }catch{
-          setNotice("U校园要求图片或数字验证码，且官方登录窗口打开失败。请使用上方“打开 U校园官方网站”完成验证，再通过本机 Cookie 导入。");
-        }
+        await openEmbeddedWindow(
+          "U校园要求图片或数字验证码。已打开官方登录窗口，请在官方页面重新输入账号密码、查看验证码并手动填写。完成登录后返回学序，点击“导入并验证会话”。",
+          "U校园要求图片或数字验证码，且官方登录窗口打开失败。请使用上方“打开 U校园官方网站”完成验证，再通过本机 Cookie 导入。"
+        );
       }else{
         setNotice(friendlyBridgeError(error));
       }
@@ -145,19 +170,9 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       const configuration:UCampusConfig={variant,catalog_url:url.trim(),cookie:cookie.trim().replace(/^cookie\s*:\s*/i,""),
         authorization:authorization.trim(),annotator_token:annotator.trim(),school_id:schoolId.trim()};
       const saved=await request<{saved:boolean;monitor_reset:boolean}>({operation:"ucampus.session.configure",configuration});
+      if(saved.saved!==true)throw Error("UCAMPUS_CREDENTIAL_STORAGE_FAILED");
       clearSensitiveInputs();
-      setStatus({configured:true,variant,jwt_lifetime:"unknown"});
-      await refreshStoredExpiry();
-      onChanged();
-      try{
-        const summary=await verifyCatalog();
-        setNotice("会话已在本机保存。"+summary+"课程读取成功不等于学习进度已核验。"+
-          (saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
-      }catch(catalogError){
-        setNotice("会话已保存，但课程读取失败："+friendlyBridgeError(catalogError)+
-          "。保存成功不表示已登录或接口可用。"+
-          (saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
-      }
+      await completeSessionSave("manual",variant,saved.monitor_reset);
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
   };
