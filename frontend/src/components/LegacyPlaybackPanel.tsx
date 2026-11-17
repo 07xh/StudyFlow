@@ -247,8 +247,12 @@ export function LegacyPlaybackPanel({
         lastScope=await request<YuketangScope>({operation:"yuketang.scope.get"});
         if(!lastScope.has_session||!lastScope.classroom_id||!lastScope.university_id)
           throw new Error("YUKETANG_SCOPE_UNAVAILABLE");
-        // Resolve on launch so switching classrooms cannot reuse the old value.
-        launchOptions={...options,completion_threshold:
+        // Platform settings can change in a separate modal while this course
+        // view remains mounted. Only the fresh, persisted values may launch a
+        // new task; a stale props snapshot must never override the saved ones.
+        const latest=await request<OriginalYktOptions>({operation:"yuketang.settings.get"});
+        if(!validateOriginalOptions(latest))throw new Error("YUKETANG_SETTINGS_UNAVAILABLE");
+        launchOptions={...latest,completion_threshold:
           readYuketangCourseThreshold(lastScope.classroom_id,lastScope.university_id)??100};
         try{
           const identity=await request<YuketangSessionMarker>({operation:"yuketang.session.marker"});
