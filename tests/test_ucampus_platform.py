@@ -214,3 +214,33 @@ def test_opaque_cookie_can_still_query_catalog_without_invented_openid(monkeypat
     assert len(UCampusAdapter().list_courses()) == 1
     assert "Authorization" not in observed[0]["headers"]
     assert "u-openid" not in observed[0]["headers"]
+
+
+def test_ucampus_local_jwt_expiration_hint_is_not_authentication(monkeypatch):
+    import base64
+    import json
+    import time
+    from studyflow.platforms.ucampus import credentials
+
+    def config(exp):
+        claims = {"exp": exp}
+        encoded = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
+        return UCampusConfig.from_dict({
+            "variant": "ai", "cookie": f"jwt=header.{encoded}.signature"
+        })
+
+    now = int(time.time())
+    assert credentials._jwt_lifetime_state(config(1)) == "expired"
+    assert credentials._jwt_lifetime_state(config(now + 120)) == "expiring"
+    assert credentials._jwt_lifetime_state(config(now + 3600)) == "not_expired"
+    assert credentials._jwt_lifetime_state(
+        UCampusConfig.from_dict({"variant": "ai", "cookie": "sid=opaque"})
+    ) == "unknown"
+    assert credentials._jwt_lifetime_state(None) == "unknown"
+
+    stored = config(1)
+    monkeypatch.setattr(credentials, "load", lambda: stored)
+    result = credentials.status()
+    assert result == {"configured": True, "variant": "ai", "jwt_lifetime": "expired"}
+    assert "header." not in repr(result)
+    assert "jwt=" not in repr(result)
