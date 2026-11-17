@@ -47,13 +47,13 @@ def mirror_asset_url(github_url: str) -> str | None:
 
 def source_order(choice: str, fallback: bool, mirror_url: str | None) -> list[str]:
     """Explicit selection keeps its priority; failover only uses known sources."""
-    if choice not in ("auto", "github", "r2") or not isinstance(fallback, bool):
+    if choice not in ("auto", "github", "mirror") or not isinstance(fallback, bool):
         raise ValueError("INVALID_UPDATE_SETTINGS")
-    available = ["github"] + (["r2"] if mirror_url else [])
-    if choice == "r2" and not mirror_url and not fallback:
+    available = ["github"] + (["mirror"] if mirror_url else [])
+    if choice == "mirror" and not mirror_url and not fallback:
         return []
     if choice == "auto":
-        return (["r2", "github"] if fallback else ["r2"]) if mirror_url else ["github"]
+        return (["mirror", "github"] if fallback else ["mirror"]) if mirror_url else ["github"]
     if choice not in available:
         return ["github"] if fallback else []
     return [choice] + ([name for name in available if name != choice] if fallback else [])
