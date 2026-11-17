@@ -54,7 +54,7 @@ export type UCampusTask = {id:string;unit_id:string;title:string;type:string;req
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
 export type YuketangSessionMarker = {marker:string};
 export type BridgeRequest =
-  | {id: string; version: 1; operation: "updates.latest"}
+  | {id: string; version: 1; operation: "updates.latest" | "updates.sources"}
   | {id: string; version: 1; operation: "updates.settings.get"}
   | {id: string; version: 1; operation: "updates.settings.save"; settings: UpdateSettings}
   | {id: string; version: 1; operation: "updates.check"; current_version: string}
@@ -145,7 +145,7 @@ export type HeartbeatStartResult={
 };
 export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean|null};
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
-export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"};
+export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"proxy"; fallback:boolean};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
 export type ReleaseChangelogEntry = {version:string;title:string;notes:string;published_at:string};
 export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
@@ -223,7 +223,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
     const allowed = new Set(["INVALID_UCAMPUS_CONFIG", "UCAMPUS_CREDENTIAL_STORAGE_FAILED", "XUEXITONG_TASK_STOP_TIMEOUT", "INVALID_XUEXITONG_COOKIE", "XUEXITONG_CREDENTIAL_STORAGE_FAILED", "INVALID_XUEXITONG_SETTINGS", "XUEXITONG_SETTINGS_UNAVAILABLE", "INVALID_REQUEST", "UNSUPPORTED_VERSION", "UNKNOWN_PLATFORM",
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
-                             "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED",
+                             "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED", "UPDATE_MIRROR_UNAVAILABLE",
                              "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
@@ -340,7 +340,8 @@ export function friendlyUpdateError(value: unknown): string {
     case "UPDATE_RATE_LIMITED": return "GitHub 接口暂时限制访问，可稍后检查或从官方发布页下载。";
     case "UPDATE_RELEASE_INVALID": return "GitHub 发布元数据格式异常，未开始下载。";
     case "UPDATE_ASSET_UNAVAILABLE": return "此版本未提供带 SHA-256 校验信息的 Windows x64 安装包。";
-    case "UPDATE_DOWNLOAD_FAILED": return "安装包下载失败或连接中断，请检查 GitHub Release 文件访问情况后重试。";
+    case "UPDATE_DOWNLOAD_FAILED": return "所有已启用下载源均下载失败，断点数据已保留，可稍后重试。";
+    case "UPDATE_MIRROR_UNAVAILABLE": return "公共代理无法使用，请选 GitHub 官方源或打开失败自动切换。";
     case "UPDATE_CHECKSUM_FAILED": return "安装包 SHA-256 校验失败，未保存不可信安装包，请从官方发布页重新下载。";
     case "UPDATE_STORAGE_FAILED": return "无法写入学序更新目录，请检查磁盘空间和文件夹权限。";
     case "UPDATE_REDIRECT_REJECTED": return "下载地址跳转到未认可的网站，已中止以保护安装包安全。";

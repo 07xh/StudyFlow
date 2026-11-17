@@ -8,8 +8,9 @@ import {OFFICIAL_RELEASES_URL,openOfficialReleases,openLatestRelease} from "../r
 export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedded=false}:{
   desktop:boolean;visible:boolean;onDownloaded:(message:string)=>void;onOpenChangelog:()=>void;embedded?:boolean;
 }){
-  const [settings,setSettings]=useState<UpdateSettings>({channel:"beta",mode:"download"});
+  const [settings,setSettings]=useState<UpdateSettings>({channel:"beta",mode:"download",source:"auto",fallback:true});
   const [current,setCurrent]=useState("");
+  const [sources,setSources]=useState<{github:boolean;proxy:boolean}>({github:true,proxy:true});
   const [release,setRelease]=useState<AvailableUpdate|null>(null);
   const [busy,setBusy]=useState(false);
   const [loaded,setLoaded]=useState(false);
@@ -19,10 +20,11 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
   notify.current=onDownloaded;
 
   async function download(version:string,update:AvailableUpdate){
-    const result=await request<{filename:string;sha256:string}>({operation:"updates.download",
+    const result=await request<{filename:string;sha256:string;source:"github"|"gh-proxy.org"|"ghfast.top"|"cache"}>({operation:"updates.download",
       current_version:version,release_version:update.version});
     setDownloaded(result.filename);
-    const text="新版本已下载并通过 SHA-256 校验，可在设置中打开更新目录安装。";
+    const used=result.source==="gh-proxy.org"?"gh-proxy.org":result.source==="ghfast.top"?"ghfast.top":result.source==="github"?"GitHub 官方源":"已缓存的校验通过安装包";
+    const text="新版本已下载并通过 SHA-256 校验（"+used+"），可在设置中打开更新目录安装。";
     setMessage(text);notify.current(text);
   }
 
@@ -47,10 +49,10 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
     if(!desktop)return;
     let active=true;
     setBusy(true);
-    void Promise.all([getVersion(),request<UpdateSettings>({operation:"updates.settings.get"})])
-      .then(async([version,preference])=>{
+    void Promise.all([getVersion(),request<UpdateSettings>({operation:"updates.settings.get"}),request<{github:boolean;proxy:boolean}>({operation:"updates.sources"})])
+      .then(async([version,preference,available])=>{
         if(!active)return;
-        setCurrent(version);setSettings(preference);setLoaded(true);
+        setCurrent(version);setSettings(preference);setSources(available);setLoaded(true);
         await check(version,preference);
       }).catch(error=>{if(active)setMessage(friendlyUpdateError(error));})
       .finally(()=>{if(active)setBusy(false);});
@@ -85,6 +87,17 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
         onChange={e=>void save({...settings,mode:e.target.value as UpdateSettings["mode"]})}>
         <option value="notify">A · 仅提示</option><option value="download">B · 后台下载并校验</option>
       </select></div>
+    <div className="sf-settings-line"><label htmlFor="update-source">安装包下载源</label>
+      <select id="update-source" value={settings.source} disabled={!desktop||busy||!loaded}
+        onChange={e=>void save({...settings,source:e.target.value as UpdateSettings["source"]})}>
+        <option value="auto">自动（公共代理优先，GitHub 兜底）</option>
+        <option value="github">GitHub 官方源</option>
+        <option value="proxy" disabled={!sources.proxy}>国内公共 GitHub 代理</option>
+      </select></div>
+    <div className="sf-settings-line"><label htmlFor="update-fallback">故障切换</label>
+      <label className="sf-inline-check"><input id="update-fallback" type="checkbox" checked={settings.fallback}
+        disabled={!desktop||busy||!loaded}
+        onChange={e=>void save({...settings,fallback:e.target.checked})}/>下载失败时自动尝试另一下载源</label></div>
     <div className="actions">
       <button className="secondary" disabled={!desktop||busy} onClick={()=>void perform(async()=>{
         const version=current||await getVersion();setCurrent(version);

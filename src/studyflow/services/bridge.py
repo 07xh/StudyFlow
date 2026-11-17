@@ -90,10 +90,12 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("version") != 1:
         return {"id": request_id, "ok": False, "error": "UNSUPPORTED_VERSION"}
     operation = request.get("operation")
-    if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download", "updates.changelog", "updates.latest"):
+    if operation in ("updates.settings.get", "updates.settings.save", "updates.check", "updates.download", "updates.changelog", "updates.latest", "updates.sources"):
         try:
             if operation == "updates.latest":
                 data = update_manager.latest()
+            elif operation == "updates.sources":
+                data = update_manager.sources()
             elif operation == "updates.settings.get":
                 data = update_manager.preferences()
             elif operation == "updates.settings.save":
