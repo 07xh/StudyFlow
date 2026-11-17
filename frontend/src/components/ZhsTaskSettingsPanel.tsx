@@ -223,7 +223,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
       <button className="secondary" type="button" disabled={busy||!desktop}
         onClick={()=>void load()}><RefreshCw size={14}/>重试读取</button>
     </div>}
-    <SettingsDialog open={opened} dark={dark} title="当前课程 · 参数设置"
+    <SettingsDialog open={opened} dark={dark} title="当前课程 · ZHS 参数"
       onClose={closeSettings}
       navigation={<nav className="sf-settings-menu" aria-label="课程参数分类">
         {([["parameters","运行参数"],["scope","课程范围"],["advanced","高级说明"]] as const).map(([id,label])=>
