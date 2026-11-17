@@ -34,12 +34,12 @@ class Response:
 
 
 GITHUB = "https://github.com/07xh/StudyFlow/releases/download/v0.2.0/StudyFlow_0.2.0_x64-setup.exe"
-P1 = "https://gh-proxy.com/" + GITHUB
+P1 = "https://gh-proxy.org/" + GITHUB
 P2 = "https://ghfast.top/" + GITHUB
 
 
 def test_public_proxies_only_accept_official_release_assets():
-    assert update_sources.proxy_url(GITHUB, "gh-proxy.com") == P1
+    assert update_sources.proxy_url(GITHUB, "gh-proxy.org") == P1
     assert update_sources.proxy_url(GITHUB, "ghfast.top") == P2
     assert not update_sources.trusted_release_url(GITHUB + "?token=secret")
     for bad in (
@@ -52,8 +52,8 @@ def test_public_proxies_only_accept_official_release_assets():
             update_sources.proxy_url(bad, "ghfast.top")
     with pytest.raises(ValueError):
         update_sources.proxy_url(GITHUB, "untrusted.example.org")
-    assert update_sources.source_order("auto", True) == ["gh-proxy.com", "ghfast.top", "github"]
-    assert update_sources.source_order("proxy", False) == ["gh-proxy.com", "ghfast.top"]
+    assert update_sources.source_order("auto", True) == ["gh-proxy.org", "ghfast.top", "github"]
+    assert update_sources.source_order("proxy", False) == ["gh-proxy.org", "ghfast.top"]
     assert update_sources.source_order("github", False) == ["github"]
 
 
@@ -108,7 +108,7 @@ def test_proxy_response_valid_digest_is_accepted(monkeypatch, tmp_path):
     checksum = hashlib.sha256(data).hexdigest()
     monkeypatch.setattr(updater, "urlopen",
                         lambda *_args, **_kwargs: Response(data, P1))
-    assert updater.verified_download(P1, checksum, target, mirror_host="gh-proxy.com") == target
+    assert updater.verified_download(P1, checksum, target, mirror_host="gh-proxy.org") == target
     assert target.read_bytes() == data
 
 
@@ -130,7 +130,7 @@ def test_proxy_rejects_unapproved_redirect(monkeypatch, tmp_path):
     monkeypatch.setattr(updater, "urlopen",
                         lambda *_args, **_kwargs: Response(b"wrong bytes", "https://evil.example.org/file.exe"))
     with pytest.raises(updater.UpdateError) as caught:
-        updater.verified_download(P1, "a" * 64, target, mirror_host="gh-proxy.com")
+        updater.verified_download(P1, "a" * 64, target, mirror_host="gh-proxy.org")
     assert caught.value.code == "UPDATE_REDIRECT_REJECTED"
     assert not target.exists()
 
