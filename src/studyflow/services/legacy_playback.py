@@ -599,6 +599,16 @@ def main(argv: list[str] | None = None) -> int:
     if args == ["--legacy-yuketang"]:
         return _run_exclusive("yuketang", run_yuketang_original)
     if len(args) in (2, 3, 4) and args[0] == "--legacy-zhidao":
+        if os.environ.get("STUDYFLOW_WATCH_PARENT_PIPE") == "1":
+            # The Tauri parent holds the only write end. If it exits without
+            # releasing the Windows Job Object, EOF still terminates this
+            # exact task, releasing the platform lock and child-worker pipes.
+            from studyflow.services.zhs_queue import watch_parent_pipe
+            try:
+                watch_parent_pipe()
+            except (OSError, ValueError):
+                return 15  # Never run an unowned task if the lease is missing.
+
         if len(args) == 4:
             try:
                 if len(args[3]) > 16384:
