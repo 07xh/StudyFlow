@@ -673,7 +673,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod ipc_validation_tests {
-    use super::{parse_jsonl_reply, validate, studyflow_release_url};
+    use super::{parse_jsonl_reply, validate, studyflow_release_url, ucampus_official_url};
     use serde_json::json;
 
     #[test]
