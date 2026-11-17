@@ -20,7 +20,10 @@ _SHARED_VIDEO_PROGRESS = re.compile(
     r"^playing\s+([1-9][0-9]{0,19})\s+\[[^\r\n]{0,512}\]\s*"
     r"(\d{1,3}(?:\.\d)?)%", re.IGNORECASE,
 )
-_ANSI_SGR = re.compile(r"\x1b\[[0-9;]*m")
+# Terminals may repaint a worker's progress line with cursor/erase CSI
+# commands before `playing`. Strip CSI control sequences, not arbitrary
+# printable text; the accepted frame must still start with a video marker.
+_ANSI_CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 ALLOWED_KINDS = frozenset(("video", "ppt", "article", "other"))
 PRIVATE_MARKERS = ("http:", "https:", "cookie", "token", "authorization", "password", "secret", "apikey", "api_key")
@@ -55,7 +58,7 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
             # Read-only compatibility for the official ZHS shared-course display.
             # Restrict parsing to the latest terminal frame, never CLI diagnostics,
             # URLs, unrelated percentages or previous progress-bar rows.
-            latest = re.split(r"[\r\n]", _ANSI_SGR.sub("", chunk[-4096:]))[-1]
+            latest = re.split(r"[\r\n]", _ANSI_CSI.sub("", chunk[-4096:]))[-1].lstrip(" \t")
             observed = _SHARED_VIDEO_PROGRESS.match(latest)
             if observed is None:
                 return
