@@ -448,3 +448,85 @@ def test_exited_rows_clear_their_last_local_percentage(tmp_path):
     assert row["state"] == "exited"
     assert row["percent"] is None
     assert row["stale"] is True
+
+
+def test_queue_atomic_replace_retries_transient_windows_sharing_denial(tmp_path, monkeypatch):
+    from studyflow.services import zhs_queue
+    original = zhs_queue.os.replace
+    attempts = []
+
+    def temporarily_locked(src, dst):
+        attempts.append((src, dst))
+        if len(attempts) <= 2:
+            raise PermissionError("transient Windows sharing violation")
+        return original(src, dst)
+
+    monkeypatch.setattr(zhs_queue.os, "replace", temporarily_locked)
+    path = tmp_path / "queue.json"
+    zhs_queue.atomic_json(path, {"state": "running", "percent": 35.0})
+    assert len(attempts) == 3
+    assert json.loads(path.read_text()) == {"state": "running", "percent": 35.0}
+
+
+def test_queue_snapshots_keep_state_transitions_immediate_but_throttle_numeric_updates(tmp_path, monkeypatch):
+    from studyflow.services import zhs_queue
+    captured = []
+    original = zhs_queue.atomic_json
+
+    def observe(path, data):
+        if path.name.startswith("zhs-queue-"):
+            captured.append((time.monotonic(), json.loads(json.dumps(data))))
+        original(path, data)
+
+    monkeypatch.setattr(zhs_queue, "atomic_json", observe)
+    target = zhs_queue.QueueTarget(10, None, "video", "视频", "shared-1", "第一章")
+
+    def launch(target, token):
+        code = (
+            "import json,pathlib,sys,time;"
+            "p=pathlib.Path(sys.argv[1]);"
+            "p.write_text(json.dumps({'v':1,'token':sys.argv[2],'at':time.time(),"
+            "'videoSegmentPercent':45.0}));"
+            "time.sleep(.85)"
+        )
+        return subprocess.Popen(
+            [sys.executable, "-c", code,
+             str(tmp_path / f"monitor-zhs-{token}.json"), token],
+            stdin=subprocess.PIPE,
+        )
+
+    assert zhs_queue.supervise([target], 1, "3"*32, tmp_path, launch) == 0
+    assert any(row["tasks"][0]["state"] == "running" for _, row in captured)
+    assert captured[0][1]["tasks"][0]["state"] == "queued"
+    assert captured[-1][1]["state"] == "exited"
+    assert len(captured) <= 6, "large queue payload must not be rewritten every 100 ms"
+
+
+def test_tauri_owned_zhidao_main_installs_parent_liveness_watcher_before_lock(monkeypatch):
+    from studyflow.services import legacy_playback as legacy, zhs_queue
+    monkeypatch.setenv("STUDYFLOW_WATCH_PARENT_PIPE", "1")
+    calls = []
+    monkeypatch.setattr(zhs_queue, "watch_parent_pipe", lambda: calls.append("parent-pipe"))
+    monkeypatch.setattr(legacy, "_run_exclusive",
+                        lambda platform, callback: calls.append("exclusive") or 10)
+    options = {**zhs_settings.DEFAULTS, "scope_mode": "all",
+               "selected_ids": [], "resource_mode": "video"}
+    assert legacy.main(["--legacy-zhidao", "a"*64, "b"*32, json.dumps(options)]) == 10
+    assert calls == ["parent-pipe", "exclusive"]
+
+    def unavailable():
+        raise ValueError("missing parent-owned pipe")
+
+    monkeypatch.setattr(zhs_queue, "watch_parent_pipe", unavailable)
+    calls.clear()
+    assert legacy.main(["--legacy-zhidao", "a"*64, "b"*32, json.dumps(options)]) == 15
+    assert calls == []
+
+
+def test_windows_launcher_owns_parent_pipe_without_disabling_job_object():
+    from pathlib import Path
+    rust = (Path(__file__).resolve().parents[1] / "src-tauri/src/legacy_tasks.rs").read_text()
+    assert 'command.env("STUDYFLOW_WATCH_PARENT_PIPE", "1")' in rust
+    assert "command.stdin(Stdio::piped())" in rust
+    assert "let process_job = WindowsJob::attach(&child)" in rust
+
