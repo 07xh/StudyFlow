@@ -1,48 +1,44 @@
-"""Optional SourceForge file mirror; GitHub Releases provides the trusted metadata."""
+"""Fixed public proxy fallbacks for official GitHub Release installer assets.
+
+These untrusted services only transport bytes. Release metadata and SHA-256
+always come directly from GitHub. Never proxy account credentials or API calls.
+"""
 from __future__ import annotations
+
 import re
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlsplit
 
-try:
-    from ._sourceforge_config import SOURCEFORGE_PROJECT as _PROJECT
-except ImportError:
-    _PROJECT = ""
-
-PROJECT_PATTERN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?")
+PROXIES = ("gh-proxy.com", "ghfast.top")
+RELEASE_PREFIX = "/07xh/StudyFlow/releases/download/"
+TAG_PATTERN = re.compile(r"v?\d+(?:\.\d+){1,3}(?:-[A-Za-z0-9.-]+)?")
+ASSET_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
 
 
-def sourceforge_project() -> str:
-    if isinstance(_PROJECT, str) and PROJECT_PATTERN.fullmatch(_PROJECT):
-        return _PROJECT
-    return ""
+def trusted_release_url(url: str) -> bool:
+    if not isinstance(url, str):
+        return False
+    parts = urlsplit(url)
+    if (parts.scheme != "https" or parts.netloc != "github.com"
+            or parts.query or parts.fragment or not parts.path.startswith(RELEASE_PREFIX)):
+        return False
+    suffix = parts.path[len(RELEASE_PREFIX):].split("/")
+    return (len(suffix) == 2 and bool(TAG_PATTERN.fullmatch(suffix[0]))
+            and bool(ASSET_PATTERN.fullmatch(suffix[1]))
+            and suffix[1] not in (".", ".."))
 
 
-def sourceforge_download_url(github_url: str) -> str | None:
-    """Translate a GitHub Release file into a manually synced SourceForge FRS path."""
-    project = sourceforge_project()
-    if not project:
-        return None
-    parsed = urlsplit(github_url)
-    prefix = "/07xh/StudyFlow/releases/download/"
-    if (parsed.scheme != "https" or parsed.netloc != "github.com" or
-            not parsed.path.startswith(prefix) or parsed.query or parsed.fragment):
-        return None
-    parts = parsed.path[len(prefix):].split("/")
-    if (len(parts) != 2 or
-            not re.fullmatch(r"v?\d+(?:\.\d+){1,3}(?:-[A-Za-z0-9.-]+)?", parts[0]) or
-            not re.fullmatch(r"[A-Za-z0-9._-]+", parts[1]) or parts[1] in (".", "..")):
-        return None
-    tag, filename = parts
-    return ("https://sourceforge.net/projects/" + project + "/files/releases/" +
-            quote(tag, safe="._-") + "/" + quote(filename, safe="._-") + "/download")
+def proxy_url(url: str, domain: str) -> str:
+    if domain not in PROXIES or not trusted_release_url(url):
+        raise ValueError("Untrusted GitHub Release proxy target")
+    return "https://" + domain + "/" + url
 
 
-def source_order(choice: str, fallback: bool, mirror_url: str | None) -> list[str]:
-    if choice not in ("auto", "github", "sourceforge") or type(fallback) is not bool:
+def source_order(choice: str, fallback: bool) -> list[str]:
+    """Source labels are fixed; changing the order never changes the SHA-256."""
+    if choice not in ("auto", "github", "proxy") or type(fallback) is not bool:
         raise ValueError("INVALID_UPDATE_SETTINGS")
-    available = ["github"] + (["sourceforge"] if mirror_url else [])
-    if choice == "auto":
-        return (["sourceforge", "github"] if fallback else ["sourceforge"]) if mirror_url else ["github"]
-    if choice not in available:
-        return ["github"] if fallback else []
-    return [choice] + ([name for name in available if name != choice] if fallback else [])
+    if choice == "github":
+        return ["github", *PROXIES] if fallback else ["github"]
+    if choice == "proxy":
+        return [*PROXIES, "github"] if fallback else list(PROXIES)
+    return [*PROXIES, "github"] if fallback else [PROXIES[0]]
