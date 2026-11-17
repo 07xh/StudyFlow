@@ -22,7 +22,7 @@ const server=http.createServer((req,res)=>{
    assert.ok(titlebar&&header&&rail,'Custom titlebar, fixed status strip and navigation must render');
    assert.ok(header.y>=titlebar.y+titlebar.height-1,'Platform status strip must begin below window controls');
    assert.ok(rail.y>=header.y+header.height-1,'Navigation must begin below full-width header');
-   assert.equal(await page.getByRole('button',{name:'设置',exact:true}).count(),1,'Global settings must appear once in the titlebar');
+   assert.equal(await page.getByRole('button',{name:'应用设置',exact:true}).count(),1,'Global settings must appear once in the titlebar');
    assert.equal(await page.getByRole('button',{name:'关闭窗口'}).count(),1,'Custom window controls must render');
    assert.equal(await page.getByRole('button',{name:'关闭窗口'}).isDisabled(),true,'Window buttons cannot invoke native commands in browser preview');
    assert.equal(await page.getByRole('progressbar').count(),0,'Empty account cannot have percentage progress');
@@ -88,7 +88,7 @@ const server=http.createServer((req,res)=>{
      'Escape closes the second-level settings dialog');
    await page.getByRole('button',{name:'学习任务',exact:true}).click();
    assert.equal(await page.locator('.sf-task-shortcuts,.sf-runtime-task').count(),0);
-   await page.getByRole('button',{name:'设置',exact:true}).click();
+   await page.getByRole('button',{name:'应用设置',exact:true}).click();
    const global=page.getByRole('dialog',{name:'设置',exact:true});
    await global.waitFor({state:'visible'});
    assert.equal(await global.count(),1,'Global settings opens as a modal instead of changing main route');
