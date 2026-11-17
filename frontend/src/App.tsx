@@ -364,6 +364,17 @@ export default function App(){
     }
   },[refresh,consentAccepted]);
 
+  // A single reducer path protects current-session verified evidence from late
+  // asynchronous reads from the player, progress panel and course workspace.
+  const updateZhidaoCourses=useCallback((incoming:Course[])=>{
+    setPlatforms(previous=>({
+      ...previous,zhidao:{
+        ...previous.zhidao,
+        courses:mergeZhidaoEvidence(previous.zhidao.courses,incoming)
+      }
+    }));
+  },[]);
+
   function updateVerifiedZhidaoCourse(course:Course) {
     if (course.platform !== "zhidao") return;
     setPlatforms(previous=>({
@@ -575,7 +586,7 @@ export default function App(){
       <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
       autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
       onAutoVerifyChange={configureAutoVerify}
-      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:mergeZhidaoEvidence(previous.zhidao.courses,list)}}))}
+      onCoursesUpdated={updateZhidaoCourses}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
       </CollapsibleSection>
       <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
@@ -754,9 +765,12 @@ export default function App(){
   </section>;
 
   const renderCourseWorkspace=(course:Course)=>{
-    const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{
-      ...previous[course.platform],courses:course.platform==="zhidao"
-        ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
+    const updateCourses=(list:Course[])=>{
+      if(course.platform==="zhidao"){updateZhidaoCourses(list);return;}
+      setPlatforms(previous=>({...previous,[course.platform]:{
+        ...previous[course.platform],courses:list
+      }}));
+    };
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
     const catalogOnly=course.platform==="xuexitong"||course.platform==="ucampus";
@@ -991,7 +1005,7 @@ export default function App(){
       onRetry={releaseChangelog.retry}
       onOpenUpdates={()=>{releaseChangelog.close();openGlobalSettings("updates");}}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
-      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+      onCoursesUpdated={updateZhidaoCourses}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setQrOpen(false);
