@@ -285,32 +285,32 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 => Ok(()),
         "ucampus.heartbeat.status" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')) => Ok(()),
         "ucampus.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("unit_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
             => Ok(()),
         "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"
             if request.get("graceful").is_none()
                 && request.get("course_id").and_then(|v| v.as_str())
                     .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
                 && request.get("run_id").and_then(|v| v.as_str())
                     .is_some_and(|id| id.len() == 32
                         && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
         "ucampus.fabricated.status" | "ucampus.fabricated.history" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')) => Ok(()),
         "ucampus.fabricated.start" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("unit_id").and_then(|v| v.as_str())
                 .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                    && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                    && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
             && request.get("speed").map_or(true, |v| v.as_f64().is_some_and(|n| (0.25..=16.0).contains(&n)))
             && request.get("duration_seconds").map_or(true, |v| v.as_f64().is_some_and(|n| (1.0..=36000.0).contains(&n)))
@@ -320,7 +320,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             if request.get("graceful").is_none()
                 && request.get("course_id").and_then(|v| v.as_str())
                     .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
                 && request.get("run_id").and_then(|v| v.as_str())
                     .is_some_and(|id| id.len() == 32
                         && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
@@ -1035,6 +1035,21 @@ mod ipc_validation_tests {
 
     #[test]
     fn ucampus_fabricated_operation_guard() {
+        // Upstream course-v2 IDs may contain a literal +. Read-only, run
+        // control and start must agree with the already-supported unit reader.
+        for operation in ["ucampus.fabricated.status", "ucampus.fabricated.history"] {
+            assert!(validate(&json!({"id":"u","version":1,"operation":operation,
+                "course_id":"course-v2:eng+1"})).is_ok());
+            assert!(validate(&json!({"id":"u","version":1,"operation":operation,
+                "course_id":"course/v2:eng+1"})).is_err());
+        }
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.start","course_id":"course-v2:eng+1",
+            "unit_id":"unit+1","pulses":6,"speed":2,"duration_seconds":600,
+            "heartbeat_interval":20,"instant_complete":false})).is_ok());
+        assert!(validate(&json!({"id":"u","version":1,
+            "operation":"ucampus.fabricated.stop","course_id":"course-v2:eng+1",
+            "run_id":"abcdef0123456789abcdef0123456789"})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,
             "operation":"ucampus.fabricated.capabilities"})).is_ok());
         assert!(validate(&json!({"id":"u","version":1,
