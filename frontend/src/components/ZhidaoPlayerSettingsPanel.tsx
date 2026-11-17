@@ -22,7 +22,9 @@ export function ZhidaoPlayerSettingsPanel({desktop,onEvent}:{desktop:boolean;onE
   try{
    const current=await request<ZhidaoPlayerSettings>({operation:'zhidao.player.settings.get'});
    const value=await request<ZhidaoPlayerSettings>({operation:'zhidao.player.settings.save',settings:{...draft,mode:current.mode}});
-   setSaved(value);setDraft(value);setMessage('默认参数已保存，下次启动播放器时生效。');
+   const confirmed=await request<ZhidaoPlayerSettings>({operation:'zhidao.player.settings.get'});
+   if(JSON.stringify(confirmed)!==JSON.stringify(value))throw new Error('PLAYER_SETTINGS_VERIFY_FAILED');
+   setSaved(confirmed);setDraft(confirmed);setMessage('默认参数已保存，下次启动播放器时生效。');
    onEvent?.('保存播放器默认参数','success','下次启动时生效');
   }catch(error){setMessage(friendlyBridgeError(error));}finally{setBusy(false);}
  }
