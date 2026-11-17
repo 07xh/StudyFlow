@@ -44,9 +44,24 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       course&&course.platform==="ucampus"&&typeof course.course_id==="string"&&
       course.course_id.length>0&&typeof course.title==="string"&&course.title.length>0
     ))throw Error("INVALID_IPC_RESPONSE");
-    return courses.length>0
-      ?`课程接口已验证：实际读取到 ${courses.length} 门 U校园课程。`
-      :"课程接口返回空列表：请求成功，但尚不能确认该账号已有课程或已完成登录验收。";
+    if(courses.length===0)
+      return "课程接口返回空列表：请求成功，但尚不能确认该账号已有课程或已完成登录验收。";
+    const catalogSummary=`课程接口已验证：实际读取到 ${courses.length} 门 U校园课程。`;
+    // A catalog JWT is not enough to establish content-side permissions.
+    // Always run a separate real, read-only unit GET and report it independently.
+    try{
+      const units=await request<{id:string}[]>({
+        operation:"ucampus.units.list",course_id:courses[0].course_id
+      });
+      if(!Array.isArray(units)||!units.every(unit=>unit&&typeof unit.id==="string"))
+        throw Error("INVALID_IPC_RESPONSE");
+      return catalogSummary+(units.length>0
+        ?`内容侧单元读取成功：${units.length} 个单元，任务状态尚需单独核验。`
+        :"内容侧请求成功，但没有返回可识别单元。");
+    }catch(error){
+      return catalogSummary+"但内容侧单元核验失败："+friendlyBridgeError(error)+
+        "。课程已登录不代表内容接口授权成功。";
+    }
   };
   const completeSessionSave=async(
     method:"official"|"password"|"manual",savedVariant:"ai"|"classic",monitorReset?:boolean

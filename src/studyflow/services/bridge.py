@@ -272,9 +272,17 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "ucampus.session.configure":
         try:
+            # Official WebView and manual Cookie imports must receive the same
+            # account-school enrichment already used by direct SSO login.
+            # Never replace a valid user session if that optional GET fails.
+            config = ucampus_credentials.UCampusConfig.from_dict(request.get("configuration"))
+            try:
+                config = ucampus_enrich_school(config)
+            except Exception:
+                pass
             ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
-            ucampus_credentials.save(request.get("configuration"))
+            ucampus_credentials.save(config.__dict__)
             monitor_reset = _clear_ucampus_monitor_safely()
             return {"id": request_id, "ok": True, "data": {
                 "saved": True, "monitor_reset": monitor_reset}}

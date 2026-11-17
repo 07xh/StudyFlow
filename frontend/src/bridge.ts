@@ -384,7 +384,9 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_OPEN_ID_REQUIRED": return "当前 U校园会话缺少可核验的 openId，无法读取单元与任务。请重新登录或更新本机会话。";
     case "UCAMPUS_AI_ONLY": return "目前单元与任务读取仅支持 U校园5.0 AI版。";
     case "UCAMPUS_SESSION_MISSING": return "请先配置 U校园登录会话。";
-    case "UCAMPUS_SESSION_EXPIRED": return "U校园会话已失效，请重新登录。";
+    case "UCAMPUS_SESSION_EXPIRED": return "U校园 JWT 自报已过期，或课程接口拒绝了当前登录会话。请重新完成官方登录并导入最新会话。";
+    case "UCAMPUS_CONTENT_AUTH_REJECTED": return "课程登录不一定失效：U校园内容进度接口未接受当前内容侧认证（HTTP 401）。请在账号与连接中重新验证；若课程可读，核对内容授权令牌，不要反复重登。";
+    case "UCAMPUS_CONTENT_ACCESS_DENIED": return "课程登录不一定失效：U校园内容进度接口拒绝访问（HTTP 403），可能是课程权限或内容侧认证要求。请确认本人在官网能进入该课程单元。";
     case "UCAMPUS_MONITOR_STORAGE_FAILED": return "U校园断点核验记录保存失败，请检查本机权限与存储空间。";
     case "UCAMPUS_MONITOR_UNAVAILABLE": return "U校园进度核验任务暂不可用。";
     case "INVALID_UCAMPUS_LOGIN": return "请输入有效的 U校园账号和密码。";
