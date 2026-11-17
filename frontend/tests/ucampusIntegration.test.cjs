@@ -136,6 +136,16 @@ test("U校园官方扫码入口与 Cookie 导入有明确的会话边界",()=>{
   assert.match(login,/系统浏览器登录不能直接同步到学序/);
   assert.match(login,/ucampus_login_window_start/);
   assert.match(login,/ucampus_login_window_import/);
+  assert.match(login,/launchEmbedded\("qr"\)/);
+  assert.match(login,/>打开二维码登录<\/button>/);
+  assert.match(login,/invoke\("ucampus_login_window_import",\{mode:embeddedMode\}\)/);
+  assert.match(login,/窗口中尚未检测到 U校园AI 的 JWT/);
+  const native=fs.readFileSync(path.join(__dirname,"..","..","src-tauri","src","lib.rs"),"utf8");
+  assert.match(native,/UCAMPUS_QR_WINDOW/);
+  assert.match(native,/https:\/\/sso\.unipus\.cn\/sso\/login/);
+  assert.match(native,/mode: Option<String>/);
+  assert.match(native,/spawn_blocking\(move \|\| -> Result<\(\), String>/);
+
   assert.match(login,/ucampus_login_window_close/);
   assert.match(login,/完成验证，导入并验证会话/);
   assert.match(login,/U校园要求图片或数字验证码/);
@@ -168,7 +178,7 @@ test("U校园 session saves share exactly one course-readback path",()=>{
   // trigger the same post-save readback with no fabricated connected state.
   assert.equal((login.match(/await completeSessionSave\(/g)||[]).length,3);
   assert.equal((login.match(/await verifyCatalog\(\)/g)||[]).length,2);
-  assert.equal((login.match(/invoke\("ucampus_login_window_start"\)/g)||[]).length,1);
+  assert.equal((login.match(/invoke\("ucampus_login_window_start",\{mode\}\)/g)||[]).length,1);
   assert.match(login,/const feedback=\{/);
   assert.match(login,/monitorReset===false/);
   assert.match(login,/if\(result\?\.saved!==true\)throw Error\("UCAMPUS_LOGIN_SAVE_FAILED"\)/);
