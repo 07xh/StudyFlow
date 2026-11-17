@@ -20,10 +20,10 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
   notify.current=onDownloaded;
 
   async function download(version:string,update:AvailableUpdate){
-    const result=await request<{filename:string;sha256:string;source:"github"|"gh-proxy.com"|"ghfast.top"|"cache"}>({operation:"updates.download",
+    const result=await request<{filename:string;sha256:string;source:"github"|"gh-proxy.org"|"ghfast.top"|"cache"}>({operation:"updates.download",
       current_version:version,release_version:update.version});
     setDownloaded(result.filename);
-    const used=result.source==="gh-proxy.com"?"gh-proxy.com":result.source==="ghfast.top"?"ghfast.top":result.source==="github"?"GitHub 官方源":"已缓存的校验通过安装包";
+    const used=result.source==="gh-proxy.org"?"gh-proxy.org":result.source==="ghfast.top"?"ghfast.top":result.source==="github"?"GitHub 官方源":"已缓存的校验通过安装包";
     const text="新版本已下载并通过 SHA-256 校验（"+used+"），可在设置中打开更新目录安装。";
     setMessage(text);notify.current(text);
   }
