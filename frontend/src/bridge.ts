@@ -145,7 +145,7 @@ export type HeartbeatStartResult={
 };
 export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean|null};
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
-export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"r2"; fallback:boolean};
+export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"mirror"; fallback:boolean};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
 export type ReleaseChangelogEntry = {version:string;title:string;notes:string;published_at:string};
 export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
