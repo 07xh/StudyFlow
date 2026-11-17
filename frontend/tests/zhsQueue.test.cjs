@@ -79,3 +79,23 @@ test('reading resources show execution state without a fake video sampling failu
   }finally{if(view)act(()=>view.unmount());}
  }
 });
+
+
+test('failed or stopped video rows stay visible as a summary even with collapsed history',async()=>{
+ const Panel=load('components/ZhsQueuePanel.tsx',{'legacyPlayback.ts':{
+   stopZhsVideo:async()=>{},legacyError:String,legacyExitMessage:()=>'',zhsDiagnosticMessage:()=>''
+ }}).ZhsQueuePanel;
+ const tasks=[
+   {...status.zhs_queue.tasks[0],state:'failed',exit_code:13,percent:null,stale:true,name:'错误章节'},
+   {...status.zhs_queue.tasks[1],state:'stopped',exit_code:null,percent:null,stale:false,name:'提前停止的章节'},
+ ];
+ let view;
+ try{
+   await act(async()=>{view=create(React.createElement(Panel,{status:{
+     ...status,zhs_queue:{...status.zhs_queue,tasks}
+   },onRefresh:async()=>{}}));});
+   assert.match(words(view.root),/本轮异常记录：失败 1 项、已停止 1 项/);
+   assert.match(words(view.root),/错误章节（退出码 13）/);
+   assert.match(words(view.root),/本轮记录 · 2 项/);
+ }finally{if(view)await act(async()=>view.unmount());}
+});
