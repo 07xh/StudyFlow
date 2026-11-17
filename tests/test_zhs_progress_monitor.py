@@ -123,6 +123,61 @@ def test_parallel_ai_and_shared_progress_frames_use_separate_local_snapshots(tmp
     assert json.loads(second.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 62.5
 
 
+def test_parallel_shared_redraw_frames_keep_independent_samples(tmp_path):
+    """Windows cursor/erase CSI must not make the second worker sample vanish."""
+    from studyflow.services.zhs_resource_monitor import create_resource_monitor
+
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    one = create_resource_monitor(vendor["NumericTelemetry"], "1" * 32, tmp_path)
+    two = create_resource_monitor(vendor["NumericTelemetry"], "2" * 32, tmp_path)
+    first = vendor["StdoutObserver"](io.StringIO(), legacy._RefreshingZhsSink(one))
+    second = vendor["StdoutObserver"](io.StringIO(), legacy._RefreshingZhsSink(two))
+    one.mark_resource("video", "第一章节")
+    two.mark_resource("video", "第二章节")
+
+    # stdout can split the CSI + progress redraw across independent writes.
+    first.write("\r\x1b[2K\x1b[1Gplaying 1001 [####------] 40.0%")
+    second.write("\r\x1b[?25l\x1b[2K")
+    second.write("\x1b[1G  playing 2002 [######----] 63.5%")
+    one_data = json.loads(one.path.read_text(encoding="utf-8"))
+    two_data = json.loads(two.path.read_text(encoding="utf-8"))
+    assert one_data["videoSegmentPercent"] == 40.0
+    assert two_data["videoSegmentPercent"] == 63.5
+    assert one_data["resourceName"] == "第一章节"
+    assert two_data["resourceName"] == "第二章节"
+    assert one_data["token"] != two_data["token"]
+
+    # Only valid progress frames update a worker's data, including after CSI.
+    second.write("\r\x1b[2K  unrelated diagnostic 99.9%")
+    assert json.loads(two.path.read_text(encoding="utf-8")) == two_data
+    first.write("\r\x1b[2Kplaying 1001 [#####-----] 55.0%")
+    assert json.loads(one.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 55.0
+    assert json.loads(two.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 63.5
+
+
+def test_shared_progress_keeps_sampling_when_fractional_precision_changes(tmp_path):
+    """Video output may switch from one to two/three decimal places mid-run."""
+    from studyflow.services.zhs_resource_monitor import create_resource_monitor
+
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    monitor = create_resource_monitor(vendor["NumericTelemetry"], "9" * 32, tmp_path)
+    observer = vendor["StdoutObserver"](
+        io.StringIO(), legacy._RefreshingZhsSink(monitor)
+    )
+    monitor.mark_resource("video", "有效视频")
+    for frame, expected in [
+        ("\rplaying 719 [===-------] 39.9%", 39.9),
+        ("\r\x1b[2Kplaying 719 [=====-----] 50.25%", 50.25),
+        ("\r\x1b[1Gplaying 719 [=======---] 75.125%", 75.125),
+    ]:
+        observer.write(frame)
+        snapshot = json.loads(monitor.path.read_text(encoding="utf-8"))
+        assert snapshot["videoSegmentPercent"] == expected
+
+    observer.write("\rplaying 719 [==========] 120.125%")
+    assert json.loads(monitor.path.read_text(encoding="utf-8"))["videoSegmentPercent"] == 75.125
+
+
 def test_shared_output_preserves_resource_boundary_and_ignores_non_video_numbers(tmp_path):
     from studyflow.services.zhs_resource_monitor import create_resource_monitor
 

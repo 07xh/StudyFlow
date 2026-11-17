@@ -17,7 +17,7 @@ import runpy
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import threading
 import time
 
@@ -582,15 +582,28 @@ def _run_exclusive(platform: str, callback) -> int:
     # reaps the process tree. Retry *only lock acquisition*, never the task
     # callback: replaying a started task would risk duplicate work.
     for attempt in range(8):
-        try:
-            with _exclusive_worker(platform):
-                return callback()
-        except _WorkerLockBusy:
-            if attempt == 7:
-                return 10  # A live other worker still owns the lock.
-            time.sleep(0.15)
-        except OSError:
-            return 11
+        with ExitStack() as stack:
+            try:
+                # Only entering the context is lock acquisition. Errors from
+                # callback() must NOT be misreported as lock failure (code 11).
+                stack.enter_context(_exclusive_worker(platform))
+            except _WorkerLockBusy:
+                if attempt == 7:
+                    return 10  # A live other worker still owns the lock.
+                time.sleep(0.15)
+                continue
+            except OSError as exc:
+                # Windows can transiently deny opening a file during AV scans
+                # or concurrent status reads. Never retry an already-started
+                # task callback; this loop covers lock acquisition only.
+                transient = isinstance(exc, PermissionError) or getattr(
+                    exc, "winerror", None
+                ) in (32, 33)
+                if transient and attempt < 7:
+                    time.sleep(0.15)
+                    continue
+                return 11
+            return callback()
     return 10
 
 
@@ -599,6 +612,16 @@ def main(argv: list[str] | None = None) -> int:
     if args == ["--legacy-yuketang"]:
         return _run_exclusive("yuketang", run_yuketang_original)
     if len(args) in (2, 3, 4) and args[0] == "--legacy-zhidao":
+        if os.environ.get("STUDYFLOW_WATCH_PARENT_PIPE") == "1":
+            # The Tauri parent holds the only write end. If it exits without
+            # releasing the Windows Job Object, EOF still terminates this
+            # exact task, releasing the platform lock and child-worker pipes.
+            from studyflow.services.zhs_queue import watch_parent_pipe
+            try:
+                watch_parent_pipe()
+            except (OSError, ValueError):
+                return 15  # Never run an unowned task if the lease is missing.
+
         if len(args) == 4:
             try:
                 if len(args[3]) > 16384:

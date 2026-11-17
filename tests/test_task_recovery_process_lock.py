@@ -1,4 +1,5 @@
 """Restart recovery process lock contract tests."""
+import pytest
 from studyflow.services import legacy_playback
 
 
@@ -65,5 +66,6 @@ def test_callback_file_error_is_not_replayed_as_lock_contention(monkeypatch, tmp
     def fail():
         attempts.append("started")
         raise OSError("task failure")
-    assert legacy_playback._run_exclusive("zhidao", fail) == 11
+    with pytest.raises(OSError, match="task failure"):
+        legacy_playback._run_exclusive("zhidao", fail)
     assert attempts == ["started"]

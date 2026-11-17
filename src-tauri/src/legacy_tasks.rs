@@ -555,7 +555,16 @@ fn legacy_start_blocking(
             command.env("COMPLETION_THRESHOLD", "100");
         }
     }
-    command.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    // A Job Object is not always assignable (e.g. nested Windows jobs).
+    // Keep a parent-owned stdin pipe as a second, independent liveness lease:
+    // on EXE crash/exit, EOF makes only our own ZHS task tree shut down.
+    if platform == "zhidao" {
+        command.env("STUDYFLOW_WATCH_PARENT_PIPE", "1");
+        command.stdin(Stdio::piped());
+    } else {
+        command.stdin(Stdio::null());
+    }
+    command.stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
