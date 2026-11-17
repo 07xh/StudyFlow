@@ -16,6 +16,7 @@ export type PlayerStatus={
   durationSeconds:number|null;
   visible:boolean|null;
   observedAt:string|null;
+  rate:number|null;
   message:string;
 };
 type Props={
@@ -27,12 +28,9 @@ type Props={
   events?:ActivityEntry[];
   onOpenTasks?:()=>void;
 };
-const defaults:ZhidaoPlayerSettings={
-  speed:"1.5",allowMinimize:true,autoStart:true,autoNext:true,mode:"official"
-};
 const initialStatus:PlayerStatus={
   state:"idle",courseKey:null,runId:null,exitCode:null,event:null,positionSeconds:null,
-  durationSeconds:null,visible:null,observedAt:null,message:"官方播放器尚未启动"
+  durationSeconds:null,visible:null,observedAt:null,rate:null,message:"官方播放器尚未启动"
 };
 function timeLabel(value:number|null){
   if(value===null||!Number.isFinite(value)||value<0)return "—";
@@ -52,12 +50,11 @@ function playerError(error:unknown){
   return friendlyBridgeError(error);
 }
 export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,detailMode=false,events=[],onOpenTasks}:Props){
-  const [settings,setSettings]=useState<ZhidaoPlayerSettings>(defaults);
+  const [settings,setSettings]=useState<ZhidaoPlayerSettings|null>(null);
   const [selected,setSelected]=useState("");
   const [status,setStatus]=useState<PlayerStatus>(initialStatus);
-  const [busy,setBusy]=useState<"prepare"|"start"|"stop"|"save"|null>(null);
+  const [busy,setBusy]=useState<"start"|"stop"|null>(null);
   const [message,setMessage]=useState("");
-  const [settingsLoaded,setSettingsLoaded]=useState(false);
   const [observations,setObservations]=useState<Array<{event:string;position:number;at:string;courseKey:string;runId:string}>>([]);
   const lastObservation=useRef("");
   const selectedRef=useRef(selected);
@@ -83,8 +80,8 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     if(!desktop)return;
     let live=true;
     void request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"})
-      .then(value=>{if(live){setSettings({...defaults,...value});setSettingsLoaded(true);}})
-      .catch(error=>{if(live){setMessage(playerError(error));setSettingsLoaded(true);}});
+      .then(value=>{if(live)setSettings(value);})
+      .catch(error=>{if(live)setMessage(playerError(error));});
     return ()=>{live=false;};
   },[desktop]);
 
@@ -123,13 +120,17 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     statusRevision.current++;
     setBusy("start");setMessage("");
     try{
+      // Reload the saved preferences at launch: the settings overlay may have changed them.
+      // Do not silently launch with stale cached preferences when the read fails.
+      const current=await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"});
+      setSettings(current);
       const next=await invoke<PlayerStatus>("zhidao_player_start",{
-        courseKey:selected,speed:settings.speed,allowMinimize:settings.allowMinimize,
-        autoStart:settings.autoStart,autoNext:settings.autoNext
+        courseKey:selected,speed:current.speed,allowMinimize:current.allowMinimize,
+        autoStart:current.autoStart,autoNext:current.autoNext
       });
       setStatus(next);
       const result="已启动原版官方 WebView2 播放器。请在网页内登录并进入课程；实际播放以页面状态为准。";
-      setMessage(result);onEvent?.("启动官方播放器","success",result,{courseId:selected,runId:next.runId??undefined,runner:"official",parameters:{speed:settings.speed,allowMinimize:settings.allowMinimize,autoStart:settings.autoStart,autoNext:settings.autoNext}});
+      setMessage(result);onEvent?.("启动官方播放器","success",result,{courseId:selected,runId:next.runId??undefined,runner:"official",parameters:{speed:current.speed,allowMinimize:current.allowMinimize,autoStart:current.autoStart,autoNext:current.autoNext}});
     }catch(error){
       const result=playerError(error);setMessage(result);
       onEvent?.("启动官方播放器","warning",result,{courseId:selected,runner:"official"});
@@ -157,6 +158,8 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
   }
 
   const current=courses.find(course=>course.course_id===selected);
+  const liveRate=ownsStatus&&status.rate!==null&&Number.isFinite(status.rate)&&status.rate>0
+    ?status.rate:null;
   const position=timeLabel(ownsStatus?status.positionSeconds:null);
   const duration=timeLabel(ownsStatus?status.durationSeconds:null);
   const localPercent=ownsStatus&&status.positionSeconds!==null&&status.durationSeconds!==null&&status.durationSeconds>0
@@ -174,7 +177,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
       {onOpenTasks&&<button className="text-button" onClick={onOpenTasks}>查看运行任务</button>}
     </p>}
     <div className="sf-zd-progress-actions">
-      <button className="primary" type="button" disabled={!desktop||!settingsLoaded||!selected||active||busy!==null}
+      <button className="primary" type="button" disabled={!desktop||!selected||active||busy!==null}
         onClick={()=>void start()}>
         <CirclePlay size={15}/>{busy==="start"?"启动中…":"打开官方播放器"}
       </button>
@@ -208,6 +211,10 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
           <span style={{width:localPercent+"%"}}/>
         </div>}
         {ownsStatus&&<small>{status.message}</small>}
+        {ownsStatus&&<small className="sf-zd-playback-rate">
+          实际倍速：{liveRate===null?"等待有效播放器采样":`${Number(liveRate.toFixed(2))}×（HTML5 实测）`}
+        </small>}
+        {!active&&settings&&<small>最近读取的目标倍速：{settings.speed}×（启动时刷新）</small>}
       </div>
     </div>
 

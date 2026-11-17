@@ -54,3 +54,27 @@ test("do not merge older account records into another authenticated session",()=
  assert.deepEqual(mergeZhidaoEvidence([previous],[otherLogin]),[otherLogin]);
  assert.deepEqual(mergeZhidaoEvidence([previous],[noMarker]),[noMarker]);
 });
+
+test("all asynchronous Zhidao course update entry points use one evidence-safe callback",()=>{
+ const app=fs.readFileSync(path.join(__dirname,"../src/App.tsx"),"utf8");
+ assert.match(app,/const updateZhidaoCourses=useCallback\(\(incoming:Course\[\]\)=>/);
+ assert.match(app,/courses:mergeZhidaoEvidence\(previous\.zhidao\.courses,incoming\)/);
+ assert.equal(app.split("onCoursesUpdated={updateZhidaoCourses}").length-1,2,
+   "settings verification and player-close monitoring must use the shared merge path");
+ assert.match(app,/if\(course\.platform==="zhidao"\)\{updateZhidaoCourses\(list\);return;\}/,
+   "course workspace must use the same update path");
+ assert.doesNotMatch(app,/onCoursesUpdated=\{list=>setPlatforms\(previous=>\(\{\.\.\.previous,zhidao:/,
+   "the close monitor must not replace the whole platform course list directly");
+});
+
+test("automatic verification and course sync share the evidence merge path",()=>{
+ const app=fs.readFileSync(path.join(__dirname,"../src/App.tsx"),"utf8");
+ const helperAt=app.indexOf("const updateZhidaoCourses=useCallback(");
+ const autoAt=app.indexOf("const autoVerifyError=useZhidaoAutoVerify(");
+ assert.ok(helperAt>0&&autoAt>helperAt,"shared callback must be initialized before automatic verification");
+ assert.match(app,/onSnapshot:snapshot=>updateZhidaoCourses\(snapshot\.courses\)/);
+ assert.match(app,/if\(platform==="zhidao"\)\{\s*updateZhidaoCourses\(list\);\s*\}else\{/);
+ assert.match(app,/\[desktop,consentAccepted,recordEvent,updateZhidaoCourses\]/);
+ assert.equal((app.match(/courses:mergeZhidaoEvidence\(previous\.zhidao\.courses,incoming\)/g)||[]).length,1,
+   "the list merge should be implemented once in the common callback");
+});

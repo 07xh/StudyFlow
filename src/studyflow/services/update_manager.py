@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import hmac
 import os
 from pathlib import Path
@@ -133,11 +132,7 @@ def download(current: str, version: str) -> dict:
         raise ValueError("UPDATE_ASSET_UNAVAILABLE")
     try:
         if target.is_file():
-            digest = hashlib.sha256()
-            with target.open("rb") as stream:
-                while chunk := stream.read(1024 * 1024):
-                    digest.update(chunk)
-            if hmac.compare_digest(digest.hexdigest(), checksum):
+            if hmac.compare_digest(updater.sha256_file(target), checksum):
                 return {"filename": target.name, "sha256": checksum, "source": "cache"}
     except OSError:
         pass

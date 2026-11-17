@@ -343,7 +343,9 @@ PLAYER_DEFAULTS = {
     "speed": "1.5", "allowMinimize": True, "autoStart": True,
     "autoNext": True, "mode": "official",
 }
-PLAYER_SPEEDS = {"1", "1.25", "1.5", "2"}
+PLAYER_SPEED_PATTERN = re.compile(r"(?:0\.[5-9][0-9]?|[1-3](?:\.[0-9]{1,2})?|4(?:\.0{1,2})?)")
+def _valid_player_speed(value: object) -> bool:
+    return isinstance(value, str) and PLAYER_SPEED_PATTERN.fullmatch(value) is not None
 
 
 def _player_settings_path() -> Path:
@@ -366,7 +368,7 @@ def get_player_settings() -> dict:
         return settings
     if not isinstance(stored, dict):
         return settings
-    if stored.get("speed") in PLAYER_SPEEDS:
+    if _valid_player_speed(stored.get("speed")):
         settings["speed"] = stored["speed"]
     for name in ("allowMinimize", "autoStart", "autoNext"):
         if isinstance(stored.get(name), bool):
@@ -379,7 +381,7 @@ def get_player_settings() -> dict:
 def save_player_settings(value: object) -> dict:
     if not isinstance(value, dict):
         raise ValueError("INVALID_PLAYER_SETTINGS")
-    if value.get("speed") not in PLAYER_SPEEDS:
+    if not _valid_player_speed(value.get("speed")):
         raise ValueError("INVALID_PLAYER_SETTINGS")
     if any(not isinstance(value.get(name), bool) for name in ("allowMinimize", "autoStart", "autoNext")):
         raise ValueError("INVALID_PLAYER_SETTINGS")

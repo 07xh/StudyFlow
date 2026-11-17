@@ -17,9 +17,11 @@ test('navigation preserves valid selection without leaking its heading to anothe
  let shell,monitor,view;
  const Null=()=>null;
  const presentation=evaluate(compile('presentation.ts'),require);
+ const progressMerge=evaluate(compile('progressMerge.ts'),require);
  const App=evaluate(compile('App.tsx'),name=>{
   if(name==='./platforms')return {initialPlatforms:{zhidao:{platform:'zhidao',status:'connected',courses:[course]},yuketang:{platform:'yuketang',status:'connected',courses:[yuketangCourse]},xuexitong:{platform:'xuexitong',status:'not_connected',courses:[]},ucampus:{platform:'ucampus',status:'not_connected',courses:[]}}};
   if(name==='./presentation')return presentation;
+  if(name==='./progressMerge')return progressMerge;
   if(name==='./activity')return require('./helpers/load.cjs')('activity.ts');
   if(name==='./runtimeTasks')return require('./helpers/load.cjs')('runtimeTasks.ts');
   if(name==='./bridge')return {isDesktop:()=>false,friendlyBridgeError:String,request:async()=>({})};

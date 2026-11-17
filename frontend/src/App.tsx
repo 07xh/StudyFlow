@@ -258,16 +258,24 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     });
   },[]);
 
+  // A single reducer path protects current-session verified evidence from late
+  // asynchronous reads from the player, progress panel and course workspace.
+  const updateZhidaoCourses=useCallback((incoming:Course[])=>{
+    setPlatforms(previous=>({
+      ...previous,zhidao:{
+        ...previous.zhidao,
+        courses:mergeZhidaoEvidence(previous.zhidao.courses,incoming)
+      }
+    }));
+  },[]);
+
   const autoVerifyError=useZhidaoAutoVerify({
     desktop:desktop&&consentAccepted,
     connected:platforms.zhidao.status==="connected"&&platforms.zhidao.courses.some(
       item=>item.course_id===autoVerify.courseId&&!item.stale),
     enabled:autoVerify.enabled,
     courseId:autoVerify.courseId,
-    onSnapshot:snapshot=>setPlatforms(previous=>({
-      ...previous,zhidao:{...previous.zhidao,
-        courses:mergeZhidaoEvidence(previous.zhidao.courses,snapshot.courses)}
-    }))
+    onSnapshot:snapshot=>updateZhidaoCourses(snapshot.courses)
   });
 
   function configureAutoVerify(courseId:string,enabled:boolean){
@@ -390,8 +398,13 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       const list=await fetchCoursesFromDesktop(platform);
       if(checkpoint.epoch!==epoch||platformsRef.current[platform].status!=="connected")return;
       checkpoint.lastSuccess=Date.now();
-      setPlatforms(previous=>({...previous,[platform]:{...previous[platform],
-        courses:platform==="zhidao"?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
+      if(platform==="zhidao"){
+        updateZhidaoCourses(list);
+      }else{
+        setPlatforms(previous=>({...previous,[platform]:{
+          ...previous[platform],courses:list
+        }}));
+      }
       setSyncFeedback(previous=>({...previous,[platform]:{phase:"synced",error:""}}));
       if(manual)setNotice(name+"已同步 "+list.length+" 门真实课程");
       recordEvent(name,manual?"同步课程":"自动同步课程","success","读取到 "+list.length+" 门真实课程");
@@ -406,7 +419,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       // Even a superseded manual request must release its own button lock.
       if(manual)setBusy(previous=>previous===platform?"":previous);
     }
-  },[desktop,consentAccepted,recordEvent]);
+  },[desktop,consentAccepted,recordEvent,updateZhidaoCourses]);
 
   // Startup/status recheck: load both connected platforms. Entering or focusing
   // a platform only refreshes stale data; the gate prevents duplicate requests.
@@ -575,7 +588,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       <ZhidaoProgressPanel courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"}
       autoVerifyCourseId={autoVerify.courseId} autoVerifyEnabled={autoVerify.enabled} autoVerifyError={autoVerifyError}
       onAutoVerifyChange={configureAutoVerify}
-      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:mergeZhidaoEvidence(previous.zhidao.courses,list)}}))}
+      onCoursesUpdated={updateZhidaoCourses}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
       </CollapsibleSection>
       <CollapsibleSection id="platform:zhidao:data" title="本地数据维护" defaultExpanded={false}>
@@ -754,9 +767,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   </section>;
 
   const renderCourseWorkspace=(course:Course)=>{
-    const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{
-      ...previous[course.platform],courses:course.platform==="zhidao"
-        ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
+    const updateCourses=(list:Course[])=>{
+      if(course.platform==="zhidao"){updateZhidaoCourses(list);return;}
+      setPlatforms(previous=>({...previous,[course.platform]:{
+        ...previous[course.platform],courses:list
+      }}));
+    };
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
     const catalogOnly=course.platform==="xuexitong"||course.platform==="ucampus";
@@ -836,7 +852,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       </>}
       <SettingsDialog open={courseLogsOpen} dark={dark} title={course.title+" · 日志与诊断"}
         onClose={()=>setCourseLogsOpen(false)}>
-        <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>
+        <ZhidaoActivityPanel events={courseEvents(activity,course.platform,course.course_id)}/>
         <button className="secondary" type="button" onClick={()=>{setCourseLogsOpen(false);setPage("logs");}}>
           查看平台与历史未归属记录
         </button>
@@ -991,7 +1007,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       onRetry={releaseChangelog.retry}
       onOpenUpdates={()=>{releaseChangelog.close();openGlobalSettings("updates");}}/>
     {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
-      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
+      onCoursesUpdated={updateZhidaoCourses}
       onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setQrOpen(false);

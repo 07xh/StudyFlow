@@ -135,3 +135,93 @@ def test_download_403_has_specific_error(headers, expected, tmp_path):
                 "a" * 64, tmp_path / "untrusted.exe")
     assert caught.value.code == expected
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_preserves_404_behavior(kind):
+    from urllib.error import HTTPError
+    missing = HTTPError(updater.API, 404, "not found", {}, None)
+    with patch.object(updater, "urlopen", side_effect=missing):
+        if kind == "release":
+            assert updater.release_info("0.1.0", channel="beta") is None
+        else:
+            assert updater.release_notes("0.1.0", history=True) == []
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_does_not_treat_json_null_as_404(kind):
+    with patch.object(updater, "urlopen",
+                      return_value=FakeResponse(b"null", updater.API)):
+        with pytest.raises(updater.UpdateError) as error:
+            if kind == "release":
+                updater.release_info("0.1.0", channel="beta")
+            else:
+                updater.release_notes("0.1.0", history=True)
+    assert error.value.code == "UPDATE_RELEASE_INVALID"
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_keeps_rate_limit_and_safe_messages(kind):
+    failure = HTTPError(updater.API, 403, "private body",
+                        {"X-RateLimit-Remaining": "0"}, None)
+    with patch.object(updater, "urlopen", side_effect=failure):
+        with pytest.raises(updater.UpdateError) as error:
+            if kind == "release":
+                updater.release_info("0.1.0", channel="beta")
+            else:
+                updater.release_notes("0.1.0", history=True)
+    assert error.value.code == "UPDATE_RATE_LIMITED"
+    assert "private" not in str(error.value).lower()
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_does_not_leak_broken_json(kind):
+    with patch.object(updater, "urlopen",
+                      return_value=FakeResponse(b'{"secret": ', updater.API)):
+        with pytest.raises(updater.UpdateError) as error:
+            if kind == "release":
+                updater.release_info("0.1.0", channel="beta")
+            else:
+                updater.release_notes("0.1.0", history=True)
+    assert error.value.code == "UPDATE_RELEASE_INVALID"
+    assert "secret" not in str(error.value).lower()
+
+
+def test_streaming_sha256_helper_matches_hashlib_for_multi_chunk_installer(tmp_path: Path):
+    payload = bytes(range(256)) * (1024 * 8 + 19)
+    file = tmp_path / "installer-fixture.exe"
+    file.write_bytes(payload)
+    assert len(payload) > 2 * 1024 * 1024
+    assert updater.sha256_file(file) == hashlib.sha256(payload).hexdigest()
+
+
+def test_cached_installer_digest_uses_shared_streaming_helper(monkeypatch, tmp_path: Path):
+    from studyflow.services import update_manager
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    payload = b"not a real installer; integrity check fixture"
+    checksum = hashlib.sha256(payload).hexdigest()
+    url = "https://github.com/07xh/StudyFlow/releases/download/v0.2.0/setup.exe"
+    monkeypatch.setattr(updater, "release_info", lambda *a, **kw: {
+        "version": "v0.2.0",
+        "assets": [{
+            "name": "StudyFlow_0.2.0_x64-setup.exe",
+            "browser_download_url": url,
+            "digest": "sha256:" + checksum,
+        }],
+    })
+    target = tmp_path / "StudyFlow" / "updates" / "StudyFlow-0.2.0-x64-setup.exe"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(payload)
+    seen = []
+    actual = updater.sha256_file
+    def digest_once(path):
+        seen.append(path)
+        return actual(path)
+    monkeypatch.setattr(updater, "sha256_file", digest_once)
+    def network_must_not_run(*_args, **_kwargs):
+        raise AssertionError("verified cached binary must never be downloaded again")
+    monkeypatch.setattr(updater, "verified_download", network_must_not_run)
+    assert update_manager.download("0.1.0", "v0.2.0") == {
+        "filename": target.name, "sha256": checksum, "source": "cache"
+    }
+    assert seen == [target]

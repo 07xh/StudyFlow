@@ -35,6 +35,7 @@ pub struct OfficialPlayerStatus {
     duration_seconds: Option<u64>,
     visible: Option<bool>,
     observed_at: Option<String>,
+    rate: Option<f64>,
     message: String,
 }
 
@@ -73,21 +74,63 @@ const OFFICIAL_MONITOR_REPORT_OLD: &str =
 const OFFICIAL_MONITOR_REPORT_NEW: &str =
     "    const shouldReport = force || state !== monitor.lastState ||\n      time - monitor.lastReport >= MONITOR_INTERVAL_MS;";
 const LOCAL_OBSERVER_INTERVAL_MS: u64 = 6000;
+const PLAYER_SPEED_OLD: &str = "[ValidateSet('1','1.25','1.5','2')][string]$Speed = '1.5'";
+const PLAYER_SPEED_NEW: &str =
+    "[ValidatePattern('^(?:0\\.[5-9][0-9]?|[1-3](?:\\.[0-9]{1,2})?|4(?:\\.0{1,2})?)$')][string]$Speed = '1.5'";
+const PLAYER_OBSERVATION_FUNCTION_OLD: &str =
+    "function Write-OfficialPlaybackObservation([string]$eventName, [int]$position, [int]$duration, [bool]$pageVisible) {";
+const PLAYER_OBSERVATION_FUNCTION_NEW: &str =
+    "function Write-OfficialPlaybackObservation([string]$eventName, [int]$position, [int]$duration, [bool]$pageVisible, [double]$rate) {";
+const PLAYER_OBSERVATION_BODY_OLD: &str =
+    "position = $position; duration = $duration;\n            visible = $pageVisible; at = $now.ToString('o')";
+const PLAYER_OBSERVATION_BODY_NEW: &str =
+    "position = $position; duration = $duration;\n            visible = $pageVisible; at = $now.ToString('o'); rate = $rate";
+const PLAYER_OBSERVATION_CALL_OLD: &str =
+    "Write-OfficialPlaybackObservation $event $position $duration ([bool]$message.pageVisible)";
+const PLAYER_OBSERVATION_CALL_NEW: &str =
+    "Write-OfficialPlaybackObservation $event $position $duration ([bool]$message.pageVisible) ([double]$message.rate)";
 
-fn local_observer_copy(source: &str) -> Result<String, String> {
-    // Git's Windows checkout can use CRLF even though the pinned Git blob is
-    // LF. Normalize only the private runtime copy, never the original source.
-    let normalized = source.replace("\r\n", "\n");
-    // Strict version guard: do not apply a textual rewrite to a new upstream
-    // script with changed semantics. The pinned original is retained intact.
-    if normalized.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count() != 1
-        || normalized.matches(OFFICIAL_MONITOR_REPORT_OLD).count() != 1 {
+fn valid_playback_speed(value: &str) -> bool {
+    let parts: Vec<&str> = value.split('.').collect();
+    if parts.is_empty() || parts.len() > 2
+        || !matches!(parts[0], "0" | "1" | "2" | "3" | "4")
+        || (parts.len() == 2 && (parts[1].is_empty() || parts[1].len() > 2
+            || !parts[1].bytes().all(|b| b.is_ascii_digit()))) {
+        return false;
+    }
+    matches!(value.parse::<f64>(), Ok(rate) if (0.5..=4.0).contains(&rate))
+}
+
+// Rewrite only known, pinned resource text in a local runtime copy.
+// Validate ALL anchors first, so a changed upstream resource fails closed.
+fn rewrite_pinned_runtime_source(source: &str, changes: &[(&str, &str)]) -> Result<String, String> {
+    let mut output = source.replace("\r\n", "\n");
+    if changes.is_empty() || changes.iter().any(|(old, new)| {
+        old.is_empty() || old == new || output.matches(*old).count() != 1
+    }) {
         return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
     }
-    Ok(normalized
-        .replacen(OFFICIAL_MONITOR_INTERVAL_OLD,
-            &format!("const MONITOR_INTERVAL_MS = {LOCAL_OBSERVER_INTERVAL_MS};"), 1)
-        .replacen(OFFICIAL_MONITOR_REPORT_OLD, OFFICIAL_MONITOR_REPORT_NEW, 1))
+    for (old, new) in changes {
+        output = output.replacen(*old, new, 1);
+    }
+    Ok(output)
+}
+
+fn local_player_copy(source: &str) -> Result<String, String> {
+    rewrite_pinned_runtime_source(source, &[
+        (PLAYER_SPEED_OLD, PLAYER_SPEED_NEW),
+        (PLAYER_OBSERVATION_FUNCTION_OLD, PLAYER_OBSERVATION_FUNCTION_NEW),
+        (PLAYER_OBSERVATION_BODY_OLD, PLAYER_OBSERVATION_BODY_NEW),
+        (PLAYER_OBSERVATION_CALL_OLD, PLAYER_OBSERVATION_CALL_NEW),
+    ])
+}
+
+fn local_observer_copy(source: &str) -> Result<String, String> {
+    let interval = format!("const MONITOR_INTERVAL_MS = {LOCAL_OBSERVER_INTERVAL_MS};");
+    rewrite_pinned_runtime_source(source, &[
+        (OFFICIAL_MONITOR_INTERVAL_OLD, &interval),
+        (OFFICIAL_MONITOR_REPORT_OLD, OFFICIAL_MONITOR_REPORT_NEW),
+    ])
 }
 
 fn copy_player_assets(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
@@ -104,6 +147,11 @@ fn copy_player_assets(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
         fs::copy(from, to).map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
     }
     // The PowerShell host reads this isolated local copy, not the pinned source.
+    let host = root.join("Official-Player.ps1");
+    let original_host = fs::read_to_string(&host)
+        .map_err(|_| "PLAYER_RESOURCES_UNAVAILABLE")?;
+    fs::write(&host, local_player_copy(&original_host)?)
+        .map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
     let controller = root.join("Official-MediaController.js");
     let original = fs::read_to_string(&controller)
         .map_err(|_| "PLAYER_RESOURCES_UNAVAILABLE")?;
@@ -164,39 +212,41 @@ fn valid_route(value: &str) -> bool {
         && value.bytes().all(|b| b.is_ascii_alphanumeric() || b"_+./=:-".contains(&b))
 }
 
-fn read_observation(root: &Path, token: &str) -> (Option<String>, Option<u64>, Option<u64>, Option<bool>, Option<String>) {
+fn read_observation(root: &Path, token: &str) -> (Option<String>, Option<u64>, Option<u64>, Option<bool>, Option<String>, Option<f64>) {
     let path = root.join(format!("monitor-playback-{token}.json"));
-    let Ok(metadata) = fs::metadata(&path) else { return (None, None, None, None, None); };
+    let Ok(metadata) = fs::metadata(&path) else { return (None, None, None, None, None, None); };
     if !metadata.is_file() || metadata.len() < 2 || metadata.len() > 2048 {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
-    let Ok(modified) = metadata.modified() else { return (None, None, None, None, None); };
+    let Ok(modified) = metadata.modified() else { return (None, None, None, None, None, None); };
     let now = SystemTime::now();
     let age = now.duration_since(modified).unwrap_or(Duration::ZERO);
     if age > Duration::from_secs(18) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
-    let Ok(bytes) = fs::read(&path) else { return (None, None, None, None, None); };
-    let Ok(data) = serde_json::from_slice::<Value>(&bytes) else { return (None, None, None, None, None); };
+    let Ok(bytes) = fs::read(&path) else { return (None, None, None, None, None, None); };
+    let Ok(data) = serde_json::from_slice::<Value>(&bytes) else { return (None, None, None, None, None, None); };
     if data.get("v").and_then(Value::as_u64) != Some(1)
         || data.get("token").and_then(Value::as_str) != Some(token) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
     let event = data.get("event").and_then(Value::as_str).unwrap_or("");
     let allowed = ["observing", "advancing", "stalled", "paused", "buffering",
         "seeking", "position-jump", "sampling-gap", "visibility-changed", "ended"];
     if !allowed.contains(&event) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
     let position = data.get("position").and_then(Value::as_u64);
     let duration = data.get("duration").and_then(Value::as_u64);
     if position.map_or(true, |n| n > 864000) || duration.map_or(true, |n| n > 864000) {
-        return (None, None, None, None, None);
+        return (None, None, None, None, None, None);
     }
     let visible = data.get("visible").and_then(Value::as_bool);
     let at = data.get("at").and_then(Value::as_str)
         .filter(|s| s.len() <= 64).map(str::to_owned);
-    (Some(event.to_owned()), position, duration, visible, at)
+    let rate = data.get("rate").and_then(Value::as_f64)
+        .filter(|value| value.is_finite() && *value > 0.0 && *value <= 16.0);
+    (Some(event.to_owned()), position, duration, visible, at, rate)
 }
 
 fn event_message(event: Option<&str>) -> String {
@@ -221,10 +271,10 @@ fn status_of(job: &mut ZhidaoPlayerJob) -> OfficialPlayerStatus {
             job.child = None;
         }
     }
-    let (event, position, duration, visible, at) = if job.state == "running" {
+    let (event, position, duration, visible, at, rate) = if job.state == "running" {
         read_observation(&player_root(&job.local_appdata), &job.token)
     } else {
-        (None, None, None, None, None)
+        (None, None, None, None, None, None)
     };
     OfficialPlayerStatus {
         state: job.state.clone(),
@@ -236,6 +286,7 @@ fn status_of(job: &mut ZhidaoPlayerJob) -> OfficialPlayerStatus {
         duration_seconds: duration,
         visible,
         observed_at: at,
+        rate,
         message: if job.state == "running" {
             event_message(event.as_deref())
         } else if job.exit_code == Some(22) {
@@ -278,7 +329,7 @@ pub async fn zhidao_player_start(
     auto_start: bool,
     auto_next: bool,
 ) -> Result<OfficialPlayerStatus, String> {
-    if !valid_course_key(&course_key) || !["1", "1.25", "1.5", "2"].contains(&speed.as_str()) {
+    if !valid_course_key(&course_key) || !valid_playback_speed(&speed) {
         return Err("INVALID_PLAYER_REQUEST".into());
     }
     let request = json!({
@@ -368,7 +419,7 @@ pub fn zhidao_player_status(state: State<'_, ZhidaoPlayerManager>) -> Result<Off
         None => Ok(OfficialPlayerStatus {
             state: "idle".into(), course_key: None, run_id: None, exit_code: None,
             event: None, position_seconds: None, duration_seconds: None,
-            visible: None, observed_at: None, message: "官方播放器尚未启动".into(),
+            visible: None, observed_at: None, rate: None, message: "官方播放器尚未启动".into(),
         }),
     }
 }
@@ -380,7 +431,7 @@ pub fn zhidao_player_stop(state: State<'_, ZhidaoPlayerManager>, expected_run_id
         return Ok(OfficialPlayerStatus {
             state: "idle".into(), course_key: None, run_id: None, exit_code: None,
             event: None, position_seconds: None, duration_seconds: None,
-            visible: None, observed_at: None, message: "官方播放器尚未启动".into(),
+            visible: None, observed_at: None, rate: None, message: "官方播放器尚未启动".into(),
         });
     };
     crate::run_identity::verify_expected_run(expected_run_id.as_deref(), Some(job.token.as_str()))
@@ -487,5 +538,48 @@ mod local_observer_tests {
     #[test]
     fn official_observer_overlay_rejects_unknown_future_source() {
         assert!(local_observer_copy("new upstream controller").is_err());
+        // Duplicate upstream anchors must fail closed rather than patching a partial copy.
+        let source = format!("{}\n{}", OFFICIAL_MONITOR_INTERVAL_OLD, OFFICIAL_MONITOR_REPORT_OLD);
+        assert!(local_observer_copy(&(source.clone() + "\n" + OFFICIAL_MONITOR_INTERVAL_OLD)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod player_speed_tests {
+    use super::{local_player_copy, valid_playback_speed};
+    #[test]
+    fn speed_range_and_original_source_isolation() {
+        for value in ["0.5", "0.75", "1", "1.23", "2.75", "3.99", "4", "4.00"] {
+            assert!(valid_playback_speed(value), "{value}");
+        }
+        for value in ["0.49", "4.01", "1.234", "NaN", "1e2", "-1", "01.5", ""] {
+            assert!(!valid_playback_speed(value), "{value}");
+        }
+        let source = format!(
+            "{}\n{}\n{}\n{}",
+            super::PLAYER_SPEED_OLD,
+            super::PLAYER_OBSERVATION_FUNCTION_OLD,
+            super::PLAYER_OBSERVATION_BODY_OLD,
+            super::PLAYER_OBSERVATION_CALL_OLD
+        );
+        let patched = local_player_copy(&source).unwrap();
+        assert!(patched.contains("ValidatePattern"));
+        assert!(patched.contains("rate = $rate"));
+        assert!(patched.contains("([double]$message.rate)"));
+        assert!(source.contains("ValidateSet"));
+        assert!(local_player_copy("unexpected upstream change").is_err());
+    }
+
+    #[test]
+    fn bundled_powershell_overlay_matches_real_pinned_file_and_crlf() {
+        const ORIGINAL: &str = include_str!("../../legacy/zhidao/Official-Player.ps1");
+        let normalized = ORIGINAL.replace("\r\n", "\n");
+        let patched = local_player_copy(ORIGINAL).expect("pinned host must match");
+        assert_eq!(local_player_copy(&normalized.replace('\n', "\r\n")).unwrap(), patched);
+        assert!(patched.contains(super::PLAYER_SPEED_NEW));
+        assert!(!patched.contains(super::PLAYER_SPEED_OLD));
+        assert!(patched.contains(super::PLAYER_OBSERVATION_CALL_NEW));
+        // A duplicate anchor means source layout drifted; refuse to patch.
+        assert!(local_player_copy(&(normalized + "\n" + super::PLAYER_SPEED_OLD)).is_err());
     }
 }

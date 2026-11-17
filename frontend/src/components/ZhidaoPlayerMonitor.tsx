@@ -1,15 +1,11 @@
 import type {TaskRecorder} from "../activity";
 import {useEffect,useRef} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {request,type ZhidaoProgressSnapshot} from "../bridge";
+import {friendlyBridgeError,request,type ZhidaoProgressSnapshot} from "../bridge";
 import type {Course} from "../types";
+import type {PlayerStatus} from "./ZhidaoOfficialPlayerPanel";
 
-type Status={
-  state:"idle"|"running"|"exited"|"stopped";
-  courseKey:string|null;
-  runId:string|null;
-  exitCode:number|null;
-};
+type Status=Pick<PlayerStatus,"state"|"courseKey"|"runId"|"exitCode">;
 type Props={
   desktop:boolean;
   onCoursesUpdated:(courses:Course[])=>void;
@@ -21,8 +17,10 @@ export function ZhidaoPlayerMonitor({desktop,onCoursesUpdated,onEvent}:Props){
   const verifiedRuns=useRef(new Set<string>());
   const onCoursesUpdatedRef=useRef(onCoursesUpdated);
   const onEventRef=useRef(onEvent);
-  useEffect(()=>{onCoursesUpdatedRef.current=onCoursesUpdated;},[onCoursesUpdated]);
-  useEffect(()=>{onEventRef.current=onEvent;},[onEvent]);
+  useEffect(()=>{
+    onCoursesUpdatedRef.current=onCoursesUpdated;
+    onEventRef.current=onEvent;
+  },[onCoursesUpdated,onEvent]);
 
   useEffect(()=>{
     if(!desktop)return;
@@ -47,7 +45,7 @@ export function ZhidaoPlayerMonitor({desktop,onCoursesUpdated,onEvent}:Props){
             :"官方播放器已关闭；已重新读取该课程的服务器学习记录。";
           onEventRef.current?.("播放器关闭后核验",snapshot.incomplete?"warning":"success",detail,{courseId:status.courseKey,runId:status.runId,runner:"official"});
         }catch(error){
-          const detail="官方播放器已关闭，但服务器核验失败："+(error instanceof Error?error.message:"未知错误");
+          const detail="官方播放器已关闭，但服务器核验失败："+friendlyBridgeError(error);
           onEventRef.current?.("播放器关闭后核验","warning",detail,{courseId:status.courseKey,runId:status.runId,runner:"official"});
         }
       }catch{

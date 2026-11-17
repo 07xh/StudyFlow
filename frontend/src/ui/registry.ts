@@ -4,9 +4,7 @@ export interface PlatformDefinition {
   id:Platform;
   name:string;
   mark:string;
-  summary:string;
   color:string;
-  capabilities:{legacyLogin:boolean;videoList:boolean;sessionConfiguration:boolean};
 }
 
 /**
@@ -14,14 +12,10 @@ export interface PlatformDefinition {
  * supports its operations. An entry in this registry never implies login works.
  */
 export const platformRegistry:readonly PlatformDefinition[] = [
-  {id:"zhidao",name:"知到",mark:"知",summary:"智慧树课程与学习记录",color:"blue",
-   capabilities:{legacyLogin:true,videoList:false,sessionConfiguration:false}},
-  {id:"yuketang",name:"雨课堂",mark:"雨",summary:"课程、章节与视频信息",color:"rose",
-   capabilities:{legacyLogin:false,videoList:true,sessionConfiguration:true}},
-  {id:"xuexitong",name:"学习通",mark:"学",summary:"课程与章节任务",color:"violet",
-   capabilities:{legacyLogin:false,videoList:false,sessionConfiguration:true}},
-  {id:"ucampus",name:"U校园",mark:"U",summary:"U校园5.0／AI版 · 真实课程接入测试",color:"blue",
-   capabilities:{legacyLogin:false,videoList:false,sessionConfiguration:true}},
+  {id:"zhidao",name:"知到",mark:"知",color:"blue"},
+  {id:"yuketang",name:"雨课堂",mark:"雨",color:"rose"},
+  {id:"xuexitong",name:"学习通",mark:"学",color:"violet"},
+  {id:"ucampus",name:"U校园",mark:"U",color:"blue"},
 ];
 
 export function platformInfo(id:Platform):PlatformDefinition|undefined {
