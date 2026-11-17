@@ -201,15 +201,23 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
                     partial.unlink(missing_ok=True)
                     raise UpdateError("UPDATE_REDIRECT_REJECTED", "Untrusted redirect")
                 status = getattr(response, "status", 200)
+                expected_end = None
                 content_range = (response.getheader("Content-Range") if hasattr(response, "getheader") else None)
                 if offset and status == 206:
                     match = re.fullmatch(r"bytes (\d+)-(\d+)/(\d+|\*)", content_range or "")
-                    if not match or int(match.group(1)) != offset:
+                    if (not match or int(match.group(1)) != offset
+                            or int(match.group(2)) < offset
+                            or (match.group(3) != "*" and int(match.group(3)) <= int(match.group(2)))):
                         partial.unlink(missing_ok=True)
                         raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Invalid partial response")
+                    expected_end = int(match.group(2)) + 1
                     mode = "ab"
                 elif status == 200:
                     # A server ignoring Range must NOT have bytes appended.
+                    content_length = (response.getheader("Content-Length")
+                                      if hasattr(response, "getheader") else None)
+                    if content_length and content_length.isdecimal():
+                        expected_end = int(content_length)
                     mode = "wb"
                 elif status == 206 and not offset:
                     partial.unlink(missing_ok=True)
@@ -219,6 +227,9 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
                 with partial.open(mode) as output:
                     while chunk := response.read(1024 * 1024):
                         output.write(chunk)
+            if expected_end is not None and partial.stat().st_size < expected_end:
+                # Preserve partial data when a server closes early without an exception.
+                raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Incomplete download response")
             digest = hashlib.sha256()
             with partial.open("rb") as stream:
                 while chunk := stream.read(1024 * 1024):
