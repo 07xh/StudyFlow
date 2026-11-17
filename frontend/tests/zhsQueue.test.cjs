@@ -68,7 +68,7 @@ test('reading resources show execution state without a fake video sampling failu
   ['ppt',false,/非视频资源 · 不提供视频位置百分比/],
   ['article',false,/非视频资源 · 不提供视频位置百分比/],
   ['video',false,/正在等待本视频的有效采样/],
-  ['video',true,/视频采样暂不可用/]
+  ['video',true,/视频采样中断或一直没有有效数值/]
  ]){
   let view;
   try{
