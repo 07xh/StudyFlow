@@ -145,7 +145,7 @@ export type HeartbeatStartResult={
 };
 export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean|null};
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
-export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"sourceforge"; fallback:boolean};
+export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"proxy"; fallback:boolean};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
 export type ReleaseChangelogEntry = {version:string;title:string;notes:string;published_at:string};
 export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
@@ -341,7 +341,7 @@ export function friendlyUpdateError(value: unknown): string {
     case "UPDATE_RELEASE_INVALID": return "GitHub 发布元数据格式异常，未开始下载。";
     case "UPDATE_ASSET_UNAVAILABLE": return "此版本未提供带 SHA-256 校验信息的 Windows x64 安装包。";
     case "UPDATE_DOWNLOAD_FAILED": return "所有已启用下载源均下载失败，断点数据已保留，可稍后重试。";
-    case "UPDATE_MIRROR_UNAVAILABLE": return "SourceForge 镜像尚未配置。请选择 GitHub 官方源或启用失败自动切换。";
+    case "UPDATE_MIRROR_UNAVAILABLE": return "公共代理无法使用，请选 GitHub 官方源或打开失败自动切换。";
     case "UPDATE_CHECKSUM_FAILED": return "安装包 SHA-256 校验失败，未保存不可信安装包，请从官方发布页重新下载。";
     case "UPDATE_STORAGE_FAILED": return "无法写入学序更新目录，请检查磁盘空间和文件夹权限。";
     case "UPDATE_REDIRECT_REJECTED": return "下载地址跳转到未认可的网站，已中止以保护安装包安全。";
