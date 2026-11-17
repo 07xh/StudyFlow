@@ -9,8 +9,7 @@ test("platform settings overlay preserves selected course workspace",()=>{
   for(const name of ["account","parameters","advanced"])assert.match(app,new RegExp('platformSettingsSection==="'+name+'"'));
   assert.match(dialog,/createPortal\(/);
   assert.match(dialog,/aria-modal="true"/);
-  assert.match(dialog,/event.key==="Escape"/);
-  assert.match(dialog,/lastFocus.current\?\.focus\(\)/);
+  assert.match(dialog,/useModalInteraction\(\{open,panel,initialFocus:closeButton,onClose\}\)/);
 });
 test("course and platform parameter controls open a shared dialog without unmounting the runner",()=>{
   const zhs=source("components/ZhsTaskSettingsPanel.tsx");

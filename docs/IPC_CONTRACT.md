@@ -1,6 +1,6 @@
 # StudyFlow 本地 IPC 契约 v1（Tauri 2 + Python）
 
-Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 \`bin/studyflow-bridge.exe\`。输入输出都是每行一个 JSON；每个请求使用独立进程，互不共享敏感状态。无对外 HTTP 监听端口。
+Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 `bin/studyflow-bridge.exe`。输入输出都是每行一个 JSON；一般读取使用独立进程，扫码及运行控制等需要共享内存状态的操作使用受管理的常驻 sidecar。无对外 HTTP 监听端口。
 
 示例请求：
 \`\`\`json
@@ -12,13 +12,13 @@ Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 \`bin/st
 | 操作 | 输入 | 返回 |
 | --- | --- | --- |
 | \`ping\` | 无 | sidecar 版本 |
-| \`platform.status\` | 无 | 知到 / 雨课堂服务端状态 |
+| \`platform.status\` | 无 | 知到 / 雨课堂 / 学习通 / U校园连接状态 |
 | \`courses.list\` | \`platform\` | 真实课程记录 |
 | \`videos.list\` | \`platform:"yuketang"\` | 当前课堂的真实章节视频 |
 | \`yuketang.configure\` | \`configuration\` | 保存会话到 Windows 凭据管理器 |
 | \`yuketang.clear\` | 无 | 仅清除学序保存的会话 |
 
-知到扫码由 Tauri 独立调用已安装的 \`%LOCALAPPDATA%/ZHSDesktop/Zhidao-GUI.ps1\`；调用原程序的只读 \`doctor-server\` / \`courses\`，不更改旧版本。
+知到扫码通过 `zhidao.qr.start/status/cancel` 调用内置 sidecar；只读检测及课程读取使用打包的知到模块。旧版 `launch_zhidao_legacy` 命令及前端包装函数因无有效调用已移除，不再依赖外部 WPF 客户端进行扫码。
 
 ## 约束
 
@@ -38,6 +38,6 @@ Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 \`bin/st
 `courses.list` 保留原有 `platform`、`course_id`、`title`、`progress_percent`，新增 `course_type`、`stale`、`progress_evidence`、`verified_at`。
 
 - 对已接线的知到只读缓存，`course_id` 采用稳定不可逆的教学班身份哈希；`course_type` 为 `ai` 或 `shared`。
-- `progress_evidence`、`verified_at` 目前返回 `null`。前端需要二者同时提供有效的服务器核验证据才展示进度百分比。
+- `progress_evidence`、`verified_at` 根据实际读取结果提供。前端需要二者同时提供有效的服务器核验证据才展示进度百分比；历史缓存和未核验记录不产生当前完成率。
 - `stale=true` 始终显示「历史缓存待核验」，不使用过时进度作为当前完成率。
 - React UI 通过 Tauri `bridge_request` 发送 JSONL IPC，核对 `id` 和平台身份，拒绝跨平台记录及异常格式；保留雨课堂现有配置、清理和视频请求。
