@@ -157,42 +157,86 @@ def release_notes(current_version: str, previous_version: str | None = None,
     entries.sort(key=cmp_to_key(by_version))
     return entries[:12 if history else 15]
 
-def verified_download(url: str, sha256: str, destination: Path, timeout: int = 60) -> Path:
-    """Download to a temporary file, verify digest, then atomically publish the file.
+def verified_download(url: str, sha256: str, destination: Path, timeout: int = 60,
+                      *, mirror_host: str | None = None) -> Path:
+    """Resume trusted HTTPS update bytes, verify GitHub digest, publish atomically.
 
-    Only accept official GitHub release asset URLs. Never execute the downloaded file.
+    Network failures preserve a digest-scoped .part; invalid redirects, unexpected
+    Range responses and checksum mismatches never publish unverified binaries.
     """
     from urllib.parse import urlparse
+
     parsed = urlparse(url)
-    if parsed.scheme != "https" or parsed.hostname != "github.com" or not parsed.path.startswith(f"/{OWNER}/{REPO}/releases/download/"):
+    official = (parsed.scheme == "https" and parsed.hostname == "github.com"
+                and parsed.netloc == "github.com"
+                and parsed.path.startswith(f"/{OWNER}/{REPO}/releases/download/")
+                and not parsed.query and not parsed.fragment)
+    mirror = (parsed.scheme == "https" and bool(mirror_host) and parsed.netloc == mirror_host
+              and parsed.path.startswith("/releases/") and not parsed.query and not parsed.fragment)
+    if not (official or mirror):
         raise ValueError("Untrusted download URL")
     if not re.fullmatch(r"[a-fA-F0-9]{64}", sha256):
         raise ValueError("Invalid SHA-256")
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(prefix=".studyflow-", dir=destination.parent)
-    os.close(fd)
-    temp = Path(temp_name)
-    digest = hashlib.sha256()
-    try:
-        req = Request(url, headers={"User-Agent": "StudyFlow-Updater"})
-        with urlopen(req, timeout=timeout) as response, temp.open("wb") as output:
-            final = urlparse(response.geturl())
-            if final.scheme != "https" or final.hostname not in ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"):
-                raise UpdateError("UPDATE_REDIRECT_REJECTED", "Untrusted redirect")
-            while chunk := response.read(1024 * 1024):
-                digest.update(chunk)
-                output.write(chunk)
-        if digest.hexdigest().lower() != sha256.lower():
-            raise UpdateError("UPDATE_CHECKSUM_FAILED", "Download checksum mismatch")
-        os.replace(temp, destination)
-        return destination
-    except HTTPError as exc:
-        code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_DOWNLOAD_FAILED"
-        raise UpdateError(code, "GitHub release download failed") from exc
-    except (URLError, TimeoutError) as exc:
-        raise UpdateError("UPDATE_DOWNLOAD_FAILED", "GitHub release download failed") from exc
-    except OSError as exc:
-        raise UpdateError("UPDATE_STORAGE_FAILED", "Cannot save update file") from exc
-    finally:
-        temp.unlink(missing_ok=True)
+    partial = destination.with_name(destination.name + "." + sha256.lower()[:16] + ".part")
+    if destination.is_symlink() or partial.is_symlink():
+        raise UpdateError("UPDATE_STORAGE_FAILED", "Update destination is not a regular file")
+    permitted_hosts = ({"github.com", "objects.githubusercontent.com",
+                        "release-assets.githubusercontent.com"} if official else {mirror_host})
+
+    def request_once(restart: bool = False) -> Path:
+        offset = partial.stat().st_size if partial.is_file() else 0
+        if offset > 4 * 1024 * 1024 * 1024:
+            partial.unlink(missing_ok=True)
+            offset = 0
+        headers = {"User-Agent": "StudyFlow-Updater"}
+        if offset:
+            headers["Range"] = f"bytes={offset}-"
+        req = Request(url, headers=headers)
+        try:
+            with urlopen(req, timeout=timeout) as response:
+                final = urlparse(response.geturl())
+                if final.scheme != "https" or final.hostname not in permitted_hosts:
+                    partial.unlink(missing_ok=True)
+                    raise UpdateError("UPDATE_REDIRECT_REJECTED", "Untrusted redirect")
+                status = getattr(response, "status", 200)
+                content_range = (response.getheader("Content-Range") if hasattr(response, "getheader") else None)
+                if offset and status == 206:
+                    match = re.fullmatch(r"bytes (\\d+)-(\\d+)/(\\d+|\\*)", content_range or "")
+                    if not match or int(match.group(1)) != offset:
+                        partial.unlink(missing_ok=True)
+                        raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Invalid partial response")
+                    mode = "ab"
+                elif status == 200:
+                    # A server ignoring Range must NOT have bytes appended.
+                    mode = "wb"
+                elif status == 206 and not offset:
+                    partial.unlink(missing_ok=True)
+                    raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Unexpected partial response")
+                else:
+                    raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Unexpected download response")
+                with partial.open(mode) as output:
+                    while chunk := response.read(1024 * 1024):
+                        output.write(chunk)
+            digest = hashlib.sha256()
+            with partial.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    digest.update(chunk)
+            if digest.hexdigest().lower() != sha256.lower():
+                partial.unlink(missing_ok=True)
+                raise UpdateError("UPDATE_CHECKSUM_FAILED", "Download checksum mismatch")
+            os.replace(partial, destination)
+            return destination
+        except HTTPError as exc:
+            if exc.code == 416 and offset and not restart:
+                partial.unlink(missing_ok=True)
+                return request_once(restart=True)
+            code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_DOWNLOAD_FAILED"
+            raise UpdateError(code, "Release download failed") from exc
+        except (URLError, TimeoutError) as exc:
+            raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Release download failed") from exc
+        except OSError as exc:
+            raise UpdateError("UPDATE_STORAGE_FAILED", "Cannot save update file") from exc
+
+    return request_once()
