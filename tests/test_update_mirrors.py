@@ -44,10 +44,10 @@ def test_mirror_paths_are_versioned_and_only_compiled_origin_is_used(monkeypatch
     assert update_sources.mirror_asset_url(GITHUB) == MIRROR
     assert update_sources.mirror_asset_url("https://evil.example.org/setup.exe") is None
     assert update_sources.mirror_asset_url(GITHUB.replace("v0.2.0", "../etc")) is None
-    assert update_sources.source_order("auto", True, MIRROR) == ["r2", "github"]
-    assert update_sources.source_order("auto", False, MIRROR) == ["r2"]
+    assert update_sources.source_order("auto", True, MIRROR) == ["mirror", "github"]
+    assert update_sources.source_order("auto", False, MIRROR) == ["mirror"]
     assert update_sources.source_order("github", False, MIRROR) == ["github"]
-    assert update_sources.source_order("r2", True, None) == ["github"]
+    assert update_sources.source_order("mirror", True, None) == ["github"]
     monkeypatch.setattr(update_sources, "_MIRROR_BASE_URL", "http://downloads.example.org")
     assert update_sources.mirror_base() == ""
 
@@ -60,10 +60,10 @@ def test_old_settings_are_preserved_and_migrated(monkeypatch, tmp_path):
     assert update_manager.preferences() == {
         "channel": "stable", "mode": "notify", "source": "auto", "fallback": True}
     assert update_manager.save_preferences({
-        "channel": "stable", "mode": "notify", "source": "r2", "fallback": False})["source"] == "r2"
+        "channel": "stable", "mode": "notify", "source": "mirror", "fallback": False})["source"] == "mirror"
     with pytest.raises(ValueError):
         update_manager.save_preferences({
-            "channel": "stable", "mode": "notify", "source": "r2", "fallback": "false"})
+            "channel": "stable", "mode": "notify", "source": "mirror", "fallback": "false"})
 
 
 def test_mirror_failure_falls_back_to_github_with_same_digest(monkeypatch, tmp_path):
