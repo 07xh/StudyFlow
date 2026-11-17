@@ -57,4 +57,4 @@ test("settings dirty checks typed fields, and unchanged Enter does not save",()=
     assert.ok(editor.includes(`draft.${property}!==saved.${property}`),property);
   assert.match(editor,/!draft\|\|busy\|\|!dirty/);
   assert.match(editor,/setMessage\(''\);/);
-})
+});
