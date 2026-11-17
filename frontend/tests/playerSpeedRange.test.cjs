@@ -38,6 +38,6 @@ test("keyboard editing does not coerce incomplete input or save invalid speed",(
   const ui=source("components/ZhidaoPlayerSettingsPanel.tsx");
   assert.match(ui,/update\('speed',event.currentTarget.value\)/);
   assert.match(ui,/setSpeedTouched\(false\)/);
-  assert.match(ui,/settings:\{\.\.\.draft,speed:normalized,mode:current.mode\}/);
+  assert.match(ui,/settings:\{\.\.\.draft,speed:canonicalSpeed,mode:current.mode\}/);
   assert.match(ui,/!speedValid&&speedTouched/);
 });

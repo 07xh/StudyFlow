@@ -101,36 +101,36 @@ fn valid_playback_speed(value: &str) -> bool {
     matches!(value.parse::<f64>(), Ok(rate) if (0.5..=4.0).contains(&rate))
 }
 
-fn local_player_copy(source: &str) -> Result<String, String> {
-    // Historical sources are never edited, only the isolated runtime copy.
-    let normalized = source.replace("\r\n", "\n");
-    if normalized.matches(PLAYER_SPEED_OLD).count() != 1
-        || normalized.matches(PLAYER_OBSERVATION_FUNCTION_OLD).count() != 1
-        || normalized.matches(PLAYER_OBSERVATION_BODY_OLD).count() != 1
-        || normalized.matches(PLAYER_OBSERVATION_CALL_OLD).count() != 1 {
+// Rewrite only known, pinned resource text in a local runtime copy.
+// Validate ALL anchors first, so a changed upstream resource fails closed.
+fn rewrite_pinned_runtime_source(source: &str, changes: &[(&str, &str)]) -> Result<String, String> {
+    let mut output = source.replace("\r\n", "\n");
+    if changes.is_empty() || changes.iter().any(|(old, new)| {
+        old.is_empty() || old == new || output.matches(*old).count() != 1
+    }) {
         return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
     }
-    Ok(normalized
-        .replacen(PLAYER_SPEED_OLD, PLAYER_SPEED_NEW, 1)
-        .replacen(PLAYER_OBSERVATION_FUNCTION_OLD, PLAYER_OBSERVATION_FUNCTION_NEW, 1)
-        .replacen(PLAYER_OBSERVATION_BODY_OLD, PLAYER_OBSERVATION_BODY_NEW, 1)
-        .replacen(PLAYER_OBSERVATION_CALL_OLD, PLAYER_OBSERVATION_CALL_NEW, 1))
+    for (old, new) in changes {
+        output = output.replacen(*old, new, 1);
+    }
+    Ok(output)
+}
+
+fn local_player_copy(source: &str) -> Result<String, String> {
+    rewrite_pinned_runtime_source(source, &[
+        (PLAYER_SPEED_OLD, PLAYER_SPEED_NEW),
+        (PLAYER_OBSERVATION_FUNCTION_OLD, PLAYER_OBSERVATION_FUNCTION_NEW),
+        (PLAYER_OBSERVATION_BODY_OLD, PLAYER_OBSERVATION_BODY_NEW),
+        (PLAYER_OBSERVATION_CALL_OLD, PLAYER_OBSERVATION_CALL_NEW),
+    ])
 }
 
 fn local_observer_copy(source: &str) -> Result<String, String> {
-    // Git's Windows checkout can use CRLF even though the pinned Git blob is
-    // LF. Normalize only the private runtime copy, never the original source.
-    let normalized = source.replace("\r\n", "\n");
-    // Strict version guard: do not apply a textual rewrite to a new upstream
-    // script with changed semantics. The pinned original is retained intact.
-    if normalized.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count() != 1
-        || normalized.matches(OFFICIAL_MONITOR_REPORT_OLD).count() != 1 {
-        return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
-    }
-    Ok(normalized
-        .replacen(OFFICIAL_MONITOR_INTERVAL_OLD,
-            &format!("const MONITOR_INTERVAL_MS = {LOCAL_OBSERVER_INTERVAL_MS};"), 1)
-        .replacen(OFFICIAL_MONITOR_REPORT_OLD, OFFICIAL_MONITOR_REPORT_NEW, 1))
+    let interval = format!("const MONITOR_INTERVAL_MS = {LOCAL_OBSERVER_INTERVAL_MS};");
+    rewrite_pinned_runtime_source(source, &[
+        (OFFICIAL_MONITOR_INTERVAL_OLD, &interval),
+        (OFFICIAL_MONITOR_REPORT_OLD, OFFICIAL_MONITOR_REPORT_NEW),
+    ])
 }
 
 fn copy_player_assets(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
@@ -538,6 +538,9 @@ mod local_observer_tests {
     #[test]
     fn official_observer_overlay_rejects_unknown_future_source() {
         assert!(local_observer_copy("new upstream controller").is_err());
+        // Duplicate upstream anchors must fail closed rather than patching a partial copy.
+        let source = format!("{}\n{}", OFFICIAL_MONITOR_INTERVAL_OLD, OFFICIAL_MONITOR_REPORT_OLD);
+        assert!(local_observer_copy(&(source.clone() + "\n" + OFFICIAL_MONITOR_INTERVAL_OLD)).is_err());
     }
 }
 
@@ -565,5 +568,18 @@ mod player_speed_tests {
         assert!(patched.contains("([double]$message.rate)"));
         assert!(source.contains("ValidateSet"));
         assert!(local_player_copy("unexpected upstream change").is_err());
+    }
+
+    #[test]
+    fn bundled_powershell_overlay_matches_real_pinned_file_and_crlf() {
+        const ORIGINAL: &str = include_str!("../../legacy/zhidao/Official-Player.ps1");
+        let normalized = ORIGINAL.replace("\r\n", "\n");
+        let patched = local_player_copy(ORIGINAL).expect("pinned host must match");
+        assert_eq!(local_player_copy(&normalized.replace('\n', "\r\n")).unwrap(), patched);
+        assert!(patched.contains(super::PLAYER_SPEED_NEW));
+        assert!(!patched.contains(super::PLAYER_SPEED_OLD));
+        assert!(patched.contains(super::PLAYER_OBSERVATION_CALL_NEW));
+        // A duplicate anchor means source layout drifted; refuse to patch.
+        assert!(local_player_copy(&(normalized + "\n" + super::PLAYER_SPEED_OLD)).is_err());
     }
 }

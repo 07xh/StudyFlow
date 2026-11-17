@@ -56,7 +56,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
   const [settings,setSettings]=useState<ZhidaoPlayerSettings>(defaults);
   const [selected,setSelected]=useState("");
   const [status,setStatus]=useState<PlayerStatus>(initialStatus);
-  const [busy,setBusy]=useState<"prepare"|"start"|"stop"|"save"|null>(null);
+  const [busy,setBusy]=useState<"start"|"stop"|null>(null);
   const [message,setMessage]=useState("");
   const [settingsLoaded,setSettingsLoaded]=useState(false);
   const [observations,setObservations]=useState<Array<{event:string;position:number;at:string;courseKey:string;runId:string}>>([]);

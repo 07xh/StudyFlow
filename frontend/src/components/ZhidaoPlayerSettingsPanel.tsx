@@ -22,12 +22,11 @@ export function ZhidaoPlayerSettingsPanel({desktop,onEvent}:{desktop:boolean;onE
  const speedValid=canonicalSpeed!==null;
  function update<K extends keyof ZhidaoPlayerSettings>(key:K,value:ZhidaoPlayerSettings[K]){setDraft(previous=>previous?{...previous,[key]:value}:null);}
  async function save(){
-  const normalized=draft?normalizePlayerSpeedInput(draft.speed):null;
-  if(!draft||busy||!normalized){setSpeedTouched(true);return;}
+  if(!draft||busy||!canonicalSpeed){setSpeedTouched(true);return;}
   setBusy(true);setMessage('');
   try{
    const current=await request<ZhidaoPlayerSettings>({operation:'zhidao.player.settings.get'});
-   const value=await request<ZhidaoPlayerSettings>({operation:'zhidao.player.settings.save',settings:{...draft,speed:normalized,mode:current.mode}});
+   const value=await request<ZhidaoPlayerSettings>({operation:'zhidao.player.settings.save',settings:{...draft,speed:canonicalSpeed,mode:current.mode}});
    setSaved(value);setDraft(value);setSpeedTouched(false);setMessage('默认参数已保存，下次启动播放器时生效。');
    onEvent?.('保存播放器默认参数','success','下次启动时生效');
   }catch(error){setMessage(friendlyBridgeError(error));}finally{setBusy(false);}
