@@ -41,10 +41,12 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   function row(task:Row){
     const inProgress=task.state==="queued"||task.state==="running";
     const pendingStop=active&&inProgress&&requested.has(task.task_id);
-    const percent=!stale&&!task.stale&&task.kind==="video"&&task.state==="running"?task.percent:null;
+    const percent=!stale&&!task.stale&&task.kind==="video"&&task.state==="running"&&
+      task.playback_phase!=="paused"&&task.playback_phase!=="answering"?task.percent:null;
+    const phaseLabel=task.playback_phase==="paused"?"播放暂停":task.playback_phase==="answering"?"处理题目":null;
     return <article className="sf-ykt-worker" key={task.task_id}>
       <div className="sf-ykt-worker-heading">
-        <span>{kinds[task.kind]} · {stale&&inProgress?"状态待核实":pendingStop?"正在停止":labels[task.state]}</span>
+        <span>{kinds[task.kind]} · {stale&&inProgress?"状态待核实":pendingStop?"正在停止":task.state==="running"&&phaseLabel?phaseLabel:labels[task.state]}</span>
         {inProgress&&<button type="button" className="secondary" aria-label={"停止"+(task.name??"此资源")}
           disabled={!active||pendingStop} onClick={()=>void stop(task.task_id)}><Square size={13}/>停止此项</button>}
       </div>
@@ -63,7 +65,9 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
         stale?"队列状态暂不可用 · 请重新读取任务状态":
         task.state==="running"&&task.kind!=="video"?"非视频资源 · 不提供视频位置百分比":
-        task.stale?"视频采样中断或一直没有有效数值；是否仍在播放尚需核对运行状态":
+        task.stale?"视频播放采样已超时或尚未建立；请检查该视频的实际运行状态":
+        task.playback_phase==="paused"?"检测到原程序处于暂停阶段；不将暂停计时当作播放进度":
+        task.playback_phase==="answering"?"检测到原程序正在处理题目；当前没有有效播放进度采样":
         percent==null?(task.state==="queued"?"等待本章节的上一资源结束":"正在等待本视频的有效采样"):"本地观测 · 非服务器完成进度"}</small>
     </article>;
   }
