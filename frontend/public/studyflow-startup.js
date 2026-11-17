@@ -15,45 +15,62 @@
   root.dataset.studyflowStartupTheme = mode === "system"
     ? (systemDark ? "dark" : "light") : mode;
 
+  var reducedMotion = false;
+  try { reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+  catch (_) { /* Use normal animation. */ }
+  var minVisibleMs = reducedMotion ? 0 : 520;
+  var fadeMs = reducedMotion ? 0 : 180;
   var startedAt = performance.now();
   var leaving = false;
   var slowTimer;
   var slowWarningTimer;
-  var exitTimer;
-  var removeTimer;
   function splash() { return document.getElementById("studyflow-startup"); }
+  function appMounted() {
+    var node = document.getElementById("root");
+    return !!(node && node.firstElementChild);
+  }
 
   function dismiss() {
     if (leaving) return;
     leaving = true;
     window.clearTimeout(slowTimer);
     window.clearTimeout(slowWarningTimer);
-    var elapsed = Math.max(0, performance.now() - startedAt);
-    exitTimer = window.setTimeout(function () {
+    var delay = Math.max(0, minVisibleMs - (performance.now() - startedAt));
+    window.setTimeout(function () {
       var node = splash();
       if (!node) return;
       node.classList.add("sf-startup--leaving");
-      removeTimer = window.setTimeout(function () { node.remove(); }, 240);
-    }, Math.max(0, 650 - elapsed));
+      window.setTimeout(function () { node.remove(); }, fadeMs);
+    }, delay);
   }
 
-  // App calls this only after its consent check has resolved (accepted / needed / error).
-  // A repeated callback from React StrictMode is harmless.
-  window.studyflowStartupReady = dismiss;
-  slowTimer = window.setTimeout(function () {
+  // A slow-start skip must never uncover an empty React root.
+  function offerSkipWhenMounted() {
     if (leaving) return;
-    var node = splash();
-    if (node) node.classList.add("sf-startup--slow");
-  }, 3200);
+    if (appMounted()) {
+      var node = splash();
+      if (node) node.classList.add("sf-startup--slow");
+    } else {
+      slowTimer = window.setTimeout(offerSkipWhenMounted, 350);
+    }
+  }
+
+  // Called after React has mounted and consent state has resolved.
+  window.studyflowStartupReady = dismiss;
+  slowTimer = window.setTimeout(offerSkipWhenMounted, 3200);
   slowWarningTimer = window.setTimeout(function () {
     if (leaving) return;
     var message = document.getElementById("studyflow-startup-message");
-    if (message) message.textContent = "启动耗时较长，可先进入学序查看状态";
+    if (message) message.textContent = appMounted()
+      ? "启动耗时较长，可先进入学序查看状态"
+      : "主界面尚未就绪，请尝试重新打开学序";
   }, 12000);
 
   function bindSkip() {
     var button = document.getElementById("studyflow-startup-skip");
-    if (button) button.addEventListener("click", dismiss);
+    if (button) button.addEventListener("click", function () {
+      if (appMounted()) dismiss();
+    });
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bindSkip, {once: true});
