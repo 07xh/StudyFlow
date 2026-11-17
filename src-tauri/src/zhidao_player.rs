@@ -75,13 +75,16 @@ const OFFICIAL_MONITOR_REPORT_NEW: &str =
 const LOCAL_OBSERVER_INTERVAL_MS: u64 = 6000;
 
 fn local_observer_copy(source: &str) -> Result<String, String> {
+    // Git's Windows checkout can use CRLF even though the pinned Git blob is
+    // LF. Normalize only the private runtime copy, never the original source.
+    let normalized = source.replace("\r\n", "\n");
     // Strict version guard: do not apply a textual rewrite to a new upstream
     // script with changed semantics. The pinned original is retained intact.
-    if source.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count() != 1
-        || source.matches(OFFICIAL_MONITOR_REPORT_OLD).count() != 1 {
+    if normalized.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count() != 1
+        || normalized.matches(OFFICIAL_MONITOR_REPORT_OLD).count() != 1 {
         return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
     }
-    Ok(source
+    Ok(normalized
         .replacen(OFFICIAL_MONITOR_INTERVAL_OLD,
             &format!("const MONITOR_INTERVAL_MS = {LOCAL_OBSERVER_INTERVAL_MS};"), 1)
         .replacen(OFFICIAL_MONITOR_REPORT_OLD, OFFICIAL_MONITOR_REPORT_NEW, 1))
@@ -468,9 +471,12 @@ mod local_observer_tests {
     #[test]
     fn official_observer_overlay_is_bounded_and_leaves_source_unchanged() {
         const ORIGINAL: &str = include_str!("../../legacy/zhidao/Official-MediaController.js");
+        let canonical = ORIGINAL.replace("\r\n", "\n");
         let patched = local_observer_copy(ORIGINAL).expect("pinned controller must match");
-        assert_eq!(ORIGINAL.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count(), 1);
-        assert_eq!(ORIGINAL.matches(OFFICIAL_MONITOR_REPORT_OLD).count(), 1);
+        let windows_copy = canonical.replace('\n', "\r\n");
+        assert_eq!(local_observer_copy(&windows_copy).unwrap(), patched);
+        assert_eq!(canonical.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count(), 1);
+        assert_eq!(canonical.matches(OFFICIAL_MONITOR_REPORT_OLD).count(), 1);
         assert!(patched.contains("const MONITOR_INTERVAL_MS = 6000;"));
         assert!(patched.contains(OFFICIAL_MONITOR_REPORT_NEW));
         assert!(!patched.contains(OFFICIAL_MONITOR_REPORT_OLD));
