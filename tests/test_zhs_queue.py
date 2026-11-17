@@ -530,3 +530,48 @@ def test_windows_launcher_owns_parent_pipe_without_disabling_job_object():
     assert "command.stdin(Stdio::piped())" in rust
     assert "let process_job = WindowsJob::attach(&child)" in rust
 
+
+
+def test_worker_oserror_inside_acquired_lock_is_not_misclassified_as_lock_error(monkeypatch):
+    from contextlib import contextmanager
+    from studyflow.services import legacy_playback as legacy
+
+    calls = []
+
+    @contextmanager
+    def lock(platform):
+        calls.append("acquire")
+        try:
+            yield
+        finally:
+            calls.append("release")
+
+    monkeypatch.setattr(legacy, "_exclusive_worker", lock)
+
+    def playback():
+        calls.append("started")
+        raise OSError("simulated task I/O interruption")
+
+    with pytest.raises(OSError, match="task I/O"):
+        legacy._run_exclusive("zhidao", playback)
+    assert calls == ["acquire", "started", "release"]
+
+
+def test_lock_acquisition_retries_only_before_task_starts(monkeypatch):
+    from contextlib import contextmanager
+    from studyflow.services import legacy_playback as legacy
+
+    attempts, calls = [], []
+
+    @contextmanager
+    def acquire(platform):
+        attempts.append(platform)
+        if len(attempts) <= 2:
+            raise PermissionError("sharing violation")
+        yield
+
+    monkeypatch.setattr(legacy, "_exclusive_worker", acquire)
+    monkeypatch.setattr(legacy.time, "sleep", lambda _: None)
+    assert legacy._run_exclusive("zhidao", lambda: calls.append("run") or 0) == 0
+    assert len(attempts) == 3
+    assert calls == ["run"], "an already-started task must never be replayed"
