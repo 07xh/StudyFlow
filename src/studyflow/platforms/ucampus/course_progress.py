@@ -60,6 +60,7 @@ def _headers(config: UCampusConfig, open_id: str) -> dict[str, str]:
         "x-csrftoken": open_id,
         "u-app-id": "39",
         "u-platform": "2",
+        "appid": "undefined",
         "Origin": CONTENT_ORIGIN,
         "Referer": CONTENT_ORIGIN + "/_explorationpc_default/pc.html",
     }
@@ -68,7 +69,14 @@ def _headers(config: UCampusConfig, open_id: str) -> dict[str, str]:
     if token:
         headers["Authorization"] = token
     if config.annotator_token:
+        # Keep the user's explicitly supplied content token unchanged.
         headers["x-annotator-auth-token"] = config.annotator_token
+    else:
+        # U校园AI uses separate browser-side content authentication.
+        # Derive its current public client protocol from this session's openId
+        # only; the server response is the sole evidence of authorization.
+        from .content_auth import content_token
+        headers["x-annotator-auth-token"] = content_token(open_id)
     if config.school_id:
         headers["u-school"] = config.school_id
     return headers
@@ -79,8 +87,12 @@ def _request(url: str, config: UCampusConfig, open_id: str) -> dict[str, Any]:
         # Fixed first-party HTTPS host; no server-returned URLs, no redirects.
         response = requests.get(url, headers=_headers(config, open_id),
                                 timeout=(5, 12), allow_redirects=False)
-        if response.status_code in (401, 403):
-            raise UCampusProgressError("UCAMPUS_SESSION_EXPIRED")
+        if response.status_code == 401:
+            # Content authorization is distinct from the SSO catalog session:
+            # do not claim the whole login expired solely from this response.
+            raise UCampusProgressError("UCAMPUS_CONTENT_AUTH_REJECTED")
+        if response.status_code == 403:
+            raise UCampusProgressError("UCAMPUS_CONTENT_ACCESS_DENIED")
         if response.status_code != 200 or response.is_redirect:
             raise UCampusProgressError("UCAMPUS_PROGRESS_UNAVAILABLE")
         if len(response.content) > 2_000_000 or "json" not in response.headers.get("content-type", "").lower():
