@@ -133,7 +133,11 @@ test("U校园官方扫码入口与 Cookie 导入有明确的会话边界",()=>{
   const style=read("style.css");
   assert.match(login,/https:\/\/sso\.unipus\.cn\/sso\/login/);
   assert.match(login,/https:\/\/uai\.unipus\.cn\//);
-  assert.match(login,/官方网页的登录状态尚不能自动同步到学序/);
+  assert.match(login,/系统浏览器登录不能直接同步到学序/);
+  assert.match(login,/ucampus_login_window_start/);
+  assert.match(login,/ucampus_login_window_import/);
+  assert.match(login,/ucampus_login_window_close/);
+  assert.match(login,/完成验证，导入并验证会话/);
   assert.match(login,/className="sf-ucampus-cookie-import" open/);
   assert.match(login,/cookie:cookie\.trim\(\)\.replace/);
   assert.match(login,/const summary=await verifyCatalog\(\)/);
