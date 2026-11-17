@@ -1,6 +1,7 @@
 import {useEffect,useId,useRef,useState,type KeyboardEvent,type MouseEvent,type PointerEvent as ReactPointerEvent,type ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {Info,Palette,RefreshCw,X} from "lucide-react";
+import {useModalInteraction} from "./useModalInteraction";
 import "./globalSettings.css";
 
 export type GlobalSettingsTab="general"|"updates"|"about";
@@ -44,8 +45,8 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
   const dragRef=useRef<{startX:number;initialWidth:number}|null>(null);
   const panelRef=useRef<HTMLElement>(null);
   const closeRef=useRef<HTMLButtonElement>(null);
-  const openerRef=useRef<HTMLElement|null>(null);
   const scrollRef=useRef<HTMLDivElement>(null);
+  const keydown=useModalInteraction({open,panel:panelRef,initialFocus:closeRef,onClose});
   const limit=maxNavWidth(viewport);
   const shownWidth=Math.min(width,limit);
   widthRef.current=width;
@@ -61,18 +62,6 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
     const timeout=setTimeout(()=>setMounted(false),190);
     return ()=>clearTimeout(timeout);
   },[open,mounted]);
-  useEffect(()=>{
-    if(!open)return;
-    openerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const oldOverflow=document.body.style.overflow;
-    document.body.style.overflow="hidden";
-    const frame=window.requestAnimationFrame(()=>closeRef.current?.focus());
-    return ()=>{
-      window.cancelAnimationFrame(frame);
-      document.body.style.overflow=oldOverflow;
-      if(openerRef.current?.isConnected)openerRef.current.focus();
-    };
-  },[open]);
   useEffect(()=>{
     if(!open)return;
     const resize=()=>setViewport(window.innerWidth);
@@ -121,23 +110,6 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
     widthRef.current=next;
     setWidth(next);
     persistWidth(next);
-  }
-  function keydown(event:KeyboardEvent<HTMLElement>){
-    if(!panelRef.current?.contains(event.target as Node))return;
-    if(event.key==="Escape"){
-      event.preventDefault();
-      event.stopPropagation();
-      onClose();
-      return;
-    }
-    if(event.key!=="Tab")return;
-    const controls=Array.from(panelRef.current.querySelectorAll<HTMLElement>(
-      'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-    )).filter(item=>item.getClientRects().length>0);
-    if(!controls.length)return;
-    const first=controls[0],last=controls[controls.length-1];
-    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
-    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
   }
   function backdrop(event:MouseEvent<HTMLDivElement>){
     if(open&&event.target===event.currentTarget)onClose();

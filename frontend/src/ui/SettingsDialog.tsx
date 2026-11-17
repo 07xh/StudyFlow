@@ -1,6 +1,7 @@
-import {useEffect,useId,useRef,type KeyboardEvent,type MouseEvent,type ReactNode} from "react";
+import {useEffect,useId,useRef,type MouseEvent,type ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {X} from "lucide-react";
+import {useModalInteraction} from "./useModalInteraction";
 import "./settingsDialog.css";
 
 /** LightC-style second-level page; does not navigate away from the current workspace. */
@@ -10,35 +11,12 @@ export function SettingsDialog({open,dark,title,onClose,children,kicker="设置"
 }){
   const titleId=useId();
   const panel=useRef<HTMLElement>(null),closeButton=useRef<HTMLButtonElement>(null);
-  const lastFocus=useRef<HTMLElement|null>(null);
   const body=useRef<HTMLDivElement>(null);
+  const handleKeys=useModalInteraction({open,panel,initialFocus:closeButton,onClose});
   useEffect(()=>{
     if(open&&body.current)body.current.scrollTop=0;
   },[open,contentKey]);
-  useEffect(()=>{
-    if(!open)return;
-    lastFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const previousOverflow=document.body.style.overflow;
-    document.body.style.overflow="hidden";
-    const frame=window.requestAnimationFrame(()=>closeButton.current?.focus());
-    return ()=>{
-      window.cancelAnimationFrame(frame);
-      document.body.style.overflow=previousOverflow;
-      lastFocus.current?.focus();
-    };
-  },[open]);
   if(!open)return null;
-  function handleKeys(event:KeyboardEvent<HTMLElement>){
-    if(event.key==="Escape"){event.preventDefault();event.stopPropagation();onClose();return;}
-    if(event.key!=="Tab")return;
-    const controls=Array.from(panel.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-    )??[]).filter(item=>item.getClientRects().length>0);
-    if(!controls.length)return;
-    const first=controls[0],last=controls[controls.length-1];
-    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
-    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
-  }
   function handleBackdrop(event:MouseEvent<HTMLDivElement>){
     if(event.target===event.currentTarget)onClose();
   }

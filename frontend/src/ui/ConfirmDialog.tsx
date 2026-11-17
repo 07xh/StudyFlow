@@ -1,9 +1,10 @@
 /** Adapted interaction pattern from the user's LightC-UI study source.
  * StudyFlow uses its own styling and platform-neutral API.
  */
-import {useEffect,useId,useRef,type KeyboardEvent,type MouseEvent} from "react";
+import {useId,useRef,type MouseEvent} from "react";
 import {createPortal} from "react-dom";
 import {AlertTriangle,ShieldCheck,X} from "lucide-react";
+import {useModalInteraction} from "./useModalInteraction";
 import "./interactions.css";
 
 interface ConfirmDialogProps {
@@ -28,37 +29,9 @@ export function ConfirmDialog({
   const detailId=useId();
   const dialogRef=useRef<HTMLElement>(null);
   const cancelRef=useRef<HTMLButtonElement>(null);
-  const previousFocus=useRef<HTMLElement|null>(null);
-  useEffect(()=>{
-    if(!open)return;
-    previousFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const previousOverflow=document.body.style.overflow;
-    document.body.style.overflow="hidden";
-    const frame=window.requestAnimationFrame(()=>cancelRef.current?.focus());
-    return ()=>{
-      window.cancelAnimationFrame(frame);
-      document.body.style.overflow=previousOverflow;
-      previousFocus.current?.focus();
-    };
-  },[open]);
+  const onKeyboard=useModalInteraction({open,panel:dialogRef,initialFocus:cancelRef,onClose:onCancel,busy});
 
   if(!open)return null;
-
-  function onKeyboard(event:KeyboardEvent<HTMLElement>){
-    if(event.key==="Escape"){
-      event.stopPropagation();
-      if(!busy)onCancel();
-      return;
-    }
-    if(event.key!=="Tab")return;
-    const items=Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>(
-      "button:not(:disabled)"
-    )??[]);
-    if(items.length===0)return;
-    const first=items[0], last=items[items.length-1];
-    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
-    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
-  }
 
   function onBackdrop(event:MouseEvent<HTMLDivElement>){
     if(!busy&&event.target===event.currentTarget)onCancel();

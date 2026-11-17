@@ -16,9 +16,9 @@
 
 ## 与现有业务保持兼容
 
-- 知到：原版扫码登录窗口、连接检测、课程同步。
+- 知到：内置扫码登录窗口、连接检测、课程同步。
 - 雨课堂：会话录入/保存、凭据清除、连接检测、课程同步、视频列表。
-- 仍使用原有 `bridge_request` 和 `launch_zhidao_legacy` Tauri commands。
+- 知到扫码通过 `bridge_request` 的 `zhidao.qr.start/status/cancel` 操作进入内置 sidecar；无人调用的旧客户端启动命令已移除。
 - `App.tsx` 负责页面业务编排，组件不直接持有凭据或调用 Python。
 - 浏览器预览禁用真实平台按钮，不虚构后端连接。
 

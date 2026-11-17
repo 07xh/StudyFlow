@@ -6,14 +6,6 @@ export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
 export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string;annotator_token?:string;school_id?:string};
 export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null;jwt_lifetime?:"expired"|"expiring"|"not_expired"|"unknown"};
-export type UCampusLocalStatus={
-  run_id:string;course_id:string;phase:string;active:boolean;paused:boolean;
-  generated:number;sent:number;transport_accepted:number;server_confirmed:number|null;
-  pulses_per_resource:number;
-  sender_connected:boolean;
-  tasks:Array<{resource_id:string;chapter_id:string;title:string;state:string;
-    generated:number;attempted:number;accepted:number;local_elapsed_seconds:number;server_completed:boolean|null}>;
-};
 export type UCampusSocketDiagnostic={
   transport:"legacy_socketio_v3";handshake:"namespace_joined";
   learning_events_sent:0;progress_verified:false;ai5_compatible:null;
@@ -33,11 +25,6 @@ export type UCampusFabricatedHistory={
     resources:number;generated:number;sent:number;server_readback_passed:number;
     resume_available:false;progress_causality:"unverified"}>;
   resume_available:false;
-};
-export type UCampusFabricatedCapabilities={
-  ok:boolean;local_generation:boolean;socket_transport_available:boolean;
-  session_configured:boolean;official_player_required:boolean;
-  activity_heartbeat:string;completion_packet:string;server_readback:string;message:string;
 };
 export type UCampusVerifiedProgress={
   course_id:string;unit_id:string;verified_at:string;
@@ -138,18 +125,12 @@ export type HeartbeatStatus={
   queue_controls:{pause:boolean;resume:boolean;stop:boolean};
 };
 export type HeartbeatLog={event:string;at:number;[key:string]:unknown};
-export type HeartbeatControlResult={ok:boolean;action?:string;run_id?:string;error?:string};
-export type HeartbeatStartResult={
-  ok:boolean;started:boolean;run_id:string;course_key:string;
-  task_count:number;chapter_count:number;speed:number;jobs:number;instant_complete:boolean;
-};
 export type XuexitongTaskItem = {id:string;type:string;title:string;chapter_id:string;completed:boolean|null};
 export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetched_at:string|null};
 export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"proxy"; fallback:boolean};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
 export type ReleaseChangelogEntry = {version:string;title:string;notes:string;published_at:string};
 export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
-export type ZhidaoPlayerTarget = {course_key:string;course_type:"ai"|"shared";course_id:string;class_id:string;recruit_and_course_id:string;title:string};
 export type ZhidaoDiagnostic = {code:number;state:string;lines:string[]};
 export type ZhidaoDocument = {id:string;title:string;content:string};
 export type YuketangVideoProgress = {
@@ -455,12 +436,6 @@ export function friendlyBridgeError(value: unknown): string {
     case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
     default: return "本机服务调用失败，请检查运行环境。";
   }
-}
-
-export async function openLegacyZhidao(): Promise<void> {
-  if (!isDesktop()) throw new Error("BRIDGE_NOT_READY");
-  try { await invoke("launch_zhidao_legacy"); }
-  catch { throw new Error("LEGACY_NOT_AVAILABLE"); }
 }
 
 /** Ephemeral QR image, never saved to localStorage or a log. */
