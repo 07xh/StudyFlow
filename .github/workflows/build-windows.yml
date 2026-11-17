@@ -1,12 +1,6 @@
 name: Build Windows EXE
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'frontend/**'
-      - 'src-tauri/**'
-      - '.github/workflows/build-windows.yml'
   push:
     branches: [main]
     paths:
@@ -28,7 +22,6 @@ concurrency:
 
 jobs:
   windows-package:
-    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     permissions:
       contents: read
