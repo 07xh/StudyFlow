@@ -165,6 +165,15 @@ def release_notes(current_version: str, previous_version: str | None = None,
     entries.sort(key=cmp_to_key(by_version))
     return entries[:12 if history else 15]
 
+def sha256_file(path: Path) -> str:
+    """Stream a local installer digest; never load the binary into memory."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def verified_download(url: str, sha256: str, destination: Path, timeout: int = 60,
                       *, mirror_host: str | None = None) -> Path:
     """Resume trusted HTTPS update bytes, verify GitHub digest, publish atomically.
@@ -244,11 +253,7 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
             if expected_end is not None and partial.stat().st_size < expected_end:
                 # Preserve partial data when a server closes early without an exception.
                 raise UpdateError("UPDATE_DOWNLOAD_FAILED", "Incomplete download response")
-            digest = hashlib.sha256()
-            with partial.open("rb") as stream:
-                while chunk := stream.read(1024 * 1024):
-                    digest.update(chunk)
-            if digest.hexdigest().lower() != sha256.lower():
+            if sha256_file(partial) != sha256.lower():
                 partial.unlink(missing_ok=True)
                 raise UpdateError("UPDATE_CHECKSUM_FAILED", "Download checksum mismatch")
             os.replace(partial, destination)
