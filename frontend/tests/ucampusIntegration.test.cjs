@@ -136,8 +136,24 @@ test("U校园官方扫码入口与 Cookie 导入有明确的会话边界",()=>{
   assert.match(login,/系统浏览器登录不能直接同步到学序/);
   assert.match(login,/ucampus_login_window_start/);
   assert.match(login,/ucampus_login_window_import/);
+  assert.match(login,/launchEmbedded\("qr"\)/);
+  assert.match(login,/>打开二维码登录<\/button>/);
+  assert.match(login,/\("ucampus_login_window_import",\{mode:embeddedMode\}\)/);
+  assert.match(login,/窗口中尚未检测到 U校园AI 的 JWT/);
+  const native=fs.readFileSync(path.join(__dirname,"..","..","src-tauri","src","lib.rs"),"utf8");
+  assert.match(native,/UCAMPUS_QR_WINDOW/);
+  assert.match(native,/https:\/\/sso\.unipus\.cn\/sso\/login/);
+  assert.match(native,/mode: Option<String>/);
+  assert.match(native,/spawn_blocking\(move \|\| -> Result<\(\), String>/);
+
   assert.match(login,/ucampus_login_window_close/);
   assert.match(login,/完成验证，导入并验证会话/);
+  assert.match(login,/U校园要求图片或数字验证码/);
+  assert.match(login,/error\.message==="UCAMPUS_LOGIN_VERIFICATION_REQUIRED"/);
+  assert.match(login,/请在官方页面重新输入账号密码、查看验证码并手动填写/);
+  assert.match(login,/扫码属于另一种登录方式，不是短信验证码/);
+  assert.doesNotMatch(login,/图形、短信或其他验证/);
+  assert.match(read("bridge.ts"),/图片或数字验证码，请在官方登录窗口查看并手动填写/);
   assert.match(login,/className="sf-ucampus-cookie-import">/);
   assert.doesNotMatch(login,/className="sf-ucampus-cookie-import" open/);
   assert.match(login,/cookie:cookie\.trim\(\)\.replace/);
@@ -154,4 +170,20 @@ test("U校园官方扫码入口与 Cookie 导入有明确的会话边界",()=>{
   assert.match(login,/await refreshStoredExpiry\(\)/);
   assert.match(login,/let windowWarning=""/);
   assert.match(style,/\.sf-shell \.sf-ucampus-session-warning\{/);
+});
+
+test("U校园 session saves share exactly one course-readback path",()=>{
+  const login=read("components/UCampusLoginPanel.tsx");
+  // Official-window import, direct SSO login and manual Cookie import all
+  // trigger the same post-save readback with no fabricated connected state.
+  assert.equal((login.match(/await completeSessionSave\(/g)||[]).length,3);
+  assert.equal((login.match(/await verifyCatalog\(\)/g)||[]).length,2);
+  assert.equal((login.match(/invoke\("ucampus_login_window_start",\{mode\}\)/g)||[]).length,1);
+  assert.match(login,/const feedback=\{/);
+  assert.match(login,/monitorReset===false/);
+  assert.match(login,/if\(result\?\.saved!==true\)throw Error\("UCAMPUS_LOGIN_SAVE_FAILED"\)/);
+  assert.equal((login.match(/if\(saved\.saved!==true\)throw Error\("UCAMPUS_CREDENTIAL_STORAGE_FAILED"\)/g)||[]).length,2);
+  assert.match(login,/if\(method==="official"\)setVariant\("ai"\)/);
+  assert.match(login,/error\.message==="UCAMPUS_LOGIN_VERIFICATION_REQUIRED"/);
+  assert.doesNotMatch(login,/localStorage\.(?:getItem|setItem)/);
 });
