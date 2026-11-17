@@ -1,1 +1,145 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><title>学序 StudyFlow</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta name="theme-color" content="#101722"/>
+  <title>学序 StudyFlow</title>
+  <!-- External bootstrap script is allowed by the Tauri CSP (script-src 'self'). -->
+  <script src="/studyflow-startup.js"></script>
+  <style>
+    html, body { min-height: 100%; }
+    body { margin: 0; background: #101722; }
+    html[data-studyflow-startup-theme="light"] body { background: #f5f8fc; }
+    #studyflow-startup {
+      --sf-splash-bg: #101722;
+      --sf-splash-bg-alt: #142134;
+      --sf-splash-ink: #f4f7fc;
+      --sf-splash-muted: rgba(225, 234, 250, .65);
+      --sf-splash-border: rgba(255, 255, 255, .15);
+      --sf-splash-orb-a: rgba(49, 145, 230, .23);
+      --sf-splash-orb-b: rgba(65, 195, 168, .16);
+      position: fixed; inset: 0; z-index: 2147483000;
+      display: grid; place-items: center; overflow: hidden;
+      box-sizing: border-box; isolation: isolate; padding: 32px;
+      background: linear-gradient(138deg, var(--sf-splash-bg), var(--sf-splash-bg-alt) 58%, var(--sf-splash-bg));
+      color: var(--sf-splash-ink);
+      font-family: Inter, "Segoe UI", "Microsoft YaHei UI", sans-serif;
+      opacity: 1; transition: opacity 240ms ease;
+    }
+    html[data-studyflow-startup-theme="light"] #studyflow-startup {
+      --sf-splash-bg: #f5f8fc;
+      --sf-splash-bg-alt: #eaf3fa;
+      --sf-splash-ink: #203044;
+      --sf-splash-muted: rgba(38, 61, 82, .64);
+      --sf-splash-border: rgba(32, 70, 108, .13);
+      --sf-splash-orb-a: rgba(55, 139, 227, .16);
+      --sf-splash-orb-b: rgba(26, 174, 146, .12);
+    }
+    #studyflow-startup.sf-startup--leaving { opacity: 0; pointer-events: none; }
+    #studyflow-startup .sf-startup__orb {
+      position: absolute; z-index: -1; border-radius: 50%; pointer-events: none;
+      width: min(48vw, 580px); aspect-ratio: 1;
+      background: radial-gradient(circle, var(--sf-splash-orb-a), transparent 68%);
+      animation: sf-startup-orbit-a 10s ease-in-out infinite alternate;
+      will-change: transform;
+    }
+    #studyflow-startup .sf-startup__orb--a { top: -27%; left: -16%; }
+    #studyflow-startup .sf-startup__orb--b {
+      right: -16%; bottom: -35%;
+      background: radial-gradient(circle, var(--sf-splash-orb-b), transparent 70%);
+      animation-name: sf-startup-orbit-b; animation-duration: 12s;
+    }
+    #studyflow-startup .sf-startup__content {
+      display: flex; align-items: center; flex-direction: column;
+      text-align: center; gap: 12px; position: relative;
+    }
+    #studyflow-startup .sf-startup__mark {
+      width: 88px; height: 88px; display: grid; place-items: center;
+      border-radius: 25px; border: 1px solid var(--sf-splash-border);
+      background: linear-gradient(140deg, rgba(106, 173, 242, .19), rgba(80, 204, 179, .10));
+      box-shadow: 0 18px 50px rgba(14, 77, 139, .14), inset 0 1px rgba(255,255,255,.12);
+      animation: sf-startup-enter 540ms cubic-bezier(.22,1,.36,1) both;
+    }
+    #studyflow-startup .sf-startup__mark svg { width: 52px; height: 52px; }
+    #studyflow-startup .sf-startup__title {
+      margin: 6px 0 0; font-size: 27px; letter-spacing: .14em;
+      font-weight: 650; line-height: 1.25;
+      animation: sf-startup-enter 520ms 65ms ease-out both;
+    }
+    #studyflow-startup .sf-startup__subtitle {
+      margin: 0; font-size: 12px; letter-spacing: .09em;
+      color: var(--sf-splash-muted);
+      animation: sf-startup-enter 520ms 110ms ease-out both;
+    }
+    #studyflow-startup .sf-startup__status {
+      display: flex; align-items: center; gap: 9px; margin-top: 18px;
+      font-size: 12px; color: var(--sf-splash-muted);
+      animation: sf-startup-enter 520ms 160ms ease-out both;
+    }
+    #studyflow-startup .sf-startup__spinner {
+      display: inline-block; width: 12px; height: 12px;
+      box-sizing: border-box; border-radius: 50%;
+      border: 1.6px solid var(--sf-splash-border);
+      border-top-color: currentColor;
+      animation: sf-startup-spin 950ms linear infinite;
+    }
+    #studyflow-startup .sf-startup__skip {
+      opacity: 0; pointer-events: none;
+      border: 1px solid var(--sf-splash-border); border-radius: 999px;
+      margin-top: 13px; padding: 7px 16px;
+      background: transparent; color: var(--sf-splash-ink);
+      font: inherit; font-size: 12px; cursor: pointer;
+      transition: opacity 180ms ease, background 180ms ease;
+    }
+    #studyflow-startup .sf-startup__skip:hover { background: rgba(134,162,196,.1); }
+    #studyflow-startup.sf-startup--slow .sf-startup__skip { opacity: 1; pointer-events: auto; }
+    @keyframes sf-startup-orbit-a {
+      from { transform: translate3d(0,0,0) scale(1); }
+      to { transform: translate3d(13vw,8vh,0) scale(1.14); }
+    }
+    @keyframes sf-startup-orbit-b {
+      from { transform: translate3d(0,0,0) scale(1); }
+      to { transform: translate3d(-11vw,-9vh,0) scale(1.12); }
+    }
+    @keyframes sf-startup-enter {
+      from { opacity: 0; transform: translateY(9px) scale(.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes sf-startup-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      #studyflow-startup, #studyflow-startup .sf-startup__skip { transition: none; }
+      #studyflow-startup .sf-startup__orb,
+      #studyflow-startup .sf-startup__mark,
+      #studyflow-startup .sf-startup__title,
+      #studyflow-startup .sf-startup__subtitle,
+      #studyflow-startup .sf-startup__status,
+      #studyflow-startup .sf-startup__spinner { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <!-- Outside #root: React can mount without replacing the prepainted splash. -->
+  <div id="studyflow-startup" role="status" aria-label="学序正在启动">
+    <div class="sf-startup__orb sf-startup__orb--a" aria-hidden="true"></div>
+    <div class="sf-startup__orb sf-startup__orb--b" aria-hidden="true"></div>
+    <div class="sf-startup__content">
+      <div class="sf-startup__mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M32 16.5c-6.2-4.1-13.9-5.7-22-4.5v34c8.5-1.3 16.2.3 22 4.7m0-38.2c6.2-4.1 13.9-5.7 22-4.5v34c-8.5-1.3-16.2.3-22 4.7m0-38.2v38.2" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M16 23c4.8-.3 8.5.4 11.5 2.2M37 25.2c3-1.8 6.7-2.5 11.5-2.2M16 32c4.8-.3 8.5.4 11.5 2.2M37 34.2c3-1.8 6.7-2.5 11.5-2.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".64"/>
+        </svg>
+      </div>
+      <h1 class="sf-startup__title">学序</h1>
+      <p class="sf-startup__subtitle">StudyFlow · 让学习井然有序</p>
+      <div class="sf-startup__status">
+        <span class="sf-startup__spinner" aria-hidden="true"></span>
+        <span id="studyflow-startup-message">正在打开学习空间…</span>
+      </div>
+      <button id="studyflow-startup-skip" class="sf-startup__skip" type="button">进入学序</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

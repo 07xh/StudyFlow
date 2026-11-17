@@ -76,7 +76,7 @@ function readActivity():ActivityEntry[]{
   }catch{return [];}
 }
 
-export default function App(){
+export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const [page,setPage]=useState<Page>("home");
   const [globalSettingsOpen,setGlobalSettingsOpen]=useState(false);
   const [globalSettingsTab,setGlobalSettingsTab]=useState<GlobalSettingsTab>("general");
@@ -986,7 +986,7 @@ export default function App(){
         onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
       {globalSettingsTab==="about"&&<ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>}
     </GlobalSettingsModal>
-    <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)}/>
+    <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)} onResolved={onStartupReady}/>
     <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}
       onRetry={releaseChangelog.retry}
       onOpenUpdates={()=>{releaseChangelog.close();openGlobalSettings("updates");}}/>

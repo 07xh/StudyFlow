@@ -3,10 +3,10 @@ import {invoke} from "@tauri-apps/api/core";
 import {BookOpen,ShieldCheck,X} from "lucide-react";
 import {friendlyBridgeError,type ZhidaoDocument} from "../bridge";
 
-type Props={desktop:boolean;dark:boolean;onAccepted?:()=>void};
+type Props={desktop:boolean;dark:boolean;onAccepted?:()=>void;onResolved?:()=>void};
 type Phase="checking"|"required"|"accepted"|"error";
 type Tab="terms"|"privacy";
-export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
+export function StudyFlowConsentGate({desktop,dark,onAccepted,onResolved}:Props){
   const [phase,setPhase]=useState<Phase>(desktop?"checking":"accepted");
   const [tab,setTab]=useState<Tab>("terms");
   const [busy,setBusy]=useState(false);
@@ -15,17 +15,37 @@ export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
     terms:null,privacy:null
   });
 
+  // The startup overlay must not hide until the first-use disclosure is known.
+  // A failed or stalled check shows this dialog's existing retry UI, not a blank window.
+  useEffect(()=>{
+    if(phase!=="checking")onResolved?.();
+  },[phase,onResolved]);
+
+  function consentStatusWithTimeout():Promise<{accepted:boolean}>{
+    let timer:number|undefined;
+    return Promise.race([
+      invoke<{accepted:boolean}>("studyflow_consent_status"),
+      new Promise<never>((_,reject)=>{
+        timer=window.setTimeout(()=>reject(new Error("CONSENT_STATUS_TIMEOUT")),8000);
+      })
+    ]).finally(()=>{if(timer!==undefined)window.clearTimeout(timer);});
+  }
+
   async function load(){
     setPhase("checking");setMessage("");
     try{
-      const status=await invoke<{accepted:boolean}>("studyflow_consent_status");
+      const status=await consentStatusWithTimeout();
       if(status.accepted){setPhase("accepted");onAccepted?.();return;}
       const [terms,privacy]=await Promise.all([
         invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"terms"}),
         invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"privacy"})
       ]);
       setDocs({terms,privacy});setPhase("required");
-    }catch(error){setMessage(friendlyBridgeError(error));setPhase("error");}
+    }catch(error){
+      setMessage(error instanceof Error&&error.message==="CONSENT_STATUS_TIMEOUT"
+        ?"首次使用声明检查超时，请重试。":friendlyBridgeError(error));
+      setPhase("error");
+    }
   }
 
   useEffect(()=>{
