@@ -34,7 +34,7 @@ def test_real_resource_name_and_type_stay_bounded_and_video_percent_resets(tmp_p
     assert data["resourceName"] == "第 4 讲 PPT"
     assert data["videoSegmentPercent"] is None
     assert set(data) == {"v", "token", "videoSegmentPercent", "resourceIndex",
-                         "resourceTotal", "resourceKind", "resourceName", "at"}
+                         "resourceTotal", "resourceKind", "resourceName", "playbackPhase", "at"}
 
 
 def test_resource_metadata_sanitization_never_persists_untrusted_urls_or_tokens(tmp_path):
