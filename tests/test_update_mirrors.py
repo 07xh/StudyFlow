@@ -154,3 +154,20 @@ def test_mirror_rejects_untrusted_redirect_even_if_digest_is_known(monkeypatch, 
         updater.verified_download(MIRROR, "a" * 64, target, mirror_host="downloads.example.org")
     assert caught.value.code == "UPDATE_REDIRECT_REJECTED"
     assert not target.exists()
+
+
+def test_short_http_206_preserves_partial_for_next_attempt(monkeypatch, tmp_path):
+    data = b"abcdefghijklmnop"
+    sha = hashlib.sha256(data).hexdigest()
+    target = tmp_path / "setup.exe"
+    partial = target.with_name(target.name + "." + sha[:16] + ".part")
+    partial.write_bytes(data[:5])
+    monkeypatch.setattr(updater, "urlopen",
+                        lambda *_args, **_kwargs: Response(data[5:8],
+                            "https://release-assets.githubusercontent.com/asset",
+                            status=206, content_range="bytes 5-15/16"))
+    with pytest.raises(updater.UpdateError) as caught:
+        updater.verified_download(GITHUB, sha, target)
+    assert caught.value.code == "UPDATE_DOWNLOAD_FAILED"
+    assert partial.read_bytes() == data[:8]
+    assert not target.exists()
