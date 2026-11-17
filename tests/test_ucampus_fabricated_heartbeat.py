@@ -682,3 +682,30 @@ def test_recent_history_uses_the_same_allowlist_as_archive_writes():
         for secret in ("HIDDEN_HISTORY_COOKIE", "HIDDEN_AUTH", "HIDDEN_ERROR"):
             assert secret not in repr(rows)
         assert store.list_recent("course-v2:100", limit=1) == rows[:1]
+
+
+def test_plus_delimited_course_identifiers_match_real_catalogue():
+    """Runtime accepts the same scoped course-v2 identifiers as course_progress."""
+    real_course = "course-v2:75b7546ea002b72+nhce_v4_rw_2+20230116"
+    assert fh._ID_RE.fullmatch(real_course)
+    item = target(course_id=real_course, unit_id="6566792c100159e")
+    item.validate()
+    assert item.course_id == real_course
+    from studyflow.platforms.ucampus.course_progress import _identifier
+    assert _identifier(real_course) == real_course
+    for bad in ("course-v2:../other", "course-v2:a/b",
+                "course-v2:a%2Fb", "course-v2:a?b", "course-v2:a#b",
+                "course-v2:a\\ninvalid"):
+        assert fh._ID_RE.fullmatch(bad) is None
+
+
+def test_plus_delimited_course_scope_reaches_python_status_without_network(monkeypatch):
+    real_course = "course-v2:75b7546ea002b72+nhce_v4_rw_2+20230116"
+    bridge.reset_runner()
+    monkeypatch.setattr(bridge.fh.FabricatedStateStore, "sanitize_existing", lambda self: None)
+    state = bridge.dispatch("ucampus.fabricated.status", {"course_id": real_course})
+    assert state["ok"] is True
+    assert state["course_id"] == real_course
+    assert state["phase"] in ("idle", "stopped")
+    assert state["sent"] == 0
+    bridge.reset_runner()

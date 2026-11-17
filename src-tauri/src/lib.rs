@@ -285,32 +285,32 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 => Ok(()),
         "ucampus.heartbeat.status" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')) => Ok(()),
         "ucampus.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("unit_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
             => Ok(()),
         "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"
             if request.get("graceful").is_none()
                 && request.get("course_id").and_then(|v| v.as_str())
                     .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
                 && request.get("run_id").and_then(|v| v.as_str())
                     .is_some_and(|id| id.len() == 32
                         && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
         "ucampus.fabricated.status" | "ucampus.fabricated.history" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':')) => Ok(()),
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')) => Ok(()),
         "ucampus.fabricated.start" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("unit_id").and_then(|v| v.as_str())
                 .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                    && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                    && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
             && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
             && request.get("speed").map_or(true, |v| v.as_f64().is_some_and(|n| (0.25..=16.0).contains(&n)))
             && request.get("duration_seconds").map_or(true, |v| v.as_f64().is_some_and(|n| (1.0..=36000.0).contains(&n)))
@@ -320,7 +320,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             if request.get("graceful").is_none()
                 && request.get("course_id").and_then(|v| v.as_str())
                     .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':'))
+                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
                 && request.get("run_id").and_then(|v| v.as_str())
                     .is_some_and(|id| id.len() == 32
                         && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
@@ -968,6 +968,50 @@ mod ipc_validation_tests {
         }
         assert!(validate(&json!({"id":"u","version":1,"operation":"ucampus.heartbeat.start",
             "course_id":"123"})).is_err());
+    }
+
+    #[test]
+    fn ucampus_runtime_accepts_actual_plus_delimited_course_ids() {
+        let course = "course-v2:75b7546ea002b72+nhce_v4_rw_2+20230116";
+        // Identifiers in the real catalogue use '+' as a literal separator.
+        // Status/history must accept the same scope that read-only units accept.
+        for operation in [
+            "ucampus.heartbeat.status",
+            "ucampus.fabricated.status", "ucampus.fabricated.history",
+        ] {
+            assert!(validate(&json!({
+                "id":"u", "version":1, "operation":operation, "course_id":course
+            })).is_ok(), "real UCampus course id rejected for {operation}");
+        }
+        for operation in [
+            "ucampus.heartbeat.start", "ucampus.fabricated.start",
+        ] {
+            assert!(validate(&json!({
+                "id":"u", "version":1, "operation":operation,
+                "course_id":course, "unit_id":"6566792c100159e",
+                "pulses":6, "speed":1, "duration_seconds":600,
+                "heartbeat_interval":20, "instant_complete":false
+            })).is_ok(), "valid UCampus run parameters rejected for {operation}");
+        }
+        for operation in [
+            "ucampus.heartbeat.pause", "ucampus.heartbeat.resume", "ucampus.heartbeat.stop",
+            "ucampus.fabricated.pause", "ucampus.fabricated.resume", "ucampus.fabricated.stop"
+        ] {
+            assert!(validate(&json!({
+                "id":"u", "version":1, "operation":operation,
+                "course_id":course, "run_id":"0123456789abcdef0123456789abcdef"
+            })).is_ok(), "valid UCampus lifecycle rejected for {operation}");
+        }
+        for bad in [
+            "course-v2:../../etc", "course-v2:abc%2Fdef", "course-v2:abc?x=y",
+            "course-v2:abc/def", "course-v2:abc#def",
+        ] {
+            for operation in ["ucampus.fabricated.status", "ucampus.heartbeat.status"] {
+                assert!(validate(&json!({
+                    "id":"u", "version":1, "operation":operation, "course_id":bad
+                })).is_err());
+            }
+        }
     }
 
     #[test]
