@@ -46,11 +46,19 @@ def read() -> dict[str, float | int | bool]:
     path = _path()
     try:
         status = path.lstat()
-        if path.is_symlink() or status.st_size > 4096:
-            return DEFAULTS.copy()
-        return validate(json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+    except FileNotFoundError:
+        # Only a genuinely absent settings file should load defaults.
         return DEFAULTS.copy()
+    except OSError as exc:
+        raise OSError("XUEXITONG_SETTINGS_UNAVAILABLE") from exc
+    if path.is_symlink() or status.st_size > 4096:
+        raise OSError("XUEXITONG_SETTINGS_UNAVAILABLE")
+    try:
+        return validate(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError) as exc:
+        # Never replace unreadable/corrupted user preferences with defaults:
+        # doing so would allow an innocent later save to overwrite them.
+        raise OSError("XUEXITONG_SETTINGS_UNAVAILABLE") from exc
 
 
 def save(raw: Any) -> dict[str, float | int | bool]:
