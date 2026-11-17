@@ -258,16 +258,24 @@ export default function App(){
     });
   },[]);
 
+  // A single reducer path protects current-session verified evidence from late
+  // asynchronous reads from the player, progress panel and course workspace.
+  const updateZhidaoCourses=useCallback((incoming:Course[])=>{
+    setPlatforms(previous=>({
+      ...previous,zhidao:{
+        ...previous.zhidao,
+        courses:mergeZhidaoEvidence(previous.zhidao.courses,incoming)
+      }
+    }));
+  },[]);
+
   const autoVerifyError=useZhidaoAutoVerify({
     desktop:desktop&&consentAccepted,
     connected:platforms.zhidao.status==="connected"&&platforms.zhidao.courses.some(
       item=>item.course_id===autoVerify.courseId&&!item.stale),
     enabled:autoVerify.enabled,
     courseId:autoVerify.courseId,
-    onSnapshot:snapshot=>setPlatforms(previous=>({
-      ...previous,zhidao:{...previous.zhidao,
-        courses:mergeZhidaoEvidence(previous.zhidao.courses,snapshot.courses)}
-    }))
+    onSnapshot:snapshot=>updateZhidaoCourses(snapshot.courses)
   });
 
   function configureAutoVerify(courseId:string,enabled:boolean){
@@ -364,17 +372,6 @@ export default function App(){
     }
   },[refresh,consentAccepted]);
 
-  // A single reducer path protects current-session verified evidence from late
-  // asynchronous reads from the player, progress panel and course workspace.
-  const updateZhidaoCourses=useCallback((incoming:Course[])=>{
-    setPlatforms(previous=>({
-      ...previous,zhidao:{
-        ...previous.zhidao,
-        courses:mergeZhidaoEvidence(previous.zhidao.courses,incoming)
-      }
-    }));
-  },[]);
-
   function updateVerifiedZhidaoCourse(course:Course) {
     if (course.platform !== "zhidao") return;
     setPlatforms(previous=>({
@@ -401,8 +398,13 @@ export default function App(){
       const list=await fetchCoursesFromDesktop(platform);
       if(checkpoint.epoch!==epoch||platformsRef.current[platform].status!=="connected")return;
       checkpoint.lastSuccess=Date.now();
-      setPlatforms(previous=>({...previous,[platform]:{...previous[platform],
-        courses:platform==="zhidao"?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
+      if(platform==="zhidao"){
+        updateZhidaoCourses(list);
+      }else{
+        setPlatforms(previous=>({...previous,[platform]:{
+          ...previous[platform],courses:list
+        }}));
+      }
       setSyncFeedback(previous=>({...previous,[platform]:{phase:"synced",error:""}}));
       if(manual)setNotice(name+"已同步 "+list.length+" 门真实课程");
       recordEvent(name,manual?"同步课程":"自动同步课程","success","读取到 "+list.length+" 门真实课程");
@@ -417,7 +419,7 @@ export default function App(){
       // Even a superseded manual request must release its own button lock.
       if(manual)setBusy(previous=>previous===platform?"":previous);
     }
-  },[desktop,consentAccepted,recordEvent]);
+  },[desktop,consentAccepted,recordEvent,updateZhidaoCourses]);
 
   // Startup/status recheck: load both connected platforms. Entering or focusing
   // a platform only refreshes stale data; the gate prevents duplicate requests.
