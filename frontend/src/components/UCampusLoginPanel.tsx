@@ -60,7 +60,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     try{
       await invoke("ucampus_login_window_start");
       setEmbeddedOpen(true);
-      setNotice("已打开 U校园官方登录窗口。请在其中扫码或按页面要求手动完成验证，然后返回学序点击“导入并验证”。");
+      setNotice("已打开 U校园官方登录窗口。如出现图片或数字验证码，请直接在官方页面查看并手动输入；也可按官方页面选择扫码。登录成功后返回学序，点击“导入并验证会话”。");
     }catch{
       setNotice("无法打开内置官方登录窗口。你仍可使用系统浏览器登录后手动导入 Cookie。");
     }finally{setEmbeddedBusy(false);}
@@ -87,7 +87,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       setNotice(message==="UCAMPUS_LOGIN_COOKIE_EXPIRED"
         ?"官方窗口里的 U校园 JWT 自报已经过期。请在官方窗口重新登录后再导入，旧 Cookie 不会覆盖本机已保存的会话。"
         :message==="UCAMPUS_LOGIN_COOKIE_MISSING"
-          ?"暂未从官方窗口检测到 U校园AI 的 JWT 会话。请确认完成扫码/验证码及后续页面跳转，或在下方手动导入 Cookie。"
+          ?"暂未从官方窗口检测到 U校园AI 的 JWT 会话。请确认已在官方页面手动输入图片/数字验证码（或完成扫码）并完成页面跳转，或在下方手动导入 Cookie。"
         :message==="UCAMPUS_LOGIN_WINDOW_MISSING"
           ?"官方登录窗口已经关闭，请重新打开。"
           :"官方窗口会话导入失败。请确认已登录 U校园AI，或使用下方手动 Cookie 导入。");
@@ -121,7 +121,19 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
         setNotice("U校园 SSO 会话已保存，但课程读取失败："+friendlyBridgeError(catalogError)+(saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
       }
     }catch(error){
-      setNotice(friendlyBridgeError(error));
+      if(error instanceof Error&&error.message==="UCAMPUS_LOGIN_VERIFICATION_REQUIRED"){
+        // The direct SSO request cannot show the provider's challenge.
+        // Let the user enter image/numeric CAPTCHA on the actual provider page.
+        try{
+          await invoke("ucampus_login_window_start");
+          setEmbeddedOpen(true);
+          setNotice("U校园要求图片或数字验证码。已打开官方登录窗口，请在官方页面重新输入账号密码、查看验证码并手动填写。完成登录后返回学序，点击“导入并验证会话”。");
+        }catch{
+          setNotice("U校园要求图片或数字验证码，且官方登录窗口打开失败。请使用上方“打开 U校园官方网站”完成验证，再通过本机 Cookie 导入。");
+        }
+      }else{
+        setNotice(friendlyBridgeError(error));
+      }
     }finally{
       setPassword("");setBusy(false);
     }
@@ -194,10 +206,10 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     </div>
     <section className="sf-ucampus-official-login" aria-label="U校园官方验证入口">
       <strong>推荐：先在官方页面完成登录验证</strong>
-      <p className="sf-muted">官方 Unipus 登录页提供扫码登录，也可按页面要求完成图形、短信或其他验证。</p>
+      <p className="sf-muted">官方页面支持账号登录；如出现图片或数字验证码，请查看图片并在官方页面手动输入。扫码属于另一种登录方式，不是短信验证码。</p>
       {variant==="ai"&&<div className="actions">
         <button type="button" className="primary" disabled={!desktop||busy||embeddedBusy}
-          onClick={()=>void launchEmbedded()}>在学序内打开官方扫码 / 验证码登录</button>
+          onClick={()=>void launchEmbedded()}>打开官方登录（图片 / 数字验证码或扫码）</button>
         <button type="button" className="secondary" disabled={!desktop||busy||embeddedBusy||!embeddedOpen}
           onClick={()=>void importEmbedded()}>完成验证，导入并验证会话</button>
         {embeddedOpen&&<button type="button" className="secondary" disabled={!desktop||busy||embeddedBusy}
@@ -212,9 +224,9 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       <p className="sf-muted">应用内官方窗口可尝试读取网站签发给 U校园AI 的 JWT，成功后仅写入本机 Windows 凭据管理器；不同账号或平台流程可能无法提供该 Cookie。系统浏览器登录不能直接同步到学序，此时请使用下方手动导入。不要分享 Cookie。</p>
     </section>
     {variant==="ai"&&<details className="sf-ucampus-password-login">
-      <summary>备用：账号密码直接登录（无法处理交互验证码）</summary>
+      <summary>备用：账号密码直接接口（需要验证码时自动打开官方页面）</summary>
       <div className="sf-platform-settings-view" aria-label="U校园 SSO 账号密码登录">
-      <p className="sf-muted">账号密码登录（实验接入）：由学序本机请求 U校园 SSO；不保存账号密码，仅将服务端返回的会话写入 Windows 凭据管理器。若出现验证码，请转到官方页面完成。</p>
+      <p className="sf-muted">账号密码登录（实验接入）：由学序本机请求 U校园 SSO；不保存账号密码，仅将服务端返回的会话写入 Windows 凭据管理器。如果需要图片或数字验证码，学序会打开官方页面供你查看并手动填写；不会要求手机短信验证码。</p>
       <label htmlFor="ucampus-username">U校园账号</label>
       <input id="ucampus-username" type="text" autoComplete="username" spellCheck={false}
         value={username} onChange={e=>setUsername(e.target.value)} disabled={!desktop||busy}
