@@ -18,8 +18,8 @@ test("isolated official player observer cadence renews read-only progress before
   const staleSec=Number(rust.match(/if age > Duration::from_secs\((\d+)\)/)?.[1]);
   assert.ok(interval>0 && interval<=staleSec*500,
     "runtime observation interval must leave margin under stale deadline");
-  assert.match(rust,/source\.matches\(OFFICIAL_MONITOR_INTERVAL_OLD\)/);
-  assert.match(rust,/source\.matches\(OFFICIAL_MONITOR_REPORT_OLD\)/);
+  assert.match(rust,/normalized\.matches\(OFFICIAL_MONITOR_INTERVAL_OLD\)/);
+  assert.match(rust,/normalized\.matches\(OFFICIAL_MONITOR_REPORT_OLD\)/);
   assert.match(rust,/time - monitor\.lastReport >= MONITOR_INTERVAL_MS/);
   assert.match(rust,/fs::write\(&controller, fresh\)/);
   assert.match(powershell,/Write-OfficialPlaybackObservation \$event \$position \$duration/);
