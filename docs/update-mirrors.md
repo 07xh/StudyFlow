@@ -3,8 +3,8 @@
 ## 零配置方案
 不使用 R2、SourceForge、对象存储、自建服务或中国内地 CDN；无需用户注册、备案或上传安装包。
 - 官方权威：GitHub Releases API 获取已发布版本、更新日志和 SHA-256 `digest`。
-- 安装包下载代理：`https://gh-proxy.com/`、`https://ghfast.top/`，只在**公开 GitHub Release 安装包**地址前增加代理前缀。
-- 默认自动模式：`gh-proxy.com` → `ghfast.top` → GitHub 官方资产地址；用户可只用 GitHub，也可选“公共代理”优先。
+- 安装包下载代理：`https://gh-proxy.org/`、`https://ghfast.top/`，只在**公开 GitHub Release 安装包**地址前增加代理前缀。
+- 默认自动模式：`gh-proxy.org` → `ghfast.top` → GitHub 官方资产地址；用户可只用 GitHub，也可选“公共代理”优先。
 - 每一个下载来源均使用同一个从 GitHub 获取的 SHA-256 校验，不信任代理提供的元数据或哈希。
 
 ## 具体下载映射
@@ -12,7 +12,7 @@
 `https://github.com/07xh/StudyFlow/releases/download/<tag>/<asset>.exe`
 
 代理地址格式：
-`https://gh-proxy.com/https://github.com/07xh/StudyFlow/releases/download/<tag>/<asset>.exe`
+`https://gh-proxy.org/https://github.com/07xh/StudyFlow/releases/download/<tag>/<asset>.exe`
 `https://ghfast.top/https://github.com/07xh/StudyFlow/releases/download/<tag>/<asset>.exe`
 
 地址必须匹配本仓库公开 Release 文件，拒绝外部任意 URL、查询参数、认证 Cookie 和 Token。只允许预设 HTTPS 代理域名及 GitHub 的已知文件 CDN 重定向域名。
