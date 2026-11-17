@@ -1,4 +1,5 @@
-import {useEffect,useState} from "react";
+import {useEffect,useState,type MouseEvent} from "react";
+import {invoke} from "@tauri-apps/api/core";
 import {friendlyBridgeError,request,type UCampusConfig,type UCampusSessionInfo} from "../bridge";
 import type {Course} from "../types";
 
@@ -35,6 +36,12 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     return courses.length>0
       ?`课程接口已验证：实际读取到 ${courses.length} 门 U校园课程。`
       :"课程接口返回空列表：请求成功，但尚不能确认该账号已有课程或已完成登录验收。";
+  };
+  const openOfficial=(event:MouseEvent<HTMLAnchorElement>,mode:"ai"|"classic"|"qr")=>{
+    if(!desktop)return;
+    event.preventDefault();
+    void invoke("ucampus_open_official_site",{mode})
+      .catch(()=>setNotice("未能打开系统浏览器，请复制上方官方网站链接在浏览器中访问。"));
   };
   const login=async()=>{
     if(!desktop||busy||variant!=="ai"||!username.trim()||!password)return;
@@ -115,9 +122,9 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       <p className="sf-muted">官方 Unipus 登录页提供扫码登录，也可按页面要求完成图形、短信或其他验证。</p>
       <div className="actions">
         <a className="sf-ucampus-official-link" href={variant==="ai"?"https://uai.unipus.cn/":"https://u.unipus.cn/"}
-          target="_blank" rel="noopener noreferrer">打开 U校园官方网站</a>
+          target="_blank" rel="noopener noreferrer" onClick={event=>openOfficial(event,variant)}>打开 U校园官方网站</a>
         <a className="sf-ucampus-official-link secondary" href="https://sso.unipus.cn/sso/login"
-          target="_blank" rel="noopener noreferrer">打开官方扫码登录页</a>
+          target="_blank" rel="noopener noreferrer" onClick={event=>openOfficial(event,"qr")}>打开官方扫码登录页</a>
       </div>
       <p className="sf-muted">官方网页的登录状态尚不能自动同步到学序。完成验证后，可在下方导入本人有效会话 Cookie；不要将 Cookie 发到聊天、日志或仓库。</p>
     </section>
