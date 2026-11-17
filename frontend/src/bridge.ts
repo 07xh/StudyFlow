@@ -5,7 +5,7 @@ import type {OriginalYktOptions,ZhsStoredOptions} from "./legacyPlayback";
 export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
 export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string;annotator_token?:string;school_id?:string};
-export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null};
+export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null;jwt_lifetime?:"expired"|"expiring"|"not_expired"|"unknown"};
 export type UCampusLocalStatus={
   run_id:string;course_id:string;phase:string;active:boolean;paused:boolean;
   generated:number;sent:number;transport_accepted:number;server_confirmed:number|null;
