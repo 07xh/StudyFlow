@@ -1,6 +1,9 @@
 # Reusable, isolated StudyFlow sidecar build. Never modifies the original ZHSDesktop.
 $ErrorActionPreference = 'Stop'
 Set-Location (Resolve-Path (Join-Path $PSScriptRoot '..'))
+# Inject only the build-approved public mirror origin into this frozen sidecar.
+python scripts/embed-update-mirror.py
+if ($LASTEXITCODE -ne 0) { throw 'Mirror configuration rejected' }
 # Never modify the installed pip package or original ZHSDesktop.
 $stage = Join-Path $PSScriptRoot '..\build\zhs-stage'
 python -m studyflow.services.zhs_upstream_patch prepare $stage
