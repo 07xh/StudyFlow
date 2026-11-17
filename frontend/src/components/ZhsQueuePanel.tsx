@@ -20,6 +20,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const playing=queue.tasks.filter(t=>t.state==="running");
   const waiting=queue.tasks.filter(t=>t.state==="queued");
   const ended=queue.tasks.filter(t=>t.state!=="queued"&&t.state!=="running");
+  const failed=ended.filter(t=>t.state==="failed");
+  const stopped=ended.filter(t=>t.state==="stopped");
   async function stop(id:string){
     const run=status.run_id;
     if(!run||!active||requested.has(id))return;
@@ -61,7 +63,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
         stale?"队列状态暂不可用 · 请重新读取任务状态":
         task.state==="running"&&task.kind!=="video"?"非视频资源 · 不提供视频位置百分比":
-        task.stale?"视频采样暂不可用 · 未收到有效数值或已有采样过期":
+        task.stale?"视频采样中断或一直没有有效数值；是否仍在播放尚需核对运行状态":
         percent==null?(task.state==="queued"?"等待本章节的上一资源结束":"正在等待本视频的有效采样"):"本地观测 · 非服务器完成进度"}</small>
     </article>;
   }
@@ -95,6 +97,10 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     {waiting.length>0&&<details className="sf-ykt-video-details"><summary>等待队列 · {waiting.length} 项</summary>
       {grouped(waiting.slice(0,100))}
       {waiting.length>100&&<small>显示前 100 项，任务将自动补位。</small>}</details>}
+    {(failed.length>0||stopped.length>0)&&<p role="status" className="sf-muted">
+      本轮异常记录：失败 {failed.length} 项、已停止 {stopped.length} 项。单个视频失败不代表其他视频已完成；若启用了遇错停止，其余运行项也可能提前结束。
+      {failed.slice(0,3).map(item=><span key={item.task_id}> {item.name??"未命名资源"}（退出码 {item.exit_code??"未知"}）</span>)}
+    </p>}
     {ended.length>0&&<details className="sf-ykt-video-details"><summary>本轮记录 · {ended.length} 项</summary>
       {grouped(ended.slice(-100))}</details>}
     {status.state==="exited"&&<p role="status">{legacyExitMessage(status)}</p>}
