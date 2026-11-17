@@ -53,7 +53,7 @@ def source_order(choice: str, fallback: bool, mirror_url: str | None) -> list[st
     if choice == "r2" and not mirror_url and not fallback:
         return []
     if choice == "auto":
-        return (["r2", "github"] if mirror_url else ["github"])
+        return (["r2", "github"] if fallback else ["r2"]) if mirror_url else ["github"]
     if choice not in available:
         return ["github"] if fallback else []
     return [choice] + ([name for name in available if name != choice] if fallback else [])
