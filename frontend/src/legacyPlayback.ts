@@ -29,7 +29,7 @@ export type ZhsQueueSnapshot={
   concurrency:number;state:string;stale:boolean;
   tasks:Array<{task_id:string;name:string|null;chapter_key?:string|null;chapter_name?:string|null;kind:"video"|"ppt"|"article"|"other";
     state:"queued"|"running"|"exited"|"failed"|"stopped"|"unknown";
-    percent:number|null;stale:boolean;exit_code:number|null}>;
+    percent:number|null;playback_phase?:"playing"|"paused"|"answering"|null;stale:boolean;exit_code:number|null}>;
 };
 
 export type YuketangLiveProgress = {
