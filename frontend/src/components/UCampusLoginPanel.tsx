@@ -29,6 +29,15 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       .catch(()=>{if(active)setStatus(null);});
     return ()=>{active=false;};
   },[desktop]);
+  const refreshStoredExpiry=async()=>{
+    try{
+      const info=await request<UCampusSessionInfo>({operation:"ucampus.session.info"});
+      setStatus(info);
+    }catch{
+      // The previous successful save remains configured; never manufacture
+      // a "connected" state from a failed local status read.
+    }
+  };
   const verifyCatalog=async():Promise<string>=>{
     const courses=await request<Course[]>({operation:"courses.list",platform:"ucampus"});
     if(!Array.isArray(courses)||!courses.every(course=>
@@ -63,6 +72,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       await invoke<{saved:boolean}>("ucampus_login_window_import");
       setEmbeddedOpen(false);
       setStatus({configured:true,variant:"ai",jwt_lifetime:"unknown"});
+      await refreshStoredExpiry();
       setVariant("ai");
       onChanged();
       try{
@@ -101,6 +111,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
         operation:"ucampus.session.login",username:username.trim(),password
       });
       setStatus({configured:true,variant:"ai",jwt_lifetime:"unknown"});
+      await refreshStoredExpiry();
       setUsername("");
       onChanged();
       try{
@@ -124,6 +135,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       const saved=await request<{saved:boolean;monitor_reset:boolean}>({operation:"ucampus.session.configure",configuration});
       clearSensitiveInputs();
       setStatus({configured:true,variant,jwt_lifetime:"unknown"});
+      await refreshStoredExpiry();
       onChanged();
       try{
         const summary=await verifyCatalog();
@@ -217,7 +229,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       </div>
       </div>
     </details>}
-    <details className="sf-ucampus-cookie-import" open>
+    <details className="sf-ucampus-cookie-import">
       <summary>高级：手动导入现有会话</summary>
       <p className="sf-muted">在已登录的 U校园官方页面获取本人有效 Cookie，粘贴到下方。AI版课程 URL 可留空，其他令牌仅在接口明确需要时填写。</p>
     <label htmlFor="ucampus-catalog-url">{variant==="ai"?"课程接口 URL（留空使用开源项目已知首页接口）":"普通版课程接口 URL（必须使用本人已核验地址）"}</label>
