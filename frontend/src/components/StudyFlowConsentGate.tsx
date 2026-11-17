@@ -1,36 +1,73 @@
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
 import {BookOpen,ShieldCheck,X} from "lucide-react";
 import {friendlyBridgeError,type ZhidaoDocument} from "../bridge";
 
-type Props={desktop:boolean;dark:boolean;onAccepted?:()=>void};
+type Props={desktop:boolean;dark:boolean;onAccepted?:()=>void;onResolved?:()=>void};
 type Phase="checking"|"required"|"accepted"|"error";
 type Tab="terms"|"privacy";
-export function StudyFlowConsentGate({desktop,dark,onAccepted}:Props){
+export function StudyFlowConsentGate({desktop,dark,onAccepted,onResolved}:Props){
   const [phase,setPhase]=useState<Phase>(desktop?"checking":"accepted");
   const [tab,setTab]=useState<Tab>("terms");
   const [busy,setBusy]=useState(false);
+  const checkRevision=useRef(0);
   const [message,setMessage]=useState("");
   const [docs,setDocs]=useState<{terms:ZhidaoDocument|null;privacy:ZhidaoDocument|null}>({
     terms:null,privacy:null
   });
 
+  // The startup overlay must not hide until the first-use disclosure is known.
+  // A failed or stalled check shows this dialog's existing retry UI, not a blank window.
+  useEffect(()=>{
+    if(phase!=="checking")onResolved?.();
+  },[phase,onResolved]);
+
+  // The timeout covers the complete status + local document read.
+  // A late response from a previous attempt cannot overwrite a retry.
+  function withTimeout<T>(operation:Promise<T>):Promise<T>{
+    let timer:number|undefined;
+    return Promise.race([
+      operation,
+      new Promise<never>((_,reject)=>{
+        timer=window.setTimeout(()=>reject(new Error("CONSENT_READ_TIMEOUT")),8000);
+      })
+    ]).finally(()=>{if(timer!==undefined)window.clearTimeout(timer);});
+  }
+
+  async function readConsent():Promise<
+    {accepted:true}|{accepted:false;terms:ZhidaoDocument;privacy:ZhidaoDocument}
+  >{
+    const status=await invoke<{accepted:boolean}>("studyflow_consent_status");
+    if(status.accepted)return {accepted:true};
+    const [terms,privacy]=await Promise.all([
+      invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"terms"}),
+      invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"privacy"})
+    ]);
+    return {accepted:false,terms,privacy};
+  }
+
   async function load(){
+    const revision=++checkRevision.current;
     setPhase("checking");setMessage("");
     try{
-      const status=await invoke<{accepted:boolean}>("studyflow_consent_status");
-      if(status.accepted){setPhase("accepted");onAccepted?.();return;}
-      const [terms,privacy]=await Promise.all([
-        invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"terms"}),
-        invoke<ZhidaoDocument>("studyflow_read_document",{documentId:"privacy"})
-      ]);
-      setDocs({terms,privacy});setPhase("required");
-    }catch(error){setMessage(friendlyBridgeError(error));setPhase("error");}
+      const result=await withTimeout(readConsent());
+      if(revision!==checkRevision.current)return;
+      if(result.accepted){
+        setPhase("accepted");onAccepted?.();return;
+      }
+      setDocs({terms:result.terms,privacy:result.privacy});setPhase("required");
+    }catch(error){
+      if(revision!==checkRevision.current)return;
+      setMessage(error instanceof Error&&error.message==="CONSENT_READ_TIMEOUT"
+        ?"首次使用声明检查超时，请重试。":friendlyBridgeError(error));
+      setPhase("error");
+    }
   }
 
   useEffect(()=>{
     if(desktop)void load();
     else setPhase("accepted");
+    return ()=>{checkRevision.current+=1;};
   },[desktop]);
 
   async function accept(){
