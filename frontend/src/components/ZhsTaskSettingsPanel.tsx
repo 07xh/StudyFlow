@@ -118,7 +118,10 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
     try{
       const result=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.save",course_key:courseId||undefined,settings:options});
       if(!validateZhsStoredOptions(result))throw new Error("INVALID_ZHS_SETTINGS");
-      setOptions(result);setSaved(result);setLoadedFor(courseId);setMessage("当前课程 ZHS 参数已保存，下次启动任务时生效。");
+      const confirmed=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.get",course_key:courseId||undefined});
+      if(!validateZhsStoredOptions(confirmed)||JSON.stringify(confirmed)!==JSON.stringify(result))
+        throw new Error("ZHS_SETTINGS_VERIFY_FAILED");
+      setOptions(confirmed);setSaved(confirmed);setLoadedFor(courseId);setMessage("当前课程 ZHS 参数已保存，下次启动任务时生效。");
       onEvent?.("保存 ZHS 参数","success","学序本机设置已保存");
     }catch(error){setMessage(friendlyBridgeError(error));onEvent?.("保存 ZHS 参数","warning","保存失败");}
     finally{setBusy(false);}
