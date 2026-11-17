@@ -1,15 +1,17 @@
-# 学序 StudyFlow 0.1.1-rc.35｜GitHub 断点续传与免费 SourceForge 镜像
+# 学序 StudyFlow 0.1.1-rc.35｜公共 GitHub 代理下载与断点续传
 
 ## 本版更新
-- 默认使用 **GitHub Releases** 更新，完全不依赖 R2 或收费国内 CDN。
-- 支持 SHA-256 校验后的断点续传：HTTP Range、未完整返回的片段保留、Range 被忽略时安全重试。
-- 接入可选 SourceForge 开源文件分发：项目所有者先创建 SourceForge 项目并同步安装包，构建时配置项目 slug 后才显示为可选源。未配置时仍正常使用 GitHub。
-- 保留现有更新通道、自动下载/仅提示模式和手动安装，不修改 rc.34 的学习业务模块。
+- **零配置公共代理**：预置 `gh-proxy.com`、`ghfast.top`，默认优先代理并在失败时回退 GitHub Releases 官方安装包。
+- **可信校验**：版本、发布信息和 SHA-256 一律从 GitHub 官方 API 获取；第三方代理只负责传输公开 EXE 文件，校验失败不提供安装。
+- **断点续传**：支持 HTTP Range、服务器忽略 Range 时安全重启、不完整传输片段保留、已下载校验包复用。
+- **设置**：支持自动、GitHub 官方、公共代理优先模式以及失败切换开关，保持 A/B 更新模式兼容。
+- 保留 rc.34 的知到、雨课堂、学习通、U校园业务功能和原有手动安装流程，不加入 R2、SourceForge 或收费 CDN。
 
-## 限制和验收
-- GitHub API 仍是更新版本信息唯一权威来源。SourceForge 全球镜像网络不保证中国内地速度；真实效果需要 Windows 下载验收。
-- 不会自动创建 SourceForge 项目，当前也没有自动上传到 SourceForge 的流水线；每次正式发布需手动同步。
-- 本版尚未实现实时下载百分比和静默自动安装。
-- 仅在前端、Python、Windows NSIS CI 通过并成功合并发布后视为正式版本。
+## 限制
+- 公共代理可用性和网速不保证，真实中国内地网络需 Windows 实测。
+- GitHub API 仍然是元数据权威来源；不能从代理查询未经验证的版本清单。
+- 不会将课程账号、密码、Cookie 或令牌发往公共代理；只下载公开 Release 文件。
+- 暂未提供实时下载百分比和静默自动安装。
+- 仅在前端、Python、Windows NSIS CI 通过并成功发布 Release 后，候选版才视为可用正式安装包。
 
 版本：`0.1.1-rc.35`。
