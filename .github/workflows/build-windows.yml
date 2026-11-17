@@ -24,8 +24,8 @@ jobs:
   windows-package:
     runs-on: windows-latest
     env:
-      # Public HTTPS origin only; secret R2 keys are never embedded in the EXE.
-      STUDYFLOW_R2_PUBLIC_BASE_URL: ${{ vars.STUDYFLOW_R2_PUBLIC_BASE_URL }}
+      # Optional public HTTPS origin; never embed private download credentials.
+      STUDYFLOW_MIRROR_BASE_URL: ${{ vars.STUDYFLOW_MIRROR_BASE_URL }}
     permissions:
       contents: read
     steps:
@@ -138,53 +138,3 @@ jobs:
             --title "学序 StudyFlow $version" \
             --prerelease --latest=false \
             --notes-file "$notes_file"
-
-  mirror-candidate:
-    name: Mirror published NSIS installer to Cloudflare R2
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [publish-candidate]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      GH_TOKEN: ${{ github.token }}
-      R2_ACCOUNT_ID: ${{ secrets.STUDYFLOW_R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.STUDYFLOW_R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.STUDYFLOW_R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET: ${{ secrets.STUDYFLOW_R2_BUCKET }}
-      R2_PUBLIC_BASE_URL: ${{ vars.STUDYFLOW_R2_PUBLIC_BASE_URL }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: StudyFlow-Windows-NSIS
-          path: dist
-      - name: Mirror only a GitHub-published version-matched installer
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_BUCKET" ] || [ -z "$R2_PUBLIC_BASE_URL" ]; then
-            echo "R2 is not provisioned; GitHub Releases remains the only update source."
-            exit 0
-          fi
-          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
-          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-          export AWS_DEFAULT_REGION=auto
-          export AWS_EC2_METADATA_DISABLED=true
-          version=$(python -c 'import json; print(json.load(open("src-tauri/tauri.conf.json", encoding="utf-8"))["version"])')
-          tag="v${version}"
-          shopt -s nullglob
-          installers=(dist/*.exe)
-          [ "${#installers[@]}" -eq 1 ] || { echo "Installer count mismatch"; exit 1; }
-          asset="${installers[0]##*/}"
-          release_target=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)
-          [ "$release_target" = "$GITHUB_SHA" ] || { echo "Release commit mismatch"; exit 1; }
-          release_digest=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq ".assets[] | select(.name == \"$asset\") | .digest")
-          local_digest="sha256:$(sha256sum "${installers[0]}" | cut -d' ' -f1)"
-          [ "$release_digest" = "$local_digest" ] || { echo "Release digest mismatch"; exit 1; }
-          python -m pip install --disable-pip-version-check awscli
-          aws --endpoint-url "https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com" \
-            s3 cp "${installers[0]}" "s3://${R2_BUCKET}/releases/${tag}/${asset}" \
-            --content-type application/octet-stream \
-            --cache-control "public,max-age=31536000,immutable" --no-progress
-          echo "Mirrored verified $tag / $asset"
