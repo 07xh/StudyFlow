@@ -67,6 +67,10 @@ def save(raw: Any) -> dict[str, float | int | bool]:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.is_symlink():
         raise OSError("XUEXITONG_SETTINGS_UNAVAILABLE")
+    if path.exists():
+        # Refuse a write over an unreadable previous configuration. A dedicated
+        # reset/repair action must be explicit; a normal Save is not a reset.
+        read()
     import uuid
     tmp = path.parent / (".xuexitong-settings-" + uuid.uuid4().hex + ".tmp")
     try:
