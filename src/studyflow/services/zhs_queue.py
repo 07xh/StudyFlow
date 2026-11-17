@@ -140,7 +140,17 @@ def atomic_json(path: Path, data: dict) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(data, stream, ensure_ascii=False, separators=(",", ":"))
-        os.replace(temporary, path)
+        # Windows may briefly deny replacing a file while the Rust status
+        # reader has it open. Retry only the atomic rename, never the task.
+        # Persistent failures still surface instead of reporting a fake state.
+        for attempt in range(6):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(.02 * (attempt + 1))
     finally:
         Path(temporary).unlink(missing_ok=True)
 
@@ -222,12 +232,25 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     deadline = time.monotonic() + limit_seconds if limit_seconds else None
     exit_code = 0
     fatal = None
+    last_publish_at = 0.0
+    last_states = None
+    last_queue_state = None
 
-    def publish(state):
+    def publish(state, *, force=False):
+        nonlocal last_publish_at, last_states, last_queue_state
+        now = time.monotonic()
+        # State transitions (start/stop/exit) are immediate. Numeric samples
+        # refresh at most 2 Hz: avoid full 100+ row Windows file rewrites at
+        # 10 Hz while preserving the UI's existing two-second poll cadence.
+        states = tuple((row["state"], row["exit_code"]) for row in rows)
+        if (not force and states == last_states and state == last_queue_state
+                and now - last_publish_at < .5):
+            return
         atomic_json(directory / f"zhs-queue-{token}.json", {
             "v": 1, "token": token, "at": time.time(), "state": state,
             "concurrency": concurrency, "tasks": rows,
         })
+        last_states, last_queue_state, last_publish_at = states, state, now
 
     def stop(index):
         if index in running:
@@ -324,7 +347,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
         for index, row in enumerate(rows):
             if row["state"] in ("queued", "running"):
                 stop(index)
-        publish("exited")
+        publish("exited", force=True)
         if fatal:
             atomic_json(directory / f"zhs-diagnostic-{token}.json", {
                 "v":1, "token":token, "at":time.time(), "code":fatal,
