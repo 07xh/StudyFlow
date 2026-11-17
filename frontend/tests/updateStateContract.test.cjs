@@ -15,7 +15,7 @@ test("updater keeps verified downloaded installer visible on check failure", () 
 });
 
 test("new installations use beta channel while published builds are candidates", () => {
-  assert.ok(code.includes('useState<UpdateSettings>({channel:"beta",mode:"download"})'));
+  assert.ok(code.includes('useState<UpdateSettings>({channel:"beta",mode:"download",source:"auto",fallback:true})'));
 });
 
 test("settings and new-version dialog both open official releases in the system browser",()=>{
@@ -32,4 +32,12 @@ test("settings and new-version dialog both open official releases in the system 
   assert.match(rust,/fn studyflow_open_releases\(tag: Option<String>\)/);
   assert.match(rust,/Command::new\("explorer.exe"\)/);
   assert.match(rust,/studyflow_exit, updates_open_folder, studyflow_open_releases,/);
+});
+
+
+test("mirror controls expose only packaged sources and safe failover",()=>{
+  assert.ok(code.includes('operation:"updates.sources"'));
+  assert.ok(code.includes('id="update-source"'));
+  assert.ok(code.includes('id="update-fallback"'));
+  assert.ok(code.includes('disabled={!sources.r2}'));
 });
