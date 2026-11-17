@@ -153,6 +153,9 @@ class UCampusProgressReader:
             raise UCampusProgressError("UCAMPUS_SESSION_MISSING")
         if config.variant != "ai":
             raise UCampusProgressError("UCAMPUS_AI_ONLY")
+        from . import credentials
+        if credentials._jwt_lifetime_state(config) == "expired":
+            raise UCampusProgressError("UCAMPUS_SESSION_EXPIRED")
         return config, _jwt_open_id(config)
 
     def list_units(self, course_id: str) -> list[dict[str, Any]]:
