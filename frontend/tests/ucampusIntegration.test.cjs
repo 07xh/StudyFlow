@@ -138,6 +138,12 @@ test("U校园官方扫码入口与 Cookie 导入有明确的会话边界",()=>{
   assert.match(login,/ucampus_login_window_import/);
   assert.match(login,/ucampus_login_window_close/);
   assert.match(login,/完成验证，导入并验证会话/);
+  assert.match(login,/U校园要求图片或数字验证码/);
+  assert.match(login,/error\.message==="UCAMPUS_LOGIN_VERIFICATION_REQUIRED"/);
+  assert.match(login,/请在官方页面重新输入账号密码、查看验证码并手动填写/);
+  assert.match(login,/扫码属于另一种登录方式，不是短信验证码/);
+  assert.doesNotMatch(login,/图形、短信或其他验证/);
+  assert.match(read("bridge.ts"),/图片或数字验证码，请在官方登录窗口查看并手动填写/);
   assert.match(login,/className="sf-ucampus-cookie-import">/);
   assert.doesNotMatch(login,/className="sf-ucampus-cookie-import" open/);
   assert.match(login,/cookie:cookie\.trim\(\)\.replace/);
