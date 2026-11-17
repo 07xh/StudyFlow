@@ -1,24 +1,21 @@
-# 学序安装包镜像（GitHub Releases + Cloudflare R2）
+# 学序更新下载：GitHub 官方源 + 可选 HTTPS 镜像（不使用 R2）
 
-## 信任边界
-- GitHub Releases API 是唯一更新版本与 SHA-256 digest 来源。R2 是**字节镜像**，不能决定发布版本或校验值。
-- 源地址从打包时的仓库变量嵌入 sidecar；前端不能提交 URL、目标目录或 SHA-256。
-- 优先镜像失败后可回退到 GitHub；所有安装包均必须通过 GitHub digest 校验，才从 .part 原子替换为最终 EXE。**不会自动执行安装包**。
-- 此版本仍依赖 GitHub API 做发布发现；GitHub API 故障不会凭未经签名的 CDN 清单选择新版本。若未来增加离线镜像清单，需要先实现签名认证。
+此功能**无需 Cloudflare R2、对象存储账号或额外云服务**。默认只使用 GitHub Releases 下载，保留下载片段及 SHA-256 校验。只有未来确实存在由维护者审核的公开 HTTPS 镜像时，才会启用额外下载源。
 
-## Cloudflare R2 部署配置
-1. 创建一个仅用于公开发布安装包的 R2 存储桶，例如 `studyflow-releases`，配置公开 HTTPS 自定义域名（或 R2 开发子域名）。不要将账号 Cookie、课程数据上传到存储桶。
-2. GitHub 仓库 **Variables**：`STUDYFLOW_R2_PUBLIC_BASE_URL` = `https://download.example.org`（仅 origin，不带路径）。
-3. GitHub 仓库 **Secrets**：`STUDYFLOW_R2_ACCOUNT_ID`、`STUDYFLOW_R2_ACCESS_KEY_ID`、`STUDYFLOW_R2_SECRET_ACCESS_KEY`、`STUDYFLOW_R2_BUCKET`。授予仅对发布桶写入所需权限，客户端不持有任何 R2 密钥。
-4. 主分支构建前 `scripts/embed-update-mirror.py` 将公开镜像 origin 写入 Python sidecar；发布候选版成功后，CI 同步本次已经验证的 NSIS EXE 到 `releases/<tag>/<asset-filename>`。如存储桶/密钥未配置，镜像同步跳过，GitHub Releases 更新仍然工作。
-5. 首次启用后，检查公开镜像 HEAD/GET 可访问、文件 SHA-256 与 GitHub Release digest 一致，进行实际 Windows 下载/断线续传/回退验收，再宣称生产镜像可用。
+## 默认运行
+- GitHub Releases API 提供版本、更新日志及官方发布安装包的 SHA-256；不从镜像获取版本清单。
+- GitHub Release 正式安装包优先直连；网络失败保留 .part，后续发起下载时使用 HTTP Range 续传。服务器不支持 Range 时从头下载。
+- 已下载完整安装包复用前仍重新计算 SHA-256；未经校验的内容不会执行或作为完整文件展示。
+- 不需要 GitHub 账号、Cloudflare 账号、下载源密钥或自建服务器。更新后的安装程序仍由用户自行运行。
 
-## 下载规则
-- `自动`：存在已配置 R2 时优先 R2，否则 GitHub；不做不可靠的带宽测速。
-- `GitHub` / `R2`：优先选定源，允许用户关闭跨源故障切换。
-- 仅对 HTTP 206 且 Content-Range 起点匹配的响应续传；如果服务器忽略 Range 返回 200，则丢弃旧片段从头写入。
-- 网络故障保留以 SHA-256 标识的 .part；校验失败或不可信重定向会删除片段，不会把它当成安装包。
-- 当前下载期间界面提示处理中，尚未提供实时下载字节进度；安装动作仍由用户手动完成。
+## 可选自备镜像（默认禁用）
+- 如未来有**可信、已实际同步**的公开 HTTPS 下载站点，构建时可设置 GitHub 仓库变量 `STUDYFLOW_MIRROR_BASE_URL`，例如 `https://download.example.org`。仅支持 origin，不允许用户在 IPC 内任意提交 URL。
+- 构建工具 `scripts/embed-update-mirror.py` 将地址嵌入 sidecar；没有变量时镜像功能自动禁用，GitHub 官方下载工作不受影响。
+- 镜像只映射 `releases/<tag>/<filename>` 的安装包文件，必须与官方 Release asset 具有完全相同的 SHA-256。**没有自动上传镜像的工作流，也没有 R2 凭据要求**。镜像站点/同步操作要由其提供者独立完成。
+- 设置中的 `自动` 在已配置可信镜像时优先尝试镜像，可开启失败切换回 GitHub；未配置时只使用官方源。用户可强制选择 GitHub 官方源。
+- 公共下载镜像可能获知下载者网络地址，因此不要通过镜像发送任何学习平台 Cookie、账号信息或私人数据。
 
-## 限制
-GitHub Actions artifact 不等于 GitHub Release；本方案只同步发布成功、通过版本校验的 release installer。CI、上传完成以及配置凭据不等于用户网络已真实验收。
+## 验证边界
+- Python 离线回归覆盖镜像白名单、损坏片段、HTTP 206 续传、服务器忽略 Range、SHA-256 不一致、失败回退和旧设置迁移。
+- Windows 打包测试、真实网络下载与 GitHub Releases 自动发布应分别验收；通过离线测试不能证明未配置的镜像可用。
+- 当前版本尚未添加实时下载百分比和自动执行安装器；版本发现仍需要 GitHub API。
