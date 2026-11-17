@@ -213,9 +213,9 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
       当前课程参数已修改但尚未保存，请在设置中保存后启动。
     </p>}
     {selectedScopeUnavailable&&<div className="sf-task-context" role="status">
-      <span>上次选择的资源范围暂时无法在当前课程目录中核验；可刷新目录，或手动切换为整门课程。</span>
-      <button className="secondary" type="button" disabled={busy}
-        onClick={()=>{updateScope("all",[]);if(settingsOpen===undefined)setInternalOpened(true);}}>改为整门课程</button>
+      <span>上次选择的资源范围暂时无法在当前课程目录中核验；请从{hideTrigger?"页面顶部「参数设置」→「课程范围」":"课程参数设置"}调整，或刷新课程目录。</span>
+      {!hideTrigger&&<button className="secondary" type="button" disabled={busy}
+        onClick={()=>{updateScope("all",[]);setInternalOpened(true);}}>改为整门课程</button>}
     </div>}
     {loadState==="loading"&&<p className="sf-task-context" role="status">正在读取当前课程的本机参数…</p>}
     {loadState==="failed"&&<div className="sf-task-context" role="alert">
