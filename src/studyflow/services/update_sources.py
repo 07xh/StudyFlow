@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit
 
-PROXIES = ("gh-proxy.com", "ghfast.top")
+PROXIES = ("gh-proxy.org", "ghfast.top")
 RELEASE_PREFIX = "/07xh/StudyFlow/releases/download/"
 TAG_PATTERN = re.compile(r"v?\d+(?:\.\d+){1,3}(?:-[A-Za-z0-9.-]+)?")
 ASSET_PATTERN = re.compile(r"[A-Za-z0-9._-]+")
