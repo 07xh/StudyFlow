@@ -500,6 +500,133 @@ fn zhidao_open_official_site() -> Result<(), String> {
     }
 }
 
+// Never accept an arbitrary browser URL from the renderer.
+fn ucampus_official_url(mode: &str) -> Result<&'static str, String> {
+    match mode {
+        "ai" => Ok("https://uai.unipus.cn/"),
+        "classic" => Ok("https://u.unipus.cn/"),
+        "qr" => Ok("https://sso.unipus.cn/sso/login"),
+        _ => Err("UCAMPUS_OFFICIAL_LINK_INVALID".into()),
+    }
+}
+
+#[tauri::command]
+fn ucampus_open_official_site(mode: String) -> Result<(), String> {
+    let url = ucampus_official_url(&mode)?;
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg(url)
+            .spawn()
+            .map_err(|_| "UCAMPUS_OFFICIAL_SITE_OPEN_FAILED".to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
+// Auth happens on the provider's actual site. The remote page is never given
+// a Tauri capability, and tokens are exchanged only through native code/sidecar.
+const UCAMPUS_AUTH_WINDOW: &str = "ucampus-official-auth";
+
+fn ucampus_auth_destination_allowed(url: &tauri::Url) -> bool {
+    url.scheme() == "https"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port().is_none()
+        && matches!(url.host_str(), Some(
+            "sso.unipus.cn" | "uai.unipus.cn" | "ucontent.unipus.cn" |
+            "ucloud.unipus.cn" | "passport.unipus.cn"
+        ))
+}
+
+fn ucampus_jwt_cookie_valid(value: &str) -> bool {
+    (10..=4096).contains(&value.len()) && value.split('.').count() == 3
+        && value.split('.').all(|segment| segment.as_bytes().iter().all(|byte|
+            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+}
+
+#[tauri::command]
+fn ucampus_login_window_start(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(UCAMPUS_AUTH_WINDOW) {
+        window.show().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+        window.set_focus().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+        return Ok(());
+    }
+    let url = "https://uai.unipus.cn/".parse()
+        .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+    let profile = app.path().app_local_data_dir()
+        .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?
+        .join("ucampus-official-auth");
+    tauri::WebviewWindowBuilder::new(
+        &app, UCAMPUS_AUTH_WINDOW, tauri::WebviewUrl::External(url))
+        .title("U校园 · 官方登录（扫码 / 验证码）")
+        .inner_size(970.0, 710.0)
+        .min_inner_size(660.0, 480.0)
+        .data_directory(profile)
+        .on_navigation(ucampus_auth_destination_allowed)
+        .build()
+        .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn ucampus_login_window_import(app: tauri::AppHandle)
+    -> Result<serde_json::Value, String> {
+    let window = app.get_webview_window(UCAMPUS_AUTH_WINDOW)
+        .ok_or_else(|| "UCAMPUS_LOGIN_WINDOW_MISSING".to_string())?;
+    // Windows WebView2 cookie access must not execute in a synchronous IPC
+    // handler: Tauri documents a deadlock on the UI thread.
+    let jwt = tauri::async_runtime::spawn_blocking(move || {
+        let url: tauri::Url = "https://uai.unipus.cn/".parse()
+            .map_err(|_| "UCAMPUS_LOGIN_COOKIE_UNAVAILABLE".to_string())?;
+        let cookies = window.cookies_for_url(url)
+            .map_err(|_| "UCAMPUS_LOGIN_COOKIE_UNAVAILABLE".to_string())?;
+        cookies.into_iter()
+            .filter(|cookie| cookie.name() == "jwt")
+            .map(|cookie| cookie.value().to_string())
+            .find(|value| ucampus_jwt_cookie_valid(value))
+            .ok_or_else(|| "UCAMPUS_LOGIN_COOKIE_MISSING".to_string())
+    }).await.map_err(|_| "UCAMPUS_LOGIN_COOKIE_UNAVAILABLE".to_string())??;
+    // No JWT/Cookie is sent to the frontend. It is forwarded solely to the
+    // already validated local sidecar which persists into Credential Manager.
+    let request = serde_json::json!({
+        "id": uuid::Uuid::new_v4().to_string(), "version": 1,
+        "operation": "ucampus.session.configure",
+        "configuration": {
+            "variant": "ai", "catalog_url": "", "cookie": format!("jwt={jwt}"),
+            "authorization": "", "annotator_token": "", "school_id": ""
+        }
+    });
+    let reply = bridge_request(app.clone(), request).await
+        .map_err(|_| "UCAMPUS_LOGIN_SAVE_FAILED".to_string())?;
+    if reply.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+        return Err("UCAMPUS_LOGIN_SAVE_FAILED".to_string());
+    }
+    // Successful import must not leave another persistent copy of the
+    // bearer token in the embedded browser profile.
+    if let Some(window) = app.get_webview_window(UCAMPUS_AUTH_WINDOW) {
+        let _ = window.clear_all_browsing_data();
+        let _ = window.close();
+    }
+    Ok(serde_json::json!({"saved": true}))
+}
+
+#[tauri::command]
+async fn ucampus_login_window_close(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(UCAMPUS_AUTH_WINDOW) {
+        let _ = tauri::async_runtime::spawn_blocking({
+            let window = window.clone();
+            move || window.clear_all_browsing_data()
+        }).await;
+        window.close().map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
+    }
+    Ok(())
+}
+
 // An explicit Exit IPC command does not necessarily destroy the main window
 // before the process exits. Stop only services owned by this instance first,
 // so the next installer can replace the bundled bridge executable.
@@ -624,7 +751,7 @@ pub fn run() {
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit, updates_open_folder, studyflow_open_releases,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
@@ -645,7 +772,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod ipc_validation_tests {
-    use super::{parse_jsonl_reply, validate, studyflow_release_url};
+    use super::{parse_jsonl_reply, validate, studyflow_release_url, ucampus_official_url};
     use serde_json::json;
 
     #[test]
@@ -699,6 +826,33 @@ mod ipc_validation_tests {
             let request = json!({"id":"qr-test","version":1,"operation":operation});
             assert!(validate(&request).is_ok(), "QR operation was rejected: {operation}");
         }
+    }
+
+    #[test]
+    fn ucampus_auth_window_restricts_navigation_and_bearer_cookie() {
+        assert!(super::ucampus_auth_destination_allowed(
+            &"https://sso.unipus.cn/sso/login".parse().unwrap()));
+        assert!(super::ucampus_auth_destination_allowed(
+            &"https://uai.unipus.cn/".parse().unwrap()));
+        for url in [
+            "https://evil.example/", "http://uai.unipus.cn/",
+            "https://uai.unipus.cn.evil.example/",
+            "https://uai.unipus.cn:444/", "https://user@uai.unipus.cn/"
+        ] {
+            assert!(!super::ucampus_auth_destination_allowed(&url.parse().unwrap()));
+        }
+        assert!(super::ucampus_jwt_cookie_valid("header.payload.signature"));
+        assert!(!super::ucampus_jwt_cookie_valid("jwt=header.payload.signature"));
+        assert!(!super::ucampus_jwt_cookie_valid("header.payload.sig\\r\\nBad:1"));
+    }
+
+    #[test]
+    fn ucampus_official_urls_are_constant_first_party_pages() {
+        assert_eq!(ucampus_official_url("ai").unwrap(), "https://uai.unipus.cn/");
+        assert_eq!(ucampus_official_url("classic").unwrap(), "https://u.unipus.cn/");
+        assert_eq!(ucampus_official_url("qr").unwrap(), "https://sso.unipus.cn/sso/login");
+        assert!(ucampus_official_url("https://evil.example/").is_err());
+        assert!(ucampus_official_url("../").is_err());
     }
 
     #[test]
