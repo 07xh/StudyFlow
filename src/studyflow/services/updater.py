@@ -171,12 +171,13 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
                 and parsed.netloc == "github.com"
                 and parsed.path.startswith(f"/{OWNER}/{REPO}/releases/download/")
                 and not parsed.query and not parsed.fragment)
-    sourceforge = (parsed.scheme == "https" and mirror_host == "sourceforge.net"
-                   and parsed.netloc == "sourceforge.net" and not parsed.query
-                   and not parsed.fragment and re.fullmatch(
-                       r"/projects/[a-z0-9-]+/files/releases/v?\d+(?:\.\d+){1,3}"
-                       r"(?:-[A-Za-z0-9.-]+)?/[A-Za-z0-9._-]+/download", parsed.path))
-    if not (official or sourceforge):
+    from . import update_sources
+    proxy = (mirror_host in update_sources.PROXIES
+             and parsed.scheme == "https" and parsed.netloc == mirror_host
+             and not parsed.query and not parsed.fragment
+             and parsed.path.startswith("/https://github.com/")
+             and update_sources.trusted_release_url(parsed.path[1:]))
+    if not (official or proxy):
         raise ValueError("Untrusted download URL")
     if not re.fullmatch(r"[a-fA-F0-9]{64}", sha256):
         raise ValueError("Invalid SHA-256")
@@ -185,9 +186,9 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
     partial = destination.with_name(destination.name + "." + sha256.lower()[:16] + ".part")
     if destination.is_symlink() or partial.is_symlink():
         raise UpdateError("UPDATE_STORAGE_FAILED", "Update destination is not a regular file")
-    permitted_hosts = ({"github.com", "objects.githubusercontent.com",
-                        "release-assets.githubusercontent.com"} if official else
-                       {"sourceforge.net", "downloads.sourceforge.net"})
+    official_hosts = {"github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"}
+    permitted_hosts = official_hosts if official else official_hosts | {mirror_host}
+
 
     def request_once(restart: bool = False) -> Path:
         offset = partial.stat().st_size if partial.is_file() else 0
@@ -201,10 +202,8 @@ def verified_download(url: str, sha256: str, destination: Path, timeout: int = 6
         try:
             with urlopen(req, timeout=timeout) as response:
                 final = urlparse(response.geturl())
-                trusted = (final.hostname in permitted_hosts or
-                           (sourceforge and bool(final.hostname) and
-                            final.hostname.endswith(".dl.sourceforge.net")))
-                if final.scheme != "https" or not trusted:
+                if (final.scheme != "https" or final.hostname not in permitted_hosts
+                        or bool(final.username) or bool(final.password)):
                     partial.unlink(missing_ok=True)
                     raise UpdateError("UPDATE_REDIRECT_REJECTED", "Untrusted redirect")
                 status = getattr(response, "status", 200)
