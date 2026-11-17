@@ -17,7 +17,7 @@ import runpy
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import threading
 import time
 
@@ -582,15 +582,28 @@ def _run_exclusive(platform: str, callback) -> int:
     # reaps the process tree. Retry *only lock acquisition*, never the task
     # callback: replaying a started task would risk duplicate work.
     for attempt in range(8):
-        try:
-            with _exclusive_worker(platform):
-                return callback()
-        except _WorkerLockBusy:
-            if attempt == 7:
-                return 10  # A live other worker still owns the lock.
-            time.sleep(0.15)
-        except OSError:
-            return 11
+        with ExitStack() as stack:
+            try:
+                # Only entering the context is lock acquisition. Errors from
+                # callback() must NOT be misreported as lock failure (code 11).
+                stack.enter_context(_exclusive_worker(platform))
+            except _WorkerLockBusy:
+                if attempt == 7:
+                    return 10  # A live other worker still owns the lock.
+                time.sleep(0.15)
+                continue
+            except OSError as exc:
+                # Windows can transiently deny opening a file during AV scans
+                # or concurrent status reads. Never retry an already-started
+                # task callback; this loop covers lock acquisition only.
+                transient = isinstance(exc, PermissionError) or getattr(
+                    exc, "winerror", None
+                ) in (32, 33)
+                if transient and attempt < 7:
+                    time.sleep(0.15)
+                    continue
+                return 11
+            return callback()
     return 10
 
 
