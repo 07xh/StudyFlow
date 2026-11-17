@@ -161,3 +161,19 @@ test("U校园官方扫码入口与 Cookie 导入有明确的会话边界",()=>{
   assert.match(login,/let windowWarning=""/);
   assert.match(style,/\.sf-shell \.sf-ucampus-session-warning\{/);
 });
+
+test("U校园 session saves share exactly one course-readback path",()=>{
+  const login=read("components/UCampusLoginPanel.tsx");
+  // Official-window import, direct SSO login and manual Cookie import all
+  // trigger the same post-save readback with no fabricated connected state.
+  assert.equal((login.match(/await completeSessionSave\(/g)||[]).length,3);
+  assert.equal((login.match(/await verifyCatalog\(\)/g)||[]).length,2);
+  assert.equal((login.match(/invoke\("ucampus_login_window_start"\)/g)||[]).length,1);
+  assert.match(login,/const feedback=\{/);
+  assert.match(login,/monitorReset===false/);
+  assert.match(login,/if\(result\?\.saved!==true\)throw Error\("UCAMPUS_LOGIN_SAVE_FAILED"\)/);
+  assert.equal((login.match(/if\(saved\.saved!==true\)throw Error\("UCAMPUS_CREDENTIAL_STORAGE_FAILED"\)/g)||[]).length,2);
+  assert.match(login,/if\(method==="official"\)setVariant\("ai"\)/);
+  assert.match(login,/error\.message==="UCAMPUS_LOGIN_VERIFICATION_REQUIRED"/);
+  assert.doesNotMatch(login,/localStorage\.(?:getItem|setItem)/);
+});
