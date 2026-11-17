@@ -98,7 +98,7 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
       <label className="sf-inline-check"><input id="update-fallback" type="checkbox" checked={settings.fallback}
         disabled={!desktop||busy||!loaded}
         onChange={e=>void save({...settings,fallback:e.target.checked})}/>下载失败时自动尝试另一下载源</label></div>
-    {!sources.sourceforge&&<p className="muted">当前发行版未配置SourceForge 镜像，下载仍使用 GitHub 官方源。</p>}
+    {!sources.sourceforge&&<p className="muted">尚未配置 SourceForge 项目，，下载仍使用 GitHub 官方源。</p>}
     <div className="actions">
       <button className="secondary" disabled={!desktop||busy} onClick={()=>void perform(async()=>{
         const version=current||await getVersion();setCurrent(version);
