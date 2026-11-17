@@ -1,10 +1,9 @@
 import {useState} from "react";
 import {ChevronDown,ChevronUp,History} from "lucide-react";
-
-type Event={id:string;at:string;action:string;result:"success"|"warning"|"info";detail:string};
+import type {ActivityEntry} from "../activity";
 export function ZhidaoActivityPanel({
   events,expandedByDefault=false,embedded=false
-}:{events:Event[];expandedByDefault?:boolean;embedded?:boolean}){
+}:{events:ActivityEntry[];expandedByDefault?:boolean;embedded?:boolean}){
   const [expanded,setExpanded]=useState(expandedByDefault);
   const records=events.length>0
     ?<div className="sf-zd-activity-list">{events.slice(0,20).map(item=><article key={item.id}>

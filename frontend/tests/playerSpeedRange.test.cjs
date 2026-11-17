@@ -58,3 +58,15 @@ test("settings dirty checks typed fields, and unchanged Enter does not save",()=
   assert.match(editor,/!draft\|\|busy\|\|!dirty/);
   assert.match(editor,/setMessage\(''\);/);
 });
+
+test("activity view and player close monitor reuse shared types without leaking raw errors",()=>{
+  const activity=source("components/ZhidaoActivityPanel.tsx");
+  const monitor=source("components/ZhidaoPlayerMonitor.tsx");
+  assert.match(activity,/import type \{ActivityEntry\} from "\.\.\/activity"/);
+  assert.match(activity,/events:ActivityEntry\[\]/);
+  assert.match(monitor,/type Status=Pick<PlayerStatus,"state"\|"courseKey"\|"runId"\|"exitCode">/);
+  assert.match(monitor,/friendlyBridgeError\(error\)/);
+  assert.doesNotMatch(monitor,/error instanceof Error\?error\.message/);
+  assert.match(monitor,/onCoursesUpdatedRef\.current=onCoursesUpdated/);
+  assert.match(monitor,/onEventRef\.current=onEvent/);
+});
