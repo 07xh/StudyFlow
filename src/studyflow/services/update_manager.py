@@ -27,9 +27,11 @@ def _validated(value: object) -> dict:
     if set(value) - set(DEFAULTS):
         raise ValueError("INVALID_UPDATE_SETTINGS")
     result = {**DEFAULTS, **value}
+    if result["source"] == "sourceforge":
+        result["source"] = "auto"
     if (result["channel"] not in ("stable", "beta")
             or result["mode"] not in ("notify", "download")
-            or result["source"] not in ("auto", "github", "sourceforge")
+            or result["source"] not in ("auto", "github", "proxy")
             or type(result["fallback"]) is not bool):
         raise ValueError("INVALID_UPDATE_SETTINGS")
     return result
@@ -114,8 +116,8 @@ def changelog(current: str, previous: str | None = None, history: bool = False) 
 
 
 def sources() -> dict:
-    """UI capabilities only; never accepts an arbitrary mirror URL."""
-    return {"github": True, "sourceforge": bool(update_sources.sourceforge_project())}
+    """Public proxies require no setup; version metadata still comes from GitHub."""
+    return {"github": True, "proxy": True}
 
 
 def download(current: str, version: str) -> dict:
@@ -140,23 +142,21 @@ def download(current: str, version: str) -> dict:
     except OSError:
         pass
 
+    if not update_sources.trusted_release_url(url):
+        raise updater.UpdateError("UPDATE_ASSET_UNAVAILABLE", "Invalid GitHub release asset")
     pref = preferences()
-    mirror_url = update_sources.sourceforge_download_url(url)
-    order = update_sources.source_order(pref["source"], pref["fallback"], mirror_url)
-    if not order:
-        raise updater.UpdateError("UPDATE_MIRROR_UNAVAILABLE", "Configured mirror unavailable")
+    order = update_sources.source_order(pref["source"], pref["fallback"])
     last_error = None
     for source in order:
         try:
-            if source == "sourceforge":
-                assert mirror_url is not None
-                updater.verified_download(mirror_url, checksum, target, mirror_host="sourceforge.net")
-            else:
+            if source == "github":
                 updater.verified_download(url, checksum, target)
+            else:
+                proxy = update_sources.proxy_url(url, source)
+                updater.verified_download(proxy, checksum, target, mirror_host=source)
             return {"filename": target.name, "sha256": checksum, "source": source}
         except updater.UpdateError as exc:
             last_error = exc
-            # Changing transport cannot resolve local disk failures.
             if exc.code == "UPDATE_STORAGE_FAILED":
                 raise
     if last_error is not None:
