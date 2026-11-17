@@ -50,7 +50,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       <div className="sf-zhs-now-progress-row"><small>本地片段位置</small>
         <strong>{percent!=null?percent.toFixed(1)+"%":"—"}</strong></div>
       {task.state==="running"&&<div
-        className={"sf-verified-track sf-zhs-progress-track"+(percent==null?" is-indeterminate":"")}
+        className={"sf-verified-track sf-zhs-progress-track"+(percent==null?" is-unverified":"")}
         role="progressbar"
         aria-label={(task.name??"此视频")+"本地片段位置"}
         aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent??undefined}

@@ -292,3 +292,28 @@ def test_local_snapshot_reader_rejects_symlink_metadata():
     rust = (ROOT / "src-tauri" / "src" / "legacy_tasks.rs").read_text(encoding="utf-8")
     assert "fs::symlink_metadata(&path)" in rust
     assert "if !metadata.is_file()" in rust
+
+
+def test_repeated_shared_video_sample_renews_freshness_without_new_percent(monkeypatch, tmp_path):
+    from studyflow.services import zhs_resource_monitor as resource_monitor
+
+    vendor = runpy.run_path(str(VENDOR), run_name="studyflow_zhs_test")
+    monitor = resource_monitor.create_resource_monitor(
+        vendor["NumericTelemetry"], "e" * 32, tmp_path
+    )
+    clock = [100.0]
+    monkeypatch.setattr(legacy.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(resource_monitor.time, "time", lambda: clock[0])
+    sink = legacy._RefreshingZhsSink(monitor)
+
+    sink.receive("playing 123456 [####------] 40.0%")
+    assert json.loads(monitor.path.read_text(encoding="utf-8"))["at"] == 100.0
+    clock[0] = 106.0
+    sink.receive("playing 123456 [####------] 40.0%")
+    unchanged = json.loads(monitor.path.read_text(encoding="utf-8"))
+    assert unchanged["videoSegmentPercent"] == 40.0
+    assert unchanged["at"] == 106.0
+
+    clock[0] = 112.0
+    sink.receive("unrelated diagnostic 80.0%")
+    assert json.loads(monitor.path.read_text(encoding="utf-8"))["at"] == 106.0
