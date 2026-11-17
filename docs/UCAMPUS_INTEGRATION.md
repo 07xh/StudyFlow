@@ -26,7 +26,8 @@
 - U校园5.0 / AI版的账号密码登录通过固定 `https://sso.unipus.cn/sso/0.1/sso/cip/login` 执行；AES-CBC/PKCS7 字段封装来自已登记的 GPL-3.0 参考实现。**协议可用性须经本人账号验收**。
 - 不保存密码、用户名或 SSO refresh token；成功时仅保存 SSO 返回的 JWT Cookie 到 Windows 凭据管理器，不把密码返回前端或日志。会话过期后需要重新登录；不承诺自动续期。
 - 登录后使用固定的官方账号信息只读 GET（`/api/account/user/info`）尝试读取 `value.userInfo.school`；仅在值为有限长度的数字学校编号时保存，失败时保留 JWT 会话，不构造学校编号。
-- 对验证码、滑块、登录限流仅显示固定状态码，不模拟用户验证、不绕过或无限重试。
+- 用户实测的账号登录验证码为**图片/数字验证码，不是手机短信验证码**。官方 WebView2 登录窗口直接呈现 U校园网页，由本人在网页内查看图片并手动输入数字/字符；不在学序另造验证码图片或自定义提交接口。独立的扫码登录仍作为可选方式。
+- 后端直接账号密码 SSO 请求如返回 `UCAMPUS_LOGIN_VERIFICATION_REQUIRED`，前端会自动打开官方登录窗口让用户重新在官网完成图片/数字验证码，不尝试猜测挑战参数、自动识别、绕过或无限重试。登录完成后仍需本机导入会话和真实课程回读。
 - 官网 [Unipus SSO](https://sso.unipus.cn/sso/login) 提供二维码扫码登录。学序现在提供**独立的官方 WebView2 登录窗口**：用户自行完成官方扫码/验证码后，点击“导入并验证会话”时由 Rust 原生层检查该窗口在 `uai.unipus.cn` 下的 JWT Cookie，符合格式才传给本机 Python sidecar，保存到 Windows 凭据管理器；Cookie/JWT 不返回前端。首次使用、域名跳转及具体学校账号是否设置 JWT Cookie 仍待 Windows 实机验收，不能将打开窗口或扫码完成当成已登录。系统浏览器仍不能向学序自动同步 Cookie，可在本机手动导入本人 Cookie 作为备用。
 - 内嵌官方登录仅允许访问固定的 U校园第一方 HTTPS 域名，窗口标签不授予 Tauri IPC capability，令牌不会进入页面 JavaScript/日志。成功导入或主动关闭时尽力清理 WebView2 浏览数据。
 - 2026-11-17 UI 修复：原 `details` 内 `label` 与 `input` 默认行内布局造成长标签和输入框互相挤压，已改为表单字段上下排列、可换行的官方登录链接。手动导入支持清理粘贴的 `Cookie:` 请求头前缀。
