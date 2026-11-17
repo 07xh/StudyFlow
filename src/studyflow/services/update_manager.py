@@ -10,10 +10,10 @@ import re
 import tempfile
 from urllib.parse import urlparse
 
-from . import updater
+from . import updater, update_sources
 
 # RC-only release line: new installations follow beta; persisted user preferences win.
-DEFAULTS = {"channel": "beta", "mode": "download"}
+DEFAULTS = {"channel": "beta", "mode": "download", "source": "auto", "fallback": True}
 
 
 def home() -> Path:
@@ -21,11 +21,18 @@ def home() -> Path:
 
 
 def _validated(value: object) -> dict:
-    if (not isinstance(value, dict) or set(value) != set(DEFAULTS)
-            or value["channel"] not in ("stable", "beta") or value["mode"] not in ("notify", "download")):
+    """Accept prior two-field preferences and migrate without losing choices."""
+    if not isinstance(value, dict) or not {"channel", "mode"}.issubset(value):
         raise ValueError("INVALID_UPDATE_SETTINGS")
-    return dict(value)
-
+    if set(value) - set(DEFAULTS):
+        raise ValueError("INVALID_UPDATE_SETTINGS")
+    result = {**DEFAULTS, **value}
+    if (result["channel"] not in ("stable", "beta")
+            or result["mode"] not in ("notify", "download")
+            or result["source"] not in ("auto", "github", "r2")
+            or type(result["fallback"]) is not bool):
+        raise ValueError("INVALID_UPDATE_SETTINGS")
+    return result
 
 def preferences() -> dict:
     path = home() / "preferences.json"
@@ -106,6 +113,11 @@ def changelog(current: str, previous: str | None = None, history: bool = False) 
     return {"entries": updater.release_notes(current, previous_version=previous, history=history)}
 
 
+def sources() -> dict:
+    """UI capabilities only; never accepts an arbitrary mirror URL."""
+    return {"github": True, "r2": bool(update_sources.mirror_base())}
+
+
 def download(current: str, version: str) -> dict:
     if not isinstance(version, str) or len(version) > 80 or not updater.VERSION_PATTERN.fullmatch(version):
         raise ValueError("INVALID_UPDATE_SETTINGS")
@@ -114,20 +126,40 @@ def download(current: str, version: str) -> dict:
     if asset is None:
         raise updater.UpdateError("UPDATE_ASSET_UNAVAILABLE", "Update asset unavailable")
     url, checksum = asset
-    # No caller-controlled path or executable name crosses the IPC boundary.
     target = home() / ("StudyFlow-" + version.lstrip("v") + "-x64-setup.exe")
     if target.is_symlink():
         raise ValueError("UPDATE_ASSET_UNAVAILABLE")
-    reusable = False
     try:
         if target.is_file():
             digest = hashlib.sha256()
             with target.open("rb") as stream:
                 while chunk := stream.read(1024 * 1024):
                     digest.update(chunk)
-            reusable = hmac.compare_digest(digest.hexdigest(), checksum)
+            if hmac.compare_digest(digest.hexdigest(), checksum):
+                return {"filename": target.name, "sha256": checksum, "source": "cache"}
     except OSError:
         pass
-    if not reusable:
-        updater.verified_download(url, checksum, target)
-    return {"filename": target.name, "sha256": checksum}
+
+    pref = preferences()
+    mirror_url = update_sources.mirror_asset_url(url)
+    order = update_sources.source_order(pref["source"], pref["fallback"], mirror_url)
+    if not order:
+        raise updater.UpdateError("UPDATE_MIRROR_UNAVAILABLE", "Configured mirror unavailable")
+    last_error = None
+    for source in order:
+        try:
+            if source == "r2":
+                assert mirror_url is not None
+                host = update_sources.mirror_base().removeprefix("https://")
+                updater.verified_download(mirror_url, checksum, target, mirror_host=host)
+            else:
+                updater.verified_download(url, checksum, target)
+            return {"filename": target.name, "sha256": checksum, "source": source}
+        except updater.UpdateError as exc:
+            last_error = exc
+            # Changing transport cannot resolve local disk failures.
+            if exc.code == "UPDATE_STORAGE_FAILED":
+                raise
+    if last_error is not None:
+        raise last_error
+    raise updater.UpdateError("UPDATE_DOWNLOAD_FAILED", "No usable download source")
