@@ -94,6 +94,11 @@ test("U校园 read-only UI keeps unit selection and account copy precise",()=>{
   assert.match(login,/operation:"courses.list",platform:"ucampus"/);
   assert.match(login,/const verifyCatalog=async\(\)/);
   assert.match(login,/const summary=await verifyCatalog\(\)/);
+  assert.match(login,/operation:"ucampus.units.list",course_id:courses\[0\].course_id/);
+  assert.match(login,/内容侧单元核验失败/);
+  assert.match(login,/课程已登录不代表内容接口授权成功/);
+  assert.match(read("bridge.ts"),/UCAMPUS_CONTENT_AUTH_REJECTED/);
+  assert.match(read("bridge.ts"),/UCAMPUS_CONTENT_ACCESS_DENIED/);
   assert.match(login,/SSO 会话已保存，但课程读取失败/);
 
   assert.match(login,/尚不能确认该账号已有课程/);
