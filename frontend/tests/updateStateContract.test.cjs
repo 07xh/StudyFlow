@@ -39,5 +39,5 @@ test("mirror controls expose only packaged sources and safe failover",()=>{
   assert.ok(code.includes('operation:"updates.sources"'));
   assert.ok(code.includes('id="update-source"'));
   assert.ok(code.includes('id="update-fallback"'));
-  assert.ok(code.includes('disabled={!sources.r2}'));
+  assert.ok(code.includes('disabled={!sources.mirror}'));
 });
