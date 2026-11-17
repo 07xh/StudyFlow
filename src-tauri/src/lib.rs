@@ -500,6 +500,34 @@ fn zhidao_open_official_site() -> Result<(), String> {
     }
 }
 
+// Never accept an arbitrary browser URL from the renderer.
+fn ucampus_official_url(mode: &str) -> Result<&'static str, String> {
+    match mode {
+        "ai" => Ok("https://uai.unipus.cn/"),
+        "classic" => Ok("https://u.unipus.cn/"),
+        "qr" => Ok("https://sso.unipus.cn/sso/login"),
+        _ => Err("UCAMPUS_OFFICIAL_LINK_INVALID".into()),
+    }
+}
+
+#[tauri::command]
+fn ucampus_open_official_site(mode: String) -> Result<(), String> {
+    let url = ucampus_official_url(&mode)?;
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg(url)
+            .spawn()
+            .map_err(|_| "UCAMPUS_OFFICIAL_SITE_OPEN_FAILED".to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
 // An explicit Exit IPC command does not necessarily destroy the main window
 // before the process exits. Stop only services owned by this instance first,
 // so the next installer can replace the bundled bridge executable.
@@ -624,7 +652,7 @@ pub fn run() {
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, studyflow_exit, updates_open_folder, studyflow_open_releases,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, studyflow_exit, updates_open_folder, studyflow_open_releases,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
@@ -699,6 +727,15 @@ mod ipc_validation_tests {
             let request = json!({"id":"qr-test","version":1,"operation":operation});
             assert!(validate(&request).is_ok(), "QR operation was rejected: {operation}");
         }
+    }
+
+    #[test]
+    fn ucampus_official_urls_are_constant_first_party_pages() {
+        assert_eq!(ucampus_official_url("ai").unwrap(), "https://uai.unipus.cn/");
+        assert_eq!(ucampus_official_url("classic").unwrap(), "https://u.unipus.cn/");
+        assert_eq!(ucampus_official_url("qr").unwrap(), "https://sso.unipus.cn/sso/login");
+        assert!(ucampus_official_url("https://evil.example/").is_err());
+        assert!(ucampus_official_url("../").is_err());
     }
 
     #[test]
