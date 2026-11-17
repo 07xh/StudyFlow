@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import base64
 import json
+import time
 import os
 import re
 from urllib.parse import urlsplit
@@ -98,6 +100,34 @@ def clear() -> None:
         pass
 
 
+def _jwt_lifetime_state(config: UCampusConfig | None) -> str:
+    """Unverified local exp hint, never a proof that the server accepts a JWT."""
+    if config is None or config.variant != "ai":
+        return "unknown"
+    cookie_parts = (item.strip().split("=", 1) for item in config.cookie.split(";") if "=" in item)
+    token = next((value for name, value in cookie_parts if name == "jwt"), "")
+    segments = token.split(".")
+    if len(segments) != 3 or not 1 <= len(segments[1]) <= 4096:
+        return "unknown"
+    try:
+        decoded = base64.urlsafe_b64decode(segments[1] + "=" * (-len(segments[1]) % 4))
+        if len(decoded) > 4096:
+            return "unknown"
+        payload = json.loads(decoded)
+        exp = payload.get("exp") if isinstance(payload, dict) else None
+        if type(exp) is not int or exp <= 0:
+            return "unknown"
+    except (ValueError, TypeError, UnicodeError):
+        return "unknown"
+    now = int(time.time())
+    if exp <= now:
+        return "expired"
+    if exp <= now + 300:
+        return "expiring"
+    return "not_expired"
+
+
 def status() -> dict:
     config = load()
-    return {"configured": config is not None, "variant": config.variant if config else None}
+    return {"configured": config is not None, "variant": config.variant if config else None,
+            "jwt_lifetime": _jwt_lifetime_state(config)}
