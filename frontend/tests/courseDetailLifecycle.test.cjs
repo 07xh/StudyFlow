@@ -57,3 +57,76 @@ test('Zhidao full-knowledge flag is not mislabeled unverified when percent is ab
  assert.doesNotMatch(JSON.stringify(view.toJSON()),/0.0%/);
  act(()=>view.unmount());
 });
+
+test('switching to a course with no cached chapters triggers real single-course verification',async()=>{
+ const key='b'.repeat(64),calls=[],updates=[];
+ let verified=false;
+ const Panel=component(async args=>{
+  calls.push(args.operation+':'+args.course_key);
+  if(args.operation==='zhidao.progress.verify'){
+   verified=true;
+   return {courses:[{platform:'zhidao',course_id:key,progress_evidence:'server_verified',
+     progress_percent:16,verified_at:'2026-11-16T13:00:00Z'}],incomplete:false,fetched_at:null};
+  }
+  if(args.operation==='zhidao.course.detail')return {
+   course_key:key,course_type:'ai',verified,stale:false,done:verified?1:0,
+   total:verified?1:0,items:verified?[{name:'从服务器回读的知识点',progress_percent:100}]:[]
+  };
+  throw Error('unexpected operation');
+ });
+ let view;
+ try{
+  await act(async()=>{view=create(React.createElement(Panel,{
+   course:{...course,course_id:key,verified_at:null},desktop:true,
+   onCoursesUpdated:list=>updates.push(list)
+  }));});
+  assert.deepEqual(calls,[
+   'zhidao.course.detail:'+key,'zhidao.progress.verify:'+key,
+   'zhidao.course.detail:'+key]);
+  assert.match(JSON.stringify(view.toJSON()),/从服务器回读的知识点/);
+  assert.equal(updates.length,1);
+ }finally{if(view)act(()=>view.unmount());}
+});
+
+test('manual chapter refresh verifies current server state instead of reading cache alone',async()=>{
+ const calls=[];
+ const Panel=component(async args=>{
+  calls.push(args.operation);
+  if(args.operation==='zhidao.progress.verify')
+    return {courses:[{...course,stale:false}],incomplete:false,fetched_at:null};
+  return detail('actual');
+ });
+ let view;
+ try{
+  await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
+  const button=view.root.findAllByType('button').find(x=>
+   Array.isArray(x.props.children)&&
+   x.props.children.some(child=>typeof child==='string'&&child.includes('刷新章节')));
+  assert.ok(button);
+  await act(async()=>{button.props.onClick();});
+  assert.deepEqual(calls,['zhidao.course.detail','zhidao.course.detail',
+   'zhidao.progress.verify','zhidao.course.detail']);
+ }finally{if(view)act(()=>view.unmount());}
+});
+
+test('a delayed previous-course response never overwrites the newly selected course',async()=>{
+ const oldKey='a'.repeat(64),newKey='b'.repeat(64);
+ let releaseOld;
+ const Panel=component(async args=>{
+  if(args.course_key===oldKey)return new Promise(resolve=>{releaseOld=resolve;});
+  return {course_key:newKey,course_type:'ai',verified:true,stale:false,done:0,total:1,
+    items:[{name:'新课程知识点',progress_percent:45}]};
+ });
+ let view;
+ try{
+  await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
+  await act(async()=>{view.update(React.createElement(Panel,{
+   course:{...course,course_id:newKey,title:'new'},desktop:true
+  }));});
+  assert.match(JSON.stringify(view.toJSON()),/新课程知识点/);
+  await act(async()=>{releaseOld(detail('旧课程知识点'));});
+  const rendered=JSON.stringify(view.toJSON());
+  assert.match(rendered,/新课程知识点/);
+  assert.doesNotMatch(rendered,/旧课程知识点/);
+ }finally{if(view)act(()=>view.unmount());}
+});

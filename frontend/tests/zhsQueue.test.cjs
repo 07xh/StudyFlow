@@ -48,7 +48,9 @@ test('stale or failed polling hides all percentages and disables row controls',a
    const placeholders=view.root.findAllByProps({role:'progressbar'});
    assert.equal(placeholders.length,2,'running tasks retain nonnumeric placeholders');
    assert.ok(placeholders.every(p=>p.props['aria-valuenow']===undefined));
-   assert.ok(placeholders.every(p=>/is-indeterminate/.test(p.props.className)));
+   assert.ok(placeholders.every(p=>/is-unverified/.test(p.props.className)));
+   assert.ok(placeholders.every(p=>p.findAllByType('span').every(x=>x.props.style?.width==='0%')),
+     'unverified tracks never draw a misleading numeric fill');
    assert.doesNotMatch(words(view.root),/25%|63%/);
    assert.ok(view.root.findAllByType('button').every(b=>b.props.disabled));
   }finally{if(view)act(()=>view.unmount());}

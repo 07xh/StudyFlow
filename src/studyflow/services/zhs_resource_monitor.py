@@ -60,7 +60,13 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
             if observed is None:
                 return
             value = float(observed.group(2))
-            if 0.0 <= value <= 100.0 and self.percent != value:
+            # A repeated, valid shared-course progress frame is still fresh
+            # telemetry. _RefreshingZhsSink resets last_snapshot every 5s so
+            # identical percentages can renew their timestamps, just like AI
+            # course frames do. Do not refresh for unrelated console output.
+            if 0.0 <= value <= 100.0 and (
+                self.percent != value or self.last_snapshot is None
+            ):
                 self.percent = value
                 self.publish()
 
