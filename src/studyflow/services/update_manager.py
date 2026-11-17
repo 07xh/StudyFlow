@@ -29,7 +29,7 @@ def _validated(value: object) -> dict:
     result = {**DEFAULTS, **value}
     if (result["channel"] not in ("stable", "beta")
             or result["mode"] not in ("notify", "download")
-            or result["source"] not in ("auto", "github", "mirror")
+            or result["source"] not in ("auto", "github", "sourceforge")
             or type(result["fallback"]) is not bool):
         raise ValueError("INVALID_UPDATE_SETTINGS")
     return result
@@ -115,7 +115,7 @@ def changelog(current: str, previous: str | None = None, history: bool = False) 
 
 def sources() -> dict:
     """UI capabilities only; never accepts an arbitrary mirror URL."""
-    return {"github": True, "mirror": bool(update_sources.mirror_base())}
+    return {"github": True, "sourceforge": bool(update_sources.sourceforge_project())}
 
 
 def download(current: str, version: str) -> dict:
@@ -141,17 +141,16 @@ def download(current: str, version: str) -> dict:
         pass
 
     pref = preferences()
-    mirror_url = update_sources.mirror_asset_url(url)
+    mirror_url = update_sources.sourceforge_download_url(url)
     order = update_sources.source_order(pref["source"], pref["fallback"], mirror_url)
     if not order:
         raise updater.UpdateError("UPDATE_MIRROR_UNAVAILABLE", "Configured mirror unavailable")
     last_error = None
     for source in order:
         try:
-            if source == "mirror":
+            if source == "sourceforge":
                 assert mirror_url is not None
-                host = update_sources.mirror_base().removeprefix("https://")
-                updater.verified_download(mirror_url, checksum, target, mirror_host=host)
+                updater.verified_download(mirror_url, checksum, target, mirror_host="sourceforge.net")
             else:
                 updater.verified_download(url, checksum, target)
             return {"filename": target.name, "sha256": checksum, "source": source}
