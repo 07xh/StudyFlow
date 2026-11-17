@@ -22,7 +22,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     if(!desktop)return;
     let active=true;
     void request<UCampusSessionInfo>({operation:"ucampus.session.info"})
-      .then(value=>{if(active)setStatus(value);})
+      .then(value=>{if(active){setStatus(value);if(value.variant)setVariant(value.variant);}})
       .catch(()=>{if(active)setStatus(null);});
     return ()=>{active=false;};
   },[desktop]);
@@ -62,13 +62,21 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     if(!desktop||busy||(variant==="classic"&&!url.trim())||!cookie.trim())return;
     setBusy(true);setNotice("");
     try{
-      const configuration:UCampusConfig={variant,catalog_url:url.trim(),cookie:cookie.trim(),
+      const configuration:UCampusConfig={variant,catalog_url:url.trim(),cookie:cookie.trim().replace(/^cookie\s*:\s*/i,""),
         authorization:authorization.trim(),annotator_token:annotator.trim(),school_id:schoolId.trim()};
       const saved=await request<{saved:boolean;monitor_reset:boolean}>({operation:"ucampus.session.configure",configuration});
       clearSensitiveInputs();
       setStatus({configured:true,variant});
-      setNotice("已在本机保存会话。保存成功不表示已登录或接口可用，请点击“验证课程读取”核验当前账号。"+(saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
       onChanged();
+      try{
+        const summary=await verifyCatalog();
+        setNotice("会话已在本机保存。"+summary+"课程读取成功不等于学习进度已核验。"+
+          (saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
+      }catch(catalogError){
+        setNotice("会话已保存，但课程读取失败："+friendlyBridgeError(catalogError)+
+          "。保存成功不表示已登录或接口可用。"+
+          (saved.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
+      }
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
   };
@@ -91,8 +99,8 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
   };
-  return <div className="sf-platform-settings-view" aria-label="U校园账号与连接">
-    <p className="sf-muted">优先适配 U校园5.0 / AI版。已参考成熟开源项目接入首页课程列表及书架只读接口；是否适配你的账号仍需核验。服务器进度只读核验已接入，是否适配当前账号仍需实际验证；本地练习与服务器完成状态分开显示。</p>
+  return <div className="sf-platform-settings-view sf-ucampus-login" aria-label="U校园账号与连接">
+    <p className="sf-muted">U校园5.0 / AI版优先接入。课程与服务器进度须以本人账号的实际读取结果核验。</p>
     <p className="sf-muted">{status?.configured?"本机已有会话配置（不代表接口已登录成功）":"本机尚未配置 U校园会话"}</p>
     <div className="sf-settings-line">
       <label htmlFor="ucampus-variant">平台版本</label>
@@ -102,7 +110,20 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
         <option value="classic">U校园普通版</option>
       </select>
     </div>
-    {variant==="ai"&&<div className="sf-platform-settings-view" aria-label="U校园 SSO 账号密码登录">
+    <section className="sf-ucampus-official-login" aria-label="U校园官方验证入口">
+      <strong>推荐：先在官方页面完成登录验证</strong>
+      <p className="sf-muted">官方 Unipus 登录页提供扫码登录，也可按页面要求完成图形、短信或其他验证。</p>
+      <div className="actions">
+        <a className="sf-ucampus-official-link" href={variant==="ai"?"https://uai.unipus.cn/":"https://u.unipus.cn/"}
+          target="_blank" rel="noopener noreferrer">打开 U校园官方网站</a>
+        <a className="sf-ucampus-official-link secondary" href="https://sso.unipus.cn/sso/login"
+          target="_blank" rel="noopener noreferrer">打开官方扫码登录页</a>
+      </div>
+      <p className="sf-muted">官方网页的登录状态尚不能自动同步到学序。完成验证后，可在下方导入本人有效会话 Cookie；不要将 Cookie 发到聊天、日志或仓库。</p>
+    </section>
+    {variant==="ai"&&<details className="sf-ucampus-password-login">
+      <summary>备用：账号密码直接登录（无法处理交互验证码）</summary>
+      <div className="sf-platform-settings-view" aria-label="U校园 SSO 账号密码登录">
       <p className="sf-muted">账号密码登录（实验接入）：由学序本机请求 U校园 SSO；不保存账号密码，仅将服务端返回的会话写入 Windows 凭据管理器。若出现验证码，请转到官方页面完成。</p>
       <label htmlFor="ucampus-username">U校园账号</label>
       <input id="ucampus-username" type="text" autoComplete="username" spellCheck={false}
@@ -116,10 +137,11 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
         <button type="button" disabled={!desktop||busy||!username.trim()||!password}
           onClick={()=>void login()}>账号密码登录</button>
       </div>
-    </div>}
-    <details>
+      </div>
+    </details>}
+    <details className="sf-ucampus-cookie-import" open>
       <summary>高级：手动导入现有会话</summary>
-      <p className="sf-muted">账号密码登录无法完成时，可从本人已登录的官方页面导入有效会话。敏感信息只应在本机输入。</p>
+      <p className="sf-muted">在已登录的 U校园官方页面获取本人有效 Cookie，粘贴到下方。AI版课程 URL 可留空，其他令牌仅在接口明确需要时填写。</p>
     <label htmlFor="ucampus-catalog-url">{variant==="ai"?"课程接口 URL（留空使用开源项目已知首页接口）":"普通版课程接口 URL（必须使用本人已核验地址）"}</label>
     <input id="ucampus-catalog-url" type="url" autoComplete="off" spellCheck={false}
       placeholder={variant==="ai"?"默认使用 U校园AI版首页课程接口":"仅支持 U校园官方 HTTPS JSON 接口"} value={url}
