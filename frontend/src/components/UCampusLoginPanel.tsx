@@ -29,6 +29,15 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       .catch(()=>{if(active)setStatus(null);});
     return ()=>{active=false;};
   },[desktop]);
+  const refreshStoredExpiry=async()=>{
+    try{
+      const info=await request<UCampusSessionInfo>({operation:"ucampus.session.info"});
+      setStatus(info);
+    }catch{
+      // The previous successful save remains configured; never manufacture
+      // a "connected" state from a failed local status read.
+    }
+  };
   const verifyCatalog=async():Promise<string>=>{
     const courses=await request<Course[]>({operation:"courses.list",platform:"ucampus"});
     if(!Array.isArray(courses)||!courses.every(course=>
@@ -62,7 +71,8 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     try{
       await invoke<{saved:boolean}>("ucampus_login_window_import");
       setEmbeddedOpen(false);
-      setStatus({configured:true,variant:"ai"});
+      setStatus({configured:true,variant:"ai",jwt_lifetime:"unknown"});
+      await refreshStoredExpiry();
       setVariant("ai");
       onChanged();
       try{
@@ -74,8 +84,10 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     }catch(error){
       if(error==="UCAMPUS_LOGIN_WINDOW_MISSING")setEmbeddedOpen(false);
       const message=typeof error==="string"?error:"";
-      setNotice(message==="UCAMPUS_LOGIN_COOKIE_MISSING"
-        ?"暂未从官方窗口检测到 U校园AI 的 JWT 会话。请确认完成扫码/验证码及后续页面跳转，或在下方手动导入 Cookie。"
+      setNotice(message==="UCAMPUS_LOGIN_COOKIE_EXPIRED"
+        ?"官方窗口里的 U校园 JWT 自报已经过期。请在官方窗口重新登录后再导入，旧 Cookie 不会覆盖本机已保存的会话。"
+        :message==="UCAMPUS_LOGIN_COOKIE_MISSING"
+          ?"暂未从官方窗口检测到 U校园AI 的 JWT 会话。请确认完成扫码/验证码及后续页面跳转，或在下方手动导入 Cookie。"
         :message==="UCAMPUS_LOGIN_WINDOW_MISSING"
           ?"官方登录窗口已经关闭，请重新打开。"
           :"官方窗口会话导入失败。请确认已登录 U校园AI，或使用下方手动 Cookie 导入。");
@@ -98,7 +110,8 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       const saved=await request<{saved:boolean;variant:"ai";monitor_reset:boolean}>({
         operation:"ucampus.session.login",username:username.trim(),password
       });
-      setStatus({configured:true,variant:"ai"});
+      setStatus({configured:true,variant:"ai",jwt_lifetime:"unknown"});
+      await refreshStoredExpiry();
       setUsername("");
       onChanged();
       try{
@@ -121,7 +134,8 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
         authorization:authorization.trim(),annotator_token:annotator.trim(),school_id:schoolId.trim()};
       const saved=await request<{saved:boolean;monitor_reset:boolean}>({operation:"ucampus.session.configure",configuration});
       clearSensitiveInputs();
-      setStatus({configured:true,variant});
+      setStatus({configured:true,variant,jwt_lifetime:"unknown"});
+      await refreshStoredExpiry();
       onChanged();
       try{
         const summary=await verifyCatalog();
@@ -148,8 +162,17 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
     setBusy(true);setNotice("");
     try{
       const cleared=await request<{cleared:boolean;monitor_reset:boolean}>({operation:"ucampus.session.clear"});
-      clearSensitiveInputs();setUsername("");setPassword("");setUrl("");setStatus({configured:false,variant:null});
-      setNotice("已清除学序保存的 U校园会话。"+(cleared.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
+      let windowWarning="";
+      try{
+        await invoke("ucampus_login_window_close");
+        setEmbeddedOpen(false);
+      }catch{
+        windowWarning="官方网页登录窗口未能自动清理，请手动关闭该窗口。";
+      }
+      clearSensitiveInputs();setUsername("");setPassword("");setUrl("");
+      setStatus({configured:false,variant:null,jwt_lifetime:"unknown"});
+      setNotice("已清除学序保存的 U校园会话。"+windowWarning+
+        (cleared.monitor_reset===false?"旧自动核验记录未能清除，请检查本机存储权限。":""));
       onChanged();
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
@@ -157,6 +180,10 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
   return <div className="sf-platform-settings-view sf-ucampus-login" aria-label="U校园账号与连接">
     <p className="sf-muted">U校园5.0 / AI版优先接入。服务器进度只读核验已接入，课程与进度须以本人账号实际读取结果核验。</p>
     <p className="sf-muted">{status?.configured?"本机已有会话配置（不代表接口已登录成功）":"本机尚未配置 U校园会话"}</p>
+    {status?.configured&&status.jwt_lifetime==="expired"&&
+      <p className="sf-ucampus-session-warning" role="status">本机 U校园 JWT 自报已过期，请重新完成官方登录。课程与进度读取不会继续使用该过期令牌。</p>}
+    {status?.configured&&status.jwt_lifetime==="expiring"&&
+      <p className="sf-ucampus-session-warning" role="status">本机 U校园 JWT 自报即将过期，建议重新登录。实际是否可用仍以服务器读取为准。</p>}
     <div className="sf-settings-line">
       <label htmlFor="ucampus-variant">平台版本</label>
       <select id="ucampus-variant" value={variant} disabled={!desktop||busy}
@@ -202,7 +229,7 @@ export function UCampusLoginPanel({desktop,onChanged}:{desktop:boolean;onChanged
       </div>
       </div>
     </details>}
-    <details className="sf-ucampus-cookie-import" open>
+    <details className="sf-ucampus-cookie-import">
       <summary>高级：手动导入现有会话</summary>
       <p className="sf-muted">在已登录的 U校园官方页面获取本人有效 Cookie，粘贴到下方。AI版课程 URL 可留空，其他令牌仅在接口明确需要时填写。</p>
     <label htmlFor="ucampus-catalog-url">{variant==="ai"?"课程接口 URL（留空使用开源项目已知首页接口）":"普通版课程接口 URL（必须使用本人已核验地址）"}</label>

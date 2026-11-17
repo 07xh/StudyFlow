@@ -543,10 +543,32 @@ fn ucampus_auth_destination_allowed(url: &tauri::Url) -> bool {
         ))
 }
 
-fn ucampus_jwt_cookie_valid(value: &str) -> bool {
+fn ucampus_jwt_cookie_shape(value: &str) -> bool {
     (10..=4096).contains(&value.len()) && value.split('.').count() == 3
-        && value.split('.').all(|segment| segment.as_bytes().iter().all(|byte|
-            byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+        && value.split('.').all(|segment| !segment.is_empty() &&
+            segment.as_bytes().iter().all(|byte|
+                byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-')))
+}
+
+// The JWT payload is an *untrusted* hint, never proof of authentication.
+// Server acceptance is still checked by a separate read-only course request.
+fn ucampus_jwt_cookie_expired(value: &str) -> bool {
+    use base64::Engine as _;
+    if !ucampus_jwt_cookie_shape(value) { return false; }
+    let payload = value.split('.').nth(1).unwrap_or_default();
+    let Ok(decoded) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload)
+        else { return false; };
+    if decoded.len() > 4096 { return false; }
+    let Ok(claims) = serde_json::from_slice::<serde_json::Value>(&decoded)
+        else { return false; };
+    let Some(exp) = claims.get("exp").and_then(|value| value.as_i64())
+        else { return false; };
+    let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) else { return false; };
+    exp <= now.as_secs() as i64
+}
+
+fn ucampus_jwt_cookie_valid(value: &str) -> bool {
+    ucampus_jwt_cookie_shape(value) && !ucampus_jwt_cookie_expired(value)
 }
 
 #[tauri::command]
@@ -567,6 +589,9 @@ fn ucampus_login_window_start(app: tauri::AppHandle) -> Result<(), String> {
         .inner_size(970.0, 710.0)
         .min_inner_size(660.0, 480.0)
         .data_directory(profile)
+        // Closing with the titlebar X must not leave a reusable login session.
+        // On Windows, WebView2 supports private profiles on modern runtimes.
+        .incognito(true)
         .on_navigation(ucampus_auth_destination_allowed)
         .build()
         .map_err(|_| "UCAMPUS_LOGIN_WINDOW_UNAVAILABLE".to_string())?;
@@ -585,11 +610,16 @@ async fn ucampus_login_window_import(app: tauri::AppHandle)
             .map_err(|_| "UCAMPUS_LOGIN_COOKIE_UNAVAILABLE".to_string())?;
         let cookies = window.cookies_for_url(url)
             .map_err(|_| "UCAMPUS_LOGIN_COOKIE_UNAVAILABLE".to_string())?;
-        cookies.into_iter()
-            .filter(|cookie| cookie.name() == "jwt")
-            .map(|cookie| cookie.value().to_string())
-            .find(|value| ucampus_jwt_cookie_valid(value))
-            .ok_or_else(|| "UCAMPUS_LOGIN_COOKIE_MISSING".to_string())
+        let mut expired = false;
+        for cookie in cookies.into_iter().filter(|cookie| cookie.name() == "jwt") {
+            let value = cookie.value();
+            if ucampus_jwt_cookie_valid(value) {
+                return Ok(value.to_string());
+            }
+            expired |= ucampus_jwt_cookie_expired(value);
+        }
+        Err(if expired { "UCAMPUS_LOGIN_COOKIE_EXPIRED" } else {
+            "UCAMPUS_LOGIN_COOKIE_MISSING" }.to_string())
     }).await.map_err(|_| "UCAMPUS_LOGIN_COOKIE_UNAVAILABLE".to_string())??;
     // No JWT/Cookie is sent to the frontend. It is forwarded solely to the
     // already validated local sidecar which persists into Credential Manager.
@@ -842,6 +872,17 @@ mod ipc_validation_tests {
             assert!(!super::ucampus_auth_destination_allowed(&url.parse().unwrap()));
         }
         assert!(super::ucampus_jwt_cookie_valid("header.payload.signature"));
+        // An expired JWT is never imported even if its shape is valid.
+        use base64::Engine as _;
+        let make = |expiry: i64| {
+            let payload = format!(r#"{{"exp":{expiry}}}"#);
+            let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload);
+            format!("header.{encoded}.signature")
+        };
+        assert!(super::ucampus_jwt_cookie_expired(&make(1)));
+        assert!(!super::ucampus_jwt_cookie_valid(&make(1)));
+        assert!(!super::ucampus_jwt_cookie_expired(&make(4_102_444_800)));
+        assert!(super::ucampus_jwt_cookie_valid(&make(4_102_444_800)));
         assert!(!super::ucampus_jwt_cookie_valid("jwt=header.payload.signature"));
         assert!(!super::ucampus_jwt_cookie_valid("header.payload.sig\\r\\nBad:1"));
     }

@@ -168,6 +168,10 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 .sf-shell .sf-ucampus-login>p[role="status"]{
   margin:0;line-height:1.6;overflow-wrap:anywhere;
 }
+.sf-shell .sf-ucampus-session-warning{
+  margin:0;padding:8px 11px;border-left:3px solid var(--warning,#ad7d29);
+  color:var(--text);font-size:12px;line-height:1.6;overflow-wrap:anywhere;
+}
 @media(max-width:650px){
   .sf-shell .sf-ucampus-official-login,.sf-shell .sf-ucampus-login>details{padding:11px}
   .sf-shell .sf-ucampus-official-login .actions{align-items:stretch;flex-direction:column}
