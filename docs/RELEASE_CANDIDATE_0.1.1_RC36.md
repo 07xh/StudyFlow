@@ -2,7 +2,7 @@
 
 ## 本版更新
 - 默认使用 GitHub Releases 官方 API 获取版本、日志及 SHA-256，**仅代理公开安装包文件下载**，不代理用户账号、Cookie、令牌、课程数据。
-- 免配置的两个公共 GitHub 代理：`gh-proxy.com` 和 `ghfast.top`，自动模式按两个代理、官方 GitHub Releases 顺序重试；用户也可选择“GitHub 官方源”或“公共代理”模式、关闭跨源故障切换。
+- 免配置的两个公共 GitHub 代理：`gh-proxy.org` 和 `ghfast.top`，自动模式按两个代理、官方 GitHub Releases 顺序重试；用户也可选择“GitHub 官方源”或“公共代理”模式、关闭跨源故障切换。
 - 经过 SHA-256 复核的 HTTP Range 断点续传：只有正确的 206 Content-Range 才允许续写；服务器返回 200 时从头写入；损坏内容不作为已完成安装包。
 - 旧版稳定版/Beta 更新偏好兼容，更新下载目录保留已校验安装包缓存；安装由用户退出软件后手动执行。
 - **不依赖 R2、SourceForge、自建 CDN、备案或存储桶**，没有任何额外第三方账号配置步骤。
