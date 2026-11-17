@@ -488,11 +488,6 @@
 }
 .sf-shell .sf-platform-actions .sf-sync-button{width:35px;padding:0}
 .sf-shell .sf-platform-expanded{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-.sf-shell .sf-platform-expanded-label{
-  display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
-  margin-bottom:12px;color:var(--accent-text);font-size:11px;font-weight:680;
-}
-.sf-shell .sf-platform-expanded-label span+span{color:var(--muted);font-size:10px;font-weight:450}
 .sf-shell .sf-platform-login{
   display:grid;grid-template-columns:minmax(0,1.45fr) minmax(190px,.8fr);gap:11px;min-width:0;
 }
@@ -1081,7 +1076,6 @@
 .sf-shell .sf-zd-mode-options button.active{
   color:var(--accent-text);border-color:rgba(19,217,146,.28);background:var(--soft-accent);
 }
-.sf-shell .sf-zhidao-activity{padding:14px 16px}
 .sf-shell .sf-zd-activity-list{display:grid;gap:8px}
 .sf-shell .sf-zd-activity-list article{
   display:grid;grid-template-columns:8px minmax(0,1fr) auto;align-items:start;gap:10px;
@@ -1363,7 +1357,6 @@
   flex:none;
 }
 .sf-shell .sf-course-workspace>.sf-zhidao-course-detail,
-.sf-shell .sf-course-workspace>.sf-zhidao-activity,
 .sf-shell .sf-course-workspace>.sf-zhidao-progress-panel,
 .sf-shell .sf-course-workspace>.legacy-playback-panel,
 .sf-shell .sf-course-workspace>.sf-yuketang-settings-panel{

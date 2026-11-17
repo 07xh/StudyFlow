@@ -852,7 +852,7 @@ export default function App(){
       </>}
       <SettingsDialog open={courseLogsOpen} dark={dark} title={course.title+" · 日志与诊断"}
         onClose={()=>setCourseLogsOpen(false)}>
-        <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>
+        <ZhidaoActivityPanel events={courseEvents(activity,course.platform,course.course_id)}/>
         <button className="secondary" type="button" onClick={()=>{setCourseLogsOpen(false);setPage("logs");}}>
           查看平台与历史未归属记录
         </button>

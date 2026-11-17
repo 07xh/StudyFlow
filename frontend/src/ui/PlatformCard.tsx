@@ -38,11 +38,9 @@ export function PlatformCard({
         </div>
       </div>
       <div className="sf-platform-actions">
-        {variant==="overview"&&<>
-        <button className={(connected?"primary":"secondary")+" sf-enter-courses"} type="button" onClick={onEnterCourses}>
+        {variant==="overview"&&<button className={(connected?"primary":"secondary")+" sf-enter-courses"} type="button" onClick={onEnterCourses}>
           <BookOpen size={16}/>进入课程<ChevronRight size={15}/>
-        </button>
-        </>}
+        </button>}
         <button className={!connected&&!expanded?"primary":"secondary"} type="button" disabled={busy}
           aria-expanded={expanded} onClick={onToggleLogin}>
           <Settings2 size={15}/>{expanded?"收起账号设置":connected?"管理账号":"登录平台"}
@@ -54,10 +52,6 @@ export function PlatformCard({
       </div>
     </div>
     {expanded&&<div className="sf-platform-expanded">
-      {variant==="overview"&&<div className="sf-platform-expanded-label">
-        <span>{definition.name} · 登录与连接</span>
-        
-      </div>}
       {children}
     </div>}
   </article>;

@@ -114,7 +114,7 @@ test("course details use one foldable workspace and show total progress only in 
  assert.match(app,/headerTitle=\{workspaceCourse\?"课程详情":undefined\}/);
  assert.match(app,/courseProgress=\{activeCourseProgress\}/);
  assert.match(app,/activeSelectedCourse/);
- assert.match(app,/<ZhidaoActivityPanel embedded events=/);
+ assert.match(app,/<ZhidaoActivityPanel events=/);
  assert.match(app,/courseId=\{course\.course_id\}.*detailMode/s);
  assert.match(lesson,/zhidao\.course\.detail/);
  assert.match(lesson,/章节进度/);
@@ -125,7 +125,8 @@ test("course details use one foldable workspace and show total progress only in 
  assert.match(simulation,/courseId\?:string/);
  assert.match(player,/sf-zd-local-observations/);
  assert.match(player,/detailMode/);
- assert.match(log,/expandedByDefault/);
+ assert.match(log,/sf-inline-activity/);
+ assert.doesNotMatch(log,/expandedByDefault|useState|ChevronDown|ChevronUp/);
  assert.doesNotMatch(yuketang,/open=\{detailMode\}/);
  assert.match(simulation,/sf-detail-live/);
  assert.match(css,/sf-ykt-live\.sf-detail-live \.sf-ykt-live-grid/);
