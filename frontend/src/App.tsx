@@ -575,7 +575,7 @@ export default function App(){
       {renderPlatformLogin(platform)}
     </PlatformCard>}
     {platformSettingsSection!=="account"&&(platform==="zhidao"?<>
-      {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
+      {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={true}>
       {renderZhidaoModeSwitch()}
       <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
       <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「参数设置」中调整；此处仅管理官方播放器的默认参数。</p>
