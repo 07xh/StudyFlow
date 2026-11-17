@@ -21,9 +21,10 @@ function safeItems(detail:ZhidaoCourseDetail|null,courseId:string):Item[]{
       (item.chapter_name||"未分组章节"),completed:detail.course_type==="ai"?Boolean(item.fully_progressed):Boolean(item.server_completed)}];
   });
 }
-export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onReady,onEvent}:{
+export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onReady,onEvent,settingsOpen,onSettingsClose,hideTrigger=false}:{
   desktop:boolean;dark?:boolean;courseId:string;courseType?:"ai"|"shared"|null;
   onReady?:(options:OriginalZhsOptions|null)=>void;onEvent?:TaskRecorder;
+  settingsOpen?:boolean;onSettingsClose?:()=>void;hideTrigger?:boolean;
 }){
   const [options,setOptions]=useState<ZhsStoredOptions>({...originalZhsDefaults});
   const [saved,setSaved]=useState<ZhsStoredOptions|null>(null);
@@ -31,11 +32,17 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const [loadState,setLoadState]=useState<"loading"|"ready"|"failed">("loading");
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
-  const [opened,setOpened]=useState(false);
+  const [internalOpened,setInternalOpened]=useState(false);
+  const opened=settingsOpen??internalOpened;
+  const [section,setSection]=useState<"parameters"|"scope"|"advanced">("parameters");
+  const wasExternallyOpen=useRef(false);
   const [detail,setDetail]=useState<ZhidaoCourseDetail|null>(null);
   const [scopeMode,setScopeMode]=useState<ScopeMode>("all");
   const [resourceMode,setResourceMode]=useState<ResourceMode>("all");
   const [selectedIds,setSelectedIds]=useState<number[]>([]);
+  const [savedScope,setSavedScope]=useState<{mode:ScopeMode;ids:number[];resourceMode:ResourceMode}>({
+    mode:"all",ids:[],resourceMode:"all"
+  });
   const revision=useRef(0);
   const detailRevision=useRef(0);
   const readyRef=useRef(onReady);
@@ -43,7 +50,9 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const scopeKey="studyflow.zhs.task.scope."+courseId;
   const items=useMemo(()=>safeItems(detail,courseId),[detail,courseId]);
   const idsAvailable=useMemo(()=>new Set(items.map(item=>item.id)),[items]);
-  const dirty=saved!==null&&JSON.stringify(options)!==JSON.stringify(saved);
+  const scopeDraft={mode:scopeMode,ids:selectedIds,resourceMode};
+  const scopeDirty=JSON.stringify(scopeDraft)!==JSON.stringify(savedScope);
+  const dirty=saved!==null&&(JSON.stringify(options)!==JSON.stringify(saved)||scopeDirty);
   const valid=validateZhsStoredOptions(options);
   const selectedScopeUnavailable=loadState==="ready"&&scopeMode==="selected"&&
     (!items.length||!selectedIds.length||!selectedIds.every(id=>idsAvailable.has(id)));
@@ -78,21 +87,27 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
     }finally{if(current===revision.current)setBusy(false);}
   },[desktop,courseId]);
   useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
-  useEffect(()=>{
-    setDetail(null);setScopeMode("all");setResourceMode("all");setSelectedIds([]);
-    if(!courseId)return;
-    try{
-      const stored=JSON.parse(window.localStorage.getItem(scopeKey)||"null");
-      if(stored && (stored.mode==="all"||stored.mode==="selected")&&Array.isArray(stored.ids)&&
-         stored.ids.length<=256 && stored.ids.every((id:unknown)=>typeof id==="number"&&Number.isSafeInteger(id)&&id>0)){
-        setScopeMode(stored.mode);setSelectedIds([...new Set<number>(stored.ids)]);
-        if(stored.resourceMode==="all"||stored.resourceMode==="video"||
-            (stored.resourceMode==="reading"&&courseType==="ai")){
-          setResourceMode(stored.resourceMode);
+  const loadScope=useCallback(()=>{
+    let scope:{mode:ScopeMode;ids:number[];resourceMode:ResourceMode}={
+      mode:"all",ids:[],resourceMode:"all"
+    };
+    if(courseId){
+      try{
+        const stored=JSON.parse(window.localStorage.getItem(scopeKey)||"null");
+        if(stored && (stored.mode==="all"||stored.mode==="selected")&&Array.isArray(stored.ids)&&
+           stored.ids.length<=256 && stored.ids.every((id:unknown)=>
+             typeof id==="number"&&Number.isSafeInteger(id)&&id>0)){
+          const ids=[...new Set<number>(stored.ids)];
+          const kind:ResourceMode=(stored.resourceMode==="video"||
+             (stored.resourceMode==="reading"&&courseType==="ai"))?stored.resourceMode:"all";
+          scope={mode:stored.mode,ids,resourceMode:kind};
         }
-      }
-    }catch{/* Invalid local selection never becomes an execution option. */}
+      }catch{/* Invalid saved selection never becomes an execution option. */}
+    }
+    setScopeMode(scope.mode);setSelectedIds(scope.ids);setResourceMode(scope.resourceMode);
+    setSavedScope(scope);
   },[scopeKey,courseId,courseType]);
+  useEffect(()=>{setDetail(null);loadScope();},[loadScope]);
   const fetchDetail=useCallback(async()=>{
     if(!desktop||!courseId)return;
     const key=courseId,seq=++detailRevision.current;
@@ -105,10 +120,36 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   },[desktop,courseId]);
   useEffect(()=>{void fetchDetail();return ()=>{detailRevision.current++;};},[fetchDetail]);
 
-  function persistScope(mode:ScopeMode,ids:number[],kind:ResourceMode=resourceMode){
+  function updateScope(mode:ScopeMode,ids:number[],kind:ResourceMode=resourceMode){
+    // Scope selection is a draft just like the numeric fields; Save owns persistence.
     setScopeMode(mode);setSelectedIds(ids);setResourceMode(kind);
-    try{window.localStorage.setItem(scopeKey,JSON.stringify({mode,ids,resourceMode:kind}));}catch{/* session-only */}
   }
+  function closeSettings(){
+    if(busy)return;
+    if(dirty){
+      if(!window.confirm("当前课程有未保存的参数或资源范围修改。放弃这些修改并关闭吗？"))return;
+      if(saved)setOptions(saved);
+      setScopeMode(savedScope.mode);setSelectedIds(savedScope.ids);
+      setResourceMode(savedScope.resourceMode);
+    }
+    if(settingsOpen!==undefined)onSettingsClose?.();
+    else setInternalOpened(false);
+  }
+  function openSettings(){
+    setSection("parameters");
+    setInternalOpened(true);
+    // A fresh backend and browser-storage read is required on every clean open.
+    if(!dirty){loadScope();void load();}
+  }
+  // The course toolbar owns visibility in the unified course-settings route.
+  // Retain this component mounted so the runner still has its validated onReady state.
+  useEffect(()=>{
+    if(settingsOpen&&!wasExternallyOpen.current){
+      setSection("parameters");
+      if(!dirty){loadScope();void load();}
+    }
+    wasExternallyOpen.current=Boolean(settingsOpen);
+  },[settingsOpen,loadScope,load]);
   function update<K extends keyof ZhsStoredOptions>(key:K,value:ZhsStoredOptions[K]){
     setOptions(previous=>({...previous,[key]:value}));
   }
@@ -118,7 +159,18 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
     try{
       const result=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.save",course_key:courseId||undefined,settings:options});
       if(!validateZhsStoredOptions(result))throw new Error("INVALID_ZHS_SETTINGS");
-      setOptions(result);setSaved(result);setLoadedFor(courseId);setMessage("当前课程 ZHS 参数已保存，下次启动任务时生效。");
+      const confirmed=await request<ZhsStoredOptions>({operation:"zhidao.zhs.settings.get",course_key:courseId||undefined});
+      if(!validateZhsStoredOptions(confirmed)||JSON.stringify(confirmed)!==JSON.stringify(result))
+        throw new Error("ZHS_SETTINGS_VERIFY_FAILED");
+      const scopeToSave=JSON.stringify(scopeDraft);
+      try{
+        window.localStorage.setItem(scopeKey,scopeToSave);
+        if(window.localStorage.getItem(scopeKey)!==scopeToSave)
+          throw new Error("ZHS_SCOPE_VERIFY_FAILED");
+      }catch{throw new Error("ZHS_SCOPE_VERIFY_FAILED");}
+      setSavedScope(scopeDraft);
+      setOptions(confirmed);setSaved(confirmed);setLoadedFor(courseId);
+      setMessage("当前课程参数和资源范围已保存，下次启动任务时生效。");
       onEvent?.("保存 ZHS 参数","success","学序本机设置已保存");
     }catch(error){setMessage(friendlyBridgeError(error));onEvent?.("保存 ZHS 参数","warning","保存失败");}
     finally{setBusy(false);}
@@ -152,18 +204,18 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   },[items]);
 
   return <div className="sf-inline-settings">
-    <button type="button" className="sf-inline-settings__toggle" aria-expanded={opened}
-      onClick={()=>setOpened(true)}>
+    {!hideTrigger&&<button type="button" className="sf-inline-settings__toggle" aria-expanded={opened}
+      onClick={openSettings}>
       <SlidersHorizontal size={16}/><strong>ZHS 原版 · 观看控制</strong>
       <span className="sf-muted">点击设置</span>
-    </button>
+    </button>}
     {loadState==="ready"&&dirty&&<p className="sf-task-context" role="status">
       当前课程参数已修改但尚未保存，请在设置中保存后启动。
     </p>}
     {selectedScopeUnavailable&&<div className="sf-task-context" role="status">
-      <span>上次选择的资源范围暂时无法在当前课程目录中核验；可刷新目录，或手动切换为整门课程。</span>
-      <button className="secondary" type="button" disabled={busy}
-        onClick={()=>persistScope("all",[])}>改为整门课程</button>
+      <span>上次选择的资源范围暂时无法在当前课程目录中核验；请从{hideTrigger?"页面顶部「参数设置」→「课程范围」":"课程参数设置"}调整，或刷新课程目录。</span>
+      {!hideTrigger&&<button className="secondary" type="button" disabled={busy}
+        onClick={()=>{updateScope("all",[]);setInternalOpened(true);}}>改为整门课程</button>}
     </div>}
     {loadState==="loading"&&<p className="sf-task-context" role="status">正在读取当前课程的本机参数…</p>}
     {loadState==="failed"&&<div className="sf-task-context" role="alert">
@@ -172,7 +224,13 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         onClick={()=>void load()}><RefreshCw size={14}/>重试读取</button>
     </div>}
     <SettingsDialog open={opened} dark={dark} title="当前课程 · ZHS 参数"
-      onClose={()=>setOpened(false)}
+      onClose={closeSettings}
+      navigation={<nav className="sf-settings-menu" aria-label="课程参数分类">
+        {([["parameters","运行参数"],["scope","课程范围"],["advanced","高级说明"]] as const).map(([id,label])=>
+          <button type="button" key={id} aria-pressed={section===id}
+            onClick={()=>setSection(id)}>{label}</button>)}
+      </nav>}
+      contentKey={section}
       footer={<div className="actions">
         <button className="secondary" type="button" disabled={!desktop||busy}
           onClick={()=>void load()}><RefreshCw size={15}/>重新读取</button>
@@ -188,6 +246,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         <span className="legacy-run-state">{loadState==="ready"?"本机参数已加载":
           loadState==="loading"?"读取中":"读取失败"}</span></div>
       <div className="legacy-options">
+        {section==="parameters"&&<>
         <h4 className="sf-settings-section-title">执行参数</h4>
         <div className="legacy-option-grid">
           <label><span>同课程章节并行数</span>
@@ -233,11 +292,13 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
             onChange={e=>update("stop_on_error",e.currentTarget.checked)}/>视频处理异常时停止任务</label>
         </div>
         <details className="sf-ykt-advanced-options"><summary>阈值与倍速说明</summary><p className="sf-ykt-advanced-note">本课程默认继承 ZHS 原版对不同课程类型的执行阈值。自定义百分比只控制本地执行目标，不代表平台已经确认完成；平台仍返回未完成时，界面不会标为完成。阈值随课程独立保存。“跳过已完成”由 ZHS 0.1.5 原版自动执行；共享课上游倍速含 ±0.15× 波动，学序会降低传入基准值以遵守上限。</p></details>
+        </>}
+        {section==="scope"&&<>
         <h4 className="sf-settings-section-title">执行范围</h4>
         <div className="legacy-option-grid">
           <label><span>本次选择的资源类型</span>
             <select value={resourceMode} disabled={!desktop||!courseId||busy}
-              onChange={e=>persistScope(scopeMode,selectedIds,e.target.value as ResourceMode)}>
+              onChange={e=>updateScope(scopeMode,selectedIds,e.target.value as ResourceMode)}>
               <option value="all">全部资源（原版处理顺序）</option>
               <option value="video">只选择视频 / 课程视频</option>
               {courseType==="ai"&&<option value="reading">只选择文章 / PPT（AI 课程）</option>}
@@ -245,7 +306,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
           </label>
           <label><span>本次执行范围</span>
             <select value={scopeMode} disabled={!desktop||!courseId}
-              onChange={e=>persistScope(e.target.value as ScopeMode,selectedIds)}>
+              onChange={e=>updateScope(e.target.value as ScopeMode,selectedIds)}>
               <option value="all">整门课程</option>
               <option value="selected">指定章节 / 视频 / 知识点</option>
             </select>
@@ -266,14 +327,14 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
                     const all=groupIds.every(id=>selectedIds.includes(id));
                     const next=all?selectedIds.filter(id=>!groupIds.includes(id)):
                       [...new Set([...selectedIds,...groupIds])];
-                    if(next.length<=256)persistScope("selected",next);
+                    if(next.length<=256)updateScope("selected",next);
                     else setMessage("选择数量不得超过 256 项。");
                   }}>切换本组未完成项目</button></div>
                 <div className="legacy-flags">{children.map(item=><label key={item.id}>
                   <input type="checkbox" checked={selectedIds.includes(item.id)} disabled={!desktop||busy}
                     onChange={e=>{
                       const next=e.currentTarget.checked?[...selectedIds,item.id]:selectedIds.filter(id=>id!==item.id);
-                      if(next.length<=256)persistScope("selected",next);
+                      if(next.length<=256)updateScope("selected",next);
                     }}/>
                   {item.name}{item.completed?" · 已完成":""}
                 </label>)}</div>
@@ -281,13 +342,14 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               {groups.length===0&&<p>当前记录没有可识别的原始项目 ID，无法启动指定范围任务。</p>}
             </div>}
         </div>}
+        </>}
         {!valid&&<p className="sf-validation-error" role="alert">参数不在 ZHS 0.1.5 支持范围内。</p>}
         {scopeMode==="selected"&&!ready&&<p className="sf-validation-error">指定范围须至少选择一项真实、当前可核验的项目。</p>}
         {dirty&&<p className="sf-validation-error">有未保存的参数，保存后再启动任务。</p>}
-        <details className="sf-ykt-advanced-options"><summary>心跳与进度说明</summary>
+        {section==="advanced"&&<details className="sf-ykt-advanced-options" open><summary>心跳与进度说明</summary>
           <p className="sf-ykt-advanced-note">原版 ZHS 负责心跳实现；学序仅限制运行范围和次数。
           本地运行、任务退出、服务器已核验进度分别呈现，达到数量限制不代表课程完成。</p>
-        </details>
+        </details>}
       </div>
       {message&&<p className="legacy-state-note" role="status">{message}</p>}
       </section>

@@ -27,9 +27,6 @@ type Props={
   events?:ActivityEntry[];
   onOpenTasks?:()=>void;
 };
-const defaults:ZhidaoPlayerSettings={
-  speed:"1.5",allowMinimize:true,autoStart:true,autoNext:true,mode:"official"
-};
 const initialStatus:PlayerStatus={
   state:"idle",courseKey:null,runId:null,exitCode:null,event:null,positionSeconds:null,
   durationSeconds:null,visible:null,observedAt:null,message:"官方播放器尚未启动"
@@ -52,7 +49,6 @@ function playerError(error:unknown){
   return friendlyBridgeError(error);
 }
 export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,detailMode=false,events=[],onOpenTasks}:Props){
-  const [settings,setSettings]=useState<ZhidaoPlayerSettings>(defaults);
   const [selected,setSelected]=useState("");
   const [status,setStatus]=useState<PlayerStatus>(initialStatus);
   const [busy,setBusy]=useState<"prepare"|"start"|"stop"|"save"|null>(null);
@@ -83,7 +79,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     if(!desktop)return;
     let live=true;
     void request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"})
-      .then(value=>{if(live){setSettings({...defaults,...value});setSettingsLoaded(true);}})
+      .then(()=>{if(live)setSettingsLoaded(true);})
       .catch(error=>{if(live){setMessage(playerError(error));setSettingsLoaded(true);}});
     return ()=>{live=false;};
   },[desktop]);
@@ -123,13 +119,17 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     statusRevision.current++;
     setBusy("start");setMessage("");
     try{
+      // The settings dialog can save while this player panel stays mounted.
+      // Fetch the persisted version for every NEW playback, not a stale mount-time copy.
+      // Fail closed if the read fails rather than silently start with old defaults.
+      const currentSettings=await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"});
       const next=await invoke<PlayerStatus>("zhidao_player_start",{
-        courseKey:selected,speed:settings.speed,allowMinimize:settings.allowMinimize,
-        autoStart:settings.autoStart,autoNext:settings.autoNext
+        courseKey:selected,speed:currentSettings.speed,allowMinimize:currentSettings.allowMinimize,
+        autoStart:currentSettings.autoStart,autoNext:currentSettings.autoNext
       });
       setStatus(next);
       const result="已启动原版官方 WebView2 播放器。请在网页内登录并进入课程；实际播放以页面状态为准。";
-      setMessage(result);onEvent?.("启动官方播放器","success",result,{courseId:selected,runId:next.runId??undefined,runner:"official",parameters:{speed:settings.speed,allowMinimize:settings.allowMinimize,autoStart:settings.autoStart,autoNext:settings.autoNext}});
+      setMessage(result);onEvent?.("启动官方播放器","success",result,{courseId:selected,runId:next.runId??undefined,runner:"official",parameters:{speed:currentSettings.speed,allowMinimize:currentSettings.allowMinimize,autoStart:currentSettings.autoStart,autoNext:currentSettings.autoNext}});
     }catch(error){
       const result=playerError(error);setMessage(result);
       onEvent?.("启动官方播放器","warning",result,{courseId:selected,runner:"official"});

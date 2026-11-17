@@ -22,9 +22,10 @@ test('global and unverified header contexts have no percentage track, verified m
 test('saving player defaults preserves a concurrently changed platform mode and only saves after editing',async()=>{
  const restore=browser();let view;const writes=[];let reads=0;
  const original={speed:'1.5',mode:'official',autoStart:true,autoNext:true,allowMinimize:true};
+ let persisted={...original};
  const Panel=load('components/ZhidaoPlayerSettingsPanel.tsx',{'bridge.ts':{friendlyBridgeError:String,request:async input=>{
-  if(input.operation==='zhidao.player.settings.get')return {...original,mode:reads++===0?'official':'zhs-original'};
-  writes.push(input.settings);return input.settings;
+  if(input.operation==='zhidao.player.settings.get')return {...persisted,mode:reads++===0?'official':'zhs-original'};
+  writes.push(input.settings);persisted={...input.settings};return input.settings;
  }}}).ZhidaoPlayerSettingsPanel;
  try{
   await act(async()=>{view=create(React.createElement(Panel,{desktop:true}));});

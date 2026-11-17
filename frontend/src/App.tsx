@@ -126,6 +126,9 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
+  // A course has ONE visible settings action. ZHS uses its course-scoped
+  // editor; official/YKT/XXT use the platform preset view.
+  const [zhsCourseSettingsOpen,setZhsCourseSettingsOpen]=useState(false);
   const [platformSettingsSection,setPlatformSettingsSection]=useState<PlatformSettingsSection>("parameters");
   const [yuketangScopeJumpRequest,setYuketangScopeJumpRequest]=useState(0);
   const [courseLogsOpen,setCourseLogsOpen]=useState(false);
@@ -461,6 +464,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   }
 
   function openPlatformSettings(platform:Platform,section:PlatformSettingsSection="parameters"){
+    setZhsCourseSettingsOpen(false);
     setYuketangScopeJumpRequest(0);
     setCourseLogsOpen(false);
     setPlatformSettingsSection(section);
@@ -473,6 +477,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     setYuketangScopeJumpRequest(previous=>previous+1);
   }
   function enterCourses(platform:Platform){
+    setZhsCourseSettingsOpen(false);
     setCourseLogsOpen(false);
     setPlatformSettingsOpen(null);
     setSelectedCourse(null);
@@ -502,6 +507,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         enabled:previous.preferences[course.course_id]??true
       });
     }
+    setZhsCourseSettingsOpen(false);
     setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage("platform-"+course.platform as Page);
   }
   function courseMode(course:Course):"official"|"zhs-original"{
@@ -544,7 +550,11 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const renderZhidaoModeSwitch=(course?:Course)=>{
     const mode=course?courseMode(course):zhidaoPlaybackMode;
     const active=course&&runtime.tasks.some(task=>task.courseId===course.course_id&&task.platform==="zhidao"&&task.state==="running");
-    const choose=(next:"official"|"zhs-original")=>course?setCourseModes(previous=>({...previous,[course.course_id]:next})):void changeZhidaoPlaybackMode(next);
+    const choose=(next:"official"|"zhs-original")=>{
+      setZhsCourseSettingsOpen(false);
+      if(course)setCourseModes(previous=>({...previous,[course.course_id]:next}));
+      else void changeZhidaoPlaybackMode(next);
+    };
     return <section className="sf-course-mode-bar" aria-label="知到运行方式">
       <strong>{course?"运行方式":"默认方式"}</strong>
       <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
@@ -565,10 +575,10 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       {renderPlatformLogin(platform)}
     </PlatformCard>}
     {platformSettingsSection!=="account"&&(platform==="zhidao"?<>
-      {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={false}>
+      {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={true}>
       {renderZhidaoModeSwitch()}
       <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-      <p className="sf-muted">ZHS 原版观看控制已移到课程播放区的独立参数弹窗；与官方播放器默认参数独立。</p>
+      <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「参数设置」中调整；此处仅管理官方播放器的默认参数。</p>
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
@@ -764,8 +774,17 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
         <div className="sf-course-top-actions">
-          <button className="secondary" onClick={()=>openPlatformSettings(course.platform,"parameters")}>
-            <SlidersHorizontal size={15}/>平台设置
+          <button className="secondary sf-course-settings-action" type="button"
+            onClick={()=>{
+              setCourseLogsOpen(false);
+              if(course.platform==="zhidao"&&mode==="zhs-original"){
+                setPlatformSettingsOpen(null);
+                setZhsCourseSettingsOpen(true);
+              }else{
+                openPlatformSettings(course.platform,"parameters");
+              }
+            }}>
+            <SlidersHorizontal size={15}/>参数设置
           </button>
           <button className="secondary sf-course-logs-action" type="button"
             onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
@@ -788,7 +807,10 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
           <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
-            <LegacyPlaybackPanel platform="zhidao" key={"zhs:"+course.course_id} dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
+            <LegacyPlaybackPanel platform="zhidao" key={"zhs:"+course.course_id} dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode
+              courseSettingsOpen={zhsCourseSettingsOpen&&mode==="zhs-original"}
+              onCourseSettingsClose={()=>setZhsCourseSettingsOpen(false)}
+              onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
           </div>
         </>:course.platform==="ucampus"?<>
@@ -801,7 +823,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
             <span>按已保存的课堂范围执行，可能包含其他课程。</span>
             <details>
               <summary>范围说明</summary>
-              <p>雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。需要切换课堂范围或默认参数时，请使用「平台设置」。</p>
+              <p>雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。需要切换课堂范围或默认参数时，请使用课程页顶部「参数设置」。</p>
             </details>
           </div>
           <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
@@ -933,6 +955,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       if(next==="platform-xuexitong"){goPlatform("xuexitong");return;}
       if(next==="platform-ucampus"){goPlatform("ucampus");return;}
       setPlatformSettingsOpen(null);
+      setZhsCourseSettingsOpen(false);
       setSelectedCourse(null);
       setPage(next);
     }}

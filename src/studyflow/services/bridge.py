@@ -293,7 +293,10 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "xuexitong.settings.get":
-        return {"id": request_id, "ok": True, "data": xuexitong_settings.read()}
+        try:
+            return {"id": request_id, "ok": True, "data": xuexitong_settings.read()}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "XUEXITONG_SETTINGS_UNAVAILABLE"}
     if operation == "xuexitong.settings.save":
         try:
             data = xuexitong_settings.save(request.get("settings"))

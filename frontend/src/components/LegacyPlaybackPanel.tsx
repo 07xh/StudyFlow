@@ -44,7 +44,7 @@ const labels: Record<LegacyTaskStatus["state"], string> = {
 };
 
 export function LegacyPlaybackPanel({
-  platform, courses, desktop, connected, dark=true, onEvent, onCourseVerified, yuketangOptions, settingsReady=true, courseId, detailMode=false, events=[], onOpenTasks
+  platform, courses, desktop, connected, dark=true, onEvent, onCourseVerified, yuketangOptions, settingsReady=true, courseId, detailMode=false, events=[], onOpenTasks, courseSettingsOpen, onCourseSettingsClose
 }: {
   platform: "zhidao" | "yuketang"; courses: Course[]; desktop: boolean; connected: boolean; dark?:boolean;
   onEvent?:TaskRecorder;
@@ -55,6 +55,8 @@ export function LegacyPlaybackPanel({
   detailMode?:boolean;
   events?:ActivityEntry[];
   onOpenTasks?:()=>void;
+  courseSettingsOpen?:boolean;
+  onCourseSettingsClose?:()=>void;
 }) {
   const [status, setStatus] = useState<LegacyTaskStatus | null>(null);
   // Retain run ID after a failed status poll; never show cached telemetry as live.
@@ -247,8 +249,12 @@ export function LegacyPlaybackPanel({
         lastScope=await request<YuketangScope>({operation:"yuketang.scope.get"});
         if(!lastScope.has_session||!lastScope.classroom_id||!lastScope.university_id)
           throw new Error("YUKETANG_SCOPE_UNAVAILABLE");
-        // Resolve on launch so switching classrooms cannot reuse the old value.
-        launchOptions={...options,completion_threshold:
+        // Platform settings can change in a separate modal while this course
+        // view remains mounted. Only the fresh, persisted values may launch a
+        // new task; a stale props snapshot must never override the saved ones.
+        const latest=await request<OriginalYktOptions>({operation:"yuketang.settings.get"});
+        if(!validateOriginalOptions(latest))throw new Error("YUKETANG_SETTINGS_UNAVAILABLE");
+        launchOptions={...latest,completion_threshold:
           readYuketangCourseThreshold(lastScope.classroom_id,lastScope.university_id)??100};
         try{
           const identity=await request<YuketangSessionMarker>({operation:"yuketang.session.marker"});
@@ -473,7 +479,9 @@ export function LegacyPlaybackPanel({
       <small className="sf-ykt-live-note">本轮视频执行结束或跳过不代表平台已完成。并发模式下按原版 Worker 实际调用归属记录本地事件及服务器响应；未能归属的进度仍留空。单节是否完成以课程章节中的服务器只读核验为准，诊断区最近值也不代表课程总进度。</small>
       </details>
     </div>}
-    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} dark={dark} courseId={selection} courseType={selectedCourse?.course_type} onReady={setZhsOptions} onEvent={onEvent}/>}
+    {platform === "zhidao"&&<ZhsTaskSettingsPanel desktop={desktop} dark={dark} courseId={selection} courseType={selectedCourse?.course_type}
+      settingsOpen={courseSettingsOpen} onSettingsClose={onCourseSettingsClose} hideTrigger={detailMode}
+      onReady={setZhsOptions} onEvent={onEvent}/>}
     {platform === "zhidao"&&!detailMode&&<div className="legacy-field">
       <label htmlFor="legacy-zhidao-course">原版 ZHS 0.1.5 · 选择知到课程</label>
       <select id="legacy-zhidao-course" value={selection} onChange={e=>setSelection(e.target.value)}>

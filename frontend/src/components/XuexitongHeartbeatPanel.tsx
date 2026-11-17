@@ -50,6 +50,9 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
 }){
   const [speed,setSpeed]=useState(1);
   const [jobs,setJobs]=useState(2);
+  // Only explicit course-level edits may override a newer global saved setting.
+  const speedEdited=useRef(false);
+  const jobsEdited=useRef(false);
   const [instant,setInstant]=useState(false);
   const [mediaType,setMediaType]=useState<"all"|"Video"|"Audio">("all");
   const [status,setStatus]=useState<HeartbeatStatus|null>(null);
@@ -100,7 +103,10 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     let active=true;
     void request<XuexitongSettings>({operation:"xuexitong.settings.get"})
       .then(settings=>{
-        if(active){setSpeed(settings.playback_speed);setJobs(settings.concurrency);}
+        if(active){
+          if(!speedEdited.current)setSpeed(settings.playback_speed);
+          if(!jobsEdited.current)setJobs(settings.concurrency);
+        }
       }).catch(()=>{});
     return ()=>{active=false;};
   },[desktop]);
@@ -116,16 +122,24 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     try{
       if(action==="start"){
         if(!validConfig)throw new Error("XUEXITONG_INVALID_PARAMETER");
-        // Reuse the same validated settings contract as the platform settings page.
-        // Only saved speed/concurrency are updated; verification preferences survive.
-        const defaults=await request<XuexitongSettings>({operation:"xuexitong.settings.get"});
-        await request<XuexitongSettings>({
-          operation:"xuexitong.settings.save",
-          settings:{...defaults,playback_speed:speed,concurrency:jobs},
-        });
+        // Fresh preset is authoritative for fields this course view did not edit.
+        const latest=await request<XuexitongSettings>({operation:"xuexitong.settings.get"});
+        const launchSpeed=speedEdited.current?speed:latest.playback_speed;
+        const launchJobs=jobsEdited.current?jobs:latest.concurrency;
+        if(speedEdited.current||jobsEdited.current){
+          const persisted=await request<XuexitongSettings>({
+            operation:"xuexitong.settings.save",
+            settings:{...latest,playback_speed:launchSpeed,concurrency:launchJobs},
+          });
+          if(persisted.playback_speed!==launchSpeed||persisted.concurrency!==launchJobs)
+            throw new Error("INVALID_IPC_RESPONSE");
+          speedEdited.current=false;
+          jobsEdited.current=false;
+        }
+        setSpeed(launchSpeed);setJobs(launchJobs);
         await request<{ok:boolean;run_id:string}>({
           operation:"xuexitong.heartbeat.start",course_id:actionCourse,
-          speed,jobs,instant_complete:instant,
+          speed:launchSpeed,jobs:launchJobs,instant_complete:instant,
           ...(mediaType!=="all"?{dtype:mediaType}:{}),
         });
         if(selectedCourse.current===actionCourse)setMessage("本地任务已启动，实际完成状态以平台核验为准。");
@@ -154,19 +168,19 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
 
   return <section className="sf-platform-settings-view sf-xxt-runtime" aria-label="学习通本地心跳任务">
     <p className="sf-hint">
-      本地计时不代表学习通已确认完成。运行章节数来自执行器实时状态，排队任务不会算作正在运行；速度、并发在启动时保存。
+      本地计时不代表学习通已确认完成。运行章节数来自执行器实时状态，排队任务不会算作正在运行；启动前读取最新预设，仅主动修改的参数会同步保存。
     </p>
 
     <div className="sf-settings-row">
       <label>速度
         <input type="number" min={0.25} max={2} step={0.25} value={speed}
           disabled={running||busy||!desktop}
-          onChange={event=>setSpeed(Number(event.target.value))}/>
+          onChange={event=>{speedEdited.current=true;setSpeed(Number(event.target.value));}}/>
       </label>
       <label>并发章节
         <input type="number" min={1} max={4} step={1} value={jobs}
           disabled={running||busy||!desktop}
-          onChange={event=>setJobs(Number(event.target.value))}/>
+          onChange={event=>{jobsEdited.current=true;setJobs(Number(event.target.value));}}/>
       </label>
       <label>任务类型
         <select value={mediaType} disabled={running||busy||!desktop}

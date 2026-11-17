@@ -101,7 +101,7 @@ export function AppShell({
       </div>
       <div className="sf-window-titlebar-actions">
         <button className="sf-window-control sf-settings-button" type="button"
-          title="设置" aria-label="设置" aria-haspopup="dialog" aria-expanded={settingsOpen}
+          title="应用设置（外观、更新与关于）" aria-label="应用设置" aria-haspopup="dialog" aria-expanded={settingsOpen}
           onClick={onOpenSettings}><Settings size={15}/></button>
         <span className="sf-window-control-separator" aria-hidden="true"/>
         <button className="sf-window-control" type="button" disabled={!desktop}
