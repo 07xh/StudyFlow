@@ -64,6 +64,29 @@ fn source_root(app: &AppHandle) -> Result<PathBuf, String> {
     Err("PLAYER_RESOURCES_UNAVAILABLE".into())
 }
 
+// Keep the pinned historical media-controller source byte-for-byte unchanged.
+// Customize only the fresh, application-owned runtime copy for more reliable
+// read-only HTML5 state observations; never alter platform heartbeats.
+const OFFICIAL_MONITOR_INTERVAL_OLD: &str = "const MONITOR_INTERVAL_MS = 12000;";
+const OFFICIAL_MONITOR_REPORT_OLD: &str =
+    "const shouldReport = force || state !== monitor.lastState ||\n      (state === 'advancing' && time - monitor.lastReport >= 60000);";
+const OFFICIAL_MONITOR_REPORT_NEW: &str =
+    "const shouldReport = force || state !== monitor.lastState ||\n      time - monitor.lastReport >= MONITOR_INTERVAL_MS;";
+const LOCAL_OBSERVER_INTERVAL_MS: u64 = 6000;
+
+fn local_observer_copy(source: &str) -> Result<String, String> {
+    // Strict version guard: do not apply a textual rewrite to a new upstream
+    // script with changed semantics. The pinned original is retained intact.
+    if source.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count() != 1
+        || source.matches(OFFICIAL_MONITOR_REPORT_OLD).count() != 1 {
+        return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
+    }
+    Ok(source
+        .replacen(OFFICIAL_MONITOR_INTERVAL_OLD,
+            &format!("const MONITOR_INTERVAL_MS = {LOCAL_OBSERVER_INTERVAL_MS};"), 1)
+        .replacen(OFFICIAL_MONITOR_REPORT_OLD, OFFICIAL_MONITOR_REPORT_NEW, 1))
+}
+
 fn copy_player_assets(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
     let local = local_appdata()?;
     let root = player_root(&local);
@@ -77,6 +100,12 @@ fn copy_player_assets(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
         }
         fs::copy(from, to).map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
     }
+    // The PowerShell host reads this isolated local copy, not the pinned source.
+    let controller = root.join("Official-MediaController.js");
+    let original = fs::read_to_string(&controller)
+        .map_err(|_| "PLAYER_RESOURCES_UNAVAILABLE")?;
+    let fresh = local_observer_copy(&original)?;
+    fs::write(&controller, fresh).map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
     Ok((local, root))
 }
 
@@ -428,5 +457,29 @@ impl ZhidaoPlayerManager {
                     .join(format!("monitor-playback-{}.json", job.token)));
             }
         }
+    }
+}
+
+
+#[cfg(test)]
+mod local_observer_tests {
+    use super::*;
+
+    #[test]
+    fn official_observer_overlay_is_bounded_and_leaves_source_unchanged() {
+        const ORIGINAL: &str = include_str!("../../legacy/zhidao/Official-MediaController.js");
+        let patched = local_observer_copy(ORIGINAL).expect("pinned controller must match");
+        assert_eq!(ORIGINAL.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count(), 1);
+        assert_eq!(ORIGINAL.matches(OFFICIAL_MONITOR_REPORT_OLD).count(), 1);
+        assert!(patched.contains("const MONITOR_INTERVAL_MS = 6000;"));
+        assert!(patched.contains(OFFICIAL_MONITOR_REPORT_NEW));
+        assert!(!patched.contains(OFFICIAL_MONITOR_REPORT_OLD));
+        assert_eq!(ORIGINAL.matches("window.chrome?.webview?.postMessage").count(),
+            patched.matches("window.chrome?.webview?.postMessage").count());
+    }
+
+    #[test]
+    fn official_observer_overlay_rejects_unknown_future_source() {
+        assert!(local_observer_copy("new upstream controller").is_err());
     }
 }
