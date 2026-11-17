@@ -54,7 +54,7 @@ export type UCampusTask = {id:string;unit_id:string;title:string;type:string;req
 export type YuketangScope = {classroom_id:string;university_id:string;has_session:boolean;has_sign:boolean};
 export type YuketangSessionMarker = {marker:string};
 export type BridgeRequest =
-  | {id: string; version: 1; operation: "updates.latest"}
+  | {id: string; version: 1; operation: "updates.latest" | "updates.sources"}
   | {id: string; version: 1; operation: "updates.settings.get"}
   | {id: string; version: 1; operation: "updates.settings.save"; settings: UpdateSettings}
   | {id: string; version: 1; operation: "updates.check"; current_version: string}
