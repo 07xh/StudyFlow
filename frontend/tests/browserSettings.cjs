@@ -46,7 +46,7 @@ const server=http.createServer((req,res)=>{
    await page.screenshot({path:path.join(output,'settings-'+theme+'-'+width+'.png')});
    await page.keyboard.press('Escape');
    assert.equal(await dialog.count(),0);await trigger.waitFor();assert.equal(await trigger.evaluate(e=>e===document.activeElement),true,'Escape restores focus to the opener');
-   const settingsButton=page.getByRole('button',{name:'设置',exact:true});
+   const settingsButton=page.getByRole('button',{name:'应用设置',exact:true});
    await settingsButton.click();
    const global=page.getByRole('dialog',{name:'设置',exact:true});
    await global.waitFor({state:'visible'});
