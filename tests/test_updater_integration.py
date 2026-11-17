@@ -135,3 +135,53 @@ def test_download_403_has_specific_error(headers, expected, tmp_path):
                 "a" * 64, tmp_path / "untrusted.exe")
     assert caught.value.code == expected
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_preserves_404_behavior(kind):
+    from urllib.error import HTTPError
+    missing = HTTPError(updater.API, 404, "not found", {}, None)
+    with patch.object(updater, "urlopen", side_effect=missing):
+        if kind == "release":
+            assert updater.release_info("0.1.0", channel="beta") is None
+        else:
+            assert updater.release_notes("0.1.0", history=True) == []
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_does_not_treat_json_null_as_404(kind):
+    with patch.object(updater, "urlopen",
+                      return_value=FakeResponse(b"null", updater.API)):
+        with pytest.raises(updater.UpdateError) as error:
+            if kind == "release":
+                updater.release_info("0.1.0", channel="beta")
+            else:
+                updater.release_notes("0.1.0", history=True)
+    assert error.value.code == "UPDATE_RELEASE_INVALID"
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_keeps_rate_limit_and_safe_messages(kind):
+    failure = HTTPError(updater.API, 403, "private body",
+                        {"X-RateLimit-Remaining": "0"}, None)
+    with patch.object(updater, "urlopen", side_effect=failure):
+        with pytest.raises(updater.UpdateError) as error:
+            if kind == "release":
+                updater.release_info("0.1.0", channel="beta")
+            else:
+                updater.release_notes("0.1.0", history=True)
+    assert error.value.code == "UPDATE_RATE_LIMITED"
+    assert "private" not in str(error.value).lower()
+
+
+@pytest.mark.parametrize("kind", ["release", "changelog"])
+def test_shared_release_reader_does_not_leak_broken_json(kind):
+    with patch.object(updater, "urlopen",
+                      return_value=FakeResponse(b'{"secret": ', updater.API)):
+        with pytest.raises(updater.UpdateError) as error:
+            if kind == "release":
+                updater.release_info("0.1.0", channel="beta")
+            else:
+                updater.release_notes("0.1.0", history=True)
+    assert error.value.code == "UPDATE_RELEASE_INVALID"
+    assert "secret" not in str(error.value).lower()

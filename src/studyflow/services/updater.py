@@ -52,24 +52,43 @@ def is_newer(candidate: str, current: str) -> bool:
     return prerelease(pre_a) > prerelease(pre_b)
 
 
+# Distinguish GitHub's 404 from a 200 response with JSON null.
+# The latter is invalid metadata, not "no published release".
+_RELEASE_NOT_FOUND = object()
+
+
+def _read_release_metadata(url: str, timeout: int, kind: str) -> object:
+    """One request/error boundary for release discovery and published notes.
+
+    Keep the two callers' public messages and their own payload-shape checks.
+    Never expose an upstream URL or raw HTTP response through UpdateError.
+    """
+    req = Request(url, headers={
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "StudyFlow-Updater",
+    })
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            return json.load(response)
+    except HTTPError as exc:
+        if exc.code == 404:
+            return _RELEASE_NOT_FOUND
+        code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_NETWORK_FAILED"
+        raise UpdateError(code, f"GitHub {kind} lookup failed") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise UpdateError("UPDATE_NETWORK_FAILED", f"GitHub {kind} lookup failed") from exc
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise UpdateError("UPDATE_RELEASE_INVALID", f"Invalid {kind} metadata") from exc
+
+
 def release_info(current_version: str, channel: str = "stable", timeout: int = 10) -> dict | None:
     """Returns a newer release's metadata, or None. Never downloads or runs binaries."""
     if channel not in ("stable", "beta"):
         raise ValueError("Unsupported update channel")
     url = API + ("/latest" if channel == "stable" else "?per_page=100")
-    req = Request(url, headers={"Accept": "application/vnd.github+json", "User-Agent": "StudyFlow-Updater"})
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            data = json.load(response)
-    except HTTPError as exc:
-        if exc.code == 404:
-            return None
-        code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_NETWORK_FAILED"
-        raise UpdateError(code, "GitHub release lookup failed") from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise UpdateError("UPDATE_NETWORK_FAILED", "GitHub release lookup failed") from exc
-    except (json.JSONDecodeError, UnicodeError) as exc:
-        raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid release metadata") from exc
+    data = _read_release_metadata(url, timeout, "release")
+    if data is _RELEASE_NOT_FOUND:
+        return None
     releases = [data] if isinstance(data, dict) else data
     if not isinstance(releases, list) or any(not isinstance(row, dict) for row in releases):
         raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid release metadata")
@@ -107,20 +126,9 @@ def release_notes(current_version: str, previous_version: str | None = None,
         raise ValueError("Invalid previous release version")
     if not isinstance(history, bool):
         raise ValueError("Invalid release history mode")
-    req = Request(API + "?per_page=30",
-                  headers={"Accept": "application/vnd.github+json", "User-Agent": "StudyFlow-Updater"})
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            data = json.load(response)
-    except HTTPError as exc:
-        if exc.code == 404:
-            return []
-        code = "UPDATE_RATE_LIMITED" if _http_rate_limited(exc) else "UPDATE_NETWORK_FAILED"
-        raise UpdateError(code, "GitHub changelog lookup failed") from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise UpdateError("UPDATE_NETWORK_FAILED", "GitHub changelog lookup failed") from exc
-    except (json.JSONDecodeError, UnicodeError) as exc:
-        raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid changelog metadata") from exc
+    data = _read_release_metadata(API + "?per_page=30", timeout, "changelog")
+    if data is _RELEASE_NOT_FOUND:
+        return []
     if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
         raise UpdateError("UPDATE_RELEASE_INVALID", "Invalid changelog metadata")
     entries = []
