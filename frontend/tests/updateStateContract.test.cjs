@@ -40,4 +40,8 @@ test("mirror controls expose only packaged sources and safe failover",()=>{
   assert.ok(code.includes('id="update-source"'));
   assert.ok(code.includes('id="update-fallback"'));
   assert.ok(code.includes('<option value="proxy" disabled={!sources.proxy}>国内公共 GitHub 代理</option>'));
+  assert.ok(code.includes('<option value="gh-proxy.org" disabled={!sources.proxy}>'));
+  assert.ok(code.includes('<option value="ghfast.top" disabled={!sources.proxy}>'));
+  const bridge = fs.readFileSync(path.join(__dirname, "../src/bridge.ts"), "utf8");
+  assert.ok(bridge.includes('source:"auto"|"github"|"proxy"|"gh-proxy.org"|"ghfast.top"'));
 });
