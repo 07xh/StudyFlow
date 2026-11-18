@@ -31,7 +31,7 @@ def _validated(value: object) -> dict:
         result["source"] = "auto"
     if (result["channel"] not in ("stable", "beta")
             or result["mode"] not in ("notify", "download")
-            or result["source"] not in ("auto", "github", "proxy")
+            or result["source"] not in ("auto", "github", "proxy", *update_sources.PROXIES)
             or type(result["fallback"]) is not bool):
         raise ValueError("INVALID_UPDATE_SETTINGS")
     return result

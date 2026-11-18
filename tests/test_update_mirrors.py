@@ -55,6 +55,14 @@ def test_public_proxies_only_accept_official_release_assets():
     assert update_sources.source_order("auto", True) == ["gh-proxy.org", "ghfast.top", "github"]
     assert update_sources.source_order("proxy", False) == ["gh-proxy.org", "ghfast.top"]
     assert update_sources.source_order("github", False) == ["github"]
+    assert update_sources.source_order("gh-proxy.org", False) == ["gh-proxy.org"]
+    assert update_sources.source_order("ghfast.top", False) == ["ghfast.top"]
+    assert update_sources.source_order("ghfast.top", True) == ["ghfast.top", "gh-proxy.org", "github"]
+    assert update_sources.source_order("gh-proxy.org", True) == ["gh-proxy.org", "ghfast.top", "github"]
+    with pytest.raises(ValueError):
+        update_sources.source_order("evil.example.org", True)
+    with pytest.raises(ValueError):
+        update_sources.source_order("gh-proxy.org", "yes")
 
 
 def test_old_settings_migrate_and_invalid_proxy_choices_rejected(monkeypatch, tmp_path):
@@ -70,6 +78,13 @@ def test_old_settings_migrate_and_invalid_proxy_choices_rejected(monkeypatch, tm
     saved = update_manager.save_preferences({
         "channel": "stable", "mode": "notify", "source": "proxy", "fallback": False})
     assert saved["source"] == "proxy"
+    saved = update_manager.save_preferences({
+        "channel": "stable", "mode": "notify", "source": "ghfast.top", "fallback": False})
+    assert saved["source"] == "ghfast.top"
+    assert update_manager.preferences() == saved
+    with pytest.raises(ValueError):
+        update_manager.save_preferences({
+            "channel": "stable", "mode": "notify", "source": "not-an-approved-proxy", "fallback": True})
     with pytest.raises(ValueError):
         update_manager.save_preferences({
             "channel": "stable", "mode": "notify", "source": "proxy", "fallback": "false"})
@@ -99,6 +114,58 @@ def test_proxy_rotation_and_official_fallback_share_github_digest(monkeypatch, t
     result = update_manager.download("0.1.0", "v0.2.0")
     assert result["source"] == "github"
     assert seen == [P1, P2, GITHUB]
+    assert result["sha256"] == digest
+
+
+def test_selected_single_proxy_does_not_try_other_sources(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    payload = b"verified installer bytes"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(updater, "release_info", lambda *args, **kwargs: {
+        "version": "v0.2.0", "assets": [{
+            "name": "StudyFlow_0.2.0_x64-setup.exe", "browser_download_url": GITHUB,
+            "digest": "sha256:" + digest,
+        }]})
+    update_manager.save_preferences({
+        "channel": "beta", "mode": "download", "source": "ghfast.top", "fallback": False})
+    seen = []
+
+    def download(url, checksum, destination, **kwargs):
+        seen.append(url)
+        assert checksum == digest
+        raise updater.UpdateError("UPDATE_DOWNLOAD_FAILED", "offline")
+
+    monkeypatch.setattr(updater, "verified_download", download)
+    with pytest.raises(updater.UpdateError):
+        update_manager.download("0.1.0", "v0.2.0")
+    assert seen == [P2]
+
+
+def test_selected_single_proxy_fails_over_in_order(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    payload = b"verified installer bytes"
+    digest = hashlib.sha256(payload).hexdigest()
+    monkeypatch.setattr(updater, "release_info", lambda *args, **kwargs: {
+        "version": "v0.2.0", "assets": [{
+            "name": "StudyFlow_0.2.0_x64-setup.exe", "browser_download_url": GITHUB,
+            "digest": "sha256:" + digest,
+        }]})
+    update_manager.save_preferences({
+        "channel": "beta", "mode": "download", "source": "ghfast.top", "fallback": True})
+    seen = []
+
+    def download(url, checksum, destination, **kwargs):
+        seen.append(url)
+        if url != P1:
+            raise updater.UpdateError("UPDATE_DOWNLOAD_FAILED", "offline")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(payload)
+        return destination
+
+    monkeypatch.setattr(updater, "verified_download", download)
+    result = update_manager.download("0.1.0", "v0.2.0")
+    assert seen == [P2, P1]
+    assert result["source"] == "gh-proxy.org"
     assert result["sha256"] == digest
 
 
