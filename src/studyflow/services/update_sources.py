@@ -35,10 +35,15 @@ def proxy_url(url: str, domain: str) -> str:
 
 def source_order(choice: str, fallback: bool) -> list[str]:
     """Source labels are fixed; changing the order never changes the SHA-256."""
-    if choice not in ("auto", "github", "proxy") or type(fallback) is not bool:
+    if choice not in ("auto", "github", "proxy", *PROXIES) or type(fallback) is not bool:
         raise ValueError("INVALID_UPDATE_SETTINGS")
     if choice == "github":
         return ["github", *PROXIES] if fallback else ["github"]
     if choice == "proxy":
+        # Preserve the old grouped-proxy preference and its fallback behavior.
         return [*PROXIES, "github"] if fallback else list(PROXIES)
-    return [*PROXIES, "github"] if fallback else [PROXIES[0]]
+    if choice == "auto":
+        return [*PROXIES, "github"] if fallback else [PROXIES[0]]
+    # An explicitly chosen proxy is always tried first. No fallback means
+    # exactly that source, unlike the historical grouped-proxy preference.
+    return [choice, *(host for host in PROXIES if host != choice), "github"] if fallback else [choice]
