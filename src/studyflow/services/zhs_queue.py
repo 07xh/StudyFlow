@@ -55,7 +55,7 @@ def resource_targets(knowledge_id: int, resources, options: dict, *,
             fields = getattr(detail, "model_fields_set", None)
             requirement = ("unknown" if fields is not None and "resources_sync_type" not in fields
                            else "required" if detail.resources_sync_type == 1 else "optional")
-            schedule = resource.schedule
+            schedule = getattr(resource, "schedule", None)
             baseline = schedule if type(schedule) is int and 0 <= schedule <= 100 else None
             result.append(QueueTarget(uid, knowledge_id, kind, safe_resource_title(detail.resources_name),
                                       chapter_key, chapter_name, requirement, baseline))
@@ -130,11 +130,12 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                 # Missing membership uses a single fallback chapter: never
                 # silently run two unclassified resources out of order.
                 chapter_key, chapter_name = chapters.get(video.video_id, ("shared-unmapped", None))
+                watched = getattr(video, "study_total_time", None)
+                baseline = (int(watched) if type(watched) in (int, float)
+                            and math.isfinite(watched) and watched >= 0 else None)
                 targets.append(QueueTarget(
                     video.video_id, None, "video", safe_resource_title(video.name),
-                    chapter_key, chapter_name, "shared",
-                    int(video.study_total_time) if type(video.study_total_time) in (int, float)
-                    and math.isfinite(video.study_total_time) and video.study_total_time >= 0 else None))
+                    chapter_key, chapter_name, "shared", baseline))
     finally:
         session.close()
     # A duplicate model must never schedule a video twice.
