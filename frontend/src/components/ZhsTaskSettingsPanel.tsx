@@ -69,8 +69,9 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
     if(scopeMode==="selected" && (!items.length||!selectedIds.every(id=>idsAvailable.has(id))))return null;
     if(courseType!=="ai" && resourceMode==="reading")return null;
     const result:OriginalZhsOptions={...saved,scope_mode:scopeMode,resource_mode:resourceMode,
-      requirement_mode:courseType==="ai"?
-        (requirementMode??(saved.learn_optional?"both":"required")):undefined,
+      // Do not silently convert an old course's optional checkbox into a new
+      // explicit filter until the user actually chooses a class mode.
+      requirement_mode:courseType==="ai"?(requirementMode??undefined):undefined,
       selected_ids:scopeMode==="selected"?selectedIds:[]};
     return validateZhsOptions(result)?result:null;
   },[saved,busy,dirty,valid,courseId,loadedFor,courseType,scopeMode,resourceMode,requirementMode,selectedIds,items,idsAvailable]);
