@@ -140,8 +140,16 @@ export function LegacyPlaybackPanel({
     if (statusPollInFlight.current === platform) return;
     statusPollInFlight.current = platform;
     const requestId = ++latestStatusRequest.current;
+    let timeoutId:number|undefined;
     try {
-      const next = await getLegacyStatus(platform);
+      // A suspended sidecar/IPC call must not hold the single-flight lock
+      // forever and freeze every task card after laptop sleep.
+      const next = await Promise.race<LegacyTaskStatus>([
+        getLegacyStatus(platform),
+        new Promise<never>((_,reject)=>{
+          timeoutId=window.setTimeout(()=>reject(new Error("TASK_STATUS_TIMEOUT")),15000);
+        })
+      ]);
       if (requestId !== latestStatusRequest.current || taskActionInFlight.current || currentPlatform.current !== platform) return;
       if (platform==="zhidao" && next.state==="running" && next.course_id) {
         setSelection(previous => previous || next.course_id || "");
@@ -163,6 +171,7 @@ export function LegacyPlaybackPanel({
       setStatusReadFailed(true);setYktProgress(null);
       setMessage("无法读取本地任务状态；显示的是上次记录，请重新查询。可尝试停止当前任务，停止前会核对运行标识。");
     } finally {
+      if(timeoutId!==undefined)window.clearTimeout(timeoutId);
       if (statusPollInFlight.current === platform) statusPollInFlight.current = null;
     }
   }, [desktop, platform]);
