@@ -34,9 +34,9 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None, ta
     maximum = options["max_videos"]
     stop_on_error = options["stop_on_error"]
     resource_mode = options.get("resource_mode", "all")
-    requirement_mode = options.get(
-        "requirement_mode", "both" if options.get("learn_optional", False) else "required"
-    )
+    # Without the new field the original ZHS resource method keeps its
+    # historical decision about required versus optional resources.
+    requirement_mode = options.get("requirement_mode")
 
     if not is_ai and resource_mode == "reading":
         raise ScopeInvalid()
@@ -78,7 +78,7 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None, ta
             requirement = ("unknown" if fields is not None and "resources_sync_type" not in fields
                            else "required" if getattr(detail, "resources_sync_type", 1) == 1
                            else "optional")
-            if requirement_mode != "both" and requirement != requirement_mode:
+            if requirement_mode is not None and requirement_mode != "both" and requirement != requirement_mode:
                 return None
             # The upstream may skip already-completed or optional resources.
             # Those are NOT an active video/PPT/reading item in the UI.
