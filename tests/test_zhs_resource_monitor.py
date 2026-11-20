@@ -187,3 +187,31 @@ def test_failed_resource_observer_cannot_interrupt_original_shared_play(monkeypa
         assert Player().play_video("course", 1, SimpleNamespace(
             videos={1: SimpleNamespace(name="title", watch_state=0)}
         )) == 42
+
+
+def test_three_independent_video_monitors_recover_from_transient_windows_file_locks(monkeypatch, tmp_path):
+    """Two transient rename denials must not kill numeric samples in any lane."""
+    from studyflow.services import zhs_resource_monitor as resource_monitor
+
+    upstream = runpy.run_path(str(VENDOR), run_name="studyflow_transient_lock_test")
+    original_replace = resource_monitor.os.replace
+    failures = {"1" * 32: 2, "2" * 32: 2, "3" * 32: 2}
+
+    def temporarily_locked(source, destination):
+        token = Path(destination).stem.removeprefix("monitor-zhs-")
+        if failures.get(token, 0):
+            failures[token] -= 1
+            raise PermissionError("simulated Windows sharing violation")
+        return original_replace(source, destination)
+
+    monkeypatch.setattr(resource_monitor.os, "replace", temporarily_locked)
+    for index, digit in enumerate(("1", "2", "3"), start=1):
+        token = digit * 32
+        monitor = create_resource_monitor(upstream["NumericTelemetry"], token, tmp_path)
+        monitor.mark_resource("video", f"第 {index} 路")
+        monitor.receive(f"playing [######----] {index * 20}.0%")
+        snapshot = json.loads(monitor.path.read_text(encoding="utf-8"))
+        assert snapshot["token"] == token
+        assert snapshot["videoSegmentPercent"] == float(index * 20)
+        assert snapshot["playbackPhase"] == "playing"
+        assert failures[token] == 0
