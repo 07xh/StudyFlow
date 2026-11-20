@@ -134,7 +134,7 @@ def transform(name: str, source: str) -> str:
             "        self._reporter.print()\n"
             "        if failed_knowledge_points:\n"
             '            self._reporter.print(msg_error(f"{failed_knowledge_points} 个知识点未确认完成"))\n'
-            "            return\n"
+            '            raise RuntimeError("ZHS_AI_RESOURCE_UNCONFIRMED")\n'
             "        if is_direct_mode:\n",
             name,
         )
