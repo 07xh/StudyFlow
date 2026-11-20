@@ -94,7 +94,7 @@ test('failed or stopped video rows stay visible as a summary even with collapsed
    await act(async()=>{view=create(React.createElement(Panel,{status:{
      ...status,zhs_queue:{...status.zhs_queue,tasks}
    },onRefresh:async()=>{}}));});
-   assert.match(words(view.root),/本轮异常记录：失败 1 项、已停止 1 项/);
+   assert.match(words(view.root),/本轮异常记录：执行失败 1 项、服务器未确认 0 项、已停止 1 项/);
    assert.match(words(view.root),/错误章节（退出码 13）/);
    assert.match(words(view.root),/本轮记录 · 2 项/);
  }finally{if(view)await act(async()=>view.unmount());}
