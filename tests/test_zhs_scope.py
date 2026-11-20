@@ -5,7 +5,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 from studyflow.platforms.zhidao.zhs_scope import (
-    scoped_upstream_play, ScopeLimitReached, ScopeInvalid,
+    scoped_upstream_play, ScopeLimitReached, ScopeUnconfirmed, ScopeInvalid,
 )
 
 
@@ -43,6 +43,30 @@ def test_shared_scope_limits_selected_unfinished_video_ids(monkeypatch):
     with pytest.raises(ScopeInvalid):
         with scoped_upstream_play({**options,"selected_ids":[999]},False):
             Player().play_course("",Context())
+
+
+def test_ai_incomplete_resource_at_local_threshold_is_unconfirmed(monkeypatch):
+    course_mod, video_mod = ModuleType("zhs.ai.course"), ModuleType("zhs.ai.video")
+    called = []
+    class Manager:
+        def _iter_targets(self, _):
+            return iter([SimpleNamespace(knowledge=SimpleNamespace(knowledge_id=10))])
+        def _process_resource(self, *_args, **_kwargs):
+            called.append(True)
+    class Player:
+        def play_video(self, *args, **kwargs):
+            called.append(True)
+    course_mod.AiCourseManager, video_mod.AiVideoPlayer = Manager, Player
+    monkeypatch.setitem(sys.modules, "zhs.ai.course", course_mod)
+    monkeypatch.setitem(sys.modules, "zhs.ai.video", video_mod)
+    opts = {"scope_mode":"selected","selected_ids":[10],"max_videos":0,
+            "stop_on_error":True,"resource_mode":"video"}
+    resource = SimpleNamespace(study_status=0, schedule=90, resources_detail=SimpleNamespace(
+        resources_uid=25, resources_type=1, resources_distribute_type=3, resources_sync_type=1))
+    with scoped_upstream_play(opts, True, target_resource=(10,25)):
+        with pytest.raises(ScopeUnconfirmed):
+            Manager()._process_resource(1,2,10,resource,Player(),[],False,90)
+    assert not called, "No-op at threshold must not be shown as successful playback"
 
 
 def test_ai_knowledge_scope_and_video_count(monkeypatch):
