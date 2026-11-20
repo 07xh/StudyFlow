@@ -11,6 +11,7 @@ pub struct QueueTask {
     pub chapter_key: Option<String>,
     pub chapter_name: Option<String>,
     pub kind: String,
+    pub requirement: Option<String>,
     pub state: String,
     pub percent: Option<f64>,
     pub playback_phase: Option<String>,
@@ -57,7 +58,15 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let kind = row.get("kind")?.as_str()?;
         if !matches!(kind, "video" | "ppt" | "article" | "other") { return None; }
         let row_state = row.get("state")?.as_str()?;
-        if !matches!(row_state, "queued" | "running" | "exited" | "failed" | "stopped") { return None; }
+        if !matches!(row_state, "queued" | "running" | "exited" | "failed" | "stopped" | "unconfirmed") { return None; }
+        let requirement = match row.get("requirement") {
+            None | Some(Value::Null) => None,
+            Some(value) => {
+                let kind = value.as_str()?;
+                if !matches!(kind, "required" | "optional" | "unknown" | "shared") { return None; }
+                Some(kind.to_owned())
+            }
+        };
         let name = match row.get("name")? {
             Value::Null => None,
             value => {
@@ -114,7 +123,7 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
             Some(row.get("exit_code")?.as_i64()?)
         };
         tasks.push(QueueTask {task_id: id.into(), name, chapter_key, chapter_name,
-            kind: kind.into(), state: row_state.into(),
+            kind: kind.into(), requirement, state: row_state.into(),
             percent, playback_phase, stale: row_stale, exit_code});
     }
     Some(QueueSnapshot {concurrency, state: state.into(), stale, tasks})
@@ -204,6 +213,18 @@ mod tests {
             "answering may not masquerade as a playing percentage");
         data["tasks"][0]["percent"] = Value::Null;
         data["tasks"][0]["playback_phase"] = json!("unauthorized");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+    }
+    #[test]
+    fn requirement_and_unconfirmed_server_state_are_bounded() {
+        let mut data = sample();
+        data["tasks"][0]["requirement"] = json!("required");
+        data["tasks"][0]["state"] = json!("unconfirmed");
+        data["tasks"][0]["exit_code"] = json!(16);
+        let parsed = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
+        assert_eq!(parsed.tasks[0].requirement.as_deref(), Some("required"));
+        assert_eq!(parsed.tasks[0].state, "unconfirmed");
+        data["tasks"][0]["requirement"] = json!("unexpected");
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
     }
     #[test]

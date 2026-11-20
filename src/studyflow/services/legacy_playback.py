@@ -28,7 +28,7 @@ from studyflow.platforms.zhidao.zhs_settings import (
 )
 from studyflow.services.zhs_resource_monitor import create_resource_monitor
 from studyflow.platforms.zhidao.zhs_scope import (
-    scoped_upstream_play, ScopeLimitReached, ScopeFailed, ScopeInvalid,
+    scoped_upstream_play, ScopeLimitReached, ScopeFailed, ScopeUnconfirmed, ScopeInvalid,
 )
 from studyflow.platforms.yuketang.credentials import load as load_yuketang
 from studyflow.platforms.yuketang.legacy_config import default_config_home, prepare_environment
@@ -428,6 +428,9 @@ def _run_bundled_zhs_args(arguments: list[str], monitor_token: str | None = None
     except ScopeFailed as exc:
         _write_zhs_diagnostic(monitor_token, _classify_zhs_failure(exc.__cause__ or exc))
         return 13
+    except ScopeUnconfirmed:
+        # An incomplete server resource would have been skipped without an update.
+        return 16
     except ScopeInvalid:
         return 14
     except SystemExit as exc:
@@ -633,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             options = None
         token = args[2] if len(args) >= 3 else None
         try:
-            if options is not None and options["concurrency"] > 1 and options["resource_mode"] != "reading":
+            if options is not None and token:
                 if not token or MONITOR_TOKEN.fullmatch(token) is None:
                     return 2
                 from studyflow.services.zhs_queue import run_queue

@@ -94,8 +94,30 @@ test('failed or stopped video rows stay visible as a summary even with collapsed
    await act(async()=>{view=create(React.createElement(Panel,{status:{
      ...status,zhs_queue:{...status.zhs_queue,tasks}
    },onRefresh:async()=>{}}));});
-   assert.match(words(view.root),/本轮异常记录：失败 1 项、已停止 1 项/);
+   assert.match(words(view.root),/本轮异常记录：执行失败 1 项、服务器未确认 0 项、已停止 1 项/);
    assert.match(words(view.root),/错误章节（退出码 13）/);
    assert.match(words(view.root),/本轮记录 · 2 项/);
+ }finally{if(view)await act(async()=>view.unmount());}
+});
+
+test('required/optional labels and server-unconfirmed evidence are distinct',async()=>{
+ const Panel=load('components/ZhsQueuePanel.tsx',{'legacyPlayback.ts':{
+  stopZhsVideo:async()=>{},legacyError:String,legacyExitMessage:()=>'',zhsDiagnosticMessage:()=>''
+ }}).ZhsQueuePanel;
+ const tasks=[
+  {...status.zhs_queue.tasks[0],requirement:'required',state:'unconfirmed',exit_code:16,percent:null,stale:true},
+  {...status.zhs_queue.tasks[1],requirement:'optional',state:'unconfirmed',exit_code:17,percent:null,stale:true}
+ ];
+ let view;
+ try{
+  await act(async()=>{view=create(React.createElement(Panel,{status:{
+   ...status,zhs_queue:{...status.zhs_queue,tasks}
+  },onRefresh:async()=>{}}));});
+  const text=words(view.root);
+  assert.match(text,/视频 · 必学 · 服务器未确认/);
+  assert.match(text,/视频 · 选学 · 服务器未确认/);
+  assert.match(text,/服务器回读状态未增加/);
+  assert.match(text,/服务器暂不可核验/);
+  assert.match(text,/服务器未确认 2 项/);
  }finally{if(view)await act(async()=>view.unmount());}
 });

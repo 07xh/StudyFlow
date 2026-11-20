@@ -16,6 +16,10 @@ class ScopeFailed(BaseException):
     """Upstream video error and stop-on-error was requested."""
 
 
+class ScopeUnconfirmed(BaseException):
+    """The server says incomplete but the local video threshold would skip it."""
+
+
 class ScopeInvalid(BaseException):
     """A selected identifier does not exist in the current upstream context."""
 
@@ -73,6 +77,15 @@ def scoped_upstream_play(options: dict | None, is_ai: bool, on_resource=None, ta
             active = getattr(item, "study_status", None) != 1 and (
                 getattr(detail, "resources_sync_type", 1) == 1 or optional_enabled is True
             )
+            if active and kind == "video" and stop_on_error:
+                # The server still reports this resource incomplete, but the
+                # upstream video player would skip it at the local threshold.
+                # Do not present that no-op as a completed queue task.
+                target_threshold = args[3] if len(args) > 3 else kwargs.get("threshold", 100)
+                schedule = getattr(item, "schedule", None)
+                if (type(schedule) is int and type(target_threshold) is int
+                        and schedule >= target_threshold):
+                    raise ScopeUnconfirmed()
             if active and on_resource is not None:
                 try:
                     on_resource(kind, getattr(detail, "resources_name", None))

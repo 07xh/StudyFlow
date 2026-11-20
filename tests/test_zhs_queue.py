@@ -665,3 +665,90 @@ def test_persistent_queue_snapshot_error_never_cancels_video_workers(monkeypatch
     ]
     assert zhs_queue.supervise(targets, 3, "f" * 32, tmp_path, launch) == 0
     assert started == [1, 2, 3]
+
+def test_required_optional_classification_with_unchanged_server_status():
+    from studyflow.services.zhs_queue import resource_targets
+    def resource(uid, sync_type, schedule):
+        return NS(study_status=0, schedule=schedule, resources_detail=NS(
+            resources_uid=uid, resources_type=1, resources_distribute_type=3,
+            resources_name=f"资源 {uid}", resources_sync_type=sync_type))
+    opts = {**zhs_settings.DEFAULTS, "learn_optional": True, "resource_mode": "all"}
+    rows = resource_targets(10, [resource(1, 1, 90), resource(2, 2, 20)], opts)
+    assert [(row.requirement, row.baseline_progress) for row in rows] == [
+        ("required", 90), ("optional", 20)]
+    excluded = resource_targets(10, [resource(1, 1, 90), resource(2, 2, 20)],
+                                {**opts, "learn_optional": False})
+    assert [row.resource_id for row in excluded] == [1]
+    unknown = resource(3, 1, 0)
+    unknown.resources_detail.model_fields_set = set()
+    assert resource_targets(10, [unknown], opts)[0].requirement == "unknown"
+
+
+def test_server_readback_distinguishes_unchanged_and_advanced_ai_resources(monkeypatch):
+    from types import ModuleType
+    from studyflow.services import legacy_playback
+    from studyflow.services.zhs_queue import QueueTarget, verify_server_advancement
+    state = {"schedule": 90, "study_status": 0}
+    row = NS(resources_detail=NS(resources_uid=11))
+    def fetch_rows(*_):
+        row.schedule = state["schedule"]
+        row.study_status = state["study_status"]
+        return [row]
+    session = NS(close=lambda: None)
+    bootstrap = ModuleType("zhs.cli.bootstrap")
+    bootstrap.load_config_and_session = lambda **_: (None, session)
+    ai_course = ModuleType("zhs.ai.course")
+    class Manager:
+        def __init__(self, _): pass
+        list_knowledge_resources = fetch_rows
+    ai_course.AiCourseManager = Manager
+    monkeypatch.setitem(sys.modules, "zhs.cli.bootstrap", bootstrap)
+    monkeypatch.setitem(sys.modules, "zhs.ai.course", ai_course)
+    monkeypatch.setattr(legacy_playback, "_current_course_row",
+                        lambda _: {"courseType": "ai", "courseId": 1, "classId": 2})
+    target = QueueTarget(11, 4, "video", "必学视频", requirement="required", baseline_progress=90)
+    assert verify_server_advancement("course", target) == 16
+    state["schedule"] = 91
+    assert verify_server_advancement("course", target) == 0
+    state["schedule"], state["study_status"] = 90, 1
+    assert verify_server_advancement("course", target) == 0
+    bootstrap.load_config_and_session = lambda **_: None
+    assert verify_server_advancement("course", target) == 17
+
+
+def test_server_readback_shared_course_uses_server_watched_seconds(monkeypatch):
+    from types import ModuleType
+    from studyflow.services import legacy_playback
+    from studyflow.services.zhs_queue import QueueTarget, verify_server_advancement
+    observed = NS(watch_state=0, study_total_time=12)
+    session = NS(close=lambda: None)
+    bootstrap = ModuleType("zhs.cli.bootstrap")
+    bootstrap.load_config_and_session = lambda **_: (None, session)
+    shared_course = ModuleType("zhs.zhidao.course")
+    class Manager:
+        def __init__(self, _): pass
+        def get_context(self, *_, **__):
+            return NS(videos={42: observed})
+    shared_course.ZhidaoCourseManager = Manager
+    monkeypatch.setitem(sys.modules, "zhs.cli.bootstrap", bootstrap)
+    monkeypatch.setitem(sys.modules, "zhs.zhidao.course", shared_course)
+    monkeypatch.setattr(legacy_playback, "_current_course_row",
+                        lambda _: {"courseType": "shared", "courseId": 9, "recruitAndCourseId": "route"})
+    target = QueueTarget(42, None, "video", "普通共享课", requirement="shared", baseline_progress=12)
+    assert verify_server_advancement("course", target) == 16
+    observed.study_total_time = 15
+    assert verify_server_advancement("course", target) == 0
+    observed.study_total_time, observed.watch_state = 12, 1
+    assert verify_server_advancement("course", target) == 0
+
+def test_server_unconfirmed_exit_is_distinct_from_failed_playback(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    target = QueueTarget(5, 1, "video", "服务器未确认的视频", requirement="required")
+    def launch(_target, _token):
+        return subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(16)"],
+                                stdin=subprocess.PIPE)
+    assert supervise([target], 1, "e" * 32, tmp_path, launch) == 13
+    snapshot = json.loads((tmp_path / ("zhs-queue-" + "e" * 32 + ".json")).read_text(encoding="utf-8"))
+    assert snapshot["tasks"][0]["state"] == "unconfirmed"
+    assert snapshot["tasks"][0]["exit_code"] == 16
+    assert snapshot["tasks"][0]["requirement"] == "required"
