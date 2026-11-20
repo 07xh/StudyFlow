@@ -49,6 +49,9 @@ test("desktop app wires course loading to startup, login refresh, entry and focu
   assert.match(app,/const newStatusCheck=statusCheckRevision!==lastObservedStatusCheck\.current/);
   assert.match(app,/page==="platform-"\+platform/);
   assert.match(app,/window\.addEventListener\("focus",onFocus\)/);
+  assert.match(app,/lastStatusCheckAt\.current=Date\.now\(\)/);
+  assert.match(app,/Date\.now\(\)-lastStatusCheckAt\.current>=5\*60\*1000/);
+  assert.match(app,/requestRevision!==statusRequestRevision\.current/);
   assert.match(app,/shouldStartCourseSync\(checkpoint,Date\.now\(\),manual\)/);
   assert.match(app,/invalidateCourseSync\(syncCheckpoints\.current\[platform\]\)/);
   assert.match(app,/fetchCoursesFromDesktop\(platform\)/);
