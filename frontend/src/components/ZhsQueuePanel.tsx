@@ -3,8 +3,9 @@ import {Square} from "lucide-react";
 import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type LegacyTaskStatus} from "../legacyPlayback";
 
 const labels:Record<string,string>={queued:"排队中",running:"运行中",exited:"本轮结束 · 待核验",
-  failed:"执行失败",stopped:"已停止",unknown:"状态待核实"};
+  failed:"执行失败",unconfirmed:"服务器未确认",stopped:"已停止",unknown:"状态待核实"};
 const kinds={video:"视频",ppt:"PPT",article:"文章",other:"其他资源"};
+const requirementLabels:Record<string,string>={required:"必学",optional:"选学",unknown:"分类待核验",shared:"共享课"};
 export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   status:LegacyTaskStatus;unavailable?:boolean;onRefresh:()=>Promise<void>;
 }){
@@ -21,6 +22,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const waiting=queue.tasks.filter(t=>t.state==="queued");
   const ended=queue.tasks.filter(t=>t.state!=="queued"&&t.state!=="running");
   const failed=ended.filter(t=>t.state==="failed");
+  const unconfirmed=ended.filter(t=>t.state==="unconfirmed");
   const stopped=ended.filter(t=>t.state==="stopped");
   async function stop(id:string){
     const run=status.run_id;
@@ -46,7 +48,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     const phaseLabel=task.playback_phase==="paused"?"播放暂停":task.playback_phase==="answering"?"处理题目":null;
     return <article className="sf-ykt-worker" key={task.task_id}>
       <div className="sf-ykt-worker-heading">
-        <span>{kinds[task.kind]} · {stale&&inProgress?"状态待核实":pendingStop?"正在停止":task.state==="running"&&phaseLabel?phaseLabel:labels[task.state]}</span>
+        <span>{kinds[task.kind]}{task.requirement&&" · "+requirementLabels[task.requirement]} · {stale&&inProgress?"状态待核实":pendingStop?"正在停止":task.state==="running"&&phaseLabel?phaseLabel:labels[task.state]}</span>
         {inProgress&&<button type="button" className="secondary" aria-label={"停止"+(task.name??"此资源")}
           disabled={!active||pendingStop} onClick={()=>void stop(task.task_id)}><Square size={13}/>停止此项</button>}
       </div>
@@ -62,6 +64,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         <span style={{width:percent!=null?percent+"%":"0%"}}/>
       </div>}
       <small className="sf-muted">{task.state==="exited"?"进程已退出，学习记录待平台核验":
+        task.state==="unconfirmed"?(task.exit_code===16?"服务器回读状态未增加，未认定任务已完成":"服务器暂不可核验，尚不能确认写入"):
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
         stale?"队列状态暂不可用 · 请重新读取任务状态":
         task.state==="running"&&task.kind!=="video"?"非视频资源 · 不提供视频位置百分比":
@@ -101,9 +104,9 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     {waiting.length>0&&<details className="sf-ykt-video-details"><summary>等待队列 · {waiting.length} 项</summary>
       {grouped(waiting.slice(0,100))}
       {waiting.length>100&&<small>显示前 100 项，任务将自动补位。</small>}</details>}
-    {(failed.length>0||stopped.length>0)&&<p role="status" className="sf-muted">
-      本轮异常记录：失败 {failed.length} 项、已停止 {stopped.length} 项。单个视频失败不代表其他视频已完成；若启用了遇错停止，其余运行项也可能提前结束。
-      {failed.slice(0,3).map(item=><span key={item.task_id}> {item.name??"未命名资源"}（退出码 {item.exit_code??"未知"}）</span>)}
+    {(failed.length>0||unconfirmed.length>0||stopped.length>0)&&<p role="status" className="sf-muted">
+      本轮异常记录：执行失败 {failed.length} 项、服务器未确认 {unconfirmed.length} 项、已停止 {stopped.length} 项。单个视频失败不代表其他视频已完成；若启用了遇错停止，其余运行项也可能提前结束。
+      {[...unconfirmed,...failed].slice(0,3).map(item=><span key={item.task_id}> {item.name??"未命名资源"}（退出码 {item.exit_code??"未知"}）</span>)}
     </p>}
     {ended.length>0&&<details className="sf-ykt-video-details"><summary>本轮记录 · {ended.length} 项</summary>
       {grouped(ended.slice(-100))}</details>}
