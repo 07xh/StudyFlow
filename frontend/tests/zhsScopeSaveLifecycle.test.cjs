@@ -135,7 +135,8 @@ test("AI-only resource mode is saved per course and survives reopening",async()=
       validateZhsStoredOptions:obj=>Object.keys(defaults).every(k=>obj?.[k]!==undefined||
         (defaults[k]===null&&obj?.[k]===null)),
       validateZhsOptions:obj=>obj?.scope_mode==="all" &&
-        obj.learn_optional===(obj.requirement_mode!=="required")
+        (obj.requirement_mode===undefined ||
+         obj.learn_optional===(obj.requirement_mode!=="required"))
     },
     "ui/SettingsDialog.tsx":{
       SettingsDialog:({open,onClose,children,footer,navigation})=>open?
@@ -158,6 +159,7 @@ test("AI-only resource mode is saved per course and survives reopening",async()=
     await act(async()=>{open().props.onClick();});
     await act(async()=>{scopeTab().props.onClick();});
     assert.equal(mode().props.value,"required");
+    assert.ok(ready.at(-1),"legacy ZHS course remains runnable");
     assert.equal(ready.at(-1)?.requirement_mode,undefined,
       "legacy settings must not acquire explicit class filters before the user chooses them");
     await act(async()=>{mode().props.onChange({target:{value:"optional"}});});
