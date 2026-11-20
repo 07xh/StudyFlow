@@ -136,7 +136,20 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
                 ) as stream:
                     temporary = Path(stream.name)
                     json.dump(data, stream, separators=(",", ":"), ensure_ascii=False)
-                os.replace(temporary, self.path)
+                # Windows readers and antivirus scanners can briefly hold the
+                # destination file. One failed replace must not permanently
+                # disable this worker's read-only progress observer.
+                for attempt in range(6):
+                    try:
+                        os.replace(temporary, self.path)
+                        break
+                    except OSError as exc:
+                        transient = isinstance(exc, PermissionError) or getattr(
+                            exc, "winerror", None
+                        ) in (32, 33)
+                        if not transient or attempt == 5:
+                            raise
+                        time.sleep(0.02 * (attempt + 1))
                 self.last_snapshot = observation
             finally:
                 if temporary is not None:
