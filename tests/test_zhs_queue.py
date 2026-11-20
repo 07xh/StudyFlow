@@ -752,3 +752,35 @@ def test_server_unconfirmed_exit_is_distinct_from_failed_playback(tmp_path):
     assert snapshot["tasks"][0]["state"] == "unconfirmed"
     assert snapshot["tasks"][0]["exit_code"] == 16
     assert snapshot["tasks"][0]["requirement"] == "required"
+
+def test_three_requirement_modes_are_exclusive_and_backward_compatible():
+    from studyflow.services.zhs_queue import resource_targets
+    from studyflow.platforms.zhidao.zhs_settings import validate_run_settings
+    def resource(uid, sync_type=1, explicit=True):
+        detail = NS(resources_uid=uid, resources_name="课时",
+                    resources_type=1, resources_distribute_type=3,
+                    resources_sync_type=sync_type)
+        if not explicit:
+            detail.model_fields_set = set()
+        return NS(study_status=0, schedule=10, resources_detail=detail)
+    rows = [resource(11), resource(22, 2), resource(33, 1, False)]
+    base = {**zhs_settings.DEFAULTS, "scope_mode": "all", "selected_ids": [],
+            "resource_mode": "all"}
+    expected = {"required": [11], "optional": [22], "both": [11, 22, 33]}
+    for mode, ids in expected.items():
+        opts = validate_run_settings({**base, "learn_optional":mode != "required",
+                                      "requirement_mode":mode})
+        assert opts["requirement_mode"] == mode
+        assert [t.resource_id for t in resource_targets(10, rows, opts)] == ids
+    # Existing persisted checkbox-only courses retain their former semantics.
+    assert [t.resource_id for t in resource_targets(10, rows,
+        validate_run_settings(base))] == [11]
+    assert [t.resource_id for t in resource_targets(10, rows,
+        validate_run_settings({**base, "learn_optional":True}))] == [11, 22, 33]
+    for mode, optional in [("optional",False), ("required",True), ("both",False)]:
+        with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
+            validate_run_settings({**base, "learn_optional":optional, "requirement_mode":mode})
+    with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
+        validate_run_settings({**base,"requirement_mode":"forged"})
+    with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
+        validate_run_settings({**base,"custom_key":"untrusted"})
