@@ -61,4 +61,5 @@ def test_overlay_keeps_protocol_outside_patch_scope():
     assert "saveDatabaseIntervalTimeV2" not in source
     assert "studyRecord/report" not in source
     assert "studyTotalTime" not in source
+    assert 'raise RuntimeError("ZHS_AI_RESOURCE_UNCONFIRMED")' in source
     assert "write_text(text, encoding=\"utf-8\", newline=\"\\n\")" in source
