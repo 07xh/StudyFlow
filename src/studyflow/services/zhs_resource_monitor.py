@@ -25,6 +25,19 @@ _SHARED_VIDEO_PROGRESS = re.compile(
 # printable text; the accepted frame must still start with a video marker.
 _ANSI_CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
+# The original numeric observer accepts one decimal place for AI videos.
+# Accept extra display precision here, but only for an anchored playing frame.
+_AI_VIDEO_PROGRESS = re.compile(
+    r"^playing\s+\[[^\r\n]{0,512}\]\s*"
+    r"(\d{1,3}(?:\.\d{1,3})?)%", re.IGNORECASE,
+)
+# ZHS uses these labels while a video is paused or at an interaction.
+# The percentage displayed in these modes is NOT a playback position.
+_CONTROL_PHASE = re.compile(
+    r"^(pause|answering)\s+\[[^\r\n]{0,512}\]\s*"
+    r"(\d{1,3}(?:\.\d{1,3})?)%", re.IGNORECASE,
+)
+
 ALLOWED_KINDS = frozenset(("video", "ppt", "article", "other"))
 PRIVATE_MARKERS = ("http:", "https:", "cookie", "token", "authorization", "password", "secret", "apikey", "api_key")
 
@@ -51,27 +64,39 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
             super().__init__(token, directory=directory)
             self.resource_kind: str | None = None
             self.resource_name: str | None = None
+            self.playback_phase: str | None = None
 
         def receive(self, chunk: str) -> None:
-            # Preserve the upstream AI percentage and resource count parser.
-            super().receive(chunk)
-            # Read-only compatibility for the official ZHS shared-course display.
-            # Restrict parsing to the latest terminal frame, never CLI diagnostics,
-            # URLs, unrelated percentages or previous progress-bar rows.
+            # Keep the original vendor monitor for resource counters and the
+            # one-decimal AI format. This is only an additional read-only parser.
+            # Read the last CR/LF frame to avoid borrowing another video's %
+            # from earlier console chatter, and strip only terminal CSI codes.
             latest = re.split(r"[\r\n]", _ANSI_CSI.sub("", chunk[-4096:]))[-1].lstrip(" \t")
-            observed = _SHARED_VIDEO_PROGRESS.match(latest)
-            if observed is None:
-                return
-            value = float(observed.group(2))
-            # A repeated, valid shared-course progress frame is still fresh
-            # telemetry. _RefreshingZhsSink resets last_snapshot every 5s so
-            # identical percentages can renew their timestamps, just like AI
-            # course frames do. Do not refresh for unrelated console output.
-            if 0.0 <= value <= 100.0 and (
-                self.percent != value or self.last_snapshot is None
-            ):
-                self.percent = value
+            playing = _SHARED_VIDEO_PROGRESS.match(latest) or _AI_VIDEO_PROGRESS.match(latest)
+            percent = float(playing.group(2 if playing.re is _SHARED_VIDEO_PROGRESS else 1)) if playing else None
+            valid_video = (
+                percent is not None and 0.0 <= percent <= 100.0
+                and self.resource_kind in (None, "video")
+            )
+            if valid_video:
+                self.playback_phase = "playing"
+            super().receive(chunk)
+            if valid_video and (self.percent != percent or self.last_snapshot is None):
+                # Shared-course formats and extra fractional precision are
+                # not accepted by the immutable vendor NumericTelemetry.
+                self.percent = percent
                 self.publish()
+            elif not valid_video and self.resource_kind in (None, "video"):
+                control = _CONTROL_PHASE.match(latest)
+                if control is not None and 0.0 <= float(control.group(2)) <= 100.0:
+                    phase = "paused" if control.group(1).lower() == "pause" else "answering"
+                    if self.playback_phase != phase or self.percent is not None or self.last_snapshot is None:
+                        # Do not reuse the last playing % as a fresh sample
+                        # while the original console says pause/answering.
+                        self.playback_phase = phase
+                        self.percent = None
+                        self.last_snapshot = None
+                        self.publish()
 
         def mark_resource(self, kind: str, name: object) -> None:
             if kind not in ALLOWED_KINDS:
@@ -80,6 +105,7 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
             # percentage. Never sum segment percentages or infer completion.
             self.resource_kind = kind
             self.resource_name = safe_resource_title(name)
+            self.playback_phase = None
             self.percent = None
             self.last_snapshot = None
             self.publish()
@@ -87,7 +113,7 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
         def publish(self) -> None:
             observation = (
                 self.percent, self.resource_index, self.resource_total,
-                self.resource_kind, self.resource_name,
+                self.resource_kind, self.resource_name, self.playback_phase,
             )
             if observation == self.last_snapshot:
                 return
@@ -99,6 +125,7 @@ def create_resource_monitor(base_class: type, token: str, directory: Path):
                 "resourceTotal": self.resource_total,
                 "resourceKind": self.resource_kind,
                 "resourceName": self.resource_name,
+                "playbackPhase": self.playback_phase,
                 "at": time.time(),
             }
             temporary: Path | None = None

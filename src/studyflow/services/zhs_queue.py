@@ -155,21 +155,37 @@ def atomic_json(path: Path, data: dict) -> None:
         Path(temporary).unlink(missing_ok=True)
 
 
-def local_percent(directory: Path, token: str) -> float | None:
+def local_observation(directory: Path, token: str) -> tuple[float | None, str | None]:
+    """Read only one worker's fresh, bounded console observation.
+
+    The playback phase is not a percentage. Missing/expired/invalid samples
+    are never replaced with local timers or values from other workers.
+    """
     path = directory / f"monitor-zhs-{token}.json"
     try:
         if path.is_symlink() or path.stat().st_size > 2048:
-            return None
+            return None, None
         data = json.loads(path.read_text(encoding="utf-8"))
         at, value = data.get("at"), data.get("videoSegmentPercent")
+        phase = data.get("playbackPhase")
         if (data.get("v") != 1 or data.get("token") != token
                 or type(at) not in (int, float) or not math.isfinite(at)
                 or not -10 <= time.time() - at <= 18
-                or type(value) not in (float, int) or not math.isfinite(value) or not 0 <= value <= 100):
-            return None
-        return value
+                or phase not in (None, "playing", "paused", "answering")):
+            return None, None
+        if value is None:
+            return None, phase
+        if (type(value) not in (float, int) or not math.isfinite(value)
+                or not 0 <= value <= 100 or phase in ("paused", "answering")):
+            return None, None
+        return value, phase
     except (OSError, ValueError, TypeError):
-        return None
+        return None, None
+
+
+def local_percent(directory: Path, token: str) -> float | None:
+    """Compatibility for callers needing only valid numeric playback."""
+    return local_observation(directory, token)[0]
 
 
 def sampling_is_stale(kind: str, percent: float | None, *, had_sample: bool,
@@ -225,7 +241,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     directory.mkdir(parents=True, exist_ok=True)
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
-             "state": "queued", "percent": None, "stale": False, "exit_code": None} for t in targets]
+             "state": "queued", "percent": None, "playback_phase": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
     started_at: dict[int, float] = {}
     had_sample: set[int] = set()
@@ -258,7 +274,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
             terminate(child)
             for prefix in ("monitor-zhs-", "zhs-diagnostic-"):
                 (directory / f"{prefix}{child_token}.json").unlink(missing_ok=True)
-        rows[index].update(state="stopped", percent=None, stale=False)
+        rows[index].update(state="stopped", percent=None, playback_phase=None, stale=False)
 
     try:
         publish("running")
@@ -279,20 +295,21 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
                     command.unlink(missing_ok=True)
             for index, (child, child_token) in list(running.items()):
                 code = child.poll()
-                percent = local_percent(directory, child_token)
+                percent, playback_phase = local_observation(directory, child_token)
                 if percent is not None and targets[index].kind == "video":
                     had_sample.add(index)
                 stale = sampling_is_stale(
                     targets[index].kind, percent, had_sample=index in had_sample,
                     running_seconds=time.monotonic() - started_at.get(index, time.monotonic()),
-                )
+                ) and playback_phase not in ("paused", "answering")
                 rows[index].update(
                     percent=percent if targets[index].kind == "video" else None,
+                    playback_phase=playback_phase if targets[index].kind == "video" else None,
                     stale=stale,
                 )
                 if code is not None:
                     rows[index].update(state="exited" if code == 0 else "failed", exit_code=code,
-                                       percent=None, stale=True)
+                                       percent=None, playback_phase=None, stale=True)
                     child_fatal = fatal_diagnostic(directory, child_token)
                     if child_fatal:
                         fatal = child_fatal

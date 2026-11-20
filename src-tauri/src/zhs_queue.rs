@@ -13,6 +13,7 @@ pub struct QueueTask {
     pub kind: String,
     pub state: String,
     pub percent: Option<f64>,
+    pub playback_phase: Option<String>,
     pub stale: bool,
     pub exit_code: Option<i64>,
 }
@@ -93,10 +94,20 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
             }
         };
         let row_stale = stale || row.get("stale")?.as_bool()?;
+        // The queue may carry a fresh read-only console phase even when the
+        // official upstream output has no valid playing percentage.
+        let playback_phase = match row.get("playback_phase") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let phase = raw.as_str()?;
+                if !matches!(phase, "playing" | "paused" | "answering") { return None; }
+                if row_stale || row_state != "running" { None } else { Some(phase.to_owned()) }
+            }
+        };
         let raw_percent = row.get("percent")?;
         let percent = if raw_percent.is_null() { None } else {
             let percent = raw_percent.as_f64()?;
-            if !percent.is_finite() || !(0.0..=100.0).contains(&percent) { return None; }
+            if !percent.is_finite() || !(0.0..=100.0).contains(&percent) || matches!(playback_phase.as_deref(), Some("paused" | "answering")) { return None; }
             if row_stale || row_state != "running" { None } else { Some(percent) }
         };
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
@@ -104,7 +115,7 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         };
         tasks.push(QueueTask {task_id: id.into(), name, chapter_key, chapter_name,
             kind: kind.into(), state: row_state.into(),
-            percent, stale: row_stale, exit_code});
+            percent, playback_phase, stale: row_stale, exit_code});
     }
     Some(QueueSnapshot {concurrency, state: state.into(), stale, tasks})
 }
@@ -173,6 +184,26 @@ mod tests {
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
         data["tasks"][0]["chapter_name"] = json!("第二章");
         data["tasks"][0]["chapter_key"] = json!("../bad");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+    }
+    #[test]
+    fn scoped_console_phases_are_validated_without_inventing_progress() {
+        for phase in ["paused", "answering", "playing"] {
+            let mut data = sample();
+            data["tasks"][0]["playback_phase"] = json!(phase);
+            if phase != "playing" { data["tasks"][0]["percent"] = Value::Null; }
+            let parsed = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
+            assert_eq!(parsed.tasks[0].playback_phase.as_deref(), Some(phase));
+            if phase != "playing" { assert!(parsed.tasks[0].percent.is_none()); }
+            let stale = parse(data.to_string().as_bytes(), &"a".repeat(32), 120.0).unwrap();
+            assert!(stale.tasks[0].playback_phase.is_none());
+        }
+        let mut data = sample();
+        data["tasks"][0]["playback_phase"] = json!("answering");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none(),
+            "answering may not masquerade as a playing percentage");
+        data["tasks"][0]["percent"] = Value::Null;
+        data["tasks"][0]["playback_phase"] = json!("unauthorized");
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
     }
     #[test]
