@@ -22,12 +22,20 @@ def validate_run_settings(value: object) -> dict:
     if isinstance(value, dict):
         value = {"concurrency": 1, "completion_threshold": None, **value}
     required = set(DEFAULTS) | {"scope_mode", "selected_ids"}
-    if not isinstance(value, dict) or set(value) not in (required, required | {"resource_mode"}):
+    allowed = required | {"resource_mode", "requirement_mode"}
+    if not isinstance(value, dict) or not required.issubset(value) or not set(value).issubset(allowed):
         raise ValueError("INVALID_ZHS_SETTINGS")
     base = validate_settings({key: value[key] for key in DEFAULTS})
     mode, identifiers = value["scope_mode"], value["selected_ids"]
     resource_mode = value.get("resource_mode", "all")
+    requirement_mode = value.get("requirement_mode", "both" if base["learn_optional"] else "required")
     if resource_mode not in ("all", "video", "reading"):
+        raise ValueError("INVALID_ZHS_SETTINGS")
+    if requirement_mode not in ("required", "optional", "both"):
+        raise ValueError("INVALID_ZHS_SETTINGS")
+    # The original ZHS flag still decides whether optional resources can run;
+    # reject contradictory UI and bridge inputs instead of silently broadening scope.
+    if base["learn_optional"] != (requirement_mode != "required"):
         raise ValueError("INVALID_ZHS_SETTINGS")
     if mode not in ("all", "selected") or not isinstance(identifiers, list):
         raise ValueError("INVALID_ZHS_SETTINGS")
@@ -37,8 +45,13 @@ def validate_run_settings(value: object) -> dict:
             or (mode == "all" and identifiers)
             or (mode == "selected" and not identifiers)):
         raise ValueError("INVALID_ZHS_SETTINGS")
-    return {**base, "scope_mode": mode, "selected_ids": identifiers,
-            "resource_mode": resource_mode}
+    result = {**base, "scope_mode": mode, "selected_ids": identifiers,
+              "resource_mode": resource_mode}
+    # Preserve the exact legacy option envelope for older ZHS callers; only
+    # new explicitly chosen modes need the additional field.
+    if "requirement_mode" in value:
+        result["requirement_mode"] = requirement_mode
+    return result
 
 
 def validate_settings(value: object) -> dict:

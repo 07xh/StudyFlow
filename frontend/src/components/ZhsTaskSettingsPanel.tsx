@@ -8,6 +8,7 @@ import type {TaskRecorder} from "../activity";
 
 type ScopeMode="all"|"selected";
 type ResourceMode="all"|"video"|"reading";
+type RequirementMode="required"|"optional"|"both";
 type Item={id:number;name:string;group:string;completed:boolean};
 function itemId(detail:ZhidaoCourseDetail,item:ZhidaoCourseDetail["items"][number]){
   return detail.course_type==="ai"?item.knowledge_id:item.video_id;
@@ -39,9 +40,13 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const [detail,setDetail]=useState<ZhidaoCourseDetail|null>(null);
   const [scopeMode,setScopeMode]=useState<ScopeMode>("all");
   const [resourceMode,setResourceMode]=useState<ResourceMode>("all");
+  // null inherits the historical persisted learn_optional preference.
+  const [requirementMode,setRequirementMode]=useState<RequirementMode|null>(null);
   const [selectedIds,setSelectedIds]=useState<number[]>([]);
-  const [savedScope,setSavedScope]=useState<{mode:ScopeMode;ids:number[];resourceMode:ResourceMode}>({
-    mode:"all",ids:[],resourceMode:"all"
+  const [savedScope,setSavedScope]=useState<{
+    mode:ScopeMode;ids:number[];resourceMode:ResourceMode;requirementMode:RequirementMode|null
+  }>({
+    mode:"all",ids:[],resourceMode:"all",requirementMode:null
   });
   const revision=useRef(0);
   const detailRevision=useRef(0);
@@ -50,7 +55,9 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   const scopeKey="studyflow.zhs.task.scope."+courseId;
   const items=useMemo(()=>safeItems(detail,courseId),[detail,courseId]);
   const idsAvailable=useMemo(()=>new Set(items.map(item=>item.id)),[items]);
-  const scopeDraft={mode:scopeMode,ids:selectedIds,resourceMode};
+  const scopeDraft={mode:scopeMode,ids:selectedIds,resourceMode,requirementMode};
+  const effectiveRequirementMode:RequirementMode=requirementMode??
+    (options.learn_optional?"both":"required");
   const scopeDirty=JSON.stringify(scopeDraft)!==JSON.stringify(savedScope);
   const dirty=saved!==null&&(JSON.stringify(options)!==JSON.stringify(saved)||scopeDirty);
   const valid=validateZhsStoredOptions(options);
@@ -62,9 +69,12 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
     if(scopeMode==="selected" && (!items.length||!selectedIds.every(id=>idsAvailable.has(id))))return null;
     if(courseType!=="ai" && resourceMode==="reading")return null;
     const result:OriginalZhsOptions={...saved,scope_mode:scopeMode,resource_mode:resourceMode,
+      // Do not silently convert an old course's optional checkbox into a new
+      // explicit filter until the user actually chooses a class mode.
+      requirement_mode:courseType==="ai"?(requirementMode??undefined):undefined,
       selected_ids:scopeMode==="selected"?selectedIds:[]};
     return validateZhsOptions(result)?result:null;
-  },[saved,busy,dirty,valid,courseId,loadedFor,courseType,scopeMode,resourceMode,selectedIds,items,idsAvailable]);
+  },[saved,busy,dirty,valid,courseId,loadedFor,courseType,scopeMode,resourceMode,requirementMode,selectedIds,items,idsAvailable]);
   useEffect(()=>{readyRef.current?.(ready);},[ready]);
 
   const load=useCallback(async()=>{
@@ -88,8 +98,8 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   },[desktop,courseId]);
   useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
   const loadScope=useCallback(()=>{
-    let scope:{mode:ScopeMode;ids:number[];resourceMode:ResourceMode}={
-      mode:"all",ids:[],resourceMode:"all"
+    let scope:{mode:ScopeMode;ids:number[];resourceMode:ResourceMode;requirementMode:RequirementMode|null}={
+      mode:"all",ids:[],resourceMode:"all",requirementMode:null
     };
     if(courseId){
       try{
@@ -100,12 +110,15 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
           const ids=[...new Set<number>(stored.ids)];
           const kind:ResourceMode=(stored.resourceMode==="video"||
              (stored.resourceMode==="reading"&&courseType==="ai"))?stored.resourceMode:"all";
-          scope={mode:stored.mode,ids,resourceMode:kind};
+          const classification:RequirementMode|null=
+            (stored.requirementMode==="required"||stored.requirementMode==="optional"||
+             stored.requirementMode==="both")?stored.requirementMode:null;
+          scope={mode:stored.mode,ids,resourceMode:kind,requirementMode:classification};
         }
       }catch{/* Invalid saved selection never becomes an execution option. */}
     }
     setScopeMode(scope.mode);setSelectedIds(scope.ids);setResourceMode(scope.resourceMode);
-    setSavedScope(scope);
+    setRequirementMode(scope.requirementMode);setSavedScope(scope);
   },[scopeKey,courseId,courseType]);
   useEffect(()=>{setDetail(null);loadScope();},[loadScope]);
   const fetchDetail=useCallback(async()=>{
@@ -131,6 +144,7 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
       if(saved)setOptions(saved);
       setScopeMode(savedScope.mode);setSelectedIds(savedScope.ids);
       setResourceMode(savedScope.resourceMode);
+      setRequirementMode(savedScope.requirementMode);
     }
     if(settingsOpen!==undefined)onSettingsClose?.();
     else setInternalOpened(false);
@@ -152,6 +166,11 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
   },[settingsOpen,loadScope,load]);
   function update<K extends keyof ZhsStoredOptions>(key:K,value:ZhsStoredOptions[K]){
     setOptions(previous=>({...previous,[key]:value}));
+  }
+  function updateRequirementMode(mode:RequirementMode){
+    setRequirementMode(mode);
+    // Keep the original ZHS optional flag consistent with the selected class.
+    setOptions(previous=>({...previous,learn_optional:mode!=="required"}));
   }
   async function save(){
     if(!desktop||busy||!valid||!dirty)return;
@@ -286,8 +305,6 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
             <input type="checkbox" checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/>
             跳过已完成 <small className="sf-muted">（原版自动启用）</small>
           </label>
-          {courseType==="ai"&&<label><input type="checkbox" checked={options.learn_optional} disabled={!desktop||busy}
-            onChange={e=>update("learn_optional",e.currentTarget.checked)}/>AI 课程包含选学资源</label>}
           <label><input type="checkbox" checked={options.stop_on_error} disabled={!desktop||busy}
             onChange={e=>update("stop_on_error",e.currentTarget.checked)}/>视频处理异常时停止任务</label>
         </div>
@@ -296,6 +313,13 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         {section==="scope"&&<>
         <h4 className="sf-settings-section-title">执行范围</h4>
         <div className="legacy-option-grid">
+          {courseType==="ai"&&<label><span>AI 任务类型</span>
+            <select value={effectiveRequirementMode} disabled={!desktop||!courseId||busy}
+              onChange={e=>updateRequirementMode(e.target.value as RequirementMode)}>
+              <option value="required">仅必学</option>
+              <option value="optional">仅选学</option>
+              <option value="both">必学＋选学</option>
+            </select></label>}
           <label><span>本次选择的资源类型</span>
             <select value={resourceMode} disabled={!desktop||!courseId||busy}
               onChange={e=>updateScope(scopeMode,selectedIds,e.target.value as ResourceMode)}>
@@ -312,6 +336,8 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
             </select>
           </label>
         </div>
+        {courseType==="ai"?<p className="sf-ykt-advanced-note">仅必学不安排选学；仅选学不安排必学；必学＋选学按原版目录顺序安排未完成资源。未提供分类的资源在单独筛选时不会被猜测归类。切换后需保存参数。</p>:
+          <p className="sf-ykt-advanced-note">普通共享课没有对应的必学/选学资源分类，继续沿用原版共享课视频范围。</p>}
         <details className="sf-ykt-advanced-options"><summary>范围与续播说明</summary><p className="sf-ykt-advanced-note">仅针对当前课程的真实资源选择类型，不更改 ZHS 原版的发送节奏。视频比例是单个片段位置，切换视频或知识点时可从 0 开始；课程总体进度以服务器核验为准。停止后再次启动会创建新的原版进程，不会续用已停止的进程。</p></details>
         {scopeMode==="selected"&&<div className="sf-ykt-advanced-options">
           <div className="actions"><button className="secondary" type="button" disabled={!desktop}

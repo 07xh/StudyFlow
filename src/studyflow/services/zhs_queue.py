@@ -38,9 +38,20 @@ def resource_targets(knowledge_id: int, resources, options: dict, *,
                      chapter_key: str | None = None,
                      chapter_name: str | None = None) -> list[QueueTarget]:
     result, seen = [], set()
+    requirement_mode = options.get("requirement_mode")
     for resource in resources:
         detail = resource.resources_detail
-        if resource.study_status == 1 or (detail.resources_sync_type != 1 and not options["learn_optional"]):
+        if resource.study_status == 1:
+            continue
+        fields = getattr(detail, "model_fields_set", None)
+        requirement = ("unknown" if fields is not None and "resources_sync_type" not in fields
+                       else "required" if detail.resources_sync_type == 1 else "optional")
+        # New explicit modes are strict; legacy clients keep their historical
+        # behavior based on the upstream optional flag and model defaults.
+        if requirement_mode is None:
+            if detail.resources_sync_type != 1 and not options["learn_optional"]:
+                continue
+        elif requirement_mode != "both" and requirement != requirement_mode:
             continue
         kind = {(1, 3): "video", (2, 2): "video", (1, 4): "ppt", (2, 1): "article"}.get(
             (detail.resources_type, detail.resources_distribute_type), "other")
@@ -52,9 +63,6 @@ def resource_targets(knowledge_id: int, resources, options: dict, *,
             raise ScopeInvalid()
         if uid not in seen:
             # The source classification is distinct from a local playback state.
-            fields = getattr(detail, "model_fields_set", None)
-            requirement = ("unknown" if fields is not None and "resources_sync_type" not in fields
-                           else "required" if detail.resources_sync_type == 1 else "optional")
             schedule = getattr(resource, "schedule", None)
             baseline = schedule if type(schedule) is int and 0 <= schedule <= 100 else None
             result.append(QueueTarget(uid, knowledge_id, kind, safe_resource_title(detail.resources_name),
