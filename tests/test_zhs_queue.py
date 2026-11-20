@@ -748,7 +748,7 @@ def test_server_unconfirmed_exit_is_distinct_from_failed_playback(tmp_path):
         return subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(16)"],
                                 stdin=subprocess.PIPE)
     assert supervise([target], 1, "e" * 32, tmp_path, launch) == 13
-    snapshot = json.loads((tmp_path / ("zhs-queue-" + "e" * 32 + ".json")).read_text())
+    snapshot = json.loads((tmp_path / ("zhs-queue-" + "e" * 32 + ".json")).read_text(encoding="utf-8"))
     assert snapshot["tasks"][0]["state"] == "unconfirmed"
     assert snapshot["tasks"][0]["exit_code"] == 16
     assert snapshot["tasks"][0]["requirement"] == "required"
