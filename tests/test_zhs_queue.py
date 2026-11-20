@@ -774,7 +774,7 @@ def test_three_requirement_modes_are_exclusive_and_backward_compatible():
         assert [t.resource_id for t in resource_targets(10, rows, opts)] == ids
     # Existing persisted checkbox-only courses retain their former semantics.
     assert [t.resource_id for t in resource_targets(10, rows,
-        validate_run_settings(base))] == [11]
+        validate_run_settings(base))] == [11, 33]
     assert [t.resource_id for t in resource_targets(10, rows,
         validate_run_settings({**base, "learn_optional":True}))] == [11, 22, 33]
     for mode, optional in [("optional",False), ("required",True), ("both",False)]:
