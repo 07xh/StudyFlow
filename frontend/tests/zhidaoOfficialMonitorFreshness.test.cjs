@@ -28,12 +28,12 @@ test("isolated official player observer cadence renews read-only progress before
 test("official player polling and close-time readback recover from hung or failed requests",()=>{
   const panel=fs.readFileSync(path.join(root,"frontend/src/components/ZhidaoOfficialPlayerPanel.tsx"),"utf8");
   const monitor=fs.readFileSync(path.join(root,"frontend/src/components/ZhidaoPlayerMonitor.tsx"),"utf8");
-  assert.match(panel,/Promise\\.race<PlayerStatus>/);
+  assert.match(panel,/Promise\.race<PlayerStatus>/);
   assert.match(panel,/PLAYER_STATUS_TIMEOUT/);
   assert.match(panel,/positionSeconds:null,durationSeconds:null,observedAt:null/);
-  assert.match(monitor,/boundedRead\\(invoke<Status>\\("zhidao_player_status"\\),15000\\)/);
-  assert.match(monitor,/lastAttempt\\.current\\.set\\(status\\.runId,now\\)/);
-  assert.match(monitor,/if\\(now-last<60000\\)return/);
+  assert.match(monitor,/boundedRead\(invoke<Status>\("zhidao_player_status"\),15000\)/);
+  assert.match(monitor,/lastAttempt\.current\.set\(status\.runId,now\)/);
+  assert.match(monitor,/if\(now-last<60000\)return/);
   assert.ok(monitor.indexOf('verifiedRuns.current.add(status.runId)')>
     monitor.indexOf('if(!target){'),
     "a failed readback must remain retryable");
