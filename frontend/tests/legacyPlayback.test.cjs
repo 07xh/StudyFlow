@@ -286,3 +286,16 @@ test("ZHS completed-content skip is shown as original, fixed playback behavior",
   assert.match(settings,/“跳过已完成”由 ZHS 0\.1\.5 原版自动执行/);
   assert.doesNotMatch(settings,/onChange=\{[^\n]*skip_completed/);
 });
+
+test("ZHS AI requirement modes must match the upstream optional flag",()=>{
+  const legacy=loadWithStub(async()=>{throw Error("No IPC expected")});
+  const base={...legacy.originalZhsDefaults,scope_mode:"all",selected_ids:[]};
+  for(const mode of ["required","optional","both"]){
+    const value={...base,learn_optional:mode!=="required",requirement_mode:mode};
+    assert.equal(legacy.validateZhsOptions(value),true,mode);
+    assert.equal(legacy.validateZhsOptions({...value,learn_optional:mode==="required"}),false,
+      "contradictory optional flag must be rejected");
+  }
+  assert.equal(legacy.validateZhsOptions({...base,requirement_mode:"any"}),false);
+  assert.equal(legacy.validateZhsOptions(base),true,"old option payload is still accepted");
+});
