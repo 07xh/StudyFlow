@@ -87,3 +87,32 @@ def test_ai_knowledge_scope_and_video_count(monkeypatch):
         with pytest.raises(ScopeLimitReached):
             Player().play_video(schedule=0,threshold=90)
     assert [t.knowledge.knowledge_id for t in Manager()._iter_targets(None)]==[1,2,3]
+
+def test_ai_resource_selection_is_enforced_inside_upstream_scope(monkeypatch):
+    course_mod, video_mod = ModuleType("zhs.ai.course"), ModuleType("zhs.ai.video")
+    seen = []
+    class Manager:
+        def _iter_targets(self, _info):
+            return iter([SimpleNamespace(knowledge=SimpleNamespace(knowledge_id=12))])
+        def _process_resource(self, _cid, _cls, _kid, item, *args, **kwargs):
+            seen.append(item.resources_detail.resources_uid)
+    class Player:
+        def play_video(self, *args, **kwargs):
+            return None
+    course_mod.AiCourseManager, video_mod.AiVideoPlayer = Manager, Player
+    monkeypatch.setitem(sys.modules, "zhs.ai.course", course_mod)
+    monkeypatch.setitem(sys.modules, "zhs.ai.video", video_mod)
+    def resource(uid, kind):
+        return SimpleNamespace(study_status=0,
+            resources_detail=SimpleNamespace(resources_uid=uid,
+                resources_type=1, resources_distribute_type=3,
+                resources_sync_type=kind))
+    for mode, expected in [("required",[21]),("optional",[22]),("both",[21,22])]:
+        seen.clear()
+        options = {"scope_mode":"selected","selected_ids":[12], "max_videos":0,
+                   "stop_on_error":False, "resource_mode":"all",
+                   "learn_optional":mode!="required", "requirement_mode":mode}
+        with scoped_upstream_play(options, True):
+            for row in [resource(21,1),resource(22,2)]:
+                Manager()._process_resource(1,2,12,row,Player(),[],mode!="required",100)
+        assert seen == expected, mode
