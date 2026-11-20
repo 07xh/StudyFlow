@@ -636,7 +636,7 @@ def main(argv: list[str] | None = None) -> int:
             options = None
         token = args[2] if len(args) >= 3 else None
         try:
-            if options is not None and token and options["resource_mode"] != "reading":
+            if options is not None and token:
                 if not token or MONITOR_TOKEN.fullmatch(token) is None:
                     return 2
                 from studyflow.services.zhs_queue import run_queue
