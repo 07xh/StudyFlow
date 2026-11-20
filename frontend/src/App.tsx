@@ -105,7 +105,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   });
   const [statusCheckRevision,setStatusCheckRevision]=useState(0);
   const lastStatusCheckAt=useRef(0);
-  const statusCheckInFlight=useRef(false);
+  const statusRequestRevision=useRef(0);
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   // One monitored course across the entire app, with explicit per-course off/on choices.
@@ -319,12 +319,13 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
 
 
   const refresh=useCallback(async()=>{
-    if(!desktop||statusCheckInFlight.current)return;
-    statusCheckInFlight.current=true;
+    if(!desktop)return;
+    const requestRevision=++statusRequestRevision.current;
     lastStatusCheckAt.current=Date.now();
     setBusy("status");setNotice("");
     try{
       const statuses=await fetchStatuses();
+      if(requestRevision!==statusRequestRevision.current)return;
       // A signed-out platform must invalidate older asynchronous course responses.
       for(const status of statuses){
         if(platformInfo(status.platform)&&status.status!=="connected"){
@@ -352,9 +353,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       setStatusCheckRevision(previous=>previous+1);
       recordEvent("系统","检测平台连接","success","已读取平台真实登录状态");
     }catch(error){
+      if(requestRevision!==statusRequestRevision.current)return;
       const message=friendlyBridgeError(error);
       setNotice(message);recordEvent("系统","检测平台连接","warning",message);
-    }finally{statusCheckInFlight.current=false;setBusy("");}
+    }finally{
+      if(requestRevision===statusRequestRevision.current)setBusy("");
+    }
   },[desktop,recordEvent]);
 
   useEffect(()=>{
