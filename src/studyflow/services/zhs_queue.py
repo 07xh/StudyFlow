@@ -38,7 +38,7 @@ def resource_targets(knowledge_id: int, resources, options: dict, *,
                      chapter_key: str | None = None,
                      chapter_name: str | None = None) -> list[QueueTarget]:
     result, seen = [], set()
-    requirement_mode = options.get("requirement_mode", "both" if options["learn_optional"] else "required")
+    requirement_mode = options.get("requirement_mode")
     for resource in resources:
         detail = resource.resources_detail
         if resource.study_status == 1:
@@ -46,8 +46,12 @@ def resource_targets(knowledge_id: int, resources, options: dict, *,
         fields = getattr(detail, "model_fields_set", None)
         requirement = ("unknown" if fields is not None and "resources_sync_type" not in fields
                        else "required" if detail.resources_sync_type == 1 else "optional")
-        # Unknown classifications must not leak into a strictly selected class.
-        if requirement_mode != "both" and requirement != requirement_mode:
+        # New explicit modes are strict; legacy clients keep their historical
+        # behavior based on the upstream optional flag and model defaults.
+        if requirement_mode is None:
+            if detail.resources_sync_type != 1 and not options["learn_optional"]:
+                continue
+        elif requirement_mode != "both" and requirement != requirement_mode:
             continue
         kind = {(1, 3): "video", (2, 2): "video", (1, 4): "ppt", (2, 1): "article"}.get(
             (detail.resources_type, detail.resources_distribute_type), "other")
