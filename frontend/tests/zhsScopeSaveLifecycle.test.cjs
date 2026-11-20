@@ -158,6 +158,8 @@ test("AI-only resource mode is saved per course and survives reopening",async()=
     await act(async()=>{open().props.onClick();});
     await act(async()=>{scopeTab().props.onClick();});
     assert.equal(mode().props.value,"required");
+    assert.equal(ready.at(-1)?.requirement_mode,undefined,
+      "legacy settings must not acquire explicit class filters before the user chooses them");
     await act(async()=>{mode().props.onChange({target:{value:"optional"}});});
     assert.equal(save().props.disabled,false);
     assert.equal(storage.has(key),false,"unsaved mode must not be persisted");
