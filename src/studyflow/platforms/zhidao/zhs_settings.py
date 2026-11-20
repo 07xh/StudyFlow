@@ -45,8 +45,13 @@ def validate_run_settings(value: object) -> dict:
             or (mode == "all" and identifiers)
             or (mode == "selected" and not identifiers)):
         raise ValueError("INVALID_ZHS_SETTINGS")
-    return {**base, "scope_mode": mode, "selected_ids": identifiers,
-            "resource_mode": resource_mode, "requirement_mode": requirement_mode}
+    result = {**base, "scope_mode": mode, "selected_ids": identifiers,
+              "resource_mode": resource_mode}
+    # Preserve the exact legacy option envelope for older ZHS callers; only
+    # new explicitly chosen modes need the additional field.
+    if "requirement_mode" in value:
+        result["requirement_mode"] = requirement_mode
+    return result
 
 
 def validate_settings(value: object) -> dict:
