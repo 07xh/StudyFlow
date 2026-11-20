@@ -603,3 +603,65 @@ def test_lock_acquisition_retries_only_before_task_starts(monkeypatch):
     assert legacy._run_exclusive("zhidao", lambda: calls.append("run") or 0) == 0
     assert len(attempts) == 3
     assert calls == ["run"], "an already-started task must never be replayed"
+
+
+def test_single_and_three_lane_workers_continue_after_telemetry_disk_failures(monkeypatch, tmp_path):
+    """A UI snapshot write error must not terminate legitimate worker processes."""
+    from studyflow.services import zhs_queue
+    original = zhs_queue.atomic_json
+
+    for slots in (1, 3):
+        token = str(slots) * 32
+        attempts = [0]
+        seen = []
+
+        def flaky_snapshot(path, data):
+            if path.name.startswith("zhs-queue-"):
+                attempts[0] += 1
+                if attempts[0] == 1:
+                    raise PermissionError("temporary Windows file lock")
+            return original(path, data)
+
+        monkeypatch.setattr(zhs_queue, "atomic_json", flaky_snapshot)
+        targets = [
+            zhs_queue.QueueTarget(i, None, "video", f"视频 {i}", f"shared-{i}", f"章节 {i}")
+            for i in range(1, slots + 1)
+        ]
+
+        def launch(target, child_token):
+            seen.append(target.resource_id)
+            return subprocess.Popen(
+                [sys.executable, "-c", "import time;time.sleep(.1)"],
+                stdin=subprocess.PIPE,
+            )
+
+        assert zhs_queue.supervise(targets, slots, token, tmp_path, launch) == 0
+        assert seen == list(range(1, slots + 1))
+        assert attempts[0] >= 2
+        completed = json.loads((tmp_path / f"zhs-queue-{token}.json").read_text())
+        assert completed["state"] == "exited"
+        assert all(row["state"] == "exited" for row in completed["tasks"])
+
+
+def test_persistent_queue_snapshot_error_never_cancels_video_workers(monkeypatch, tmp_path):
+    from studyflow.services import zhs_queue
+
+    def unavailable(*args, **kwargs):
+        raise PermissionError("persistent telemetry directory lock")
+
+    monkeypatch.setattr(zhs_queue, "atomic_json", unavailable)
+    started = []
+
+    def launch(target, child_token):
+        started.append(target.resource_id)
+        return subprocess.Popen(
+            [sys.executable, "-c", "import time;time.sleep(.12)"],
+            stdin=subprocess.PIPE,
+        )
+
+    targets = [
+        zhs_queue.QueueTarget(i, None, "video", f"视频 {i}", f"shared-{i}")
+        for i in range(1, 4)
+    ]
+    assert zhs_queue.supervise(targets, 3, "f" * 32, tmp_path, launch) == 0
+    assert started == [1, 2, 3]

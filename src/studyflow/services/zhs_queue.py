@@ -249,12 +249,17 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     exit_code = 0
     fatal = None
     last_publish_at = 0.0
+    last_failed_publish_at = -float("inf")
     last_states = None
     last_queue_state = None
 
     def publish(state, *, force=False):
-        nonlocal last_publish_at, last_states, last_queue_state
+        nonlocal last_publish_at, last_failed_publish_at, last_states, last_queue_state
         now = time.monotonic()
+        # UI telemetry must never stop an otherwise valid video job. Throttle
+        # recovery attempts when the filesystem remains temporarily blocked.
+        if not force and now - last_failed_publish_at < 1.0:
+            return
         # State transitions (start/stop/exit) are immediate. Numeric samples
         # refresh at most 2 Hz: avoid full 100+ row Windows file rewrites at
         # 10 Hz while preserving the UI's existing two-second poll cadence.
@@ -262,10 +267,16 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
         if (not force and states == last_states and state == last_queue_state
                 and now - last_publish_at < .5):
             return
-        atomic_json(directory / f"zhs-queue-{token}.json", {
-            "v": 1, "token": token, "at": time.time(), "state": state,
-            "concurrency": concurrency, "tasks": rows,
-        })
+        try:
+            atomic_json(directory / f"zhs-queue-{token}.json", {
+                "v": 1, "token": token, "at": time.time(), "state": state,
+                "concurrency": concurrency, "tasks": rows,
+            })
+        except OSError:
+            last_failed_publish_at = now
+            # Leave the last-successful snapshot unchanged. A later polling
+            # cycle can recover without replaying a playback request.
+            return
         last_states, last_queue_state, last_publish_at = states, state, now
 
     def stop(index):
@@ -366,9 +377,13 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
                 stop(index)
         publish("exited", force=True)
         if fatal:
-            atomic_json(directory / f"zhs-diagnostic-{token}.json", {
-                "v":1, "token":token, "at":time.time(), "code":fatal,
-            })
+            try:
+                atomic_json(directory / f"zhs-diagnostic-{token}.json", {
+                    "v":1, "token":token, "at":time.time(), "code":fatal,
+                })
+            except OSError:
+                # A diagnostic-file problem cannot change the real task result.
+                pass
     return exit_code
 
 

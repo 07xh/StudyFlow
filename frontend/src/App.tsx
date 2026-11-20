@@ -104,6 +104,8 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     zhidao:{phase:"idle",error:""},yuketang:{phase:"idle",error:""},xuexitong:{phase:"idle",error:""},ucampus:{phase:"idle",error:""}
   });
   const [statusCheckRevision,setStatusCheckRevision]=useState(0);
+  const lastStatusCheckAt=useRef(0);
+  const statusRequestRevision=useRef(0);
   const [busy,setBusy]=useState("");
   const [selectedCourse,setSelectedCourse]=useState<Course|null>(null);
   // One monitored course across the entire app, with explicit per-course off/on choices.
@@ -318,9 +320,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
 
   const refresh=useCallback(async()=>{
     if(!desktop)return;
+    const requestRevision=++statusRequestRevision.current;
+    lastStatusCheckAt.current=Date.now();
     setBusy("status");setNotice("");
     try{
       const statuses=await fetchStatuses();
+      if(requestRevision!==statusRequestRevision.current)return;
       // A signed-out platform must invalidate older asynchronous course responses.
       for(const status of statuses){
         if(platformInfo(status.platform)&&status.status!=="connected"){
@@ -348,9 +353,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       setStatusCheckRevision(previous=>previous+1);
       recordEvent("系统","检测平台连接","success","已读取平台真实登录状态");
     }catch(error){
+      if(requestRevision!==statusRequestRevision.current)return;
       const message=friendlyBridgeError(error);
       setNotice(message);recordEvent("系统","检测平台连接","warning",message);
-    }finally{setBusy("");}
+    }finally{
+      if(requestRevision===statusRequestRevision.current)setBusy("");
+    }
   },[desktop,recordEvent]);
 
   useEffect(()=>{
@@ -423,6 +431,18 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       if(newStatusCheck||page==="platform-"+platform)void sync(platform);
     }
   },[desktop,consentAccepted,page,platforms.zhidao.status,platforms.yuketang.status,platforms.xuexitong.status,platforms.ucampus.status,statusCheckRevision,sync]);
+
+  // Laptop sleep/overnight use may preserve an old UI "connected" flag.
+  // Recheck the real session on wake before relying on cached course progress.
+  // This does not start playback, mutate login data or submit study records.
+  useEffect(()=>{
+    if(!desktop||!consentAccepted||typeof window.addEventListener!=="function")return;
+    const onWake=()=>{
+      if(Date.now()-lastStatusCheckAt.current>=5*60*1000)void refresh();
+    };
+    window.addEventListener("focus",onWake);
+    return ()=>window.removeEventListener("focus",onWake);
+  },[desktop,consentAccepted,refresh]);
 
   useEffect(()=>{
     if(!desktop||!consentAccepted||typeof window.addEventListener!=="function")return;
@@ -834,7 +854,10 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       </section>
       {course.platform==="zhidao"?<>
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
-          <ZhidaoCourseDetailPanel key={"chapters:"+course.course_id} course={course} desktop={desktop} onCoursesUpdated={updateCourses}/>
+          <ZhidaoCourseDetailPanel key={"chapters:"+course.course_id} course={course} desktop={desktop}
+            onCoursesUpdated={updateCourses}
+            autoVerifyActive={autoVerify.enabled&&autoVerify.courseId===course.course_id&&
+              platforms.zhidao.status==="connected"}/>
         </CollapsibleSection>
         <CollapsibleSection id={scope+"server"} title="服务器进度核验" defaultExpanded={false}>
           <ZhidaoProgressPanel key={"server:"+course.course_id} courses={platforms.zhidao.courses} desktop={desktop} connected={platforms.zhidao.status==="connected"} onCoursesUpdated={updateCourses} courseId={course.course_id} courseTitle={course.title} detailMode

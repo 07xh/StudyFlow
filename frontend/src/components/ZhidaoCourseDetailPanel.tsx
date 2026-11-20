@@ -4,7 +4,9 @@ import {friendlyBridgeError,request,type ZhidaoCourseDetail,type ZhidaoProgressS
 import type {Course} from "../types";
 import {CourseChapterGroup,CourseRecordToolbar} from "../ui/CourseRecordViews";
 
-type Props={course:Course;desktop:boolean;onCoursesUpdated?:(courses:Course[])=>void};
+type Props={course:Course;desktop:boolean;onCoursesUpdated?:(courses:Course[])=>void;
+  /** App-scoped monitor already refreshes this course; do not duplicate a slow server read. */
+  autoVerifyActive?:boolean};
 type StatusFilter="all"|"incomplete"|"completed"|"unverified";
 type Lesson=ZhidaoCourseDetail["items"][number];
 
@@ -20,6 +22,13 @@ function lessonStatus(item:Lesson,kind:ZhidaoCourseDetail["course_type"]):Exclud
 }
 function chapterOf(item:Lesson){return (item.chapter_name||item.theme||"").trim();}
 function groupName(item:Lesson){return chapterOf(item)||"其他内容";}
+/** A cached server record remains historical evidence after an overnight break. */
+const SERVER_EVIDENCE_FRESH_MS=5*60*1000;
+function needsFreshServerEvidence(value:string|null|undefined,now=Date.now()):boolean{
+  if(!value)return true;
+  const at=Date.parse(value);
+  return !Number.isFinite(at)||at>now+60000||now-at>SERVER_EVIDENCE_FRESH_MS;
+}
 function seconds(value:number|undefined){
   if(value===undefined||!Number.isFinite(value)||value<0)return "—";
   const n=Math.floor(value);
@@ -27,7 +36,7 @@ function seconds(value:number|undefined){
 }
 
 /** Real Zhidao course records; course-level metric remains in the workspace header. */
-export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated}:Props){
+export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated,autoVerifyActive=false}:Props){
   const [detail,setDetail]=useState<ZhidaoCourseDetail|null>(null);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
@@ -63,12 +72,16 @@ export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated}:Props)
       // The detail endpoint reads a local cache. On a newly selected course with
       // no usable chapter evidence, query the real server before declaring it empty.
       // A manual refresh always requests new server evidence.
-      const missingEvidence=!cached.verified||cached.stale||cached.items.length===0;
-      if(!verifyServer&&(!missingEvidence||course.stale||
-        autoVerifiedCourseRef.current===course.course_id))return;
+      const missingEvidence=!cached.verified||cached.stale||cached.items.length===0||
+        needsFreshServerEvidence(cached.verified_at);
+      // App-level monitoring is the sole owner while enabled. Its newer
+      // course timestamp re-runs this cache read; avoid overlapping requests.
+      const attemptKey=course.course_id+":"+(course.session_marker??"");
+      if(!verifyServer&&(autoVerifyActive||!missingEvidence||course.stale||
+        autoVerifiedCourseRef.current===attemptKey))return;
       // Only one automatic retry per selected course, even if the server
       // legitimately has no chapter records. Manual refresh can retry again.
-      autoVerifiedCourseRef.current=course.course_id;
+      autoVerifiedCourseRef.current=attemptKey;
       const snapshot=await request<ZhidaoProgressSnapshot>({
         operation:"zhidao.progress.verify",course_key:course.course_id
       });
@@ -92,7 +105,7 @@ export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated}:Props)
         setMessage("当前课程读取或服务器核验失败："+friendlyBridgeError(error));
       }
     }finally{if(current===revision.current)setBusy(false);}
-  },[desktop,course.course_id,course.verified_at,course.stale]);
+  },[desktop,course.course_id,course.session_marker,course.verified_at,course.stale,autoVerifyActive]);
   useEffect(()=>{void load();return ()=>{revision.current++;};},[load]);
 
   // Never present records belonging to a previously selected course.

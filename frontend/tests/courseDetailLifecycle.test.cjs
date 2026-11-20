@@ -21,8 +21,8 @@ function component(request){
  new Function('module','exports','require',code)(mod,mod.exports,name=>name==='../bridge'?{request,friendlyBridgeError:()=> 'failed'}:name==='../ui/CourseRecordViews'?sharedViews():require(name));
  return mod.exports.ZhidaoCourseDetailPanel;
 }
-const course={platform:'zhidao',course_id:'a'.repeat(64),title:'course',course_type:'ai',verified_at:'2026-11-14T12:00:00Z'};
-const detail=name=>({course_key:course.course_id,course_type:'ai',verified:true,stale:false,done:0,total:1,items:[{name,progress_percent:50}]});
+const course={platform:'zhidao',course_id:'a'.repeat(64),title:'course',course_type:'ai',verified_at:new Date().toISOString()};
+const detail=name=>({course_key:course.course_id,course_type:'ai',verified:true,stale:false,done:0,total:1,verified_at:new Date().toISOString(),items:[{name,progress_percent:50}]});
 
 test('chapter detail follows verification timestamp and clears failed refresh',async()=>{
  let calls=0;
@@ -30,10 +30,10 @@ test('chapter detail follows verification timestamp and clears failed refresh',a
  let view;
  await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
  assert.match(JSON.stringify(view.toJSON()),/snapshot-1/);
- await act(async()=>{view.update(React.createElement(Panel,{course:{...course,verified_at:'2026-11-14T12:01:00Z'},desktop:true}));});
+ await act(async()=>{view.update(React.createElement(Panel,{course:{...course,verified_at:new Date(Date.now()+1000).toISOString()},desktop:true}));});
  assert.equal(calls,2);
  assert.match(JSON.stringify(view.toJSON()),/snapshot-2/);
- await act(async()=>{view.update(React.createElement(Panel,{course:{...course,verified_at:'2026-11-14T12:02:00Z'},desktop:true}));});
+ await act(async()=>{view.update(React.createElement(Panel,{course:{...course,verified_at:new Date(Date.now()+2000).toISOString()},desktop:true}));});
  assert.doesNotMatch(JSON.stringify(view.toJSON()),/snapshot-[12]/);
  act(()=>view.unmount());
 });
@@ -46,7 +46,7 @@ test('clears a selected course when the current session no longer contains it',(
 test('Zhidao full-knowledge flag is not mislabeled unverified when percent is absent',async()=>{
  const Panel=component(async()=>({
   course_key:course.course_id,course_type:'ai',verified:true,stale:false,done:1,total:1,
-  items:[{name:'已完成知识点',fully_progressed:true}]
+  verified_at:new Date().toISOString(),items:[{name:'已完成知识点',fully_progressed:true}]
  }));
  let view;
  await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
@@ -115,7 +115,7 @@ test('a delayed previous-course response never overwrites the newly selected cou
  const Panel=component(async args=>{
   if(args.course_key===oldKey)return new Promise(resolve=>{releaseOld=resolve;});
   return {course_key:newKey,course_type:'ai',verified:true,stale:false,done:0,total:1,
-    items:[{name:'新课程知识点',progress_percent:45}]};
+    verified_at:new Date().toISOString(),items:[{name:'新课程知识点',progress_percent:45}]};
  });
  let view;
  try{
@@ -128,5 +128,51 @@ test('a delayed previous-course response never overwrites the newly selected cou
   const rendered=JSON.stringify(view.toJSON());
   assert.match(rendered,/新课程知识点/);
   assert.doesNotMatch(rendered,/旧课程知识点/);
+ }finally{if(view)act(()=>view.unmount());}
+});
+
+test('overnight verified chapter cache is refreshed with one real server read',async()=>{
+ const old='2025-01-01T00:00:00Z',calls=[],updates=[];
+ let fresh=false;
+ const Panel=component(async args=>{
+  calls.push(args.operation);
+  if(args.operation==='zhidao.progress.verify'){
+   fresh=true;
+   return {courses:[{...course,progress_evidence:'server_verified',
+     verified_at:new Date().toISOString(),progress_percent:42,stale:false}],
+     incomplete:false,fetched_at:null};
+  }
+  if(args.operation==='zhidao.course.detail')
+   return {...detail(fresh?'服务器最新章节':'昨日历史章节'),
+     verified_at:fresh?new Date().toISOString():old};
+  throw Error('unexpected operation');
+ });
+ let view;
+ try{
+  await act(async()=>{view=create(React.createElement(Panel,{
+   course:{...course,verified_at:old},desktop:true,
+   onCoursesUpdated:rows=>updates.push(rows)
+  }));});
+  assert.deepEqual(calls,[
+   'zhidao.course.detail','zhidao.progress.verify','zhidao.course.detail']);
+  assert.equal(updates.length,1);
+  assert.match(JSON.stringify(view.toJSON()),/服务器最新章节/);
+ }finally{if(view)act(()=>view.unmount());}
+});
+
+test('app-level automatic verifier owns the read when already enabled',async()=>{
+ const old='2025-01-01T00:00:00Z',calls=[];
+ const Panel=component(async args=>{
+  calls.push(args.operation);
+  if(args.operation!=='zhidao.course.detail')throw Error('duplicate verification');
+  return {...detail('昨日历史章节'),verified_at:old};
+ });
+ let view;
+ try{
+  await act(async()=>{view=create(React.createElement(Panel,{
+   course:{...course,verified_at:old},desktop:true,autoVerifyActive:true
+  }));});
+  assert.deepEqual(calls,['zhidao.course.detail']);
+  assert.match(JSON.stringify(view.toJSON()),/昨日历史章节/);
  }finally{if(view)act(()=>view.unmount());}
 });
