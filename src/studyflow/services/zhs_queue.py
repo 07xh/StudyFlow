@@ -26,6 +26,8 @@ class QueueTarget:
     name: str | None
     chapter_key: str | None = None
     chapter_name: str | None = None
+    requirement: str = "unknown"
+    baseline_progress: int | None = None
 
     @property
     def task_id(self) -> str:
@@ -49,8 +51,14 @@ def resource_targets(knowledge_id: int, resources, options: dict, *,
         if type(uid) is not int or uid <= 0 or uid > 2**63 - 1:
             raise ScopeInvalid()
         if uid not in seen:
+            # The source classification is distinct from a local playback state.
+            fields = getattr(detail, "model_fields_set", None)
+            requirement = ("unknown" if fields is not None and "resources_sync_type" not in fields
+                           else "required" if detail.resources_sync_type == 1 else "optional")
+            schedule = resource.schedule
+            baseline = schedule if type(schedule) is int and 0 <= schedule <= 100 else None
             result.append(QueueTarget(uid, knowledge_id, kind, safe_resource_title(detail.resources_name),
-                                      chapter_key, chapter_name))
+                                      chapter_key, chapter_name, requirement, baseline))
             seen.add(uid)
     return result
 
@@ -124,7 +132,9 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                 chapter_key, chapter_name = chapters.get(video.video_id, ("shared-unmapped", None))
                 targets.append(QueueTarget(
                     video.video_id, None, "video", safe_resource_title(video.name),
-                    chapter_key, chapter_name))
+                    chapter_key, chapter_name, "shared",
+                    int(video.study_total_time) if type(video.study_total_time) in (int, float)
+                    and math.isfinite(video.study_total_time) and video.study_total_time >= 0 else None))
     finally:
         session.close()
     # A duplicate model must never schedule a video twice.
@@ -241,6 +251,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     directory.mkdir(parents=True, exist_ok=True)
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
+             "requirement": t.requirement,
              "state": "queued", "percent": None, "playback_phase": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
     started_at: dict[int, float] = {}
@@ -319,7 +330,8 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
                     stale=stale,
                 )
                 if code is not None:
-                    rows[index].update(state="exited" if code == 0 else "failed", exit_code=code,
+                    rows[index].update(state="exited" if code == 0 else
+                                       "unconfirmed" if code in (16, 17) else "failed", exit_code=code,
                                        percent=None, playback_phase=None, stale=True)
                     child_fatal = fatal_diagnostic(directory, child_token)
                     if child_fatal:
@@ -432,6 +444,74 @@ def watch_parent_pipe() -> None:
     threading.Thread(target=wait_for_eof, daemon=True).start()
 
 
+def verify_server_advancement(course_key: str, target: QueueTarget) -> int:
+    """Read-only post-run check: 0=server advanced/completed, 16=unchanged, 17=unavailable.
+
+    A transport success or local exit code does not prove a persisted study record.
+    The original ZHS reporting algorithm and request format remain untouched.
+    """
+    from studyflow.services.legacy_playback import _current_course_row
+    from zhs.cli.bootstrap import load_config_and_session
+
+    session = None
+    try:
+        course = _current_course_row(course_key)
+        loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
+        if loaded is None:
+            return 17
+        _, session = loaded
+        if target.knowledge_id is not None:
+            if course["courseType"] != "ai":
+                return 17
+            from zhs.ai.course import AiCourseManager
+            resources = AiCourseManager(session).list_knowledge_resources(
+                int(course["courseId"]), int(course["classId"]), target.knowledge_id)
+            matches = [r for r in resources
+                       if r.resources_detail.resources_uid == target.resource_id]
+            if len(matches) != 1:
+                return 17
+            record = matches[0]
+            if record.study_status == 1:
+                return 0
+            if (target.baseline_progress is not None
+                    and type(record.schedule) is int
+                    and record.schedule > target.baseline_progress):
+                return 0
+            return 16
+
+        if course["courseType"] != "shared":
+            return 17
+        from zhs.zhidao.course import ZhidaoCourseManager
+        manager = ZhidaoCourseManager(session)
+        route = course.get("recruitAndCourseId")
+        if not route:
+            found = manager.find_course(int(course["courseId"]))
+            if found is None:
+                return 17
+            route = found.secret
+        context = manager.get_context(route, force=True)
+        video = context.videos.get(target.resource_id)
+        if video is None:
+            return 17
+        if video.watch_state == 1:
+            return 0
+        if (target.baseline_progress is not None
+                and type(video.study_total_time) in (int, float)
+                and math.isfinite(video.study_total_time)
+                and video.study_total_time > target.baseline_progress):
+            return 0
+        return 16
+    except Exception:
+        # An unreadable platform status is not evidence of a reporting failure.
+        return 17
+    finally:
+        if session is not None:
+            try:
+                session.close()
+            except Exception:
+                pass
+
+
 def video_worker(args: list[str]) -> int:
     from studyflow.platforms.zhidao.zhs_settings import validate_run_settings
     from studyflow.services.legacy_playback import run_zhidao_original, MONITOR_TOKEN, COURSE_KEY
@@ -452,5 +532,6 @@ def video_worker(args: list[str]) -> int:
     except (ValueError, TypeError, KeyError):
         return 2
     watch_parent_pipe()
-    return run_zhidao_original(args[0], args[1], options,
-                              target_resource=(target.knowledge_id, target.resource_id))
+    code = run_zhidao_original(args[0], args[1], options,
+                               target_resource=(target.knowledge_id, target.resource_id))
+    return code if code != 0 else verify_server_advancement(args[0], target)
