@@ -88,8 +88,15 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     if(!desktop||statusInFlight.current||actionInFlight.current)return;
     statusInFlight.current=true;
     const revision=++statusRevision.current;
+    let timeoutId:number|undefined;
     try{
-      const next=await invoke<PlayerStatus>("zhidao_player_status");
+      // Do not let one hung native read freeze the official player's panel.
+      const next=await Promise.race<PlayerStatus>([
+        invoke<PlayerStatus>("zhidao_player_status"),
+        new Promise<never>((_,reject)=>{
+          timeoutId=window.setTimeout(()=>reject(new Error("PLAYER_STATUS_TIMEOUT")),15000);
+        })
+      ]);
       if(revision!==statusRevision.current||actionInFlight.current)return;
       setStatus(next);
       if(next.event&&next.positionSeconds!==null&&next.courseKey&&next.runId&&next.courseKey===selectedRef.current){
@@ -100,8 +107,14 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
         }
       }
     }catch(error){
-      if(revision===statusRevision.current&&!actionInFlight.current)setMessage(playerError(error));
+      if(revision===statusRevision.current&&!actionInFlight.current){
+        // Last observation is not live playback while native status is unknown.
+        setStatus(previous=>({...previous,positionSeconds:null,durationSeconds:null,observedAt:null}));
+        setMessage(error instanceof Error&&error.message==="PLAYER_STATUS_TIMEOUT"
+          ?"官方播放器状态查询超时；播放位置待重新读取。":playerError(error));
+      }
     }finally{
+      if(timeoutId!==undefined)window.clearTimeout(timeoutId);
       statusInFlight.current=false;
     }
   },[desktop]);
