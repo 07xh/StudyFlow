@@ -740,3 +740,15 @@ def test_server_readback_shared_course_uses_server_watched_seconds(monkeypatch):
     assert verify_server_advancement("course", target) == 0
     observed.study_total_time, observed.watch_state = 12, 1
     assert verify_server_advancement("course", target) == 0
+
+def test_server_unconfirmed_exit_is_distinct_from_failed_playback(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    target = QueueTarget(5, 1, "video", "服务器未确认的视频", requirement="required")
+    def launch(_target, _token):
+        return subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(16)"],
+                                stdin=subprocess.PIPE)
+    assert supervise([target], 1, "e" * 32, tmp_path, launch) == 13
+    snapshot = json.loads((tmp_path / ("zhs-queue-" + "e" * 32 + ".json")).read_text())
+    assert snapshot["tasks"][0]["state"] == "unconfirmed"
+    assert snapshot["tasks"][0]["exit_code"] == 16
+    assert snapshot["tasks"][0]["requirement"] == "required"
