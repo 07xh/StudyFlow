@@ -105,7 +105,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.progress.verify"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.player.target"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.course.detail"; course_key: string}
-  | {id: string; version: 1; operation: "zhidao.zhs.knowledge.detail"; course_key: string; knowledge_id: string}
+  | {id: string; version: 1; operation: "zhidao.zhs.knowledge.detail" | "zhidao.zhs.knowledge.enter"; course_key: string; knowledge_id: string}
   | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
   | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
@@ -175,6 +175,13 @@ export type ZhsKnowledgeDetail = {
   verified_at:string;study_record_submitted:false;
 };
 
+export type ZhsKnowledgeEntryResult = {
+  knowledge_id:string;state:"progress_conflict"|"already_complete"|"verification_unavailable"|"completed"|"advanced"|"unchanged";
+  submitted:boolean;server_advanced:boolean;server_completed:boolean;
+  before_progress_percent?:number;after_progress_percent?:number;
+  before_mobile_progress_percent?:number|null;after_mobile_progress_percent?:number|null;
+};
+
 export type ZhidaoCourseDetail = {course_key:string;title:string;course_type:"ai"|"shared";verified:boolean;stale:boolean;verified_at:string|null;done:number;total:number;percent:number|null;items:Array<{name:string;theme?:string;knowledge_id?:number|null;video_id?:number|null;chapter_id?:number|null;chapter_name?:string;progress_percent?:number;fully_progressed?:boolean;duration_seconds?:number;studied_seconds?:number;server_completed?:boolean}>};
 
 export type BridgeResponse<T> =
@@ -240,7 +247,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
-                             "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
+                             "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
                              "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED",
                              "XUEXITONG_COURSE_REQUIRED", "XUEXITONG_TASK_ALREADY_RUNNING",
                              "XUEXITONG_INVALID_PARAMETER", "XUEXITONG_INVALID_TARGET",
