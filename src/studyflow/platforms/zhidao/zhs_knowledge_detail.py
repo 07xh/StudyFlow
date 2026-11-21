@@ -51,7 +51,8 @@ def _integer(value: Any) -> int | None:
     if type(value) is int and 0 <= value <= 2**63 - 1:
         return value
     if isinstance(value, str) and re.fullmatch(r"[0-9]{1,19}", value):
-        return int(value)
+        parsed = int(value)
+        return parsed if parsed <= 2**63 - 1 else None
     return None
 
 
@@ -62,10 +63,16 @@ def official_catalog_entry(payload: Any, knowledge_id: int) -> dict | None:
     for theme in payload["themeList"][:1000]:
         if not isinstance(theme, dict):
             continue
-        for sub in theme.get("subThemeList", [])[:2000]:
+        subthemes = theme.get("subThemeList")
+        if not isinstance(subthemes, list):
+            continue
+        for sub in subthemes[:2000]:
             if not isinstance(sub, dict):
                 continue
-            for entry in sub.get("knowledgeList", [])[:5000]:
+            knowledge = sub.get("knowledgeList")
+            if not isinstance(knowledge, list):
+                continue
+            for entry in knowledge[:5000]:
                 if isinstance(entry, dict) and _integer(entry.get("knowledgeId")) == knowledge_id:
                     return entry
     return None
@@ -138,7 +145,10 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
         body = _plain_text(detail.get("mainContent"))
         if body:
             chunks.append(body)
-        for item in (detail.get("knowledgeDescList") or [])[:80]:
+        descriptions = detail.get("knowledgeDescList")
+        if not isinstance(descriptions, list):
+            descriptions = []
+        for item in descriptions[:80]:
             if isinstance(item, dict):
                 part = _plain_text(item.get("itemName"), limit=1000)
                 if part:
@@ -154,7 +164,7 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
             "name": name,
             "content": content,
             "content_available": bool(content),
-            "detail_metadata_present": bool(detail.get("knowledgeDescList") or detail.get("mainContent")),
+            "detail_metadata_present": bool(descriptions or detail.get("mainContent")),
             "listed_resource_count": len(resources),
             "official_resource_count": resource_count,
             "official_finished_resource_count": finished_count,
