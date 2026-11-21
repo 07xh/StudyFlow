@@ -352,6 +352,7 @@ def start_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
             "mastery": paper["mastery"],
             "questions": questions,
             "answers": {},
+            "submission_state": "draft",
             "opened_at": time.time(),
         }
         with _LOCK:
@@ -397,6 +398,8 @@ def save_answer(course_key: str, knowledge_id: str, question_id: str, answer: An
     题目里取，所以不需要界面自己判断分隔符。
     """
     state = _active_round(course_key, knowledge_id)
+    if state.get("submission_state", "draft") != "draft":
+        raise MasteryError("ROUND_ALREADY_SUBMITTED")
     qid = _int(question_id)
     if qid is None:
         raise MasteryError("INVALID_REQUEST")
@@ -440,73 +443,123 @@ def save_answer(course_key: str, knowledge_id: str, question_id: str, answer: An
 
 
 def submit_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
-    """提交本轮 → 重取每题读判分 → 再读一次掌握度。
+    """提交掌握度习题并回读；任何回读异常都不能导致第二次提交。
 
-    三件事实必须分清，返回里也分开：
-
-    * ``round_score`` —— **本轮**正确率（提交后回读 ``userAnswerVo`` 得到）；
-    * ``mastery_before.high`` —— 本轮之前的**历史最高**掌握度（官方达标依据）；
-    * ``mastery_after`` —— 提交后重新读到的掌握度（来自只读接口，不建新卷）。
-
-    ``next_round_hint`` 只是提示，不替用户决定：``> 90`` 官方视为达标；
-    ``< 30`` 时官方页面会把资源推荐拉满，说明该先学再练。
+    submission_state 属于本地的一轮：
+      draft -> sending -> submitted（发送已确认）
+                      -> unknown（请求是否到达服务器不确定）
+    再次点击时，submitted 只回读判分；unknown 仅查询服务器提交状态，
+    不重发 POST。判分/掌握度缺失时保留本轮，供只读重查。
     """
     state = _active_round(course_key, knowledge_id)
     session, _ = _open_session(course_key)
     exam_test_id, exam_paper_id = state["exam_test_id"], state["exam_paper_id"]
+    key = _round_key(course_key, knowledge_id)
     try:
-        session.ai_exam_submit(
-            f"{_exam_root(session)}/exam/user/submit",
-            submit_payload(
-                exam_test_id=exam_test_id,
-                course_id=state["course_id"],
-                exam_paper_id=exam_paper_id,
-                knowledge_id=int(state["knowledge_id"]),
-            ),
-        )
-    except Exception as error:
-        raise MasteryError("SUBMIT_FAILED", str(error)[:200]) from error
+        with _LOCK:
+            current = state.get("submission_state", "draft")
+            if current == "sending":
+                raise MasteryError("SUBMIT_IN_PROGRESS")
+            if current == "draft":
+                state["submission_state"] = "sending"
 
-    graded: list[dict[str, Any]] = []
-    try:
+        if current == "draft":
+            try:
+                session.ai_exam_submit(
+                    f"{_exam_root(session)}/exam/user/submit",
+                    submit_payload(
+                        exam_test_id=exam_test_id,
+                        course_id=state["course_id"],
+                        exam_paper_id=exam_paper_id,
+                        knowledge_id=int(state["knowledge_id"]),
+                    ),
+                )
+            except Exception as error:
+                # 请求已经发出，超时或解析异常不证明服务器没有接收。
+                with _LOCK:
+                    state["submission_state"] = "unknown"
+                raise MasteryError("SUBMIT_STATUS_UNKNOWN") from error
+            with _LOCK:
+                state["submission_state"] = "submitted"
+        elif current == "unknown":
+            # 只读核验，不得将不确定的请求再次发出。
+            try:
+                response = _exam_query(
+                    session, f"{_exam_root(session)}/exam/user/getExamTestUserInfo",
+                    {"examTestId": str(exam_test_id), "examPaperId": str(exam_paper_id)},
+                    method="GET",
+                )
+                info = response.get("data") if isinstance(response, dict) else None
+                confirmed = isinstance(info, dict) and (
+                    bool(info.get("submitTime")) or _int(info.get("examState")) == 6
+                )
+            except Exception as error:
+                raise MasteryError("SUBMIT_STATUS_UNKNOWN") from error
+            if not confirmed:
+                raise MasteryError("SUBMIT_STATUS_UNKNOWN")
+            with _LOCK:
+                state["submission_state"] = "submitted"
+        elif current != "submitted":
+            raise MasteryError("SUBMIT_STATUS_UNKNOWN")
+
+        # 单题回读失败/返回空判分不能被计算成“错误题”或 0 分。
+        graded: list[dict[str, Any]] = []
+        grading_failed = False
         for question in state["questions"]:
-            detail = _exam_query(
-                session, f"{_exam_root(session)}/question/getExamQuestionInfo",
-                {
-                    "examTestId": exam_test_id, "examPaperId": exam_paper_id,
-                    "questionId": question["question_id"], "version": 1,
-                },
-                method="GET",
-            )
-            raw = detail.get("data") if isinstance(detail, dict) else None
-            if isinstance(raw, dict):
-                graded.append(parse_question_result(raw))
+            try:
+                detail = _exam_query(
+                    session, f"{_exam_root(session)}/question/getExamQuestionInfo",
+                    {
+                        "examTestId": exam_test_id, "examPaperId": exam_paper_id,
+                        "questionId": question["question_id"], "version": 1,
+                    },
+                    method="GET",
+                )
+                raw = detail.get("data") if isinstance(detail, dict) else None
+                if not isinstance(raw, dict):
+                    grading_failed = True
+                    continue
+                result = parse_question_result(raw)
+                if result.get("graded") is not True:
+                    grading_failed = True
+                    continue
+                graded.append(result)
+            except Exception:
+                grading_failed = True
             time.sleep(0.15)
     finally:
         session.close()
 
-    total = len(graded) or len(state["questions"])
-    correct = sum(1 for item in graded if item["isCorrect"])
+    expected = len(state["questions"])
+    graded_ids = {str(item.get("questionId")) for item in graded}
+    complete = (
+        not grading_failed and len(graded) == expected
+        and len(graded_ids) == expected
+        and graded_ids == {str(q["question_id"]) for q in state["questions"]}
+    )
+    correct = sum(1 for item in graded if item["isCorrect"]) if complete else None
 
     after: dict[str, Any] | None = None
     mastery_error: str | None = None
-    session2, _ = _open_session(course_key)
     try:
+        session2, _ = _open_session(course_key)
         try:
             after = read_mastery_stat(session2, state["course_id"], int(state["knowledge_id"]))
-        except Exception as error:
-            mastery_error = getattr(error, "code", None) or type(error).__name__
-    finally:
-        session2.close()
+        finally:
+            session2.close()
+    except Exception as error:
+        mastery_error = getattr(error, "code", None) or type(error).__name__
 
     high_before = state.get("high_mastery")
     latest = after["mastery"] if after else None
     best = max(value for value in (high_before, latest) if value is not None) if (
         high_before is not None or latest is not None
     ) else None
+    verification_pending = not complete or after is None
 
     with _LOCK:
-        _ACTIVE_ROUNDS.pop(_round_key(course_key, knowledge_id), None)
+        if not verification_pending:
+            _ACTIVE_ROUNDS.pop(key, None)
         _MASTERY_CACHE.pop(f"{state['course_id']}:{state['knowledge_id']}", None)
 
     return {
@@ -514,10 +567,12 @@ def submit_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
         "exam_test_id": exam_test_id,
         "exam_paper_id": exam_paper_id,
         "submitted": True,
+        "grading_pending": not complete,
+        "verification_pending": verification_pending,
         "round_score": {
             "correct": correct,
-            "total": total,
-            "percent": round(correct / total * 100) if total else None,
+            "total": expected,
+            "percent": round(correct / expected * 100) if complete and expected else None,
         },
         "graded": graded,
         "mastery_before": {
@@ -603,6 +658,7 @@ def active_round(course_key: str, knowledge_id: str) -> dict[str, Any] | None:
             "exam_paper_id": state["exam_paper_id"],
             "questions": state["questions"],
             "answers": dict(state["answers"]),
+            "submission_state": state.get("submission_state", "draft"),
             "draft": draft,
             "answered": len(state["answers"]),
             "total": len(state["questions"]),
