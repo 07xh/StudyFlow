@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from "react";
-import {Square} from "lucide-react";
+import {Square,ExternalLink,RefreshCw} from "lucide-react";
+import {invoke} from "@tauri-apps/api/core";
 import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type LegacyTaskStatus} from "../legacyPlayback";
 import {friendlyBridgeError,request,type ZhsKnowledgeDetail} from "../bridge";
 
@@ -15,11 +16,14 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const [detail,setDetail]=useState<ZhsKnowledgeDetail|null>(null);
   const [detailBusy,setDetailBusy]=useState(false);
   const [detailMessage,setDetailMessage]=useState("");
+  const [officialBusy,setOfficialBusy]=useState(false);
+  const [serverComparison,setServerComparison]=useState("");
   const currentRun=useRef(status.run_id);
   currentRun.current=status.run_id;
   useEffect(()=>{
     setRequested(new Set());setMessage("");
     setDetail(null);setDetailMessage("");setDetailBusy(false);
+    setOfficialBusy(false);setServerComparison("");
   },[status.run_id]);
   const queue=status.zhs_queue;
   if(!queue)return null;
@@ -52,6 +56,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     const run=status.run_id;
     if(!courseKey||!/^[1-9][0-9]{0,18}$/.test(knowledgeId))return;
     setDetailBusy(true);setDetailMessage("");
+    const previous=detail?.knowledge_id===knowledgeId?detail:null;
     try{
       const result=await request<ZhsKnowledgeDetail>({
         operation:"zhidao.zhs.knowledge.detail",course_key:courseKey,knowledge_id:knowledgeId
@@ -62,12 +67,50 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         throw new Error("ZHS_DETAIL_UNAVAILABLE");
       }
       setDetail(result);
+      if(previous){
+        const zhsAdvanced=result.knowledge_progress_percent>previous.knowledge_progress_percent;
+        const mobileComparable=result.mobile_knowledge_progress_percent!=null&&
+          previous.mobile_knowledge_progress_percent!=null;
+        const mobileAdvanced=mobileComparable&&
+          result.mobile_knowledge_progress_percent!>previous.mobile_knowledge_progress_percent!;
+        const nextProgress=Math.max(result.knowledge_progress_percent,
+          result.mobile_knowledge_progress_percent??0);
+        if(zhsAdvanced||mobileAdvanced){
+          setServerComparison("官方服务器进度已增加（最新 "+nextProgress+"%）；这是只读回读结果，不是本地模拟。");
+        }else if(result.knowledge_progress_percent===previous.knowledge_progress_percent &&
+          (!mobileComparable||result.mobile_knowledge_progress_percent===previous.mobile_knowledge_progress_percent)){
+          setServerComparison("再次核验：服务器学习进度没有增加。进入详情或返回页面不等于完成学习。");
+        }else{
+          setServerComparison("已刷新服务器状态，但两个接口的数据口径不同，无法确认本次增加。");
+        }
+      }else{
+        setServerComparison("已建立服务器进度基线。请正常学习后再次点击「核验服务器进度」，确认是否真实增加。");
+      }
     }catch(error){
       if(run!==currentRun.current)return;
       setDetail(null);
       setDetailMessage("知识点详情读取失败："+friendlyBridgeError(error));
     }finally{
       if(run===currentRun.current)setDetailBusy(false);
+    }
+  }
+  async function openOfficialKnowledge(){
+    const item=detail;
+    const courseKey=status.course_id;
+    const run=status.run_id;
+    if(!item||!courseKey||officialBusy)return;
+    setOfficialBusy(true);setDetailMessage("");
+    try{
+      await invoke("zhidao_zhs_open_knowledge",{
+        courseKey,knowledgeId:item.knowledge_id
+      });
+      if(run!==currentRun.current)return;
+      setServerComparison("已尝试打开知到官方知识点学习页。官方浏览器可能需要重新登录；请在网页内实际阅读，返回后点击「核验服务器进度」。仅打开页面不保证学习进度改变。");
+    }catch{
+      if(run!==currentRun.current)return;
+      setDetailMessage("官方知识点页面未能打开。请检查是否已登录 ZHS，以及课程、知识点是否仍可用。");
+    }finally{
+      if(run===currentRun.current)setOfficialBusy(false);
     }
   }
   type Row=NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number];
@@ -161,6 +204,17 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       {detail.mobile_knowledge_progress_percent!=null&&<p>
         移动版目录学习进度：{detail.mobile_knowledge_progress_percent}%（独立回读，并非本次操作新增）
       </p>}
+      <div className="actions">
+        <button className="secondary" type="button" disabled={officialBusy||detailBusy}
+          onClick={()=>void openOfficialKnowledge()}>
+          <ExternalLink size={14}/>{officialBusy?"打开中…":"在知到官网实际学习此知识点"}
+        </button>
+        <button className="secondary" type="button" disabled={detailBusy||officialBusy}
+          onClick={()=>void inspectDetail(detail.knowledge_id)}>
+          <RefreshCw size={14}/>{detailBusy?"核验中…":"核验服务器进度"}
+        </button>
+      </div>
+      {serverComparison&&<p role="status" className="sf-muted">{serverComparison}</p>}
       {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>}
       {detail.official_resource_count===0&&<p>官方目录记录为 0 项资源。这类知识点没有可调用的视频/PPT 资源心跳，不能凭打开详情就标记学习完成。</p>}
       <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>
