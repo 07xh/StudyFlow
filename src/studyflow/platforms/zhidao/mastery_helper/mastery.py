@@ -568,7 +568,7 @@ class Bank:
                 rejected.append({'rejected_answer': remap_answer(json.loads(answer), old.get('image_hashes'), q)})
             except (Halt, ValueError, KeyError, TypeError):
                 continue
-            if len(rejected) == 4:
+            if len(rejected) == 256:
                 break
         return reviews + rejected
 
@@ -1361,18 +1361,18 @@ class Runner:
                     for q, _ in rows:
                         self.limits.report('question', question=q.stem)
                         answer = self.bank.get(self.scope, q)
-                        source = "bank" if answer is not None else "ai"
+                        source = "bank" if answer is not None else "trial"
                         if answer is None:
-                            self.limits.report('phase', status='运行中', message='正在请求 DeepSeek 解答当前题目')
-                            answer, explanation = self.limits.retry_step('AI 解答当前题目', lambda: self.ai.answer(q, self.bank.history(self.scope, q)))
+                            self.limits.report('phase', status='运行中', message='无已确认答案，按历史反馈进行本地试答')
+                            answer, explanation = self.limits.retry_step('本地试答当前题目', lambda: self.ai.answer(q, self.bank.history(self.scope, q)))
                             pending_ai[q.key] = (q, answer, explanation)
                         self.limits.check()
-                        self.limits.report('phase', status='运行中', message='正在填写题库答案' if source == 'bank' else '正在填写 AI 建议答案')
+                        self.limits.report('phase', status='运行中', message='正在填写题库答案' if source == 'bank' else '正在填写未确认的试答')
                         self.limits.retry_step('填写当前题目的答案', lambda: a.fill(q, answer))
                         self.bank.attempt(self.run_id, round_, self.scope, self.knowledge, q, answer, source)
                         attempted[q.key] = (q, answer)
                         self.limits.report('answered', source=source)
-                        print(f"  {'题库' if source == 'bank' else 'AI'}：{q.stem[:50]}")
+                        print(f"  {'题库' if source == 'bank' else '本地试答'}：{q.stem[:50]}")
                     if a.button("next", optional=True) is not None:
                         a.next_page(fingerprint)
                         if a.is_result():
