@@ -10,6 +10,7 @@
 - 原版官方 WebView2 播放器：使用随安装包部署的播放器脚本与 WebView2 SDK 资源；支持原版设置、播放位置观测与自动下一节选项。
 - ZHS 0.1.5 原版任务：通过独立 sidecar 子进程启动原版 CLI，不在 React 前端重写原版任务逻辑。可按课程继承原版阈值或自定义本地执行目标，服务器完成仍需核验。
 - 课程与进度：真实课程同步、智慧课程知识点明细、共享课程视频明细、当前会话缓存、单课/全量只读核验。
+- AI 掌握度：AI 课程的知识点掌握度与课后练习，在课程工作台内直接作答、保存、提交并回看本轮判分；掌握度走只读接口读取，仅浏览不会新建试卷。练习是知识点作业，不是考试，不做倒计时与监考。
 - 运行记录与监控：区分本机播放器位置、原版任务运行状态和服务器已核验进度；播放器退出后可触发单课只读核验。
 
 ### 长江雨课堂
@@ -58,6 +59,7 @@ powershell -NoProfile -File .\scripts\build-windows.ps1
 
 详见：
 - [Windows 构建与验收](docs/BUILD_WINDOWS.md)
+- [知到 AI 掌握度纯 HTTP 接入](docs/ZHIDAO_MASTERY_HTTP.md)
 - [原版功能接入与兼容性](docs/LEGACY_COMPATIBILITY.md)
 - [原版任务迁移记录](docs/ORIGINAL_HEARTBEAT_RESTORE.md)
 - [知到源码与许可证说明](legacy/zhidao/SOURCE.md)

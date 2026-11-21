@@ -109,6 +109,13 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
   | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
+  | {id: string; version: 1; operation: "zhidao.mastery.catalog"; course_key: string; with_mastery?: boolean}
+  | {id: string; version: 1; operation: "zhidao.mastery.round.start"; course_key: string; knowledge_id: string}
+  | {id: string; version: 1; operation: "zhidao.mastery.round.active"; course_key: string; knowledge_id: string}
+  | {id: string; version: 1; operation: "zhidao.mastery.round.answer"; course_key: string; knowledge_id: string; question_id: string; answer: string | number | Array<string | number>}
+  | {id: string; version: 1; operation: "zhidao.mastery.round.submit"; course_key: string; knowledge_id: string}
+  | {id: string; version: 1; operation: "zhidao.mastery.round.discard"; course_key: string; knowledge_id: string}
+  | {id: string; version: 1; operation: "zhidao.mastery.wrong"; course_key: string; knowledge_id: string; exam_test_id?: string}
   | {id: string; version: 1; operation: "studyflow.consent.status" | "studyflow.consent.accept"}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"}
   | {id:string;version:1;operation:"xuexitong.heartbeat.start";course_id:string;
@@ -241,6 +248,9 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
                              "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
+                             "LOGIN_REQUIRED", "NOT_AI_COURSE", "MASTERY_UNAVAILABLE", "PAPER_UNAVAILABLE", "PAPER_EMPTY",
+                             "NO_ACTIVE_ROUND", "ROUND_EXPIRED", "QUESTION_NOT_IN_ROUND", "EMPTY_ANSWER",
+                             "ANSWER_SAVE_FAILED", "SUBMIT_FAILED", "ZHS_MASTERY_UNAVAILABLE",
                              "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED",
                              "XUEXITONG_COURSE_REQUIRED", "XUEXITONG_TASK_ALREADY_RUNNING",
                              "XUEXITONG_INVALID_PARAMETER", "XUEXITONG_INVALID_TARGET",
@@ -448,6 +458,18 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_PLAYER_SETTINGS": return "知到播放器参数无效，未保存。";
     case "ZHS_SETTINGS_UNAVAILABLE": return "ZHS 参数读取或保存失败，原版设置未修改。";
     case "INVALID_ZHS_SETTINGS": return "ZHS 参数超出原版支持范围，未保存。";
+    case "LOGIN_REQUIRED": return "知到登录态已失效，请先重新登录再打开掌握度。";
+    case "NOT_AI_COURSE": return "只有 AI 课程的知识点有掌握度习题。";
+    case "MASTERY_UNAVAILABLE": return "该知识点的掌握度暂时读不到。";
+    case "PAPER_UNAVAILABLE": return "服务器没有返回可作答的练习卷。";
+    case "PAPER_EMPTY": return "本轮练习没有题目。";
+    case "NO_ACTIVE_ROUND": return "当前没有进行中的一轮，请先开始练习。";
+    case "ROUND_EXPIRED": return "这一轮已超时，重新开始即可。";
+    case "QUESTION_NOT_IN_ROUND": return "这道题不属于当前这一轮。";
+    case "EMPTY_ANSWER": return "请先选择或填写答案。";
+    case "ANSWER_SAVE_FAILED": return "这一题没保存成功，可以重试。";
+    case "SUBMIT_FAILED": return "提交没有成功，掌握度未更新。";
+    case "ZHS_MASTERY_UNAVAILABLE": return "掌握度服务读取失败，稍后再试。";
     case "ZHIDAO_DIAGNOSE_FAILED": return "知到连接诊断未能完成。";
     case "ZHIDAO_DATA_CLEAR_FAILED": return "知到本地数据清理失败；未删除未列入清单的数据。";
     case "INVALID_DOCUMENT": return "请求的说明文档不存在。";
@@ -485,4 +507,146 @@ export function zhidaoQrCommand(action:"start"|"status"|"cancel"):Promise<Zhidao
   const operation = ({start:"zhidao.qr.start",status:"zhidao.qr.status",
     cancel:"zhidao.qr.cancel"} as const)[action];
   return request<ZhidaoQrState>({operation});
+}
+
+// ---------------------------------------------------------------------------
+// 掌握度（AI 课程作业）
+//
+// 一条练习的生命周期由后端持有：start -> answer x N -> submit。
+// 掌握度本身走只读接口，不会因为"看一眼"就多建一张卷。
+// ---------------------------------------------------------------------------
+
+export type MasteryBand = "low" | "mid" | "high";
+
+export type MasteryKnowledge = {
+  knowledge_id: string;
+  name: string;
+  theme: string;
+  study_progress: number;
+  free_exam: boolean;
+  mastery: number | null;
+  band: MasteryBand | null;
+  mastery_error?: string;
+};
+
+export type MasteryCatalog = {
+  course_key: string;
+  course_id: string;
+  class_id: string;
+  course_name: string;
+  threshold: number;
+  knowledge: MasteryKnowledge[];
+  count: number;
+  pending_count: number;
+  average_mastery: number | null;
+  verified_at: string;
+};
+
+export type MasteryQuestion = {
+  question_id: number;
+  content: string;
+  question_type: number;
+  type_name: string;
+  options: Array<{id: number; content: string; sort?: number}>;
+};
+
+export type MasteryRound = {
+  course_key: string;
+  knowledge_id: string;
+  exam_test_id: number;
+  exam_paper_id: number;
+  question_num: number;
+  questions: MasteryQuestion[];
+  high_mastery: number | null;
+  mastery: number | null;
+  mastery_change: number | null;
+  threshold: number;
+  opened_at: string;
+};
+
+export type MasteryActiveRound = {
+  knowledge_id: string;
+  exam_test_id: number;
+  exam_paper_id: number;
+  questions: MasteryQuestion[];
+  answers: Record<string, string>;
+  draft: Record<string, string | number | Array<string | number>>;
+  answered: number;
+  total: number;
+  high_mastery: number | null;
+  opened_at: string;
+};
+
+export type MasteryAnswerResult = {
+  knowledge_id: string;
+  question_id: string;
+  saved: boolean;
+  answered: number;
+  total: number;
+  complete: boolean;
+};
+
+export type MasteryGraded = {
+  questionId: number;
+  questionType: number;
+  graded: boolean;
+  isCorrect: boolean;
+  answers: Array<{answer: string; isCorrect: boolean}>;
+  correctOptionIds: number[];
+  correctTexts: string[];
+  analysis: string;
+};
+
+export type MasterySubmitResult = {
+  knowledge_id: string;
+  exam_test_id: number;
+  exam_paper_id: number;
+  submitted: boolean;
+  round_score: {correct: number; total: number; percent: number | null};
+  graded: MasteryGraded[];
+  mastery_before: {high: number | null; this_round_start: number | null};
+  mastery_after: {mastery: number; band: MasteryBand; reached_threshold: boolean} | null;
+  mastery_error: string | null;
+  high_mastery_now: number | null;
+  threshold: number;
+  reached_threshold: boolean;
+  next_round_hint: "reached" | "study_first" | "practice_more";
+  verified_at: string;
+};
+
+export function masteryCatalog(courseKey: string, withMastery = true): Promise<MasteryCatalog> {
+  return request<MasteryCatalog>({operation: "zhidao.mastery.catalog", course_key: courseKey, with_mastery: withMastery});
+}
+
+export function masteryStartRound(courseKey: string, knowledgeId: string): Promise<MasteryRound> {
+  return request<MasteryRound>({operation: "zhidao.mastery.round.start", course_key: courseKey, knowledge_id: knowledgeId});
+}
+
+export function masteryActiveRound(courseKey: string, knowledgeId: string): Promise<MasteryActiveRound | null> {
+  return request<MasteryActiveRound | null>({operation: "zhidao.mastery.round.active", course_key: courseKey, knowledge_id: knowledgeId});
+}
+
+export function masterySaveAnswer(
+  courseKey: string, knowledgeId: string, questionId: string | number,
+  answer: string | number | Array<string | number>,
+): Promise<MasteryAnswerResult> {
+  return request<MasteryAnswerResult>({
+    operation: "zhidao.mastery.round.answer",
+    course_key: courseKey, knowledge_id: knowledgeId,
+    question_id: String(questionId), answer,
+  });
+}
+
+export function masterySubmitRound(courseKey: string, knowledgeId: string): Promise<MasterySubmitResult> {
+  return request<MasterySubmitResult>({operation: "zhidao.mastery.round.submit", course_key: courseKey, knowledge_id: knowledgeId});
+}
+
+export function masteryDiscardRound(courseKey: string, knowledgeId: string): Promise<{knowledge_id: string; discarded: boolean}> {
+  return request<{knowledge_id: string; discarded: boolean}>({operation: "zhidao.mastery.round.discard", course_key: courseKey, knowledge_id: knowledgeId});
+}
+
+export function masteryWrongQuestions(
+  courseKey: string, knowledgeId: string, examTestId?: string,
+): Promise<{knowledge_id: string; mastery: number | null; questions: unknown[]; count: number}> {
+  return request({operation: "zhidao.mastery.wrong", course_key: courseKey, knowledge_id: knowledgeId, exam_test_id: examTestId});
 }

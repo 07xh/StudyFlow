@@ -1,0 +1,112 @@
+/* AI 掌握度栏目：沿用 StudyFlow 的 panel / line / accent 变量，深浅色自动适配。 */
+
+.sf-mastery{
+  display:flex;flex-direction:column;gap:14px;
+  padding:16px;border:1px solid var(--line);border-radius:14px;
+  background:var(--panel);color:var(--text);
+}
+.sf-mastery-head{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.sf-mastery-head h3{margin:2px 0 4px;font-size:16px}
+.sf-mastery-head p{margin:0;font-size:12px;line-height:1.6;max-width:60ch}
+.sf-mastery-head-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.sf-mastery-error,
+.sf-mastery-notice{
+  margin:0;padding:8px 10px;border-radius:9px;font-size:12px;line-height:1.5;
+  border:1px solid var(--line);background:var(--panel-raised);
+}
+.sf-mastery-error{border-color:rgba(240,120,120,.45);color:#f08a8a}
+.sf-mastery-notice{color:var(--muted)}
+
+.sf-mastery-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto}
+.sf-mastery-row{
+  width:100%;display:grid;grid-template-columns:12px minmax(0,1fr) 96px 104px;
+  gap:10px;align-items:center;padding:10px 12px;border-radius:10px;
+  border:1px solid transparent;background:var(--panel-raised);color:inherit;
+  text-align:left;cursor:pointer;font:inherit;
+}
+.sf-mastery-row:hover{border-color:var(--line)}
+.sf-mastery-list li.is-active .sf-mastery-row{border-color:var(--accent);box-shadow:0 0 0 1px var(--soft-accent)}
+.sf-mastery-dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.sf-mastery-dot.low{background:#e06c6c}
+.sf-mastery-dot.mid{background:var(--warning)}
+.sf-mastery-dot.high{background:var(--success)}
+.sf-mastery-dot.unknown{background:var(--muted);opacity:.5}
+.sf-mastery-row-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sf-mastery-row-main strong{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sf-mastery-row-main small{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sf-mastery-row-meta{display:flex;flex-direction:column;gap:2px;text-align:right}
+.sf-mastery-score{font-size:15px;font-variant-numeric:tabular-nums}
+.sf-mastery-score em{font-size:11px;font-style:normal;color:var(--muted);margin-left:2px}
+.sf-mastery-row-meta small{font-size:11px;color:var(--muted)}
+.sf-mastery-row-progress{font-size:11px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.sf-mastery-empty{padding:14px;font-size:12px;color:var(--muted);text-align:center}
+
+.sf-mastery-round,
+.sf-mastery-result{display:flex;flex-direction:column;gap:12px}
+.sf-mastery-round-head,
+.sf-mastery-result-head{display:flex;gap:12px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap}
+.sf-mastery-round-head h4,
+.sf-mastery-result-head h4{margin:2px 0 4px;font-size:15px}
+.sf-mastery-round-head p,
+.sf-mastery-result-head p{margin:0;font-size:12px;line-height:1.6}
+.sf-mastery-round-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.sf-mastery-questions,
+.sf-mastery-graded{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.sf-mastery-question,
+.sf-mastery-graded>li{
+  padding:12px 14px;border-radius:11px;border:1px solid var(--line);
+  background:var(--panel-raised);display:flex;flex-direction:column;gap:8px;
+}
+.sf-mastery-graded>li.is-correct{border-color:rgba(77,226,162,.4)}
+.sf-mastery-graded>li.is-wrong{border-color:rgba(224,108,108,.4)}
+.sf-mastery-question-head{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted)}
+.sf-mastery-index{
+  display:inline-flex;width:20px;height:20px;align-items:center;justify-content:center;
+  border-radius:6px;background:var(--soft-accent);color:var(--accent-text,var(--accent));font-weight:600;
+}
+.sf-mastery-type{padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+.sf-mastery-saved{display:inline-flex;gap:4px;align-items:center;color:var(--success)}
+.sf-mastery-ok{display:inline-flex;gap:4px;align-items:center;color:var(--success)}
+.sf-mastery-bad{display:inline-flex;gap:4px;align-items:center;color:#e07c7c}
+.sf-mastery-stem{margin:0;font-size:13px;line-height:1.65;white-space:pre-wrap}
+
+.sf-mastery-options{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.sf-mastery-options label{
+  display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:9px;
+  border:1px solid var(--line);cursor:pointer;font-size:12.5px;line-height:1.5;
+}
+.sf-mastery-options label:hover{border-color:var(--accent)}
+.sf-mastery-options label.is-picked{border-color:var(--accent);background:var(--soft-accent)}
+.sf-mastery-options input{margin-top:2px;accent-color:var(--accent)}
+
+.sf-mastery-fill{
+  width:100%;padding:9px 11px;border-radius:9px;border:1px solid var(--line);
+  background:var(--panel);color:var(--text);font:inherit;font-size:12.5px;
+}
+.sf-mastery-fill:focus{outline:none;border-color:var(--accent)}
+
+.sf-mastery-mastery{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0}
+.sf-mastery-mastery>div{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel-raised)}
+.sf-mastery-mastery dt{font-size:11px;color:var(--muted);margin-bottom:3px}
+.sf-mastery-mastery dd{margin:0;font-size:17px;font-variant-numeric:tabular-nums}
+.sf-mastery-hint{margin:0;font-size:12px;color:var(--muted);line-height:1.6}
+
+.sf-mastery-answer,.sf-mastery-correct,.sf-mastery-analysis{
+  margin:0;font-size:12px;line-height:1.6;color:var(--muted);
+}
+.sf-mastery-correct{color:var(--success)}
+.sf-mastery-analysis{display:flex;gap:6px;align-items:flex-start;padding-top:4px;border-top:1px dashed var(--line)}
+
+.sf-mastery-foot{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  font-size:11px;color:var(--muted);padding-top:8px;border-top:1px solid var(--line);
+}
+.sf-mastery-foot .text-button{margin-left:auto;display:inline-flex;gap:5px;align-items:center}
+
+@media(max-width:760px){
+  .sf-mastery-row{grid-template-columns:12px minmax(0,1fr) 80px;grid-template-areas:none}
+  .sf-mastery-row-progress{display:none}
+  .sf-mastery-mastery{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

@@ -433,6 +433,36 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": error}
         except Exception:
             return {"id": request_id, "ok": False, "error": "ZHS_DETAIL_UNAVAILABLE"}
+    if operation.startswith("zhidao.mastery."):
+        from studyflow.platforms.zhidao import zhs_mastery_service as mastery
+
+        course_key = request.get("course_key")
+        knowledge_id = request.get("knowledge_id")
+        kid = knowledge_id if isinstance(knowledge_id, str) else str(knowledge_id or "")
+        try:
+            if operation == "zhidao.mastery.catalog":
+                data = mastery.read_catalog(course_key, with_mastery=request.get("with_mastery") is not False)
+            elif operation == "zhidao.mastery.round.active":
+                data = mastery.active_round(course_key, kid)
+            elif operation == "zhidao.mastery.round.start":
+                data = mastery.start_round(course_key, kid)
+            elif operation == "zhidao.mastery.round.answer":
+                data = mastery.save_answer(course_key, kid, request.get("question_id"), request.get("answer"))
+            elif operation == "zhidao.mastery.round.submit":
+                data = mastery.submit_round(course_key, kid)
+            elif operation == "zhidao.mastery.round.discard":
+                data = mastery.discard_round(course_key, kid)
+            elif operation == "zhidao.mastery.wrong":
+                data = mastery.read_wrong_questions(course_key, kid, request.get("exam_test_id"))
+            else:
+                return {"id": request_id, "ok": False, "error": "UNKNOWN_OPERATION"}
+            return {"id": request_id, "ok": True, "data": data}
+        except mastery.MasteryError as error:
+            return {"id": request_id, "ok": False, "error": error.code}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHS_MASTERY_UNAVAILABLE"}
     if operation == "zhidao.zhs.settings.get":
         try:
             return {"id": request_id, "ok": True, "data": read_zhs_settings(request.get("course_key"))}
