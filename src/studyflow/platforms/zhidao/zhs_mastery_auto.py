@@ -38,7 +38,7 @@ _RESUME.set()
 _STATUS: dict[str, Any] = {}
 
 DEFAULTS = {"target": 100, "max_rounds": 12, "stagnation_rounds": 3, "max_minutes": 180, "max_ai_calls": 30}
-FIRST_ROUND_MODES = {"bank_only", "bank_ai", "ai_first"}
+FIRST_ROUND_MODES = {"bank_only", "bank_ai", "ai_first", "arbitrary_first"}
 CHOICE_TYPES = (1, 2, 14)
 
 
@@ -276,6 +276,25 @@ class AnswerBank:
         return True
 
 
+def _arbitrary_first_answer(question: dict[str, Any]) -> tuple[Any, str, list[str]]:
+    """Provide a valid but unverified answer for *one complete first paper*.
+
+    Do not consult the bank or AI. This is not a blank submission: use a
+    real option ID for choices and a single placeholder for a fill-in blank.
+    Server-side answer-count verification still gates the submit POST.
+    """
+    identity, pairs = _identity(question)
+    if not identity:
+        raise ValueError("题目格式不完整，无法完成首轮随意作答")
+    kind = question.get("question_type")
+    if kind == 3:
+        return "待复习", identity, ["待复习"]
+    if kind in CHOICE_TYPES and pairs:
+        option_id, option_text = pairs[0]
+        return ([option_id] if kind == 2 else option_id), identity, [option_text]
+    raise ValueError("当前题型不支持首轮随意作答")
+
+
 def _execute_point(
     course_key: str, point: dict[str, Any], bank: AnswerBank,
     config: dict[str, Any], deadline: float, api_key: str = "",
@@ -298,9 +317,16 @@ def _execute_point(
         try:
             for question in paper["questions"]:
                 _checkpoint(deadline)
+                mode = config.get("first_round_mode", "bank_only")
+                if mode == "arbitrary_first" and round_index == 1:
+                    choice, identity, texts = _arbitrary_first_answer(question)
+                    selections.append((question, identity, texts))
+                    _progress(point, reason="首轮已随意作答（非空白卷，等待官方判分）")
+                    service.save_answer(course_key, kid, str(question["question_id"]), choice)
+                    _update(trials=_STATUS.get("trials", 0) + 1)
+                    continue
                 verified = bank.verified(question)
                 identity, pairs = _identity(question)
-                mode = config.get("first_round_mode", "bank_only")
                 ai_first = mode == "ai_first" and round_index == 1
                 ai_fallback = mode in ("bank_ai", "ai_first") and verified is None
                 may_ai = (
