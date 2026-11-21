@@ -234,7 +234,7 @@ def test_single_chapter_resource_mode_fills_slots_without_duplicate_launch(tmp_p
     assert [item[1] for item in started[:3]] == [0, 1, 2]
     assert len({item[2] for item in started}) == 4
     assert all(child.poll() is not None for child in children)
-    snapshot = json.loads((tmp_path / f"zhs-queue-{'f' * 32}.json").read_text())
+    snapshot = json.loads((tmp_path / f"zhs-queue-{'f' * 32}.json").read_text(encoding="utf-8"))
     assert snapshot["parallel_mode"] == "resources"
     assert all(row["state"] == "exited" for row in snapshot["tasks"])
 
