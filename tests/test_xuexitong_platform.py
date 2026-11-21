@@ -227,6 +227,9 @@ def test_video_discovery_dedupes_same_chapter_resource_before_status_request(mon
                 return StatusResponse("")
             return super().get(url, params=params, **kwargs)
 
+        def close(self):
+            self.closed = True
+
     fake = MediaSession()
     monkeypatch.setattr(adapter, "_session", lambda: fake)
     targets = adapter.XuexitongAdapter().list_video_tasks("9:8:7")
