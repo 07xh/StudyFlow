@@ -171,3 +171,111 @@ def test_mobile_2026_detail_fallback_uses_read_only_api_without_resource_count(m
                      "get-course-knowledge-dic",
                      "get-course-knowledge-dic-wx-three"]
     assert events[-1] == "close"
+
+
+def test_native_zhs_entry_sends_exactly_one_official_log_and_requires_server_change(monkeypatch):
+    from studyflow.platforms.zhidao import zhs_knowledge_detail as module
+    install_mock_zhs(monkeypatch, resource_count=0)
+    import zhs.ai.course as ai_course
+    posts = []
+
+    class Manager:
+        def __init__(self, session):
+            pass
+
+        def get_knowledge_points(self, cid, class_id):
+            return NS(cake_theme_list=[NS(knowledge_list=[
+                NS(knowledge_id=87, study_progress=0)
+            ])])
+
+        def list_knowledge_resources(self, cid, class_id, kid):
+            return []
+
+        def _ai_query(self, url, data):
+            assert url.endswith("/stu/task/saveStudentPointLog")
+            posts.append((url, data))
+            return {"code": 200, "data": None}
+
+    monkeypatch.setattr(ai_course, "AiCourseManager", Manager)
+    base = {"knowledge_id": "87", "listed_resource_count": 0,
+            "official_resource_count": 0, "catalog_mismatch": False,
+            "progress_sources_disagree": False,
+            "knowledge_progress_percent": 0,
+            "mobile_knowledge_progress_percent": 0}
+    updated = {**base, "knowledge_progress_percent": 100,
+               "mobile_knowledge_progress_percent": 100}
+    snapshots = [base, updated]
+    monkeypatch.setattr(module, "read_knowledge_detail", lambda *args: snapshots.pop(0))
+    outcome = module.enter_knowledge_once("a" * 64, 87)
+    assert outcome["state"] == "completed"
+    assert outcome["submitted"] is True
+    assert outcome["server_advanced"] is True
+    assert outcome["server_completed"] is True
+    assert len(posts) == 1
+    assert posts[0][1] == {"courseId": 88, "classId": 99, "knowledgeId": 87}
+
+
+def test_native_zhs_entry_does_not_claim_completion_when_log_was_accepted(monkeypatch):
+    from studyflow.platforms.zhidao import zhs_knowledge_detail as module
+    install_mock_zhs(monkeypatch, resource_count=0)
+    import zhs.ai.course as ai_course
+    calls = []
+
+    class Manager:
+        def __init__(self, session):
+            pass
+
+        def get_knowledge_points(self, cid, class_id):
+            return NS(cake_theme_list=[NS(knowledge_list=[
+                NS(knowledge_id=87, study_progress=0)
+            ])])
+
+        def list_knowledge_resources(self, cid, class_id, kid):
+            return []
+
+        def _ai_query(self, url, data):
+            calls.append(url.rsplit("/", 1)[-1])
+            return {"code": 200, "data": None}
+
+    monkeypatch.setattr(ai_course, "AiCourseManager", Manager)
+    base = {"knowledge_id": "87", "listed_resource_count": 0,
+            "official_resource_count": 0, "catalog_mismatch": False,
+            "progress_sources_disagree": False,
+            "knowledge_progress_percent": 0,
+            "mobile_knowledge_progress_percent": 0}
+    monkeypatch.setattr(module, "read_knowledge_detail", lambda *args: base)
+    outcome = module.enter_knowledge_once("a" * 64, 87)
+    assert outcome["state"] == "unchanged"
+    assert outcome["submitted"] is True
+    assert outcome["server_advanced"] is False
+    assert outcome["server_completed"] is False
+    assert calls == ["saveStudentPointLog"]
+
+
+def test_native_zhs_entry_rejects_missing_resource_evidence_without_writing(monkeypatch):
+    from studyflow.platforms.zhidao import zhs_knowledge_detail as module
+    calls = []
+    monkeypatch.setattr(module, "read_knowledge_detail", lambda *args: {
+        "listed_resource_count": 0, "official_resource_count": None,
+        "catalog_mismatch": False, "progress_sources_disagree": False,
+        "knowledge_progress_percent": 0, "mobile_knowledge_progress_percent": None,
+    })
+    with pytest.raises(RuntimeError, match="ZHS_DETAIL_RESOURCES_UNCONFIRMED"):
+        module.enter_knowledge_once("a" * 64, 87)
+    assert calls == []
+
+
+def test_native_zhs_entry_ipc_never_claims_success_by_http_status(monkeypatch):
+    from studyflow.services import bridge
+    monkeypatch.setattr(bridge, "enter_zhs_knowledge_once", lambda key, kid: {
+        "knowledge_id": str(kid), "state": "unchanged", "submitted": True,
+        "server_advanced": False, "server_completed": False,
+    })
+    reply = bridge.dispatch({
+        "id": "native-entry-test", "version": 1,
+        "operation": "zhidao.zhs.knowledge.enter",
+        "course_key": "a" * 64, "knowledge_id": "87",
+    })
+    assert reply["ok"] is True
+    assert reply["data"]["state"] == "unchanged"
+    assert reply["data"]["server_completed"] is False
