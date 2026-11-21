@@ -753,6 +753,23 @@ fn studyflow_open_releases(tag: Option<String>) -> Result<(), String> {
     }
 }
 
+/// Open the author's fixed homepage outside the application.
+#[tauri::command]
+fn studyflow_open_author_site() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg("https://0701000.xyz/")
+            .spawn()
+            .map_err(|_| "AUTHOR_SITE_OPEN_FAILED".to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
 #[tauri::command]
 fn updates_open_folder() -> Result<(), String> {
     let local = std::env::var_os("LOCALAPPDATA").ok_or("WINDOWS_APPDATA_UNAVAILABLE")?;
@@ -808,7 +825,7 @@ pub fn run() {
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
