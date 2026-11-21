@@ -60,7 +60,8 @@ pub fn zhidao_mastery_status(app: AppHandle) -> Result<MasteryStatus, String> {
 }
 
 #[tauri::command]
-pub fn zhidao_mastery_start(app: AppHandle) -> Result<MasteryStatus, String> {
+pub fn zhidao_mastery_start(app: AppHandle, mode: String) -> Result<MasteryStatus, String> {
+    if mode != "login" && mode != "run" { return Err("MASTERY_INVALID_MODE".into()); }
     let state = app.state::<MasteryTasks>();
     let mut guard = state.child.lock().map_err(|_| "MASTERY_TASK_UNAVAILABLE")?;
     if snapshot(&mut guard)?.running {
@@ -73,7 +74,7 @@ pub fn zhidao_mastery_start(app: AppHandle) -> Result<MasteryStatus, String> {
     let _ = fs::remove_file(dir.join("pause.flag"));
     let _ = fs::remove_file(dir.join("status.json"));
     let mut command = Command::new(bin);
-    command.arg("--zhidao-mastery-worker")
+    command.args(["--zhidao-mastery-worker", mode.as_str()])
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
     #[cfg(windows)]
     {
