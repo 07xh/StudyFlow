@@ -10,7 +10,7 @@ test("author blog is only an About link and opens a fixed HTTPS origin", () => {
 
   assert.match(about, /view==="about"&&<div className="sf-zd-legal-actions">/);
   assert.match(about, /href="https:\/\/0701000\.xyz\/"/);
-  assert.match(about, /小慌的博客/);
+  assert.match(about, /开发者网站/);
   assert.match(about, /rel="noopener noreferrer"/);
   assert.match(about, /invoke\("studyflow_open_author_site"\)/);
   assert.doesNotMatch(shell, /0701000\.xyz/);
