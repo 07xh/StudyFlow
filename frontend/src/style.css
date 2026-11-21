@@ -53,7 +53,8 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 }
 
 /* Platform-independent modal shell; Zhidao supplies only QR-specific content. */
-.qr-backdrop{position:fixed;inset:0;z-index:1000;background:#060711a8;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(6px)}
+/* QR dialog must sit above platform settings (10000) and confirmation overlays (10050). */
+.qr-backdrop{position:fixed;inset:0;z-index:10100;background:#060711a8;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(6px)}
 .qr-dialog{width:min(100%,440px);max-height:min(94vh,740px);overflow:auto;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:20px;padding:24px;box-shadow:0 24px 80px #0005;margin:0}
 .qr-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
 .qr-header h3{font-size:19px;margin:0}
@@ -65,6 +66,8 @@ button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 .qr-stage{font-size:14px;text-align:center;font-weight:600;min-height:24px}
 .qr-error{color:#df7575;font-size:12px;overflow-wrap:anywhere}
 .qr-footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+/* The QR dialog is portaled to <body>, outside .sf-shell theme variables. */
+.qr-backdrop .qr-footer .secondary{color:var(--qr-fg,#203047);border-color:var(--qr-line,#dfe7f2)}
 .qr-privacy{border-top:1px solid var(--line);padding-top:12px;margin-bottom:0}
 @media(max-width:500px){.qr-dialog{padding:17px}.qr-image-area{min-height:230px}}
 
