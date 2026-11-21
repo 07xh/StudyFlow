@@ -12,7 +12,7 @@ export type XuexitongChapter = {
 };
 export type ChapterFilter = "all" | "pending" | "completed" | "locked";
 export type TaskFilter = "all" | "video" | "audio" | "document" |
-  "workid" | "read" | "live" | "other";
+  "workid" | "read" | "live" | "flash" | "other";
 export type CompletionFilter = "all" | "pending" | "completed" | "unknown";
 
 function includesSearch(value:string, query:string):boolean {
@@ -41,7 +41,7 @@ export function filterXuexitongTasks(
   tasks:readonly XuexitongTaskItem[],query:string,kind:TaskFilter,
   completion:CompletionFilter
 ):XuexitongTaskItem[] {
-  const known = new Set(["video","audio","document","workid","read","live"]);
+  const known = new Set(["video","audio","document","workid","read","live","flash"]);
   return tasks.filter(task=>
     (includesSearch(task.title,query)||includesSearch(task.id,query)) &&
     (kind==="all" || (kind==="other"?!known.has(task.type):task.type===kind)) &&
