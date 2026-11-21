@@ -43,7 +43,7 @@ test("Xuexitong panel does not control a different course",()=>{
     "Navigation must clear stale messages and logs");
   assert.ok(source.includes("Number.isFinite(speed)")&&source.includes("Number.isInteger(jobs)"),
     "Speed and chapter counts require validation before starting");
-  assert.ok(source.includes("disabled={busy||!desktop||running||!validConfig}"),
+  assert.ok(source.includes("disabled={busy||!desktop||running||!validConfig||Boolean(statusError)}"),
     "Invalid settings must not enable start");
   assert.ok(source.includes("本地计时（非平台进度）")&&source.includes("学习通返回状态"),
     "Local scheduling estimates must be distinct from verified playback");
