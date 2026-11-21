@@ -804,11 +804,12 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     bootstrap.load_config_and_session = lambda **_kwargs: (None, session)
 
     class Manager:
+        progress = 0
         def __init__(self, _session): pass
 
         def get_knowledge_points(self, _cid, _cls):
             return NS(cake_theme_list=[NS(theme_name="绪论", knowledge_list=[
-                NS(knowledge_id=87, knowledge_name="历任校首", study_progress=0)])])
+                NS(knowledge_id=87, knowledge_name="历任校首", study_progress=self.progress)])])
 
         def list_knowledge_resources(self, _cid, _cls, _kid):
             return []  # The mobile app's 资源 tab says 暂无资源.
@@ -840,6 +841,14 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     assert snapshot["tasks"][0]["state"] == "informational"
     assert snapshot["tasks"][0]["percent"] is None
     assert snapshot["tasks"][0]["exit_code"] is None
+
+    # On the uploaded recording the directory shows completed points,
+    # even though mastery stays at 0%; those must not become fake jobs.
+    Manager.progress = 100
+    completed, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert completed == []
+    Manager.progress = 0
 
     # Video-only selection should not create a synthetic detail task.
     video_only, _ = discover_targets(
