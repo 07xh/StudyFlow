@@ -331,3 +331,22 @@ def test_unknown_submission_never_reposts_when_not_confirmed(monkeypatch):
     with pytest.raises(service.MasteryError) as saved:
         service.save_answer("k" * 64, KNOWLEDGE, "939136618", 671372794)
     assert saved.value.code == "ROUND_ALREADY_SUBMITTED"
+
+
+def test_answer_with_null_correctness_is_not_a_confirmed_zero(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    service.start_round("k" * 64, KNOWLEDGE)
+    original = session.ai_exam_query
+
+    def delayed_grade(url, data, method="POST"):
+        if session.submitted and url.endswith("/question/getExamQuestionInfo"):
+            question = dict(QUESTIONS[data["questionId"]])
+            question["userAnswerVo"] = [{"answer": "671372794", "isCorrect": None}]
+            return {"code": 0, "data": question}
+        return original(url, data, method=method)
+
+    monkeypatch.setattr(session, "ai_exam_query", delayed_grade)
+    result = service.submit_round("k" * 64, KNOWLEDGE)
+    assert result["grading_pending"] is True
+    assert result["round_score"] == {"correct": None, "total": 2, "percent": None}
+    assert result["graded"] == []
