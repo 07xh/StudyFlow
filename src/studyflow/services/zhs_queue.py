@@ -294,8 +294,11 @@ def fatal_diagnostic(directory: Path, token: str) -> str | None:
 
 
 def supervise(targets: list[QueueTarget], concurrency: int, token: str, directory: Path,
-              launch, *, stop_on_error: bool = False, limit_seconds: float = 0) -> int:
-    """Bounded chapter lanes: sequential within each chapter, parallel across chapters."""
+              launch, *, parallel_mode: str = "chapters", stop_on_error: bool = False,
+              limit_seconds: float = 0) -> int:
+    """One bounded process pool with either chapter-serial or resource-level scheduling."""
+    if parallel_mode not in ("chapters", "resources") or type(concurrency) is not int or not 1 <= concurrency <= 3:
+        raise ValueError("INVALID_ZHS_SETTINGS")
     directory.mkdir(parents=True, exist_ok=True)
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
              "knowledge_id": t.knowledge_id if t.kind == "detail" else None,
@@ -333,7 +336,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
         try:
             atomic_json(directory / f"zhs-queue-{token}.json", {
                 "v": 1, "token": token, "at": time.time(), "state": state,
-                "concurrency": concurrency, "tasks": rows,
+                "concurrency": concurrency, "parallel_mode": parallel_mode, "tasks": rows,
             })
         except OSError:
             last_failed_publish_at = now
@@ -399,31 +402,69 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
                 break
             if fatal or (exit_code and stop_on_error):
                 break
-            # Claim only the earliest queued resource per chapter. A video,
-            # article or PPT blocks its own chapter but never a different one.
-            # For legacy/unclassified QueueTargets, use a unique lane key.
+            # Chapter mode retains the old one-worker-per-chapter ordering.
+            # Resource mode shares the same global slots across ALL chapters,
+            # including multiple distinct resources in a single chapter.
             def lane_key(index):
                 return targets[index].chapter_key or targets[index].task_id
 
-            busy_lanes = {lane_key(index) for index in running}
-            claimed_lanes = set()
-            for index, target in enumerate(targets):
-                if len(running) >= concurrency:
-                    break
-                if rows[index]["state"] != "queued":
-                    continue
-                lane = lane_key(index)
-                if lane in claimed_lanes:
-                    continue
-                claimed_lanes.add(lane)
-                if lane in busy_lanes:
-                    continue
+            selected = []
+            if parallel_mode == "chapters":
+                busy_lanes = {lane_key(index) for index in running}
+                claimed_lanes = set()
+                for index, target in enumerate(targets):
+                    if len(running) + len(selected) >= concurrency:
+                        break
+                    if rows[index]["state"] != "queued":
+                        continue
+                    lane = lane_key(index)
+                    if lane in claimed_lanes:
+                        continue
+                    claimed_lanes.add(lane)
+                    if lane not in busy_lanes:
+                        selected.append(index)
+            else:
+                # Prefer less-busy chapters and distinct knowledge points.
+                # With only one chapter/knowledge point, still use free slots.
+                chapter_load: dict[str, int] = {}
+                busy_knowledge = set()
+                for index in running:
+                    lane = lane_key(index)
+                    chapter_load[lane] = chapter_load.get(lane, 0) + 1
+                    if targets[index].knowledge_id is not None:
+                        busy_knowledge.add(targets[index].knowledge_id)
+                for _ in range(concurrency - len(running)):
+                    candidates: dict[str, int] = {}
+                    for index, target in enumerate(targets):
+                        if rows[index]["state"] != "queued" or index in selected:
+                            continue
+                        lane = lane_key(index)
+                        previous = candidates.get(lane)
+                        if previous is None or (
+                            targets[previous].knowledge_id in busy_knowledge
+                            and target.knowledge_id not in busy_knowledge
+                        ):
+                            candidates[lane] = index
+                    if not candidates:
+                        break
+                    index = min(candidates.values(), key=lambda item: (
+                        chapter_load.get(lane_key(item), 0),
+                        targets[item].knowledge_id in busy_knowledge,
+                        item,
+                    ))
+                    selected.append(index)
+                    lane = lane_key(index)
+                    chapter_load[lane] = chapter_load.get(lane, 0) + 1
+                    if targets[index].knowledge_id is not None:
+                        busy_knowledge.add(targets[index].knowledge_id)
+
+            for index in selected:
+                target = targets[index]
                 child_token = uuid.uuid4().hex
                 try:
                     running[index] = (launch(target, child_token), child_token)
                     started_at[index] = time.monotonic()
                     rows[index]["state"] = "running"
-                    busy_lanes.add(lane)
                 except OSError:
                     rows[index].update(state="failed", exit_code=1)
                     exit_code = 13
@@ -480,6 +521,7 @@ def run_queue(course_key: str, token: str, options: dict) -> int:
     minutes = options["limit_minutes"]
     remaining = max(.001, minutes * 60 - (time.monotonic() - started)) if minutes else 0
     code = supervise(targets, options["concurrency"], token, root, launch,
+                     parallel_mode=options["parallel_mode"],
                      stop_on_error=options["stop_on_error"], limit_seconds=remaining)
     return code or (12 if limited else 0)
 

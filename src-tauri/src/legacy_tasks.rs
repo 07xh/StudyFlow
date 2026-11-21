@@ -131,15 +131,19 @@ pub struct ZhsOptions {
     resource_mode: String,
     #[serde(default = "default_zhs_concurrency")]
     concurrency: u8,
+    #[serde(default = "default_zhs_parallel_mode")]
+    parallel_mode: String,
 }
 fn default_zhs_resource_mode() -> String { "all".into() }
 fn default_zhs_concurrency() -> u8 { 1 }
+fn default_zhs_parallel_mode() -> String { "chapters".into() }
 impl ZhsOptions {
     fn validate(&self) -> Result<(), String> {
         if !self.speed.is_finite() || self.speed < 1.0 || self.speed > 2.0
             || !self.speed_cap.is_finite() || self.speed_cap < 1.0 || self.speed_cap > 2.0
             || self.limit_minutes > 1440 || self.max_videos > 1000
             || !(1..=3).contains(&self.concurrency)
+            || !matches!(self.parallel_mode.as_str(), "chapters" | "resources")
             || self.completion_threshold.is_some_and(|value| value == 0 || value > 100)
             || !matches!(self.resource_mode.as_str(), "all" | "video" | "reading")
             || (self.scope_mode != "all" && self.scope_mode != "selected")
@@ -812,6 +816,17 @@ mod tests {
         let options: ZhsOptions = serde_json::from_value(raw.clone()).unwrap();
         assert!(options.completion_threshold.is_none());
         assert!(options.validate().is_ok());
+        assert_eq!(options.parallel_mode, "chapters");
+        for mode in ["chapters", "resources"] {
+            let mut changed=raw.clone();
+            changed["parallel_mode"]=serde_json::json!(mode);
+            assert!(serde_json::from_value::<ZhsOptions>(changed).unwrap().validate().is_ok());
+        }
+        for invalid in ["resource", "all", ""] {
+            let mut changed=raw.clone();
+            changed["parallel_mode"]=serde_json::json!(invalid);
+            assert_eq!(serde_json::from_value::<ZhsOptions>(changed).unwrap().validate().unwrap_err(), "INVALID_SETTINGS");
+        }
         for valid in [1u8, 90, 100] {
             let mut with_threshold=raw.clone();
             with_threshold["completion_threshold"]=serde_json::json!(valid);

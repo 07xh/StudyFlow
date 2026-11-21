@@ -24,6 +24,7 @@ pub struct QueueTask {
 #[derive(Clone, Serialize)]
 pub struct QueueSnapshot {
     pub concurrency: u64,
+    pub parallel_mode: String,
     pub state: String,
     pub stale: bool,
     pub tasks: Vec<QueueTask>,
@@ -48,6 +49,11 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
     let stale = now - at > 18.0;
     let concurrency = data.get("concurrency")?.as_u64()?;
     if !(1..=3).contains(&concurrency) { return None; }
+    let parallel_mode = match data.get("parallel_mode") {
+        None => "chapters",
+        Some(value) => value.as_str()?,
+    };
+    if !matches!(parallel_mode, "chapters" | "resources") { return None; }
     let state = data.get("state")?.as_str()?;
     if !matches!(state, "running" | "exited") { return None; }
     let raw_tasks = data.get("tasks")?.as_array()?;
@@ -171,7 +177,7 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
             kind: kind.into(), requirement, state: row_state.into(),
             percent, playback_phase, stale: row_stale, exit_code});
     }
-    Some(QueueSnapshot {concurrency, state: state.into(), stale, tasks})
+    Some(QueueSnapshot {concurrency, parallel_mode: parallel_mode.into(), state: state.into(), stale, tasks})
 }
 
 pub fn read(token: &str, now: f64) -> Option<QueueSnapshot> {
@@ -224,6 +230,16 @@ mod tests {
         let old = parse(data.as_bytes(), &"a".repeat(32), 120.0).unwrap();
         assert!(old.stale);
         assert!(old.tasks[0].percent.is_none());
+    }
+    #[test]
+    fn resource_parallel_mode_is_verified_and_old_snapshots_keep_chapter_mode() {
+        let token = "a".repeat(32);
+        let mut data = sample();
+        assert_eq!(parse(data.to_string().as_bytes(), &token, 101.0).unwrap().parallel_mode, "chapters");
+        data["parallel_mode"] = json!("resources");
+        assert_eq!(parse(data.to_string().as_bytes(), &token, 101.0).unwrap().parallel_mode, "resources");
+        data["parallel_mode"] = json!("invalid");
+        assert!(parse(data.to_string().as_bytes(), &token, 101.0).is_none());
     }
     #[test]
     fn chapter_metadata_is_optional_for_old_snapshots_but_validated_when_present() {

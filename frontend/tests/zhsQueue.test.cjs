@@ -12,6 +12,9 @@ test('concurrency bounds stop invalid options before IPC and per-video stop carr
  const calls=[];
  const api=load('legacyPlayback.ts',{'bridge.ts':{isDesktop:()=>true},'@tauri-apps/api/core':{invoke:async(...args)=>calls.push(args)}});
  assert.equal(api.originalZhsDefaults.concurrency,2);
+  assert.equal(api.originalZhsDefaults.parallel_mode,"chapters");
+  for(const mode of ["resources","chapters"])assert.equal(api.validateZhsStoredOptions({...api.originalZhsDefaults,parallel_mode:mode}),true);
+  for(const mode of ["one-chapter",null,false,3])assert.equal(api.validateZhsStoredOptions({...api.originalZhsDefaults,parallel_mode:mode}),false);
  for(const concurrency of [0,4,1.5,true])assert.equal(api.validateZhsStoredOptions({...api.originalZhsDefaults,concurrency}),false);
  await assert.rejects(api.stopZhsVideo('', 'b'.repeat(32)),/TASK_RUN_CHANGED/);
  await api.stopZhsVideo('run-1','b'.repeat(32));
@@ -36,6 +39,23 @@ test('independent progress bars and stop buttons belong to exact video and run',
   assert.deepEqual(calls,[['run-1','b'.repeat(32)]]);
   assert.equal(view.root.findAllByType('button').find(x=>x.props['aria-label']==='停止电路基础').props.disabled,true);
  }finally{if(view)act(()=>view.unmount());}
+});
+test('single-chapter mode shows distinct queue status while preserving per-resource controls',async()=>{
+  const Panel=load('components/ZhsQueuePanel.tsx',{'legacyPlayback.ts':{
+    stopZhsVideo:async()=>{},legacyError:String,legacyExitMessage:()=>''
+  }}).ZhsQueuePanel;
+  let view;
+  const tasks=[{...status.zhs_queue.tasks[0]},{
+    ...status.zhs_queue.tasks[1],chapter_key:'ai-1',chapter_name:'第一章'
+  },{...status.zhs_queue.tasks[2]}];
+  try{
+    await act(async()=>{view=create(React.createElement(Panel,{status:{
+      ...status,zhs_queue:{...status.zhs_queue,parallel_mode:'resources',tasks}
+    },onRefresh:async()=>{}}));});
+    assert.match(words(view.root),/单章节并行 · 2 路/);
+    assert.match(words(view.root),/等待空闲运行路数/);
+    assert.equal(view.root.findAllByProps({'aria-label':'第一章'}).length,2);
+  }finally{if(view)act(()=>view.unmount());}
 });
 test('stale or failed polling hides all percentages and disables row controls',async()=>{
  const Panel=load('components/ZhsQueuePanel.tsx',{'legacyPlayback.ts':{

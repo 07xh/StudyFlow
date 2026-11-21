@@ -11,7 +11,7 @@ import tempfile
 DEFAULTS = {
     "speed": 1.5, "speed_cap": 2.0, "limit_minutes": 0,
     "learn_optional": False, "max_videos": 0, "stop_on_error": False,
-    "concurrency": 2,
+    "concurrency": 2, "parallel_mode": "chapters",
     # None follows the original ZHS course-type default; overrides are course-scoped.
     "completion_threshold": None,
 }
@@ -20,7 +20,7 @@ MAX_SELECTED = 256
 
 def validate_run_settings(value: object) -> dict:
     if isinstance(value, dict):
-        value = {"concurrency": 1, "completion_threshold": None, **value}
+        value = {"concurrency": 1, "completion_threshold": None, "parallel_mode": "chapters", **value}
     required = set(DEFAULTS) | {"scope_mode", "selected_ids"}
     allowed = required | {"resource_mode", "requirement_mode"}
     if not isinstance(value, dict) or not required.issubset(value) or not set(value).issubset(allowed):
@@ -55,6 +55,9 @@ def validate_run_settings(value: object) -> dict:
 
 
 def validate_settings(value: object) -> dict:
+    # Earlier versions saved no scheduler choice; keep their chapter-only behavior.
+    if isinstance(value, dict) and "parallel_mode" not in value:
+        value = {**value, "parallel_mode": "chapters"}
     if not isinstance(value, dict) or set(value) != set(DEFAULTS):
         raise ValueError("INVALID_ZHS_SETTINGS")
     speed, minutes, optional = value["speed"], value["limit_minutes"], value["learn_optional"]
@@ -67,6 +70,7 @@ def validate_settings(value: object) -> dict:
         raise ValueError("INVALID_ZHS_SETTINGS")
     if (type(cap) not in (float, int) or not math.isfinite(cap) or not 1.0 <= cap <= 2.0
             or type(value["concurrency"]) is not int or not 1 <= value["concurrency"] <= 3
+            or value["parallel_mode"] not in ("chapters", "resources")
             or type(maximum) is not int or not 0 <= maximum <= 1000
             or type(stop) is not bool or not isinstance(optional, bool)):
         raise ValueError("INVALID_ZHS_SETTINGS")
@@ -75,7 +79,8 @@ def validate_settings(value: object) -> dict:
     return {"speed": float(speed), "speed_cap": float(cap),
             "limit_minutes": minutes, "learn_optional": optional,
             "max_videos": maximum, "stop_on_error": stop,
-            "concurrency": value["concurrency"], "completion_threshold": threshold}
+            "concurrency": value["concurrency"], "parallel_mode": value["parallel_mode"],
+            "completion_threshold": threshold}
 
 
 def _path(course_key: str | None = None) -> Path:

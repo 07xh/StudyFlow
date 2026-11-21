@@ -268,13 +268,19 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
         {section==="parameters"&&<>
         <h4 className="sf-settings-section-title">执行参数</h4>
         <div className="legacy-option-grid">
-          <label><span>同课程章节并行数</span>
+          <label><span>同课程最大并行数</span>
             <select value={options.concurrency??1} disabled={!desktop||busy}
               onChange={e=>update("concurrency",Number(e.target.value))}>
               <option value={1}>1 · 单路顺序执行</option>
               <option value={2}>2 · 双路并发（默认）</option>
               <option value={3}>3 · 三路并发</option>
             </select></label>
+           <label><span>调度模式</span>
+             <select value={options.parallel_mode??"chapters"} disabled={!desktop||busy}
+               onChange={e=>update("parallel_mode",e.target.value as "chapters"|"resources")}>
+               <option value="chapters">跨章节并行（原模式）</option>
+               <option value="resources">单章节内多任务并行</option>
+             </select></label>
           <label><span>请求倍速（1–2×）</span>
             <input type="number" min={1} max={2} step={0.25} value={options.speed}
               disabled={!desktop||busy} onChange={e=>update("speed",Number(e.target.value))}/></label>
@@ -299,7 +305,9 @@ export function ZhsTaskSettingsPanel({desktop,dark=true,courseId,courseType,onRe
               disabled={!desktop||busy}
               onChange={e=>update("completion_threshold",Number(e.target.value))}/></label>}
         </div>
-        <details className="sf-ykt-advanced-options"><summary>并发运行说明</summary><p className="sf-ykt-advanced-note">不同章节最多同时运行 1–3 路，每个章节内部严格按原版视频、文章和 PPT 顺序执行。若本次只有一个可执行章节，则实际只运行一项；逐资源可独立停止，课程完成情况仍以服务器核验为准。</p></details>
+        <details className="sf-ykt-advanced-options"><summary>并发运行说明</summary><p className="sf-ykt-advanced-note">{options.parallel_mode==="resources"
+           ?"单章节内的多个视频、文章或 PPT 可以分别占用运行路数；全课程同时最多 1–3 项。优先分配到不同章节或知识点，降低重复资源和会话竞争风险。单项结束后自动补位，可单独停止，完成情况仍以服务器回读为准。"
+           :"原模式：不同章节最多并行 1–3 路，同一章节内部按原顺序执行。只有一个可执行章节时实际运行一项。可切换为单章节内多任务并行；完成情况仍以服务器回读为准。"}</p></details>
         <div className="legacy-flags">
           <label title="ZHS 0.1.5 原版自动跳过已完成内容，暂不支持在学序中关闭此行为。">
             <input type="checkbox" checked readOnly disabled aria-label="跳过已完成（原版自动启用）"/>

@@ -25,6 +25,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   },[status.run_id]);
   const queue=status.zhs_queue;
   if(!queue)return null;
+  const withinChapter=queue.parallel_mode==="resources";
   const stale=unavailable||queue.stale;
   const active=status.state==="running"&&!stale;
   const playing=queue.tasks.filter(t=>t.state==="running");
@@ -141,7 +142,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         task.stale?"视频采样中断或一直没有有效数值；是否仍在播放尚需核对运行状态":
         task.playback_phase==="paused"?"检测到原程序处于暂停阶段；不将暂停计时当作播放进度":
         task.playback_phase==="answering"?"检测到原程序正在处理题目；当前没有有效播放进度采样":
-        percent==null?(task.state==="queued"?"等待本章节的上一资源结束":"正在等待本视频的有效采样"):"本地观测 · 非服务器完成进度"}</small>
+        percent==null?(task.state==="queued"?(withinChapter?"等待空闲运行路数":"等待本章节的上一资源结束"):"正在等待本视频的有效采样"):"本地观测 · 非服务器完成进度"}</small>
     </article>;
   }
   function grouped(rows:Row[]){
@@ -161,7 +162,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       </section>);
   }
   return <section className="sf-ykt-live sf-zhs-queue" aria-label="知到同课章节任务">
-    <div className="sf-ykt-live-title"><strong>章节并行 · {queue.concurrency} 路</strong>
+    <div className="sf-ykt-live-title"><strong>{withinChapter?"单章节并行":"章节并行"} · {queue.concurrency} 路</strong>
       <small>{stale?"采样待同步":playing.length+" 项运行 · "+waiting.length+" 项排队"}</small></div>
     {grouped(playing)}
     {!playing.length&&status.state==="running"&&<div className="sf-task-context" role="status">
@@ -214,6 +215,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     {status.state==="exited"&&<p role="status">{legacyExitMessage(status)}</p>}
     {status.state==="exited"&&status.exit_code!==0&&status.diagnostic_code&&<p role="status">{zhsDiagnosticMessage(status)}</p>}
     {message&&<p role="status">{message}</p>}
-    <small className="sf-muted">同一章节按视频、文章和 PPT 的原顺序逐项执行，不同章节独立占用运行路数；不足多个可执行章节时不会强行凑满并发。课程进度以服务器核验为准。</small>
+    <small className="sf-muted">{withinChapter
+       ?"单章节内可同时执行多个独立资源，空闲名额自动补位；任务各有独立监控和停止入口，全课程最多占用设定路数。服务器核验仍是完成依据。"
+       :"同一章节按视频、文章和 PPT 的原顺序逐项执行，不同章节独立占用运行路数；不足多个可执行章节时不会强行凑满并发。课程进度以服务器核验为准。"}</small>
   </section>;
 }
