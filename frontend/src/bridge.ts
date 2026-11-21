@@ -666,7 +666,7 @@ export function masteryWrongQuestions(
 
 export type MasteryAutoSettings = {
   target: number; max_rounds: number; stagnation_rounds: number; max_minutes: number;
-  first_round_mode: "bank_only" | "bank_ai" | "ai_first";
+  first_round_mode: "bank_only" | "bank_ai" | "ai_first" | "arbitrary_first";
   max_ai_calls: number; api_key?: string;
 };
 export type MasteryAutoTask = {
