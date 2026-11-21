@@ -126,11 +126,11 @@ StudyFlow 现有 LightC 风格 UI
 
 ## 8. 状态声明
 
-本文件仅将架构与实施约束确定下来；**尚未证明 OCS 核心代码已被移植、没有发布新 EXE，也不代表真实后台任务通过验收**。实际开发必须按 PR、测试和平台回读证据更新状态。
+本文件记录架构及实际开发进度。已复用 OCS 的部分资源类型语义并落地 StudyFlow 原生代码，但**没有完整移植 OCS 运行时**；Windows 真机托盘交互及真实平台进度回读尚需验收。代码合并不等于发布新 EXE。
 
 ## 9. 第一阶段审查记录（2026-11-21）
 
-已完成 **StudyFlow 现有运行链与 OCS 主要平台源码的静态对照**，详见 [OCS_STUDYFLOW_COMPATIBILITY_AUDIT.md](OCS_STUDYFLOW_COMPATIBILITY_AUDIT.md)。结论：学习通已有成熟任务卡解析与长驻后台桥，不再重建；OCS 主要执行器与 DOM/播放器耦合，新平台先做只读接入；职教云窗口协调实现不适合本项目。**此项仅完成审查，尚未实施代码移植、Windows 真机验收或发布。**
+已完成 **StudyFlow 现有运行链与 OCS 主要平台源码的静态对照**，详见 [OCS_STUDYFLOW_COMPATIBILITY_AUDIT.md](OCS_STUDYFLOW_COMPATIBILITY_AUDIT.md)。结论：学习通已有成熟任务卡解析与长驻后台桥，不再重建；OCS 主要执行器与 DOM/播放器耦合，新平台先做只读接入；职教云窗口协调实现不适合本项目。此段为当时的静态审查结论；后续实际代码变更见第 10 节，仍不代表 Windows 真机及平台进度已验收。
 
 ## 10. 开发进度更新（2026-11-22）
 
@@ -140,7 +140,7 @@ StudyFlow 现有 LightC 风格 UI
 | P0-C 学习通服务内部去重/启动互斥 | [#193](https://github.com/07xh/StudyFlow/pull/193) | **已合并 main** | 按 `task_id` 去重、启动槽防竞态、异常释放；不表示跨平台/跨进程全局互斥已完成 |
 | P1 全局执行器状态独立轮询 | [#195](https://github.com/07xh/StudyFlow/pull/195) | **已合并 main** | 分离 ZHS、雨课堂、官方播放器查询；某一执行器卡住不影响另外两者；仍需在 CI/Windows 验收 |
 | P1 学习通状态和日志故障隔离 | [#195](https://github.com/07xh/StudyFlow/pull/195) | **已合并 main** | 日志读取与状态读取解耦；失去状态证据时清除旧状态并禁用操作；未在 Windows 真机验证 |
-| P1 最小化/关闭/托盘生命周期 | [#198](https://github.com/07xh/StudyFlow/pull/198) | **PR 构建验收中** | Tauri 系统托盘、隐藏主窗口、原窗口恢复与完全退出已提交；Windows 编译与安装检查未最终确认，实际托盘交互尚未真机验收 |
+| P1 最小化/关闭/托盘生命周期 | [#198](https://github.com/07xh/StudyFlow/pull/198) | **已合并 main** | Tauri 原生托盘、隐藏主窗口、原窗口恢复与完全退出；Python、React、Windows NSIS/安装升级卸载 CI 已通过；实际托盘交互仍需 Windows 真机验收 |
 | P1 官方记录核验 | 暂无 | **未完成** | 平台发送回执不等于独立的官方课程完成记录；需要分开呈现和校验 |
 | P2 增量平台 | 暂无 | **未开发** | 首先只读课程和资源身份，不承诺无页面学习 |
 
