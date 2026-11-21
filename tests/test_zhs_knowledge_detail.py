@@ -114,3 +114,23 @@ def test_zhs_detail_rejects_invalid_knowledge_ids_before_network():
         read_knowledge_detail("a" * 64, True)
     with pytest.raises(ValueError, match="INVALID_KNOWLEDGE_ID"):
         read_knowledge_detail("a" * 64, 0)
+
+
+def test_zhs_detail_ipc_is_scoped_and_reports_only_readonly_evidence(monkeypatch):
+    from studyflow.services import bridge
+    expected = {"verification": "read_only", "study_record_submitted": False}
+    calls = []
+    monkeypatch.setattr(bridge, "read_zhs_knowledge_detail",
+                        lambda course_key, knowledge_id:
+                        (calls.append((course_key, knowledge_id)) or expected))
+    request = {"id": "detail-read-1", "version": 1,
+               "operation": "zhidao.zhs.knowledge.detail",
+               "course_key": "a" * 64, "knowledge_id": 87}
+    response = bridge.dispatch(request)
+    assert response == {"id": "detail-read-1", "ok": True, "data": expected}
+    assert calls == [("a" * 64, 87)]
+    for invalid in (0, -2, True, "87", 2**64):
+        response = bridge.dispatch({**request, "knowledge_id": invalid})
+        assert response["ok"] is False
+        assert response["error"] == "INVALID_REQUEST"
+    assert len(calls) == 1
