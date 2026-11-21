@@ -67,7 +67,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     if(!desktop||busy||running)return;
     setBusy(true);setError("");
     try{
-      const options={...settings,...(settings.first_round_mode!=="bank_only"?{api_key:aiKey.trim()}: {})};
+      const options={...settings,...(["bank_ai","ai_first"].includes(settings.first_round_mode)?{api_key:aiKey.trim()}: {})};
       setStatus(await masteryAutoStart(courseKey,options));
       setAiKey("");
     }catch(cause){
@@ -89,7 +89,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     <div className="sf-mastery-auto-heading">
       <div>
         <h4>全课程自动掌握度</h4>
-        <p>一键扫描全部章节知识点，未达标自动开新卷、保存作答、提交并核对官方掌握度，达标后继续下一个。纯 HTTP，无浏览器、无 AI。</p>
+        <p>一键扫描全部章节知识点，未达标自动开新卷、保存作答、提交并核对官方掌握度，达标后继续下一个。纯 HTTP、无独立窗口，AI 是否参与由首轮策略决定。</p>
       </div>
       <strong className="sf-mastery-auto-state" aria-live="polite">{LABEL[status.state]??status.state}</strong>
     </div>
@@ -102,9 +102,10 @@ export function MasteryAutoPanel({courseKey,desktop}:{
           <option value="bank_only">题库与本地有界试答（不调用 AI）</option>
           <option value="bank_ai">已验证题库优先，未命中询问 AI（推荐）</option>
           <option value="ai_first">首轮 AI 优先，后续优先用已验证题库</option>
+          <option value="arbitrary_first">首轮随意作答并提交，后续用官方结果与题库</option>
         </select>
       </label>
-      {settings.first_round_mode!=="bank_only"&&<>
+      {["bank_ai","ai_first"].includes(settings.first_round_mode)&&<>
         <label>DeepSeek API Key（仅本次执行）
           <input type="password" autoComplete="off" value={aiKey}
             disabled={running||busy} placeholder="输入 DeepSeek API Key"
@@ -117,7 +118,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         </label>
       </>}
     </div>
-    {settings.first_round_mode!=="bank_only"&&<p className="sf-mastery-auto-caption">
+    {["bank_ai","ai_first"].includes(settings.first_round_mode)&&<p className="sf-mastery-auto-caption">
       启用后仅把题干与选项发送至 DeepSeek；不会上传知到 Cookie、账户信息或题目 ID。
       AI 答案未经验证，必须以服务器交卷结果确认。
     </p>}
@@ -140,7 +141,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       </label>
     </div>
     <div className="sf-mastery-auto-actions">
-      <button type="button" disabled={busy||running||(settings.first_round_mode!=="bank_only"&&!aiKey.trim())} onClick={()=>void start()}>
+      <button type="button" disabled={busy||running||(["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())} onClick={()=>void start()}>
         <Play size={14}/>{status.total>0?"重新扫描全部章节":"开始全部章节"}
       </button>
       <button type="button" className="secondary" disabled={busy||!running||status.state==="stopping"}
