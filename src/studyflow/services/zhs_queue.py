@@ -105,10 +105,16 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                 official_catalog_entry, _counts,
             )
             resource_catalog = None
-            for source, url in (
-                ("desktop", f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
-                ("mobile", f"{getattr(session.urls, 'ai_task', '')}/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
+            endpoints = getattr(session, "urls", None)
+            ai_base = getattr(endpoints, "ai", None)
+            ai_task_base = getattr(endpoints, "ai_task", None)
+            for source, base, suffix in (
+                ("desktop", ai_base, "/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
+                ("mobile", ai_task_base, "/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
             ):
+                if not isinstance(base, str) or not base.startswith("https://"):
+                    continue
+                url = base.rstrip("/") + suffix
                 try:
                     response = manager._ai_query(
                         url, {"courseId": cid, "classId": cls},
