@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct QueueTask {
     pub task_id: String,
     pub name: Option<String>,
+    pub knowledge_id: Option<u64>,
     pub chapter_key: Option<String>,
     pub chapter_name: Option<String>,
     pub kind: String,
@@ -83,6 +84,15 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         };
         // Older rc.23 snapshots have no chapter fields. Accept those for a
         // seamless upgrade but reject malformed or unsafe new metadata.
+        let knowledge_id = match row.get("knowledge_id") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let id = raw.as_u64()?;
+                if id == 0 || id > i64::MAX as u64 { return None; }
+                Some(id)
+            }
+        };
+        if (kind == "detail") != knowledge_id.is_some() { return None; }
         let chapter_key = match row.get("chapter_key") {
             None | Some(Value::Null) => None,
             Some(raw) => {
@@ -134,7 +144,7 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         ) {
             return None;
         }
-        tasks.push(QueueTask {task_id: id.into(), name, chapter_key, chapter_name,
+        tasks.push(QueueTask {task_id: id.into(), name, knowledge_id, chapter_key, chapter_name,
             kind: kind.into(), requirement, state: row_state.into(),
             percent, playback_phase, stale: row_stale, exit_code});
     }
@@ -257,6 +267,7 @@ mod tests {
         let mut data = sample();
         data["tasks"][0]["name"] = json!("历任校首");
         data["tasks"][0]["kind"] = json!("detail");
+        data["tasks"][0]["knowledge_id"] = json!(87);
         data["tasks"][0]["state"] = json!("informational");
         data["tasks"][0]["percent"] = Value::Null;
         let decoded = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
