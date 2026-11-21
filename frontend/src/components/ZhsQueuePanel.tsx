@@ -141,7 +141,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       </div>
       <strong className="sf-ykt-video-name" title={task.name??undefined}>{task.name??"未命名资源"}</strong>
       {task.kind==="detail"&&task.knowledge_id!=null&&<button
-        type="button" className="secondary" disabled={detailBusy||!status.course_id}
+        type="button" className="secondary" disabled={detailBusy||entryBusy||!status.course_id}
         onClick={()=>void inspectDetail(task.knowledge_id!)}>
         {detailBusy?"读取中…":"读取知识点详情与服务器资源状态"}
       </button>}
