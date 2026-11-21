@@ -4,7 +4,7 @@ import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type Leg
 
 const labels:Record<string,string>={queued:"排队中",running:"运行中",exited:"本轮结束 · 待核验",
   failed:"执行失败",unconfirmed:"服务器未确认",stopped:"已停止",informational:"只有详情 · 暂无可执行资源",unknown:"状态待核实"};
-const kinds={video:"视频",ppt:"PPT",article:"文章",other:"其他资源",detail:"知识点详情"};
+const kinds={video:"视频",ppt:"PPT",article:"文章",other:"其他资源",detail:"无资源知识点"};
 const requirementLabels:Record<string,string>={required:"必学",optional:"选学",unknown:"分类待核验",shared:"共享课"};
 export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   status:LegacyTaskStatus;unavailable?:boolean;onRefresh:()=>Promise<void>;
@@ -64,7 +64,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         aria-valuetext={percent==null?"等待当前资源的有效进度采样":percent.toFixed(1)+"%"}>
         <span style={{width:percent!=null?percent+"%":"0%"}}/>
       </div>}
-      <small className="sf-muted">{task.state==="informational"?"目录中可识别此知识点，但资源列表为空。详情页内容不属于视频/PPT任务；未运行原版发送器，也未提交或确认学习记录。":
+      <small className="sf-muted">{task.state==="informational"?"目录中可识别此知识点，但本次资源列表为空。可能只有详情内容或课程尚在建设；未启动原版发送器，也未提交或确认学习记录。":
         task.state==="exited"?"进程已退出，学习记录待平台核验":
         task.state==="unconfirmed"?(task.exit_code===16?"服务器回读状态未增加，未认定任务已完成":"服务器暂不可核验，尚不能确认写入"):
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
