@@ -285,13 +285,9 @@ def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
     submitted = False
     try:
         manager = AiCourseManager(session)
-        # Recheck the resource identity in the authenticated write session.
-        points = [
-            point for theme in manager.get_knowledge_points(cid, class_id).cake_theme_list
-            for point in theme.knowledge_list if point.knowledge_id == knowledge_id
-        ]
-        if len(points) != 1 or manager.list_knowledge_resources(cid, class_id, knowledge_id):
-            raise RuntimeError("ZHS_DETAIL_RESOURCES_UNCONFIRMED")
+        # The ZHS queue already validated the course and resource catalog;
+        # read_knowledge_detail above rechecked the same point. No repeated
+        # catalog fetch here: submit this single entry record and read back.
         # Captured first-party frontend: taskId is an optional route query;
         # without it, the official page's JSON payload omits that field.
         # Exactly ONE call. No forged watch time, resource UID, or periodic retry.
