@@ -56,7 +56,11 @@ function bridgeMock(state){
     masterySaveAnswer:async(courseKey,knowledgeId,questionId,answer)=>{
       calls.push(['save',String(questionId),answer]);return {saved:true,complete:true};
     },
-    masterySubmitRound:async()=>{calls.push(['submit']);return submitted;},
+    masterySubmitRound:async()=>{
+      calls.push(['submit']);
+      if(state.submitError)throw state.submitError;
+      return state.submitResult??submitted;
+    },
     masteryDiscardRound:async()=>{calls.push(['discard']);return {discarded:true};},
   };
 }
@@ -162,4 +166,40 @@ test('lazy section keeps its panel unmounted until first expand, then never drop
   assert.equal(live,1,'收起只隐藏，不卸载');
   await act(async()=>{toggle().props.onClick();});
   assert.equal(live,1,'重新展开不应重新挂载，否则作答草稿会丢');
+});
+
+
+test('partial grading displays pending status and refresh does not masquerade as a new submission',async()=>{
+  const state={submitResult:{
+    ...submitted,grading_pending:true,verification_pending:true,graded:[],
+    round_score:{correct:null,total:1,percent:null},mastery_after:null,
+    mastery_error:'MASTERY_UNAVAILABLE',
+  }};
+  const view=await mount(bridgeMock(state));
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('知识点甲')).props.onClick();});
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('提交本轮')).props.onClick();});
+  assert.match(textOf(view.root),/本轮判分待确认/);
+  assert.doesNotMatch(textOf(view.root),/本轮 0\/1/);
+  const next=view.root.findAllByType('button').find(node=>textOf(node).includes('再练一轮'));
+  assert.equal(next.props.disabled,true,'尚未完成回读，不能意外覆盖本轮');
+
+  state.submitResult={...submitted,grading_pending:false,verification_pending:false};
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('重新核对结果')).props.onClick();});
+  assert.equal(state.calls.filter(c=>c[0]==='submit').length,2);
+  assert.match(textOf(view.root),/本轮 1\/1/);
+});
+
+
+test('unknown submission switches UI to status check and prevents answer edits',async()=>{
+  const state={submitError:new Error('SUBMIT_STATUS_UNKNOWN')};
+  const view=await mount(bridgeMock(state));
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('知识点甲')).props.onClick();});
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('提交本轮')).props.onClick();});
+  assert.match(textOf(view.root),/核验提交状态/);
+  const options=view.root.findAllByType('input').filter(x=>x.props.type==='radio');
+  assert.ok(options.every(x=>x.props.disabled===true));
+
+  state.submitError=null;
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('核验提交状态')).props.onClick();});
+  assert.match(textOf(view.root),/本轮 1\/1/);
 });
