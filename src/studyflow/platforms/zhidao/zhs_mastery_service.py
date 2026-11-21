@@ -38,11 +38,13 @@ from studyflow.platforms.zhidao.zhs_mastery import (
     format_answer,
     parse_question_result,
     parse_sheet_progress,
+    submit_payload,
 )
 
-# ``kgRunStu`` 与前端同名常量一致。
-KG_STU = "https://kg-ai-run.zhihuishu.com/run/gateway/t/stu"
-EXAM_ROOT = "https://studentexamtest.zhihuishu.com/gateway/t/v1"
+# 域名一律取自会话配置（``session.urls``），和 ``AiCourseManager`` 同源：
+# 用户改成代理/镜像地址时这里跟着走，不在本模块硬编码第二份。
+KG_STU_PATH = "/run/gateway/t/stu"
+EXAM_PATH = "/gateway/t/v1"
 
 MASTERY_TTL_SECONDS = 90.0
 ACTIVE_ROUND_TTL_SECONDS = 3600.0
@@ -90,6 +92,16 @@ def _open_session(course_key: str):
         raise MasteryError("LOGIN_REQUIRED")
     _, session = loaded
     return session, course
+
+
+def _kg_stu(session) -> str:
+    """``kg-ai-run`` 的 ``/run/gateway/t/stu`` 前缀（建卷、掌握度统计）。"""
+    return f"{session.urls.ai}{KG_STU_PATH}"
+
+
+def _exam_root(session) -> str:
+    """``studentexamtest`` 的 ``/gateway/t/v1`` 前缀（开卷、答题、提交）。"""
+    return f"{session.urls.exam}{EXAM_PATH}"
 
 
 def _ai_query(session, url: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -162,7 +174,7 @@ def read_mastery_stat(session, course_id: int, knowledge_id: int) -> dict[str, A
     """
     reply = _ai_query(
         session,
-        f"{KG_STU}/mastery-statistics/get-knowledge-mastery-stat",
+        f"{_kg_stu(session)}/mastery-statistics/get-knowledge-mastery-stat",
         {"courseId": course_id, "knowledgeId": knowledge_id, "dateFormate": _now_ms()},
     )
     data = reply.get("data") if isinstance(reply, dict) else None
@@ -249,7 +261,7 @@ def _paper_payload(course_id: int, class_id: int, knowledge_id: int) -> dict[str
 
 
 def _create_paper(session, course_id: int, class_id: int, knowledge_id: int) -> dict[str, Any]:
-    reply = _ai_query(session, f"{KG_STU}/exam/questions-paper", _paper_payload(course_id, class_id, knowledge_id))
+    reply = _ai_query(session, f"{_kg_stu(session)}/exam/questions-paper", _paper_payload(course_id, class_id, knowledge_id))
     data = reply.get("data") if isinstance(reply, dict) else None
     if not isinstance(data, dict):
         raise MasteryError("PAPER_UNAVAILABLE")
@@ -305,18 +317,18 @@ def start_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
         if exam_paper_id is None:
             raise MasteryError("PAPER_UNAVAILABLE")
         _exam_query(
-            session, f"{EXAM_ROOT}/exam/user/openExam",
+            session, f"{_exam_root(session)}/exam/user/openExam",
             {"examTestId": exam_test_id, "examPaperId": exam_paper_id, "courseId": course_id},
         )
         sheet = _exam_query(
-            session, f"{EXAM_ROOT}/exam/user/getExamSheetInfo",
+            session, f"{_exam_root(session)}/exam/user/getExamSheetInfo",
             {"examTestId": exam_test_id, "examPaperId": exam_paper_id}, method="GET",
         )
         progress = parse_sheet_progress(sheet.get("data") or {})
         questions: list[dict[str, Any]] = []
         for entry in progress.entries:
             detail = _exam_query(
-                session, f"{EXAM_ROOT}/question/getExamQuestionInfo",
+                session, f"{_exam_root(session)}/question/getExamQuestionInfo",
                 {
                     "examTestId": exam_test_id, "examPaperId": exam_paper_id,
                     "questionId": entry["questionId"], "version": entry.get("version", 1),
@@ -398,7 +410,7 @@ def save_answer(course_key: str, knowledge_id: str, question_id: str, answer: An
     session, _ = _open_session(course_key)
     try:
         _exam_query(
-            session, f"{EXAM_ROOT}/answer/saveAnswer",
+            session, f"{_exam_root(session)}/answer/saveAnswer",
             {
                 "recruitId": str(state["course_id"]),
                 "examTestId": str(state["exam_test_id"]),
@@ -444,14 +456,13 @@ def submit_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
     exam_test_id, exam_paper_id = state["exam_test_id"], state["exam_paper_id"]
     try:
         session.ai_exam_submit(
-            f"{EXAM_ROOT}/exam/user/submit",
-            {
-                "examTestId": exam_test_id,
-                "courseId": state["course_id"],
-                "courseType": 8,
-                "examPaperId": exam_paper_id,
-                "aiKnlowledgeId": int(state["knowledge_id"]),
-            },
+            f"{_exam_root(session)}/exam/user/submit",
+            submit_payload(
+                exam_test_id=exam_test_id,
+                course_id=state["course_id"],
+                exam_paper_id=exam_paper_id,
+                knowledge_id=int(state["knowledge_id"]),
+            ),
         )
     except Exception as error:
         raise MasteryError("SUBMIT_FAILED", str(error)[:200]) from error
@@ -460,7 +471,7 @@ def submit_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
     try:
         for question in state["questions"]:
             detail = _exam_query(
-                session, f"{EXAM_ROOT}/question/getExamQuestionInfo",
+                session, f"{_exam_root(session)}/question/getExamQuestionInfo",
                 {
                     "examTestId": exam_test_id, "examPaperId": exam_paper_id,
                     "questionId": question["question_id"], "version": 1,
@@ -555,7 +566,7 @@ def read_wrong_questions(course_key: str, knowledge_id: str, exam_test_id: str |
             payload["examTestId"] = _int(exam_test_id)
         if mastery is not None:
             payload["mastery"] = mastery
-        reply = _ai_query(session, f"{KG_STU}/mastery-statistics/bd/get-test-question", payload)
+        reply = _ai_query(session, f"{_kg_stu(session)}/mastery-statistics/bd/get-test-question", payload)
         data = reply.get("data") if isinstance(reply, dict) else None
         items = data.get("questionList") if isinstance(data, dict) else None
         return {

@@ -235,6 +235,7 @@ c/has(m6) → questions-paper → c/has(m3) → openExam → getExamTestUserInfo
 | `tests/zhs_fake_gateway.py` | 有状态假网关，含 `submit`（断言 `courseType == 8`），提交后才回填判分 |
 | `tests/test_zhs_mastery.py` | 密文复现断言 |
 | `tests/test_zhs_practice.py` | 练习流程断言（含请求顺序、submit body、答案编解码） |
+| `tests/test_zhs_mastery_service.py` | 服务层断言：URL 取自 `session.urls`、只读不建卷、提交体、本轮判分、恢复回填 |
 | `scripts/verify_zhs_mastery.py` | 标准库自检 |
 | `scripts/run_zhs_tests.py` | 无 pytest 环境下的 runner（内置最小替身） |
 | `scripts/zhs_mastery_probe.py` | 真实账号探测（建卷 → 答题 → 提交 → 读判分与掌握度） |
@@ -278,7 +279,9 @@ python scripts/zhs_mastery_probe.py `
 all 44 checks passed
 ```
 
-`scripts/run_zhs_tests.py` 实测：`32 passed, 0 failed`。
+`scripts/run_zhs_tests.py` 实测：`32 passed, 0 failed`（该 runner 只收集协议与流程两个文件；
+服务层用带 `monkeypatch` 的 `tests/test_zhs_mastery_service.py`，需要真 pytest：
+`37 passed`，与上面两个文件合计）。
 
 ## 12. 未核实（代码里单独标注，不阻塞已验证功能）
 
