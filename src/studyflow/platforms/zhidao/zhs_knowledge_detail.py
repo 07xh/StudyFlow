@@ -126,6 +126,11 @@ def mobile_study_progress(entry: dict | None) -> int | None:
     return progress if progress is not None and progress <= 100 else None
 
 
+def effective_knowledge_progress(zhs_progress: int, mobile_progress: int | None) -> int:
+    """Use the explicit mobile studyProgress when present, else ZHS progress."""
+    return mobile_progress if mobile_progress is not None else zhs_progress
+
+
 def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
     """Read one validated knowledge node via ZHS' own signed session.
 
@@ -264,10 +269,9 @@ def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
             or before["official_resource_count"] != 0
             or before["catalog_mismatch"]):
         raise RuntimeError("ZHS_DETAIL_RESOURCES_UNCONFIRMED")
-    if before["progress_sources_disagree"]:
-        return {"knowledge_id": str(knowledge_id), "state": "progress_conflict",
-                "submitted": False, "server_advanced": False, "server_completed": False}
-    if desktop_before >= 100 and (mobile_before is None or mobile_before >= 100):
+    # A stale ZHS catalog must not block a truly pending mobile knowledge
+    # point. Disagreement is diagnostics only, never a second completion gate.
+    if effective_knowledge_progress(desktop_before, mobile_before) >= 100:
         return {"knowledge_id": str(knowledge_id), "state": "already_complete",
                 "submitted": False, "server_advanced": False, "server_completed": True}
 
@@ -299,6 +303,10 @@ def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
     finally:
         session.close()
 
+    # A single subsequent server read is enough to observe a persisted
+    # change. It must be a comparable progress source, not an HTTP status.
+    import time
+    time.sleep(0.7)
     try:
         after = read_knowledge_detail(course_key, knowledge_id)
     except Exception:
@@ -306,26 +314,13 @@ def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
                 "submitted": submitted, "server_advanced": False, "server_completed": False}
     desktop_after = after["knowledge_progress_percent"]
     mobile_after = after["mobile_knowledge_progress_percent"]
-    # A server may commit the knowledge record after acknowledging the log.
-    # Retry ONLY the read once, never the write; a 200 response is not proof.
-    if (desktop_after <= desktop_before
-            and (mobile_after is None or mobile_before is None
-                 or mobile_after <= mobile_before)):
-        import time
-        time.sleep(1.0)
-        try:
-            after = read_knowledge_detail(course_key, knowledge_id)
-            desktop_after = after["knowledge_progress_percent"]
-            mobile_after = after["mobile_knowledge_progress_percent"]
-        except Exception:
-            pass
-    desktop_advanced = desktop_after > desktop_before
-    mobile_advanced = (mobile_before is not None and mobile_after is not None
-                       and mobile_after > mobile_before)
-    advanced = bool(desktop_advanced or mobile_advanced)
-    completed = (desktop_after >= 100
-                 and (mobile_after is None or mobile_after >= 100)
-                 and not after["progress_sources_disagree"])
+    if (mobile_before is None) != (mobile_after is None):
+        return {"knowledge_id": str(knowledge_id), "state": "verification_unavailable",
+                "submitted": submitted, "server_advanced": False, "server_completed": False}
+    before_progress = effective_knowledge_progress(desktop_before, mobile_before)
+    after_progress = effective_knowledge_progress(desktop_after, mobile_after)
+    advanced = after_progress > before_progress
+    completed = advanced and after_progress >= 100
     return {
         "knowledge_id": str(knowledge_id),
         "state": "completed" if completed and advanced else "advanced" if advanced else "unchanged",

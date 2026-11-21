@@ -880,19 +880,19 @@ def test_zero_resource_ai_point_uses_existing_worker_and_server_readback(tmp_pat
     Manager.progress = 0
     Manager.mobile_progress = 0
 
-    # Both signed directories must agree before silently skipping a
-    # zero-resource knowledge point. Desktop=0/mobile=100 is unresolved.
+    # Mobile studyProgress has precedence: its 100 skips an already
+    # completed zero-resource node even if the older ZHS catalog is at 0.
     Manager.mobile_progress = 100
-    conflict, _ = discover_targets(
+    mobile_done, _ = discover_targets(
         {"courseType": "ai", "courseId": 1, "classId": 2}, options)
-    assert len(conflict) == 1
-    assert conflict[0].detail_evidence == "progress_conflict"
+    assert mobile_done == []
+    # Conversely, a stale 100 in ZHS cannot block a genuine mobile 0.
     Manager.mobile_progress = 0
     Manager.progress = 100
-    opposite, _ = discover_targets(
+    mobile_pending, _ = discover_targets(
         {"courseType": "ai", "courseId": 1, "classId": 2}, options)
-    assert len(opposite) == 1
-    assert opposite[0].detail_evidence == "progress_conflict"
+    assert len(mobile_pending) == 1
+    assert mobile_pending[0].detail_evidence == "catalog_empty"
     Manager.progress = 0
 
     # A non-empty official catalog and an empty ZHS resource endpoint is a

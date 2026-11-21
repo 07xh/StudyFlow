@@ -136,6 +136,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         task.state==="unconfirmed"?(task.exit_code===16?(task.kind==="detail"?"进入记录后服务器进度未增加，未认定完成":"服务器回读状态未增加，未认定任务已完成"):"服务器暂不可核验，尚不能确认写入"):
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
         stale?"队列状态暂不可用 · 请重新读取任务状态":
+        task.state==="running"&&task.kind==="detail"?"正在处理知识点进入记录，结果以服务器学习进度为准":
         task.state==="running"&&task.kind!=="video"?"非视频资源 · 不提供视频位置百分比":
         task.stale?"视频采样中断或一直没有有效数值；是否仍在播放尚需核对运行状态":
         task.playback_phase==="paused"?"检测到原程序处于暂停阶段；不将暂停计时当作播放进度":
@@ -192,7 +193,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         </button>
       </div>
       {serverComparison&&<p role="status" className="sf-muted">{serverComparison}</p>}
-      {detail.progress_sources_disagree&&<p role="status">两个官方目录对知识点是否完成的判断不一致，不会按已完成处理；请检查服务器最新状态。</p>}
+      {detail.progress_sources_disagree&&<p role="status">两份目录的进度不同步：优先使用移动端知识点 studyProgress，缺失时回退 ZHS 进度；不因不同步而重复阻止任务。</p>
       {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>}
       {detail.official_resource_count===0&&<p>官方目录记录为 0 项资源。这类知识点没有可调用的视频/PPT 资源心跳，不能凭打开详情就标记学习完成。</p>}
       <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>

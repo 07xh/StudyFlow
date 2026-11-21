@@ -202,8 +202,9 @@ def test_native_zhs_entry_sends_exactly_one_official_log_and_requires_server_cha
             "progress_sources_disagree": False,
             "knowledge_progress_percent": 0,
             "mobile_knowledge_progress_percent": 0}
-    updated = {**base, "knowledge_progress_percent": 100,
-               "mobile_knowledge_progress_percent": 100}
+    updated = {**base, "knowledge_progress_percent": 0,
+               "mobile_knowledge_progress_percent": 100,
+               "progress_sources_disagree": True}
     snapshots = [base, updated]
     monkeypatch.setattr(module, "read_knowledge_detail", lambda *args: snapshots.pop(0))
     outcome = module.enter_knowledge_once("a" * 64, 87)
@@ -263,3 +264,10 @@ def test_native_zhs_entry_rejects_missing_resource_evidence_without_writing(monk
     with pytest.raises(RuntimeError, match="ZHS_DETAIL_RESOURCES_UNCONFIRMED"):
         module.enter_knowledge_once("a" * 64, 87)
     assert calls == []
+
+
+def test_knowledge_progress_uses_mobile_status_not_stale_zhs_snapshot():
+    from studyflow.platforms.zhidao.zhs_knowledge_detail import effective_knowledge_progress
+    assert effective_knowledge_progress(100, 0) == 0
+    assert effective_knowledge_progress(0, 100) == 100
+    assert effective_knowledge_progress(25, None) == 25

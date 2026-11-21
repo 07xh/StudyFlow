@@ -103,7 +103,7 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             # completion or a progress heartbeat.
             from studyflow.platforms.zhidao.zhs_knowledge_detail import (
                 official_catalog_entry, _counts, read_course_catalogs,
-                mobile_study_progress,
+                mobile_study_progress, effective_knowledge_progress,
             )
             # Resource counts and mobile studyProgress are distinct server
             # signals. Read each without sending a completion request.
@@ -123,15 +123,11 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                 resources = manager.list_knowledge_resources(cid, cls, kid)
                 mobile_entry = official_catalog_entry(catalogs.get("mobile"), kid)
                 mobile_progress = mobile_study_progress(mobile_entry)
-                desktop_complete = point.study_progress >= 100
-                mobile_complete = mobile_progress is not None and mobile_progress >= 100
-                progress_disagrees = (
-                    mobile_progress is not None and desktop_complete != mobile_complete
-                )
-                if not resources and desktop_complete and not progress_disagrees:
-                    # A verified server-complete knowledge point has no
-                    # resource task to run. When mobile and ZHS disagree,
-                    # fail closed rather than reporting a false completion.
+                if not resources and effective_knowledge_progress(
+                    point.study_progress, mobile_progress,
+                ) >= 100:
+                    # Knowledge completion comes from mobile studyProgress when
+                    # available; the ZHS catalog is its fallback only.
                     continue
                 if not resources and options.get("resource_mode", "all") == "all":
                     # A directory knowledge point can contain detail-page text
@@ -142,7 +138,6 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                     entry = desktop_entry if desktop_entry is not None else mobile_entry
                     catalog_total, _ = _counts(entry)
                     evidence = (
-                        "progress_conflict" if progress_disagrees else
                         "catalog_empty" if catalog_total == 0 else
                         "catalog_mismatch" if catalog_total is not None else
                         "catalog_no_counts" if entry is not None else
