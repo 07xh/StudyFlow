@@ -232,7 +232,7 @@ test('auto mastery task can start and stop within the existing panel',async()=>{
   await act(async()=>{start.props.onClick();});
   const called=state.calls.find(call=>call[0]==='auto.start');
   assert.equal(called[1],key);
-  assert.equal(called[2].target,90);
+  assert.equal(called[2].target,100);
   assert.equal(called[2].max_rounds,3);
   assert.equal(called[2].use_ai,false);
   assert.match(textOf(view.root),/知识点 0\/1/);
