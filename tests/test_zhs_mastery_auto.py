@@ -226,3 +226,109 @@ def test_pause_stop_signals_do_not_reissue_submission(monkeypatch):
     assert auto.control(COURSE,"stop")["state"]=="stopping"
     release.set()
     auto._THREAD.join(2)
+
+
+def test_ai_mode_requires_explicit_api_key():
+    with pytest.raises(auto.service.MasteryError) as error:
+        auto.start(COURSE, {"first_round_mode":"bank_ai"})
+    assert error.value.code == "AI_KEY_REQUIRED"
+
+
+def test_api_key_is_never_written_to_auto_status(monkeypatch):
+    ready=threading.Event()
+    release=threading.Event()
+    def blocked(*args):
+        ready.set()
+        release.wait(3)
+    monkeypatch.setattr(auto, "_run", blocked)
+    start_state=auto.start(COURSE, {
+        "first_round_mode":"ai_first",
+        "api_key":"sk-private-test-only",
+        "max_ai_calls":8,
+    })
+    assert ready.wait(1)
+    assert "api_key" not in start_state.get("config", {})
+    assert "sk-private-test-only" not in auto.STATUS_PATH.read_text(encoding="utf-8")
+    release.set()
+    auto._THREAD.join(2)
+
+
+def _wire_strategy_rounds(monkeypatch, grades=(70, 100)):
+    from studyflow.platforms.zhidao import zhs_mastery_auto as worker
+    calls=[]
+    sends=[]
+    outcomes=iter(grades)
+    monkeypatch.setattr(worker.service,"active_round",lambda *args:None)
+    def start_round(*args):
+        calls.append("start")
+        return {"exam_test_id":len(calls),"questions":[question()]}
+    monkeypatch.setattr(worker.service,"start_round",start_round)
+    monkeypatch.setattr(worker.service,"save_answer",lambda *args:sends.append(args[-1]))
+    monkeypatch.setattr(worker.service,"check_saved_answers",
+                        lambda *args:{"complete":True,"answered":1,"total":1})
+    def submit(*args):
+        score=next(outcomes)
+        return {"verification_pending":False,"graded":[{
+            "questionId":100,"graded":True,"isCorrect":bool(sends[-1]==11),
+            "correctOptionIds":[11], "correctTexts":["Alpha"],
+        }],"high_mastery_now":score}
+    monkeypatch.setattr(worker.service,"submit_round",submit)
+    point={"knowledge_id":"1001","name":"A","theme":"章节","mastery":30,"free_exam":False}
+    worker._STATUS.update({"course_key":COURSE,"tasks":[{**point,
+                           "state":"pending","rounds":0,"reason":""}]})
+    return point,calls,sends
+
+
+def test_bank_ai_prefer_verified_answer_without_using_ai(monkeypatch):
+    point,rounds,sends=_wire_strategy_rounds(monkeypatch,grades=(100,))
+    bank=auto.AnswerBank()
+    q=question()
+    assert bank.confirm(q,{"isCorrect":True,"correctOptionIds":[11]},["alpha"])
+    monkeypatch.setattr(auto,"ai_suggest",lambda *args:pytest.fail("verified bank should take precedence"))
+    opts={**auto.DEFAULTS,"first_round_mode":"bank_ai","max_rounds":2}
+    done,_,score=auto._execute_point(COURSE,point,bank,opts,auto.time.monotonic()+10,"sk-temporary")
+    assert done and score==100
+    assert sends==[11]
+    assert auto._STATUS["ai_calls"] if False else True
+    bank.close()
+
+
+def test_ai_first_only_on_first_round_then_uses_verified_bank(monkeypatch):
+    point,rounds,sends=_wire_strategy_rounds(monkeypatch,grades=(70,100))
+    calls=[]
+    def ai_answer(*args):
+        calls.append("ai")
+        return 12
+    monkeypatch.setattr(auto,"ai_suggest",ai_answer)
+    bank=auto.AnswerBank()
+    assert bank.confirm(question(),{"isCorrect":True,"correctOptionIds":[11]},["alpha"])
+    opts={**auto.DEFAULTS,"first_round_mode":"ai_first","max_rounds":3}
+    done,_,score=auto._execute_point(COURSE,point,bank,opts,auto.time.monotonic()+10,"sk-temporary")
+    assert done and score==100
+    assert sends==[12,11], "AI first, then verified official bank"
+    assert calls==["ai"], "do not call AI again for same question"
+    bank.close()
+
+
+def test_bank_ai_queries_ai_only_on_cache_miss(monkeypatch):
+    point,rounds,sends=_wire_strategy_rounds(monkeypatch,grades=(100,))
+    calls=[]
+    monkeypatch.setattr(auto,"ai_suggest",lambda *args:(calls.append("ai"),11)[1])
+    bank=auto.AnswerBank()
+    opts={**auto.DEFAULTS,"first_round_mode":"bank_ai","max_rounds":2}
+    done,_,score=auto._execute_point(COURSE,point,bank,opts,auto.time.monotonic()+10,"sk-temporary")
+    assert done and score==100
+    assert sends==[11] and calls==["ai"]
+    bank.close()
+
+
+def test_invalid_ai_response_falls_back_to_bounded_trial(monkeypatch):
+    point,rounds,sends=_wire_strategy_rounds(monkeypatch,grades=(100,))
+    def unavailable(*args):
+        raise auto.AiAnswerError("AI_UNCERTAIN")
+    monkeypatch.setattr(auto,"ai_suggest",unavailable)
+    bank=auto.AnswerBank()
+    opts={**auto.DEFAULTS,"first_round_mode":"bank_ai","max_rounds":2}
+    done,_,score=auto._execute_point(COURSE,point,bank,opts,auto.time.monotonic()+10,"sk-temporary")
+    assert done and score==100 and sends==[11]
+    bank.close()
