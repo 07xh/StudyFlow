@@ -861,7 +861,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
             autoVerifyActive={autoVerify.enabled&&autoVerify.courseId===course.course_id&&
               platforms.zhidao.status==="connected"}/>
         </CollapsibleSection>
-        <CollapsibleSection id={scope+"mastery"} title="AI 掌握度" defaultExpanded={false}>
+        <CollapsibleSection id={scope+"mastery"} title="AI 掌握度" defaultExpanded={false} lazy>
           {course.course_type==="ai"
             ?<MasteryPanel key={"mastery:"+course.course_id} courseKey={course.course_id}
               courseTitle={course.title} desktop={desktop}/>

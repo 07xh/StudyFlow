@@ -9,6 +9,13 @@ interface Props{
   defaultExpanded?:boolean;
   /** Positive request counter opens this section even if previously collapsed. */
   expandRequest?:number;
+  /**
+   * 首次展开前不挂载 children（展开过一次后常驻，收起也不再卸载）。
+   *
+   * 默认 false：播放器、监控这类组件必须一直活着。只有"一挂载就去读网络"的面板
+   * 才需要这个开关，否则每次打开课程都会在后台替用户发请求。
+   */
+  lazy?:boolean;
 }
 
 const STORAGE_PREFIX="studyflow.section.expanded.v1.";
@@ -26,9 +33,11 @@ function initialExpanded(id:string,fallback:boolean):boolean{
  * Keeps children mounted while folded, so active playback and progress
  * monitors are not restarted or silently cancelled by visual preferences.
  */
-export function CollapsibleSection({id,title,children,defaultExpanded=true,expandRequest=0}:Props){
+export function CollapsibleSection({id,title,children,defaultExpanded=true,expandRequest=0,lazy=false}:Props){
   const controlsId=useId();
   const [expanded,setExpanded]=useState(()=>initialExpanded(id,defaultExpanded));
+  // 一次性门闩：lazy 段落展开过就不再卸载，收起时保留内部状态。
+  const [everExpanded,setEverExpanded]=useState(expanded);
 
   useEffect(()=>{
     // The section can be reused for another course without leaking its state.
@@ -38,6 +47,10 @@ export function CollapsibleSection({id,title,children,defaultExpanded=true,expan
   useEffect(()=>{
     if(expandRequest>0)setExpanded(true);
   },[expandRequest]);
+
+  useEffect(()=>{
+    if(expanded)setEverExpanded(true);
+  },[expanded]);
 
   function toggle(){
     setExpanded(previous=>{
@@ -56,7 +69,7 @@ export function CollapsibleSection({id,title,children,defaultExpanded=true,expan
       <ChevronDown size={17} className={expanded?"":"sf-fold-chevron-closed"}/>
     </button>
     <div className="sf-fold-body" id={controlsId} hidden={!expanded}>
-      {children}
+      {lazy&&!everExpanded?null:children}
     </div>
   </section>;
 }

@@ -135,3 +135,31 @@ test('mastery panel refuses to run outside the desktop shell',async()=>{
   assert.match(textOf(view.root),/需要在桌面版中运行/);
   assert.equal(state.calls.length,0,'未连接桌面时不应该发起请求');
 });
+
+test('lazy section keeps its panel unmounted until first expand, then never drops it',async()=>{
+  // 掌握度段落一旦挂载就会去读网络，所以收起状态下不能替用户先请求一轮；
+  // 展开过之后要常驻，否则收起再展开会丢掉还没保存的作答。
+  const {CollapsibleSection}=load('ui/CollapsibleSection.tsx');
+  let live=0;
+  const Child=()=>{
+    React.useEffect(()=>{live+=1;return()=>{live-=1;};},[]);
+    return React.createElement('p',null,'面板内容');
+  };
+  let view;
+  await act(async()=>{
+    view=create(React.createElement(CollapsibleSection,
+      {id:'test:lazy',title:'AI 掌握度',defaultExpanded:false,lazy:true},
+      React.createElement(Child)));
+  });
+  const toggle=()=>view.root.findAllByType('button')[0];
+  assert.equal(live,0,'收起状态不该挂载面板');
+
+  await act(async()=>{toggle().props.onClick();});
+  assert.equal(live,1);
+  assert.match(textOf(view.root),/面板内容/);
+
+  await act(async()=>{toggle().props.onClick();});
+  assert.equal(live,1,'收起只隐藏，不卸载');
+  await act(async()=>{toggle().props.onClick();});
+  assert.equal(live,1,'重新展开不应重新挂载，否则作答草稿会丢');
+});
