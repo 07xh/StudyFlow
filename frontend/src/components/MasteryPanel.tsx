@@ -349,7 +349,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
       {autoAi&&<p className="sf-muted">启用 AI 会向 DeepSeek 发送当前习题题干与选项；密钥不写入本地配置。</p>}
       <div className="sf-mastery-round-actions">
         {!auto?.running
-          ?<button type="button" disabled={autoBusy||!desktop||!catalog||(autoAi&&!autoKey.trim())}
+          ?<button type="button" disabled={autoBusy||!desktop||!catalog||Boolean(round)||(autoAi&&!autoKey.trim())}
               onClick={()=>void startAuto()}>启动后台自动习题</button>
           :<>
             {auto.state==="paused"
@@ -379,7 +379,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
           const value=item.mastery??null;
           const active=selected?.knowledge_id===item.knowledge_id;
           return <li key={item.knowledge_id} className={active?"is-active":undefined}>
-            <button type="button" className="sf-mastery-row" onClick={()=>void openKnowledge(item)}>
+            <button type="button" className="sf-mastery-row" disabled={Boolean(auto?.running)} onClick={()=>void openKnowledge(item)}>
               <span className={`sf-mastery-dot ${bandClass(value)}`} aria-hidden="true"/>
               <span className="sf-mastery-row-main">
                 <strong>{item.name}</strong>
@@ -414,11 +414,11 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
           </p>
         </div>
         <div className="sf-mastery-round-actions">
-          <button className="secondary" type="button" disabled={Boolean(busy)} onClick={()=>void discard()}>放弃本轮</button>
-          <button className="secondary" type="button" disabled={Boolean(busy)||submissionCheck||!dirtyIds.length} onClick={()=>void saveOnly()}>
+          <button className="secondary" type="button" disabled={Boolean(busy)||Boolean(auto?.running)} onClick={()=>void discard()}>放弃本轮</button>
+          <button className="secondary" type="button" disabled={Boolean(busy)||Boolean(auto?.running)||submissionCheck||!dirtyIds.length} onClick={()=>void saveOnly()}>
             {busy==="save"?"保存中…":`保存答案${dirtyIds.length?`（${dirtyIds.length}）`:""}`}
           </button>
-          <button type="button" disabled={Boolean(busy)} onClick={()=>void submitRound()}>
+          <button type="button" disabled={Boolean(busy)||Boolean(auto?.running)} onClick={()=>void submitRound()}>
             {busy==="submit"?"核验中…":submissionCheck?"核验提交状态":"提交本轮"}
           </button>
         </div>
@@ -439,7 +439,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
             <p className="sf-mastery-stem">{question.content}</p>
             {fill?<input className="sf-mastery-fill" type="text"
               placeholder="多个空用 | 分隔，例如：生产力|生产关系"
-              disabled={submissionCheck}
+              disabled={submissionCheck||Boolean(auto?.running)}
               value={typeof value==="string"?value:(Array.isArray(value)?value.join("|"):"")}
               onChange={event=>{
                 const raw=event.target.value;
@@ -454,7 +454,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
                   :value===option.id;
                 return <li key={option.id}>
                   <label className={picked?"is-picked":undefined}>
-                    <input type={multi?"checkbox":"radio"} name={key} checked={picked} disabled={submissionCheck}
+                    <input type={multi?"checkbox":"radio"} name={key} checked={picked} disabled={submissionCheck||Boolean(auto?.running)}
                       onChange={()=>toggleOption(question.question_id,option.id,multi)}/>
                     <span>{option.content||`选项 ${option.sort??""}`}</span>
                   </label>
