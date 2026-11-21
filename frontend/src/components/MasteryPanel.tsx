@@ -57,7 +57,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
   const [auto,setAuto]=useState<MasteryAutoStatus|null>(null);
   const [autoBusy,setAutoBusy]=useState(false);
   const [autoError,setAutoError]=useState("");
-  const [autoTarget,setAutoTarget]=useState(90);
+  const [autoTarget,setAutoTarget]=useState(100);
   const [autoRounds,setAutoRounds]=useState(3);
   const [autoNext,setAutoNext]=useState(true);
   const [autoKnowledge,setAutoKnowledge]=useState("");
