@@ -27,7 +27,7 @@ export type LegacyTaskStatus = {
 
 export type ZhsQueueSnapshot={
   concurrency:number;state:string;stale:boolean;
-  tasks:Array<{task_id:string;name:string|null;knowledge_id?:number|null;detail_evidence?:"catalog_empty"|"catalog_mismatch"|"catalog_unavailable"|null;chapter_key?:string|null;chapter_name?:string|null;kind:"video"|"ppt"|"article"|"other"|"detail";
+  tasks:Array<{task_id:string;name:string|null;knowledge_id?:string|null;detail_evidence?:"catalog_empty"|"catalog_mismatch"|"catalog_unavailable"|null;chapter_key?:string|null;chapter_name?:string|null;kind:"video"|"ppt"|"article"|"other"|"detail";
     requirement?:"required"|"optional"|"unknown"|"shared"|null;
     state:"queued"|"running"|"exited"|"failed"|"stopped"|"unconfirmed"|"informational"|"unknown";
     percent:number|null;playback_phase?:"playing"|"paused"|"answering"|null;stale:boolean;exit_code:number|null}>;
