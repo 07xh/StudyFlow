@@ -58,8 +58,12 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
   const [status,setStatus]=useState<HeartbeatStatus|null>(null);
   const [logs,setLogs]=useState<HeartbeatLog[]>([]);
   const [message,setMessage]=useState("");
+  const [statusError,setStatusError]=useState("");
+  const [logsUnavailable,setLogsUnavailable]=useState(false);
   const [busy,setBusy]=useState(false);
   const refreshInFlight=useRef(new Set<number>());
+  const logsInFlight=useRef(new Map<number,string>());
+  const activeRunId=useRef("");
   const courseRevision=useRef(0);
   const selectedCourse=useRef(course.course_id);
   selectedCourse.current=course.course_id;
@@ -72,22 +76,54 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     refreshInFlight.current.add(revision);
     const isCurrent=()=>courseRevision.current===revision&&selectedCourse.current===course.course_id;
     try{
-      const [nextStatus,nextLogs]=await Promise.all([
-        request<HeartbeatStatus>({operation:"xuexitong.heartbeat.status",course_id:course.course_id}),
-        request<{ok:boolean;events:HeartbeatLog[]}>({operation:"xuexitong.heartbeat.logs",limit:30,course_id:course.course_id}),
-      ]);
+      // Status is authoritative. A failed or slow *log* request must not
+      // hold up fresh task state or leave obsolete action controls enabled.
+      const nextStatus=await request<HeartbeatStatus>({
+        operation:"xuexitong.heartbeat.status",course_id:course.course_id
+      });
       if(!isCurrent())return;
       if(nextStatus.course_key!==course.course_id)throw new Error("INVALID_IPC_RESPONSE");
       setStatus(nextStatus);
-      setLogs(nextStatus.run_id?(nextLogs.events||[]).filter(entry=>entry.run_id===nextStatus.run_id):[]);
+      setStatusError("");
+      if(activeRunId.current!==nextStatus.run_id){
+        activeRunId.current=nextStatus.run_id;
+        setLogs([]);
+      }
+      // Keep at most one log read per run and course generation. A new run
+      // can still fetch its own logs even when an older log read is stuck.
+      if(logsInFlight.current.get(revision)!==nextStatus.run_id){
+        const requestedRun=nextStatus.run_id;
+        logsInFlight.current.set(revision,requestedRun);
+        void request<{ok:boolean;events:HeartbeatLog[]}>({
+          operation:"xuexitong.heartbeat.logs",limit:30,course_id:course.course_id
+        }).then(nextLogs=>{
+          if(!isCurrent()||activeRunId.current!==requestedRun)return;
+          setLogs(requestedRun?(nextLogs.events||[]).filter(entry=>entry.run_id===requestedRun):[]);
+          setLogsUnavailable(false);
+        }).catch(()=>{
+          if(!isCurrent()||activeRunId.current!==requestedRun)return;
+          setLogs([]);
+          setLogsUnavailable(true);
+        }).finally(()=>{
+          if(logsInFlight.current.get(revision)===requestedRun)
+            logsInFlight.current.delete(revision);
+        });
+      }
     }catch(error){
-      if(isCurrent())setMessage(friendlyBridgeError(error));
+      if(isCurrent()){
+        activeRunId.current="";
+        setStatus(null);
+        setLogs([]);
+        setStatusError(friendlyBridgeError(error));
+      }
     }finally{refreshInFlight.current.delete(revision);}
   },[course.course_id]);
 
   useEffect(()=>{
     courseRevision.current++;
+    activeRunId.current="";
     setStatus(null);setLogs([]);setMessage("");
+    setStatusError("");setLogsUnavailable(false);
     if(desktop)void refresh();
     // React's Node-based test renderer has no window. The desktop app does.
     if(typeof window==="undefined"||!desktop)return ()=>{courseRevision.current++;};
@@ -198,7 +234,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     </div>
 
     <div className="sf-actions actions">
-      <button type="button" className="primary" disabled={busy||!desktop||running||!validConfig} onClick={()=>void control("start")}>开始</button>
+      <button type="button" className="primary" disabled={busy||!desktop||running||!validConfig||Boolean(statusError)} onClick={()=>void control("start")}>开始</button>
       <button type="button" className="secondary" disabled={busy||!desktop||!controls?.pause} onClick={()=>void control("pause")}>暂停</button>
       <button type="button" className="secondary" disabled={busy||!desktop||!controls?.resume} onClick={()=>void control("resume")}>继续</button>
       <button type="button" className="secondary" disabled={busy||!desktop||!controls?.stop} onClick={()=>void control("stop")}>停止</button>
@@ -206,10 +242,11 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     </div>
 
     {message?<p className="sf-message">{message}</p>:null}
+    {statusError?<p role="alert">后台状态待核实，已隐藏过期数据；请刷新后操作。{statusError}</p>:null}
 
     <h4 className="sf-xxt-section-heading">运行概览</h4>
     <dl className="sf-stat-grid">
-      <div><dt>运行状态</dt><dd>{!currentStatus?"尚未读取":running?(paused?"已暂停":"运行中"):tasks.length?"历史记录（未运行）":"空闲"}</dd></div>
+      <div><dt>运行状态</dt><dd>{statusError?"状态待核实":!currentStatus?"尚未读取":running?(paused?"已暂停":"运行中"):tasks.length?"历史记录（未运行）":"空闲"}</dd></div>
       <div><dt>本地已申报</dt><dd>{currentStatus?.heartbeats.sent??0}</dd></div>
       <div><dt>服务端确认</dt><dd>{currentStatus?.heartbeats.server_confirmed??0}</dd></div>
       <div><dt>正在运行章节</dt><dd>{queue?`${queue.active_chapters} / ${queue.total_chapters}`:"—"}</dd></div>
@@ -257,7 +294,7 @@ export function XuexitongHeartbeatPanel({course,desktop}:{
     </div>}
 
     <details className="sf-xxt-log">
-      <summary>运行日志（最近 {logs.length} 条）</summary>
+      <summary>运行日志（最近 {logs.length} 条）{logsUnavailable?" · 日志暂不可用":""}</summary>
       <ul className="sf-log-list">
         {logs.map((entry,index)=><li key={`${entry.event}-${entry.at}-${index}`}>
           {entry.event}{entry.end_reason?` · ${String(entry.end_reason)}`:""}
