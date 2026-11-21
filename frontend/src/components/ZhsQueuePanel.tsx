@@ -104,6 +104,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
           ?"官方学习目录确认此知识点资源总数为 0。没有可上报的视频或文章资源；详情内容可只读查看，不代表服务端已增加学习进度。"
           :task.detail_evidence==="catalog_mismatch"
           ?"官方学习目录显示有资源，但 ZHS 的资源列表为空；属于接口不一致，不能冒充无资源学习完成。"
+          :task.detail_evidence==="catalog_no_counts"
+          ?"移动版学习目录已确认此知识点存在，但未提供资源总数；不能把未知数量当作 0，也不能据此断言已完成。"
           :"资源列表为空，但官方资源计数尚未核实；请检查登录、同步状态与知识点详情。"
         ):
         task.state==="exited"?"进程已退出，学习记录待平台核验":
