@@ -245,6 +245,50 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
+        // The mastery worker shares the existing ZHS sidecar session with the
+        // manual exercise panel. Check the same course identity at native IPC.
+        "zhidao.mastery.auto.start" if request.get("course_key").and_then(|x| x.as_str())
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
+            && request.get("settings").and_then(|x| x.as_object()).is_some_and(|opts| {
+                let mode = opts.get("first_round_mode").and_then(|v| v.as_str()).unwrap_or("bank_only");
+                matches!(mode, "bank_only" | "bank_ai" | "ai_first")
+                    && opts.get("target").and_then(|v| v.as_u64()).is_some_and(|n| (1..=100).contains(&n))
+                    && opts.get("max_rounds").and_then(|v| v.as_u64()).is_some_and(|n| (1..=30).contains(&n))
+                    && opts.get("max_minutes").and_then(|v| v.as_u64()).is_some_and(|n| (1..=720).contains(&n))
+                    && opts.get("stagnation_rounds").and_then(|v| v.as_u64()).is_some_and(|n| (1..=10).contains(&n))
+                    && opts.get("max_ai_calls").and_then(|v| v.as_u64()).is_some_and(|n| (1..=100).contains(&n))
+                    && opts.get("api_key").map_or(mode == "bank_only", |k| k.as_str()
+                        .is_some_and(|s| s.len() <= 256 && !s.contains('\r') && !s.contains('\n')
+                            && (mode == "bank_only" || !s.trim().is_empty())))
+            }) => Ok(()),
+        "zhidao.mastery.auto.status" if request.get("course_key").and_then(|x| x.as_str())
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
+        "zhidao.mastery.auto.control" if request.get("course_key").and_then(|x| x.as_str())
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
+            && matches!(request.get("action").and_then(|v| v.as_str()), Some("pause" | "resume" | "stop")) => Ok(()),
+        "zhidao.mastery.catalog" | "zhidao.mastery.round.active"
+        | "zhidao.mastery.round.start" | "zhidao.mastery.round.submit"
+        | "zhidao.mastery.round.discard" | "zhidao.mastery.wrong"
+            if request.get("course_key").and_then(|x| x.as_str())
+                .is_some_and(|key| key.len() == 64
+                    && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
+            && (operation == "zhidao.mastery.catalog"
+                || request.get("knowledge_id").and_then(|v| v.as_str())
+                    .is_some_and(|id| !id.is_empty() && id.len() <= 24
+                        && id.bytes().all(|c| c.is_ascii_digit()))) => Ok(()),
+        "zhidao.mastery.round.answer" if request.get("course_key").and_then(|x| x.as_str())
+            .is_some_and(|key| key.len() == 64
+                && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
+            && request.get("knowledge_id").and_then(|v| v.as_str())
+                .is_some_and(|id| !id.is_empty() && id.len() <= 24
+                    && id.bytes().all(|c| c.is_ascii_digit()))
+            && request.get("question_id").and_then(|v| v.as_str())
+                .is_some_and(|id| !id.is_empty() && id.len() <= 24
+                    && id.bytes().all(|c| c.is_ascii_digit()))
+            && request.get("answer").is_some_and(|v| v.is_string() || v.is_number() || v.is_array()) => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong" | "ucampus")) => Ok(()),
         "ucampus.monitor.status" | "ucampus.monitor.tick" => Ok(()),
         "ucampus.monitor.configure" if request.get("enabled").and_then(|v| v.as_bool())
