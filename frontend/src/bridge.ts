@@ -170,7 +170,8 @@ export type ZhsKnowledgeDetail = {
   official_finished_resource_count:number|null;catalog_mismatch:boolean;
   catalog_source:"desktop"|"mobile"|null;detail_source:"desktop"|"mobile";
   mobile_knowledge_progress_percent:number|null;
-  knowledge_progress_percent:number;verification:"read_only";
+  knowledge_progress_percent:number;progress_sources_disagree:boolean;
+  verification:"read_only";
   verified_at:string;study_record_submitted:false;
 };
 
