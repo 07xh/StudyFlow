@@ -9,6 +9,7 @@ pub struct QueueTask {
     pub task_id: String,
     pub name: Option<String>,
     pub knowledge_id: Option<u64>,
+    pub detail_evidence: Option<String>,
     pub chapter_key: Option<String>,
     pub chapter_name: Option<String>,
     pub kind: String,
@@ -93,6 +94,15 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
             }
         };
         if (kind == "detail") != knowledge_id.is_some() { return None; }
+        let detail_evidence = match row.get("detail_evidence") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let value = raw.as_str()?;
+                if !matches!(value, "catalog_empty" | "catalog_mismatch" | "catalog_unavailable") { return None; }
+                Some(value.to_owned())
+            }
+        };
+        if kind != "detail" && detail_evidence.is_some() { return None; }
         let chapter_key = match row.get("chapter_key") {
             None | Some(Value::Null) => None,
             Some(raw) => {
@@ -144,7 +154,7 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         ) {
             return None;
         }
-        tasks.push(QueueTask {task_id: id.into(), name, knowledge_id, chapter_key, chapter_name,
+        tasks.push(QueueTask {task_id: id.into(), name, knowledge_id, detail_evidence, chapter_key, chapter_name,
             kind: kind.into(), requirement, state: row_state.into(),
             percent, playback_phase, stale: row_stale, exit_code});
     }
@@ -268,6 +278,7 @@ mod tests {
         data["tasks"][0]["name"] = json!("历任校首");
         data["tasks"][0]["kind"] = json!("detail");
         data["tasks"][0]["knowledge_id"] = json!(87);
+        data["tasks"][0]["detail_evidence"] = json!("catalog_empty");
         data["tasks"][0]["state"] = json!("informational");
         data["tasks"][0]["percent"] = Value::Null;
         let decoded = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
