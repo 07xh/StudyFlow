@@ -252,7 +252,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
             && request.get("settings").and_then(|x| x.as_object()).is_some_and(|opts| {
                 let mode = opts.get("first_round_mode").and_then(|v| v.as_str()).unwrap_or("bank_only");
-                matches!(mode, "bank_only" | "bank_ai" | "ai_first")
+                matches!(mode, "bank_only" | "bank_ai" | "ai_first" | "arbitrary_first")
                     && opts.get("target").and_then(|v| v.as_u64()).is_some_and(|n| (1..=100).contains(&n))
                     && opts.get("max_rounds").and_then(|v| v.as_u64()).is_some_and(|n| (1..=30).contains(&n))
                     && opts.get("max_minutes").and_then(|v| v.as_u64()).is_some_and(|n| (1..=720).contains(&n))
