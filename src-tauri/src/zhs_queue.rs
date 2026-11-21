@@ -100,7 +100,7 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
             None | Some(Value::Null) => None,
             Some(raw) => {
                 let value = raw.as_str()?;
-                if !matches!(value, "catalog_empty" | "catalog_mismatch" | "catalog_no_counts" | "catalog_unavailable") { return None; }
+                if !matches!(value, "catalog_empty" | "catalog_mismatch" | "catalog_no_counts" | "catalog_unavailable" | "progress_conflict") { return None; }
                 Some(value.to_owned())
             }
         };
