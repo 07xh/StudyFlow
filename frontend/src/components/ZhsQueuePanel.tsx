@@ -1,6 +1,5 @@
 import {useEffect,useRef,useState} from "react";
-import {Square,ExternalLink,RefreshCw} from "lucide-react";
-import {invoke} from "@tauri-apps/api/core";
+import {Square,RefreshCw} from "lucide-react";
 import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type LegacyTaskStatus} from "../legacyPlayback";
 import {friendlyBridgeError,request,type ZhsKnowledgeDetail} from "../bridge";
 
@@ -16,14 +15,13 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const [detail,setDetail]=useState<ZhsKnowledgeDetail|null>(null);
   const [detailBusy,setDetailBusy]=useState(false);
   const [detailMessage,setDetailMessage]=useState("");
-  const [officialBusy,setOfficialBusy]=useState(false);
   const [serverComparison,setServerComparison]=useState("");
   const currentRun=useRef(status.run_id);
   currentRun.current=status.run_id;
   useEffect(()=>{
     setRequested(new Set());setMessage("");
     setDetail(null);setDetailMessage("");setDetailBusy(false);
-    setOfficialBusy(false);setServerComparison("");
+    setServerComparison("");
   },[status.run_id]);
   const queue=status.zhs_queue;
   if(!queue)return null;
@@ -84,7 +82,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
           setServerComparison("已刷新服务器状态，但两个接口的数据口径不同，无法确认本次增加。");
         }
       }else{
-        setServerComparison("已建立服务器进度基线。请正常学习后再次点击「核验服务器进度」，确认是否真实增加。");
+        setServerComparison("已建立 ZHS 服务器进度基线。目前无资源知识点尚未有经验证的执行心跳；重新核验只会读取真实服务器状态。");
       }
     }catch(error){
       if(run!==currentRun.current)return;
@@ -92,25 +90,6 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       setDetailMessage("知识点详情读取失败："+friendlyBridgeError(error));
     }finally{
       if(run===currentRun.current)setDetailBusy(false);
-    }
-  }
-  async function openOfficialKnowledge(){
-    const item=detail;
-    const courseKey=status.course_id;
-    const run=status.run_id;
-    if(!item||!courseKey||officialBusy)return;
-    setOfficialBusy(true);setDetailMessage("");
-    try{
-      await invoke("zhidao_zhs_open_knowledge",{
-        courseKey,knowledgeId:item.knowledge_id
-      });
-      if(run!==currentRun.current)return;
-      setServerComparison("已尝试打开知到官方知识点学习页。官方浏览器可能需要重新登录；请在网页内实际阅读，返回后点击「核验服务器进度」。仅打开页面不保证学习进度改变。");
-    }catch{
-      if(run!==currentRun.current)return;
-      setDetailMessage("官方知识点页面未能打开。请检查是否已登录 ZHS，以及课程、知识点是否仍可用。");
-    }finally{
-      if(run===currentRun.current)setOfficialBusy(false);
     }
   }
   type Row=NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number];
@@ -205,11 +184,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         移动版目录学习进度：{detail.mobile_knowledge_progress_percent}%（独立回读，并非本次操作新增）
       </p>}
       <div className="actions">
-        <button className="secondary" type="button" disabled={officialBusy||detailBusy}
-          onClick={()=>void openOfficialKnowledge()}>
-          <ExternalLink size={14}/>{officialBusy?"打开中…":"在知到官网实际学习此知识点"}
-        </button>
-        <button className="secondary" type="button" disabled={detailBusy||officialBusy}
+        <button className="secondary" type="button" disabled={detailBusy}
           onClick={()=>void inspectDetail(detail.knowledge_id)}>
           <RefreshCw size={14}/>{detailBusy?"核验中…":"核验服务器进度"}
         </button>
