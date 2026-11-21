@@ -47,6 +47,7 @@ CASES = [
             "max_videos": 7,
             "stop_on_error": True,
             "concurrency": 3,
+            "parallel_mode": "resources",
             "completion_threshold": 80,
         },
         ("concurrency", 99),
