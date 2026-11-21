@@ -193,7 +193,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       </div>
       {serverComparison&&<p role="status" className="sf-muted">{serverComparison}</p>}
       {detail.progress_sources_disagree&&<p role="status">两个官方目录对知识点是否完成的判断不一致，不会按已完成处理；请检查服务器最新状态。</p>}
-      {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>
+      {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>}
       {detail.official_resource_count===0&&<p>官方目录记录为 0 项资源。这类知识点没有可调用的视频/PPT 资源心跳，不能凭打开详情就标记学习完成。</p>}
       <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>
         {detail.content_available?detail.content:"官方知识点接口未提供可展示的正文；请在知到原页面查看完整详情。"}
