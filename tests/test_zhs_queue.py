@@ -800,17 +800,26 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     ai.__path__ = []
     bootstrap = ModuleType("zhs.cli.bootstrap")
     course_module = ModuleType("zhs.ai.course")
-    session = NS(close=lambda: None, urls=NS(ai="https://kg-ai-run.zhihuishu.com"))
+    session = NS(close=lambda: None, urls=NS(
+        ai="https://kg-ai-run.zhihuishu.com",
+        ai_task="https://kg-run-student.zhihuishu.com"))
     bootstrap.load_config_and_session = lambda **_kwargs: (None, session)
 
     class Manager:
         progress = 0
         catalog_total = 0
+        desktop_missing = False
         def __init__(self, _session): pass
 
         def _ai_query(self, url, params):
-            assert url.endswith("/get-course-knowledge-dic")
             assert params == {"courseId": 1, "classId": 2}
+            if url.endswith("/get-course-knowledge-dic") and self.desktop_missing:
+                raise RuntimeError("desktop catalog temporarily unavailable")
+            if url.endswith("/get-course-knowledge-dic-wx-three"):
+                return {"data": {"themeList": [{"subThemeList": [{"knowledgeList": [
+                    {"knowledgeId": 87, "studyProgress": 0}
+                ]}]}]}}
+            assert url.endswith("/get-course-knowledge-dic")
             return {"data": {"themeList": [{"subThemeList": [{"knowledgeList": [
                 {"knowledgeId": 87, "resourceCount": self.catalog_total,
                  "finishedResourceCount": 0}
@@ -870,6 +879,14 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     assert len(mismatch) == 1
     assert mismatch[0].detail_evidence == "catalog_mismatch"
     Manager.catalog_total = 0
+
+    # Mobile 2026 endpoint lacks resource totals: never call 0/0 completed.
+    Manager.desktop_missing = True
+    mobile, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(mobile) == 1
+    assert mobile[0].detail_evidence == "catalog_no_counts"
+    Manager.desktop_missing = False
 
     # Video-only selection should not create a synthetic detail task.
     video_only, _ = discover_targets(
