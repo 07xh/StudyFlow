@@ -3,8 +3,8 @@ import {Square} from "lucide-react";
 import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type LegacyTaskStatus} from "../legacyPlayback";
 
 const labels:Record<string,string>={queued:"排队中",running:"运行中",exited:"本轮结束 · 待核验",
-  failed:"执行失败",unconfirmed:"服务器未确认",stopped:"已停止",unknown:"状态待核实"};
-const kinds={video:"视频",ppt:"PPT",article:"文章",other:"其他资源"};
+  failed:"执行失败",unconfirmed:"服务器未确认",stopped:"已停止",informational:"只有详情 · 暂无可执行资源",unknown:"状态待核实"};
+const kinds={video:"视频",ppt:"PPT",article:"文章",other:"其他资源",detail:"知识点详情"};
 const requirementLabels:Record<string,string>={required:"必学",optional:"选学",unknown:"分类待核验",shared:"共享课"};
 export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   status:LegacyTaskStatus;unavailable?:boolean;onRefresh:()=>Promise<void>;
@@ -24,6 +24,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const failed=ended.filter(t=>t.state==="failed");
   const unconfirmed=ended.filter(t=>t.state==="unconfirmed");
   const stopped=ended.filter(t=>t.state==="stopped");
+  const informational=ended.filter(t=>t.state==="informational");
   async function stop(id:string){
     const run=status.run_id;
     if(!run||!active||requested.has(id))return;
@@ -53,8 +54,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
           disabled={!active||pendingStop} onClick={()=>void stop(task.task_id)}><Square size={13}/>停止此项</button>}
       </div>
       <strong className="sf-ykt-video-name" title={task.name??undefined}>{task.name??"未命名资源"}</strong>
-      <div className="sf-zhs-now-progress-row"><small>本地片段位置</small>
-        <strong>{percent!=null?percent.toFixed(1)+"%":"—"}</strong></div>
+      {task.kind!=="detail"&&<div className="sf-zhs-now-progress-row"><small>本地片段位置</small>
+        <strong>{percent!=null?percent.toFixed(1)+"%":"—"}</strong></div>}
       {task.state==="running"&&<div
         className={"sf-verified-track sf-zhs-progress-track"+(percent==null?" is-unverified":"")}
         role="progressbar"
@@ -63,7 +64,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         aria-valuetext={percent==null?"等待当前资源的有效进度采样":percent.toFixed(1)+"%"}>
         <span style={{width:percent!=null?percent+"%":"0%"}}/>
       </div>}
-      <small className="sf-muted">{task.state==="exited"?"进程已退出，学习记录待平台核验":
+      <small className="sf-muted">{task.state==="informational"?"目录中可识别此知识点，但资源列表为空。详情页内容不属于视频/PPT任务；未运行原版发送器，也未提交或确认学习记录。":
+        task.state==="exited"?"进程已退出，学习记录待平台核验":
         task.state==="unconfirmed"?(task.exit_code===16?"服务器回读状态未增加，未认定任务已完成":"服务器暂不可核验，尚不能确认写入"):
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
         stale?"队列状态暂不可用 · 请重新读取任务状态":
@@ -104,6 +106,9 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     {waiting.length>0&&<details className="sf-ykt-video-details"><summary>等待队列 · {waiting.length} 项</summary>
       {grouped(waiting.slice(0,100))}
       {waiting.length>100&&<small>显示前 100 项，任务将自动补位。</small>}</details>}
+    {informational.length>0&&<p role="status" className="sf-muted">
+      已识别 {informational.length} 个仅含详情、没有可执行资源的知识点；这些项目只作目录提示，不会伪造资源 ID 或学习完成结果。请在官方详情页核实内容与建设状态。
+    </p>}
     {(failed.length>0||unconfirmed.length>0||stopped.length>0)&&<p role="status" className="sf-muted">
       本轮异常记录：执行失败 {failed.length} 项、服务器未确认 {unconfirmed.length} 项、已停止 {stopped.length} 项。单个视频失败不代表其他视频已完成；若启用了遇错停止，其余运行项也可能提前结束。
       {[...unconfirmed,...failed].slice(0,3).map(item=><span key={item.task_id}> {item.name??"未命名资源"}（退出码 {item.exit_code??"未知"}）</span>)}
