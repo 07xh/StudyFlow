@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState,type KeyboardEvent} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {BookOpen,Database,FileText,ShieldCheck} from "lucide-react";
+import {BookOpen,Database,ExternalLink,FileText,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,request,type ZhidaoDiagnostic,type ZhidaoDocument} from "../bridge";
 import {ConfirmDialog} from "../ui/ConfirmDialog";
 
@@ -114,7 +114,17 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:P
         <button className="secondary sf-destructive-action" disabled={!desktop||busy} onClick={()=>setAction("cache")}>清理课程缓存</button>
         <button className="secondary sf-destructive-action" disabled={!desktop||busy} onClick={()=>setAction("web")}>清除官方网页登录数据</button>
       </div>}
-      {view==="about"&&<div className="sf-zd-legal-actions">{docs.map(item=><button key={item.id} className="text-button" disabled={!desktop||documentBusy} onClick={()=>void openDocument(item.id)}><item.icon size={14}/>{item.label}</button>)}</div>}
+      {view==="about"&&<div className="sf-zd-legal-actions">
+        <a className="text-button" href="https://0701000.xyz/" target="_blank" rel="noopener noreferrer"
+          onClick={event=>{
+            if(!desktop)return;
+            event.preventDefault();
+            void invoke("studyflow_open_author_site").catch(()=>{
+              setMessage("无法打开作者博客，请在浏览器访问 https://0701000.xyz/");
+            });
+          }}><ExternalLink size={14}/>小慌的博客 · 0701000.xyz</a>
+        {docs.map(item=><button key={item.id} className="text-button" disabled={!desktop||documentBusy} onClick={()=>void openDocument(item.id)}><item.icon size={14}/>{item.label}</button>)}
+      </div>}
       {view==="account"&&diagnostic&&<div className="sf-zd-diagnostic">
         <strong>最近一次连接诊断</strong>
         {diagnostic.lines.length>0
