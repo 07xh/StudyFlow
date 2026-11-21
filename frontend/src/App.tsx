@@ -32,6 +32,7 @@ import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
 import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
 import {ZhidaoCourseDetailPanel} from "./components/ZhidaoCourseDetailPanel";
+import {ZhidaoMasteryPanel} from "./components/ZhidaoMasteryPanel";
 import {StudyFlowConsentGate} from "./components/StudyFlowConsentGate";
 import {ZhidaoActivityPanel} from "./components/ZhidaoActivityPanel";
 import {ZhidaoPlayerMonitor} from "./components/ZhidaoPlayerMonitor";
@@ -854,6 +855,9 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         </>}
       </section>
       {course.platform==="zhidao"?<>
+        {course.course_type==="ai"&&<CollapsibleSection id={scope+"mastery"} title="掌握度" defaultExpanded={false}>
+          <ZhidaoMasteryPanel desktop={desktop} courseTitle={course.title} courseId={course.course_id}/>
+        </CollapsibleSection>}
         <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
           <ZhidaoCourseDetailPanel key={"chapters:"+course.course_id} course={course} desktop={desktop}
             onCoursesUpdated={updateCourses}

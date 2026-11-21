@@ -1,5 +1,6 @@
 mod run_identity;
 mod legacy_tasks;
+mod mastery_tasks;
 mod zhs_queue;
 mod zhidao_player;
 
@@ -207,7 +208,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     match operation {
         "ping" | "platform.status" | "yuketang.clear" | "updates.settings.get" | "updates.latest"
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
-        | "zhidao.progress.sync" | "zhidao.player.settings.get"
+        | "zhidao.progress.sync" | "zhidao.player.settings.get" | "zhidao.mastery.settings.get"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
         | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
@@ -239,6 +240,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             && request.get("course_key").map_or(true, |key| key.as_str()
                 .is_some_and(|key| key.len() == 64
                     && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))) => Ok(()),
+        "zhidao.mastery.settings.save" if request.get("settings").map_or(false, |x| x.is_object()) => Ok(()),
         "zhidao.player.settings.save" if request.get("settings").map_or(false, |x| x.is_object()) => Ok(()),
         "zhidao.course.detail" if request.get("course_key").and_then(|x| x.as_str())
             .is_some_and(|key| key.len() == 64
@@ -689,6 +691,7 @@ async fn ucampus_login_window_close(app: tauri::AppHandle, mode: Option<String>)
 // so the next installer can replace the bundled bridge executable.
 fn shutdown_owned_services(app: &tauri::AppHandle) {
     app.state::<legacy_tasks::LegacyTasks>().shutdown();
+    app.state::<mastery_tasks::MasteryTasks>().shutdown();
     app.state::<zhidao_player::ZhidaoPlayerManager>().shutdown();
     let qr_worker = app.state::<QrBridgeState>();
     if let Ok(mut guard) = qr_worker.lock() {
@@ -823,6 +826,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(Mutex::new(None::<QrBridgeWorker>)))
         .manage(legacy_tasks::LegacyTasks::default())
+        .manage(mastery_tasks::MasteryTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
             bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site,
@@ -831,7 +835,9 @@ pub fn run() {
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
             zhidao_player::zhidao_player_clear_web_profile,
             legacy_tasks::legacy_start, legacy_tasks::legacy_status, legacy_tasks::legacy_stop,
-            legacy_tasks::zhs_queue_stop_video
+            legacy_tasks::zhs_queue_stop_video,
+            mastery_tasks::zhidao_mastery_start, mastery_tasks::zhidao_mastery_status,
+            mastery_tasks::zhidao_mastery_stop, mastery_tasks::zhidao_mastery_pause
         ])
         .on_window_event(|window, event| {
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {

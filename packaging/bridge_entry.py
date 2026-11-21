@@ -36,6 +36,9 @@ def _prepare_jsonl_stdout():
 def main() -> int:
     if len(sys.argv) > 1:
         mode = sys.argv[1]
+        if mode == "--zhidao-mastery-http-worker" and len(sys.argv) == 3:
+            from studyflow.platforms.zhidao.mastery_helper.http_worker import main as mastery_main
+            return mastery_main(sys.argv[2])
         if mode == "--zhs-video-worker":
             from studyflow.services.zhs_queue import video_worker
             return video_worker(sys.argv[2:])
