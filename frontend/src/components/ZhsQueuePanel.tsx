@@ -99,7 +99,13 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         aria-valuetext={percent==null?"等待当前资源的有效进度采样":percent.toFixed(1)+"%"}>
         <span style={{width:percent!=null?percent+"%":"0%"}}/>
       </div>}
-      <small className="sf-muted">{task.state==="informational"?"目录中可识别此知识点，但本次资源列表为空。可能只有详情内容或课程尚在建设；未启动原版发送器，也未提交或确认学习记录。":
+      <small className="sf-muted">{task.state==="informational"?(
+          task.detail_evidence==="catalog_empty"
+          ?"官方学习目录确认此知识点资源总数为 0。没有可上报的视频或文章资源；详情内容可只读查看，不代表服务端已增加学习进度。"
+          :task.detail_evidence==="catalog_mismatch"
+          ?"官方学习目录显示有资源，但 ZHS 的资源列表为空；属于接口不一致，不能冒充无资源学习完成。"
+          :"资源列表为空，但官方资源计数尚未核实；请检查登录、同步状态与知识点详情。"
+        ):
         task.state==="exited"?"进程已退出，学习记录待平台核验":
         task.state==="unconfirmed"?(task.exit_code===16?"服务器回读状态未增加，未认定任务已完成":"服务器暂不可核验，尚不能确认写入"):
         task.state==="failed"?"退出码 "+(task.exit_code??"未知"):
@@ -158,7 +164,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     </section>}
     {detailMessage&&<p role="status" className="sf-muted">{detailMessage}</p>}
     {informational.length>0&&<p role="status" className="sf-muted">
-      已识别 {informational.length} 个仅含详情、没有可执行资源的知识点；这些项目只作目录提示，不会伪造资源 ID 或学习完成结果。请在官方详情页核实内容与建设状态。
+      已识别 {informational.length} 个当前资源列表为空的知识点；已增加官方学习目录的资源计数对照与 ZHS 原会话详情读取。不会伪造资源 ID、心跳或学习完成结果。
     </p>}
     {(failed.length>0||unconfirmed.length>0||stopped.length>0)&&<p role="status" className="sf-muted">
       本轮异常记录：执行失败 {failed.length} 项、服务器未确认 {unconfirmed.length} 项、已停止 {stopped.length} 项。单个视频失败不代表其他视频已完成；若启用了遇错停止，其余运行项也可能提前结束。
