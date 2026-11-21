@@ -111,7 +111,7 @@ export function AppShell({
           title="最大化或还原" aria-label="最大化或还原窗口"
           onClick={()=>{if(desktop)void getCurrentWindow().toggleMaximize();}}><Maximize2 size={14}/></button>
         <button className="sf-window-control sf-window-close" type="button" disabled={!desktop}
-          title="关闭" aria-label="关闭窗口"
+          title="收起到系统托盘（后台继续运行；从托盘选择完全退出）" aria-label="关闭窗口（收起到系统托盘）"
           onClick={()=>{if(desktop)void getCurrentWindow().close();}}><X size={17}/></button>
       </div>
     </div>
