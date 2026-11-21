@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import {Square} from "lucide-react";
 import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type LegacyTaskStatus} from "../legacyPlayback";
+import {friendlyBridgeError,request,type ZhsKnowledgeDetail} from "../bridge";
 
 const labels:Record<string,string>={queued:"排队中",running:"运行中",exited:"本轮结束 · 待核验",
   failed:"执行失败",unconfirmed:"服务器未确认",stopped:"已停止",informational:"只有详情 · 暂无可执行资源",unknown:"状态待核实"};
@@ -11,9 +12,15 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
 }){
   const [requested,setRequested]=useState<Set<string>>(new Set());
   const [message,setMessage]=useState("");
+  const [detail,setDetail]=useState<ZhsKnowledgeDetail|null>(null);
+  const [detailBusy,setDetailBusy]=useState(false);
+  const [detailMessage,setDetailMessage]=useState("");
   const currentRun=useRef(status.run_id);
   currentRun.current=status.run_id;
-  useEffect(()=>{setRequested(new Set());setMessage("");},[status.run_id]);
+  useEffect(()=>{
+    setRequested(new Set());setMessage("");
+    setDetail(null);setDetailMessage("");setDetailBusy(false);
+  },[status.run_id]);
   const queue=status.zhs_queue;
   if(!queue)return null;
   const stale=unavailable||queue.stale;
@@ -40,6 +47,29 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       setMessage(legacyError(error));
     }
   }
+  async function inspectDetail(knowledgeId:number){
+    const courseKey=status.course_id;
+    const run=status.run_id;
+    if(!courseKey||!Number.isSafeInteger(knowledgeId)||knowledgeId<=0)return;
+    setDetailBusy(true);setDetailMessage("");
+    try{
+      const result=await request<ZhsKnowledgeDetail>({
+        operation:"zhidao.zhs.knowledge.detail",course_key:courseKey,knowledge_id:knowledgeId
+      });
+      if(run!==currentRun.current)return;
+      if(result.course_key!==courseKey||result.knowledge_id!==knowledgeId||
+          result.verification!=="read_only"){
+        throw new Error("ZHS_DETAIL_UNAVAILABLE");
+      }
+      setDetail(result);
+    }catch(error){
+      if(run!==currentRun.current)return;
+      setDetail(null);
+      setDetailMessage("知识点详情读取失败："+friendlyBridgeError(error));
+    }finally{
+      if(run===currentRun.current)setDetailBusy(false);
+    }
+  }
   type Row=NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number];
   function row(task:Row){
     const inProgress=task.state==="queued"||task.state==="running";
@@ -54,6 +84,11 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
           disabled={!active||pendingStop} onClick={()=>void stop(task.task_id)}><Square size={13}/>停止此项</button>}
       </div>
       <strong className="sf-ykt-video-name" title={task.name??undefined}>{task.name??"未命名资源"}</strong>
+      {task.kind==="detail"&&task.knowledge_id!=null&&<button
+        type="button" className="secondary" disabled={detailBusy||!status.course_id}
+        onClick={()=>void inspectDetail(task.knowledge_id!)}>
+        {detailBusy?"读取中…":"读取知识点详情与服务器资源状态"}
+      </button>}
       {task.kind!=="detail"&&<div className="sf-zhs-now-progress-row"><small>本地片段位置</small>
         <strong>{percent!=null?percent.toFixed(1)+"%":"—"}</strong></div>}
       {task.state==="running"&&<div
@@ -106,6 +141,22 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     {waiting.length>0&&<details className="sf-ykt-video-details"><summary>等待队列 · {waiting.length} 项</summary>
       {grouped(waiting.slice(0,100))}
       {waiting.length>100&&<small>显示前 100 项，任务将自动补位。</small>}</details>}
+    {detail&&<section className="sf-task-context" aria-label="ZHS 知识点详情（只读）">
+      <div className="sf-ykt-worker-heading">
+        <strong>{detail.name} · 服务器只读</strong>
+        <button className="secondary" type="button" onClick={()=>setDetail(null)}>收起详情</button>
+      </div>
+      <p>知识点进度：{detail.knowledge_progress_percent}% ·
+        平台目录资源：{detail.official_resource_count==null?"未提供":detail.official_resource_count} ·
+        已完成资源：{detail.official_finished_resource_count==null?"未提供":detail.official_finished_resource_count}</p>
+      {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>}
+      {detail.official_resource_count===0&&<p>官方目录记录为 0 项资源。这类知识点没有可调用的视频/PPT 资源心跳，不能凭打开详情就标记学习完成。</p>}
+      <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>
+        {detail.content_available?detail.content:"官方知识点接口未提供可展示的正文；请在知到原页面查看完整详情。"}
+      </div>
+      <small className="sf-muted">本页面只读，不发送学习心跳或完成请求；进度来自真实课程服务器记录。</small>
+    </section>}
+    {detailMessage&&<p role="status" className="sf-muted">{detailMessage}</p>}
     {informational.length>0&&<p role="status" className="sf-muted">
       已识别 {informational.length} 个仅含详情、没有可执行资源的知识点；这些项目只作目录提示，不会伪造资源 ID 或学习完成结果。请在官方详情页核实内容与建设状态。
     </p>}
