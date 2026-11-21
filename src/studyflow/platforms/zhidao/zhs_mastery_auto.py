@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from studyflow.platforms.zhidao import zhs_mastery_service as service
+from studyflow.platforms.zhidao.zhs_mastery_ai import AiAnswerError, suggest as ai_suggest
 
 DATA = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".studyflow") / "StudyFlow" / "ZhidaoMasteryAuto"
 STATUS_PATH = DATA / "status.json"
@@ -36,7 +37,8 @@ _RESUME = threading.Event()
 _RESUME.set()
 _STATUS: dict[str, Any] = {}
 
-DEFAULTS = {"target": 100, "max_rounds": 12, "stagnation_rounds": 3, "max_minutes": 180}
+DEFAULTS = {"target": 100, "max_rounds": 12, "stagnation_rounds": 3, "max_minutes": 180, "max_ai_calls": 30}
+FIRST_ROUND_MODES = {"bank_only", "bank_ai", "ai_first"}
 CHOICE_TYPES = (1, 2, 14)
 
 
@@ -166,12 +168,34 @@ class AnswerBank:
         row = self.db.execute("SELECT choice_texts FROM answers WHERE identity=?", (identity,)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def verified(self, question: dict[str, Any]) -> tuple[Any, str, list[str]] | None:
+        """Return an officially confirmed answer, never a speculative trial."""
+        identity, pairs = _identity(question)
+        if not identity:
+            return None
+        known = self._known(identity)
+        if known is None:
+            return None
+        kind = question.get("question_type")
+        if kind == 3:
+            return (known if len(known) > 1 else known[0]), identity, known
+        by_text = {text: option_id for option_id, text in pairs}
+        if not all(value in by_text for value in known):
+            return None
+        selected = [by_text[x] for x in known]
+        if (kind in (1, 14) and len(selected) != 1) or (kind == 2 and not selected):
+            return None
+        return (selected if kind == 2 else selected[0]), identity, known
+
     def choose(self, question: dict[str, Any]) -> tuple[Any, str, list[str]]:
         identity, pairs = _identity(question)
         qtype = question.get("question_type")
         if not identity:
             raise ValueError("题目或选项不完整，需要手动处理")
-        known = self._known(identity)
+        verified = self.verified(question)
+        if verified is not None:
+            return verified
+        known = None
         if qtype == 3:
             if known is not None:
                 return known if len(known) > 1 else known[0], identity, known
@@ -254,12 +278,13 @@ class AnswerBank:
 
 def _execute_point(
     course_key: str, point: dict[str, Any], bank: AnswerBank,
-    config: dict[str, int], deadline: float,
+    config: dict[str, Any], deadline: float, api_key: str = "",
 ) -> tuple[bool, str, int | float | None]:
     kid = point["knowledge_id"]
     before = point.get("mastery")
     score: int | float | None = before
     stagnant = 0
+    ai_attempted: set[str] = set()  # once per distinct question per point/run
     for round_index in range(1, config["max_rounds"] + 1):
         _checkpoint(deadline)
         _progress(point, state="working", rounds=round_index,
@@ -273,8 +298,47 @@ def _execute_point(
         try:
             for question in paper["questions"]:
                 _checkpoint(deadline)
-                choice, identity, texts = bank.choose(question)
+                verified = bank.verified(question)
+                identity, pairs = _identity(question)
+                mode = config.get("first_round_mode", "bank_only")
+                ai_first = mode == "ai_first" and round_index == 1
+                ai_fallback = mode in ("bank_ai", "ai_first") and verified is None
+                may_ai = (
+                    (ai_first or ai_fallback) and identity not in ai_attempted
+                    and bool(api_key) and _STATUS.get("ai_calls", 0) < config.get("max_ai_calls", 30)
+                )
+                choice = None
+                texts: list[str] = []
+                source = "trial"
+                if may_ai:
+                    ai_attempted.add(identity)
+                    _update(ai_calls=_STATUS.get("ai_calls", 0) + 1)
+                    try:
+                        candidate = ai_suggest(question, api_key, deadline - time.monotonic())
+                        if question.get("question_type") == 3:
+                            texts = candidate if isinstance(candidate, list) else [candidate]
+                        else:
+                            lookup = dict(pairs)
+                            selected = candidate if isinstance(candidate, list) else [candidate]
+                            texts = [lookup[option] for option in selected]
+                        choice, source = candidate, "ai"
+                        _update(ai_used=_STATUS.get("ai_used", 0) + 1)
+                    except (AiAnswerError, KeyError):
+                        _update(ai_errors=_STATUS.get("ai_errors", 0) + 1)
+                        # A third-party AI failure never becomes a confirmed
+                        # answer and never triggers repeated network calls.
+                if choice is None:
+                    if verified is not None:
+                        choice, identity, texts = verified
+                        source = "bank"
+                        _update(bank_hits=_STATUS.get("bank_hits", 0) + 1)
+                    else:
+                        choice, identity, texts = bank.choose(question)
+                        source = "trial"
+                        _update(trials=_STATUS.get("trials", 0) + 1)
                 selections.append((question, identity, texts))
+                _progress(point, reason={"bank":"已验证题库作答", "ai":"AI 建议作答（待判分）",
+                                         "trial":"本地有界试答（待判分）"}[source])
                 service.save_answer(course_key, kid, str(question["question_id"]), choice)
 
             _checkpoint(deadline)
@@ -335,7 +399,7 @@ def _execute_point(
     return False, "达到单知识点最大轮次，未保证满分", score
 
 
-def _run(course_key: str, config: dict[str, int]) -> None:
+def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
     bank: AnswerBank | None = None
     try:
         deadline = time.monotonic() + config["max_minutes"] * 60
@@ -368,7 +432,7 @@ def _run(course_key: str, config: dict[str, int]) -> None:
             if value >= config["target"]:
                 _step(course_key, item, done=True, reason="服务器已达标", mastery=value)
                 continue
-            passed, reason, final_score = _execute_point(course_key, item, bank, config, deadline)
+            passed, reason, final_score = _execute_point(course_key, item, bank, config, deadline, api_key)
             _step(course_key, item, done=passed, reason=reason, mastery=final_score)
         _update(state="completed", current=None, submitting=None,
                 message="已扫描课程全部章节；未达标或需手动处理的知识点已单独标明")
@@ -385,12 +449,21 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
     if not isinstance(course_key, str) or not re.fullmatch(r"[0-9a-f]{64}", course_key):
         raise service.MasteryError("INVALID_REQUEST")
     raw = options if isinstance(options, dict) else {}
-    config = {}
+    api_key = raw.get("api_key", "")
+    if not isinstance(api_key, str) or len(api_key) > 256:
+        raise service.MasteryError("INVALID_REQUEST")
+    mode = raw.get("first_round_mode", "bank_only")
+    if mode not in FIRST_ROUND_MODES:
+        raise service.MasteryError("INVALID_REQUEST")
+    if mode in ("bank_ai", "ai_first") and not api_key.strip():
+        raise service.MasteryError("AI_KEY_REQUIRED")
+    config = {"first_round_mode": mode}
     for field, low, high in (
         ("target", 1, 100),
         ("max_rounds", 1, 30),
         ("stagnation_rounds", 1, 10),
         ("max_minutes", 1, 720),
+        ("max_ai_calls", 1, 100),
     ):
         value = raw.get(field, DEFAULTS[field])
         if type(value) is not int or not low <= value <= high:
@@ -415,11 +488,12 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
             "run_id": uuid.uuid4().hex, "course_key": course_key,
             "state": "starting", "message": "正在启动", "config": config,
             "total": 0, "processed": 0, "done": 0, "skipped": 0,
+            "ai_calls": 0, "ai_used": 0, "ai_errors": 0, "bank_hits": 0, "trials": 0,
             "current": None, "submitting": None, "blocked": blocked, "tasks": [], "updated_at": _utc(),
         })
         _save(_STATUS.copy())
         _THREAD = threading.Thread(
-            target=_run, args=(course_key, config), daemon=True,
+            target=_run, args=(course_key, config, api_key.strip()), daemon=True,
             name="zhidao-mastery-auto",
         )
         _THREAD.start()
