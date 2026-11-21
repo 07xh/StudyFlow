@@ -128,6 +128,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
           ?"官方学习目录显示有资源，但 ZHS 的资源列表为空；属于接口不一致，不能冒充无资源学习完成。"
           :task.detail_evidence==="catalog_no_counts"
           ?"移动版学习目录已确认此知识点存在，但未提供资源总数；不能把未知数量当作 0，也不能据此断言已完成。"
+          :task.detail_evidence==="progress_conflict"
+          ?"ZHS 原会话与移动版目录对这个知识点的完成状态不一致；暂停认定完成，请核验服务器状态。"
           :"资源列表为空，但官方资源计数尚未核实；请检查登录、同步状态与知识点详情。"
         ):
         task.state==="exited"?"进程已退出，学习记录待平台核验":
@@ -190,7 +192,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         </button>
       </div>
       {serverComparison&&<p role="status" className="sf-muted">{serverComparison}</p>}
-      {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>}
+      {detail.progress_sources_disagree&&<p role="status">两个官方目录对知识点是否完成的判断不一致，不会按已完成处理；请检查服务器最新状态。</p>}
+      {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>
       {detail.official_resource_count===0&&<p>官方目录记录为 0 项资源。这类知识点没有可调用的视频/PPT 资源心跳，不能凭打开详情就标记学习完成。</p>}
       <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>
         {detail.content_available?detail.content:"官方知识点接口未提供可展示的正文；请在知到原页面查看完整详情。"}
