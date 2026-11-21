@@ -72,7 +72,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         const mobileComparable=result.mobile_knowledge_progress_percent!=null&&
           previous.mobile_knowledge_progress_percent!=null;
         const mobileAdvanced=mobileComparable&&
-          result.mobile_knowledge_progress_percent!>previous.mobile_knowledge_progress_percent!;
+          result.mobile_knowledge_progress_percent! > previous.mobile_knowledge_progress_percent!;
         const nextProgress=Math.max(result.knowledge_progress_percent,
           result.mobile_knowledge_progress_percent??0);
         if(zhsAdvanced||mobileAdvanced){
