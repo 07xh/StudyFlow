@@ -51,7 +51,8 @@ test('a hanging official-player request cannot freeze ZHS or YKT status polling'
   assert.equal(current.tasks.find(t=>t.runner==='zhs').runId,'zhs-1');
   assert.equal(current.tasks.find(t=>t.runner==='yuketang').runId,'ykt-1');
 
-  await act(async()=>{interval();interval();});
+  await act(async()=>{interval();});
+  await act(async()=>{interval();});
   assert.equal(officialReads,1,'never overlap requests for the same blocked provider');
   assert.equal(zhsReads,3,'other providers still refresh independently');
   assert.equal(yktReads,3);
