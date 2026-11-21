@@ -753,96 +753,6 @@ fn studyflow_open_releases(tag: Option<String>) -> Result<(), String> {
     }
 }
 
-// StudyFlow's ZHS mode may direct a user to the *real* knowledge page.
-// Opening the page is not a heartbeat or completion report; the website owns
-// its authenticated events, and subsequent server progress must be re-read.
-fn zhs_knowledge_learning_url(course_id: &str, knowledge_id: &str, class_id: &str) -> Result<String, String> {
-    let valid_decimal = |input: &str| {
-        !input.is_empty() && input.len() <= 20 && input.bytes().all(|v| v.is_ascii_digit())
-            && input.parse::<u64>().is_ok_and(|n| n > 0)
-    };
-    if !valid_decimal(course_id) || !valid_decimal(class_id) || !valid_decimal(knowledge_id)
-        || knowledge_id.parse::<u64>().ok().map_or(true, |id| id > i64::MAX as u64)
-    {
-        return Err("ZHS_KNOWLEDGE_ROUTE_INVALID".into());
-    }
-    Ok(format!(
-        "https://ai-smart-course-student-pro.zhihuishu.com/learnPage/{course_id}/{knowledge_id}/{class_id}"
-    ))
-}
-
-#[tauri::command]
-async fn zhidao_zhs_open_knowledge(
-    app: tauri::AppHandle,
-    course_key: String,
-    knowledge_id: String,
-) -> Result<(), String> {
-    if course_key.len() != 64 || !course_key.bytes().all(|v| v.is_ascii_hexdigit() && !v.is_ascii_uppercase())
-        || knowledge_id.is_empty() || knowledge_id.starts_with('0')
-        || knowledge_id.len() > 19 || !knowledge_id.bytes().all(|v| v.is_ascii_digit())
-    {
-        return Err("ZHS_KNOWLEDGE_ROUTE_INVALID".into());
-    }
-    // Authorize the deep link using the locally known course AND the live
-    // knowledge node via ZHS' signed read-only endpoints.
-    let route = bridge_request(app.clone(), serde_json::json!({
-        "id": format!("zhs-link-course-{}", uuid::Uuid::new_v4().simple()),
-        "version": 1, "operation": "zhidao.player.target", "course_key": course_key,
-    })).await.map_err(|_| "ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE")?;
-    let info = route.get("data").ok_or("ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE")?;
-    if route.get("ok").and_then(|v| v.as_bool()) != Some(true)
-        || info.get("course_type").and_then(|v| v.as_str()) != Some("ai")
-    {
-        return Err("ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE".into());
-    }
-    let cid = info.get("course_id").and_then(|v| v.as_str()).ok_or("ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE")?;
-    let class_id = info.get("class_id").and_then(|v| v.as_str()).ok_or("ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE")?;
-    let url = zhs_knowledge_learning_url(cid, &knowledge_id, class_id)?;
-
-    let check = bridge_request(app, serde_json::json!({
-        "id": format!("zhs-link-node-{}", uuid::Uuid::new_v4().simple()),
-        "version": 1, "operation": "zhidao.zhs.knowledge.detail",
-        "course_key": course_key, "knowledge_id": knowledge_id,
-    })).await.map_err(|_| "ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE")?;
-    let detail = check.get("data").ok_or("ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE")?;
-    if check.get("ok").and_then(|v| v.as_bool()) != Some(true)
-        || detail.get("course_key").and_then(|v| v.as_str()) != Some(course_key.as_str())
-        || detail.get("knowledge_id").and_then(|v| v.as_str()) != Some(knowledge_id.as_str())
-        || detail.get("verification").and_then(|v| v.as_str()) != Some("read_only")
-    {
-        return Err("ZHS_KNOWLEDGE_ROUTE_UNAVAILABLE".into());
-    }
-
-    #[cfg(windows)]
-    {
-        Command::new("explorer.exe").arg(url).spawn()
-            .map_err(|_| "ZHS_KNOWLEDGE_OPEN_FAILED".to_string())?;
-        Ok(())
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = url;
-        Err("WINDOWS_ONLY".into())
-    }
-}
-
-#[cfg(test)]
-mod zhs_knowledge_link_tests {
-    use super::zhs_knowledge_learning_url;
-
-    #[test]
-    fn official_ai_page_keeps_19_digit_id_exact_and_never_accepts_input_urls() {
-        assert_eq!(
-            zhs_knowledge_learning_url("321", "1234567890123456789", "77").unwrap(),
-            "https://ai-smart-course-student-pro.zhihuishu.com/learnPage/321/1234567890123456789/77"
-        );
-        for value in ["0", "", "1/../../admin", "javascript:evil", "12345678901234567890", "-12"] {
-            assert!(zhs_knowledge_learning_url("321", value, "77").is_err());
-        }
-        assert!(zhs_knowledge_learning_url("0", "87", "77").is_err());
-    }
-}
-
 #[tauri::command]
 fn updates_open_folder() -> Result<(), String> {
     let local = std::env::var_os("LOCALAPPDATA").ok_or("WINDOWS_APPDATA_UNAVAILABLE")?;
@@ -898,7 +808,7 @@ pub fn run() {
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, zhidao_zhs_open_knowledge,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
