@@ -102,31 +102,12 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             # finishedResourceCount. It is read-only, and 0/0 is NOT a fake
             # completion or a progress heartbeat.
             from studyflow.platforms.zhidao.zhs_knowledge_detail import (
-                official_catalog_entry, _counts,
+                official_catalog_entry, _counts, read_course_catalogs,
+                mobile_study_progress,
             )
-            resource_catalog = None
-            endpoints = getattr(session, "urls", None)
-            ai_base = getattr(endpoints, "ai", None)
-            ai_task_base = getattr(endpoints, "ai_task", None)
-            for source, base, suffix in (
-                ("desktop", ai_base, "/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
-                ("mobile", ai_task_base, "/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
-            ):
-                if not isinstance(base, str) or not base.startswith("https://"):
-                    continue
-                url = base.rstrip("/") + suffix
-                try:
-                    response = manager._ai_query(
-                        url, {"courseId": cid, "classId": cls},
-                    )
-                    data = response.get("data") if isinstance(response, dict) else None
-                    if isinstance(data, dict) and isinstance(data.get("themeList"), list):
-                        resource_catalog = data
-                        break
-                except Exception:
-                    # Optional evidence queries must not abort the existing
-                    # original ZHS video or article playback.
-                    continue
+            # Resource counts and mobile studyProgress are distinct server
+            # signals. Read each without sending a completion request.
+            catalogs = read_course_catalogs(manager, session, cid, cls)
             # A cake theme is the chapter boundary. Keep the server's theme and
             # knowledge-point order, then process resources in their original order.
             points = {
@@ -140,19 +121,28 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                 if (selected and kid not in selected) or point.study_progress >= 101:
                     continue
                 resources = manager.list_knowledge_resources(cid, cls, kid)
-                if not resources and point.study_progress >= 100:
-                    # A mastered/not mastered score is separate from the
-                    # server's knowledge-learning progress. The mobile
-                    # directory may already mark zero-resource points done.
+                mobile_entry = official_catalog_entry(catalogs.get("mobile"), kid)
+                mobile_progress = mobile_study_progress(mobile_entry)
+                desktop_complete = point.study_progress >= 100
+                mobile_complete = mobile_progress is not None and mobile_progress >= 100
+                progress_disagrees = (
+                    mobile_progress is not None and desktop_complete != mobile_complete
+                )
+                if not resources and desktop_complete and not progress_disagrees:
+                    # A verified server-complete knowledge point has no
+                    # resource task to run. When mobile and ZHS disagree,
+                    # fail closed rather than reporting a false completion.
                     continue
                 if not resources and options.get("resource_mode", "all") == "all":
                     # A directory knowledge point can contain detail-page text
                     # while its resource tab has no playable / finishable item.
                     # Preserve that observation without inventing a resource UID
                     # or sending a completion request.
-                    entry = official_catalog_entry(resource_catalog, kid)
-                    catalog_total, catalog_done = _counts(entry)
+                    desktop_entry = official_catalog_entry(catalogs.get("desktop"), kid)
+                    entry = desktop_entry if desktop_entry is not None else mobile_entry
+                    catalog_total, _ = _counts(entry)
                     evidence = (
+                        "progress_conflict" if progress_disagrees else
                         "catalog_empty" if catalog_total == 0 else
                         "catalog_mismatch" if catalog_total is not None else
                         "catalog_no_counts" if entry is not None else
