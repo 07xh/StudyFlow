@@ -193,7 +193,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         </button>
       </div>
       {serverComparison&&<p role="status" className="sf-muted">{serverComparison}</p>}
-      {detail.progress_sources_disagree&&<p role="status">两份目录的进度不同步：优先使用移动端知识点 studyProgress，缺失时回退 ZHS 进度；不因不同步而重复阻止任务。</p>
+      {detail.progress_sources_disagree&&<p role="status">两份目录的进度不同步：优先使用移动端知识点 studyProgress，缺失时回退 ZHS 进度；不因不同步而重复阻止任务。</p>}
       {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>}
       {detail.official_resource_count===0&&<p>官方目录记录为 0 项资源。这类知识点没有可调用的视频/PPT 资源心跳，不能凭打开详情就标记学习完成。</p>}
       <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>
