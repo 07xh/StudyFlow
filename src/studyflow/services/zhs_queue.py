@@ -105,16 +105,22 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                 official_catalog_entry, _counts,
             )
             resource_catalog = None
-            try:
-                response = manager._ai_query(
-                    f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic",
-                    {"courseId": cid, "classId": cls},
-                )
-                resource_catalog = response.get("data") if isinstance(response, dict) else None
-            except Exception:
-                # Never stop original ZHS videos for an optional read-only
-                # directory evidence query. A failed read remains unknown.
-                resource_catalog = None
+            for source, url in (
+                ("desktop", f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
+                ("mobile", f"{session.urls.ai_task}/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
+            ):
+                try:
+                    response = manager._ai_query(
+                        url, {"courseId": cid, "classId": cls},
+                    )
+                    data = response.get("data") if isinstance(response, dict) else None
+                    if isinstance(data, dict) and isinstance(data.get("themeList"), list):
+                        resource_catalog = data
+                        break
+                except Exception:
+                    # Optional evidence queries must not abort the existing
+                    # original ZHS video or article playback.
+                    continue
             # A cake theme is the chapter boundary. Keep the server's theme and
             # knowledge-point order, then process resources in their original order.
             points = {
@@ -138,11 +144,12 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                     # while its resource tab has no playable / finishable item.
                     # Preserve that observation without inventing a resource UID
                     # or sending a completion request.
-                    catalog_total, catalog_done = _counts(
-                        official_catalog_entry(resource_catalog, kid))
+                    entry = official_catalog_entry(resource_catalog, kid)
+                    catalog_total, catalog_done = _counts(entry)
                     evidence = (
                         "catalog_empty" if catalog_total == 0 else
                         "catalog_mismatch" if catalog_total is not None else
+                        "catalog_no_counts" if entry is not None else
                         "catalog_unavailable"
                     )
                     targets.append(QueueTarget(
