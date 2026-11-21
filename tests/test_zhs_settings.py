@@ -26,6 +26,24 @@ def test_zhs_settings_roundtrip(tmp_path, monkeypatch):
     assert zhs_settings.read_settings() == options
 
 
+def test_scheduler_mode_is_opt_in_migrates_old_settings_and_rejects_invalid(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    original = {**zhs_settings.DEFAULTS, "parallel_mode": "resources"}
+    assert zhs_settings.save_settings(original) == original
+    assert zhs_settings.read_settings()["parallel_mode"] == "resources"
+    path = tmp_path / "StudyFlow/zhidao/zhs-task-settings.json"
+    legacy = {key: value for key, value in original.items() if key != "parallel_mode"}
+    path.write_text(json.dumps(legacy), encoding="utf-8")
+    assert zhs_settings.read_settings()["parallel_mode"] == "chapters"
+    run = {**legacy, "scope_mode": "all", "selected_ids": []}
+    assert zhs_settings.validate_run_settings(run)["parallel_mode"] == "chapters"
+    for invalid in ("one-chapter", "all", None, True, 2):
+        with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
+            zhs_settings.save_settings({**original, "parallel_mode": invalid})
+    assert zhs_settings.validate_run_settings({**run, "parallel_mode": "resources"})["parallel_mode"] == "resources"
+
+
 def test_zhs_cli_options_are_passed_to_original_typer(monkeypatch):
     monkeypatch.setattr(legacy, "_current_course_row",
                         lambda key: {"courseType": "ai", "courseId": "11", "classId": "22"})
