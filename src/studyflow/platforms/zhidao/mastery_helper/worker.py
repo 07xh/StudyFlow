@@ -8,6 +8,7 @@ import sys
 import time
 from . import mastery as m
 from .private_state import PrivateStore, CookieKeeper
+from .local_trial import LocalTrial
 from .settings import ROOT, DATA, load_config, save_work_url
 
 
@@ -19,7 +20,7 @@ class Reporter:
         self.started = time.time()
         self.state = {"state": "starting", "phase": "准备运行", "message": "",
                       "mastery": None, "round": 0, "points_completed": 0,
-                      "points_skipped": 0, "bank_hit": 0, "ai_count": 0,
+                      "points_skipped": 0, "bank_hit": 0, "trial_count": 0,
                       "api_calls": 0, "course": "", "chapter": "",
                       "knowledge": "", "question": "", "logs": [], "updated_at": self.started}
         self.stop_file.unlink(missing_ok=True)
@@ -47,7 +48,7 @@ class Reporter:
         elif kind == "score":
             self.state["mastery"] = values.get("mastery")
         elif kind == "answered":
-            key = "bank_hit" if values.get("source") == "bank" else "ai_count"
+            key = "bank_hit" if values.get("source") == "bank" else "trial_count"
             self.state[key] += 1
         elif kind == "metrics":
             self.state["api_calls"] = int(values.get("api_calls", 0))
@@ -106,18 +107,18 @@ class LogStream:
             self.buf = ""
 
 
-def main() -> int:
+def main(mode: str = "run") -> int:
     ROOT.mkdir(parents=True, exist_ok=True)
     DATA.mkdir(parents=True, exist_ok=True)
     reporter = Reporter()
     bank = None
+    if mode not in ("run", "login"):
+        reporter.emit("phase", status="需要处理", message="不支持的掌握度任务操作")
+        return 2
     context = None
     log = LogStream(reporter)
     try:
         cfg = load_config()
-        api_key = PrivateStore(DATA).load_key()
-        if not api_key:
-            raise m.Halt("请先在学序「掌握度」设置中填写 DeepSeek API Key")
         from playwright.sync_api import sync_playwright
         bank = m.Bank(DATA / "question-bank.sqlite3")
         with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
@@ -125,9 +126,11 @@ def main() -> int:
                 # The first authorized login needs a visible official browser.
                 # Subsequent runs use the saved official exercise URL in headless Edge.
                 saved_url = cfg.get("last_work_url")
-                headless = bool(saved_url)
+                if mode == "run" and not saved_url:
+                    raise m.Halt("请先点击「设置练习起点」，在官方浏览器中打开一道掌握度题目")
+                headless = mode == "run"
                 reporter.emit("phase", status="启动中" if headless else "等待登录",
-                              message="正在静默进入已保存的知识点" if headless else "请在打开的 Edge 中登录并进入目标掌握度练习，之后即可静默运行")
+                              message="后台进入已保存的掌握度练习" if headless else "请在官方 Edge 页面登录并打开想要开始的掌握度题目")
                 options = {"channel": cfg.get("browser", "msedge")}
                 context = pw.chromium.launch_persistent_context(str(DATA / "browser-profile"),
                     headless=headless, viewport={"width": 1440, "height": 950},
@@ -138,18 +141,21 @@ def main() -> int:
                 try:
                     page = context.pages[0] if context.pages else context.new_page()
                     page.set_default_timeout(10000)
-                    page.goto(saved_url or cfg["url"], wait_until="domcontentloaded", timeout=60000)
+                    page.goto((saved_url if mode == "run" else cfg["url"]), wait_until="domcontentloaded", timeout=60000)
                     limits = m.Limits(cfg, reporter, on_checkpoint=cookies.maybe_save)
                     page = m.wait_for_work_page(context, page, cfg, reporter, on_poll=cookies.maybe_save)
                     # Only remember a verified exercise page, never a login page.
                     save_work_url(page.url)
                     cookies.maybe_save(force=True)
-                    reporter.emit("phase", status="运行中", message="已识别掌握度练习，开始处理")
-                    score = m.run_course(context, page, cfg, bank, limits,
-                        ai=m.DeepSeek(cfg, limits, api_key=api_key))
-                    reporter.state["mastery"] = score
-                    reporter.state["state"] = "completed"
-                    reporter.emit("phase", status="已完成", message="当前知识点范围已处理完成")
+                    if mode == "login":
+                        reporter.state["state"] = "ready"
+                        reporter.emit("phase", status="起点已保存", message="已保存练习入口和登录状态，可以关闭官方浏览器并启动后台练习")
+                    else:
+                        reporter.emit("phase", status="运行中", message="开始按题库及官方反馈处理掌握度练习")
+                        score = m.run_course(context, page, cfg, bank, limits, ai=LocalTrial())
+                        reporter.state["mastery"] = score
+                        reporter.state["state"] = "completed"
+                        reporter.emit("phase", status="已完成", message="当前知识点范围已处理完成")
                 finally:
                     try:
                         cookies.maybe_save(force=True)
@@ -174,4 +180,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "run"))
