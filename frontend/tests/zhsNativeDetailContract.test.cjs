@@ -12,6 +12,7 @@ test("ZHS detail workflow remains native and cannot redirect to browser playback
   assert.match(panel,/operation:"zhidao.zhs.knowledge.detail"/);
   assert.match(panel,/核验服务器进度/);
   assert.match(python,/if t.kind == "detail"/);
-  assert.match(python,/"state": "informational" if t.kind == "detail"/);
+  assert.match(python,/t.detail_evidence != "catalog_empty"/);
+  assert.match(python,/enter_knowledge_once/);
   assert.doesNotMatch(python,/saveStudentPointLog|\/studyRecord\/completed/);
 });
