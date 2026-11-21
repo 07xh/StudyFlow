@@ -280,6 +280,9 @@ def _execute_point(
                 result = service.submit_round(course_key, kid)  # read-only after submit
             if result.get("verification_pending"):
                 return False, "本轮交卷后判分或掌握度未确认；已停止该知识点", score
+            # Verified server readback is complete; safe to clear the pending
+            # submission marker before preparing a fresh paper.
+            _update(submitting=None)
             graded = {str(item["questionId"]): item for item in result.get("graded", [])}
             for question, identity, texts in selections:
                 entry = graded.get(str(question["question_id"]))
@@ -309,11 +312,6 @@ def _execute_point(
             return False, str(exc)[:120], score
         except Exception:
             return False, "请求异常；本卷保留，未自动重试交卷", score
-        finally:
-            # After a verified submission this marker is cleared; after an
-            # ambiguous request it remains visible in the persisted status.
-            pass
-        _update(submitting=None)
     return False, "达到单知识点最大轮次，未保证满分", score
 
 
@@ -336,6 +334,10 @@ def _run(course_key: str, config: dict[str, int]) -> None:
             _checkpoint(deadline)
             _update(current={"knowledge_id": item["knowledge_id"],
                              "name": item["name"], "theme": item["theme"]})
+            if item["knowledge_id"] in _STATUS.get("blocked", []):
+                _step(course_key, item, done=False,
+                      reason="上次交卷状态不确定，已保护该知识点不重复提交")
+                continue
             if item.get("free_exam"):
                 _step(course_key, item, done=False, reason="官方免考知识点")
                 continue
@@ -378,6 +380,14 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
         global _THREAD
         if _THREAD is not None and _THREAD.is_alive():
             raise service.MasteryError("MASTERY_AUTO_RUNNING")
+        prior = _loaded()
+        blocked = list(prior.get("blocked", [])) if prior.get("course_key") == course_key else []
+        # A previous process may have died after the POST reached the server.
+        # Never blindly resubmit or create another paper for that point.
+        if prior.get("course_key") == course_key and isinstance(prior.get("submitting"), dict):
+            pending_id = prior["submitting"].get("knowledge_id")
+            if isinstance(pending_id, str) and pending_id not in blocked:
+                blocked.append(pending_id)
         _STOP.clear()
         _RESUME.set()
         _STATUS.clear()
@@ -385,7 +395,7 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
             "run_id": uuid.uuid4().hex, "course_key": course_key,
             "state": "starting", "message": "正在启动", "config": config,
             "total": 0, "processed": 0, "done": 0, "skipped": 0,
-            "current": None, "submitting": None, "tasks": [], "updated_at": _utc(),
+            "current": None, "submitting": None, "blocked": blocked, "tasks": [], "updated_at": _utc(),
         })
         _save(_STATUS.copy())
         _THREAD = threading.Thread(
