@@ -440,7 +440,16 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         knowledge_id = request.get("knowledge_id")
         kid = knowledge_id if isinstance(knowledge_id, str) else str(knowledge_id or "")
         try:
-            if operation == "zhidao.mastery.catalog":
+            if operation == "zhidao.mastery.auto.start":
+                from studyflow.platforms.zhidao import zhs_mastery_auto as mastery_auto
+                data = mastery_auto.start(course_key, request.get("settings"))
+            elif operation == "zhidao.mastery.auto.status":
+                from studyflow.platforms.zhidao import zhs_mastery_auto as mastery_auto
+                data = mastery_auto.status(course_key)
+            elif operation == "zhidao.mastery.auto.control":
+                from studyflow.platforms.zhidao import zhs_mastery_auto as mastery_auto
+                data = mastery_auto.control(course_key, request.get("action"))
+            elif operation == "zhidao.mastery.catalog":
                 data = mastery.read_catalog(course_key, with_mastery=request.get("with_mastery") is not False)
             elif operation == "zhidao.mastery.round.active":
                 data = mastery.active_round(course_key, kid)
