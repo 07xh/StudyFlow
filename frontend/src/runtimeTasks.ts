@@ -6,46 +6,76 @@ type LegacyPlatform = 'zhidao' | 'yuketang';
 import type {Runner} from './activity';
 export type RuntimeTask={runner:Runner;platform:LegacyPlatform;state:LegacyTaskState;courseId:string|null;runId:string|null;exitCode:number|null;unavailable?:boolean};
 export const runnerNames:Record<Runner,string>={official:'知到官方播放器',zhs:'知到 ZHS 原版',yuketang:'雨课堂批量任务'};
+// One slow platform must not block live status from the others.
+const runtimeRunners:Runner[]=['official','zhs','yuketang'];
+function upsertRuntimeTask(previous:RuntimeTask[], next:RuntimeTask):RuntimeTask[]{
+ const byRunner=new Map(previous.map(task=>[task.runner,task]));
+ byRunner.set(next.runner,next);
+ return runtimeRunners.flatMap(runner=>{const task=byRunner.get(runner);return task?[task]:[];});
+}
 export function useRuntimeTasks(desktop:boolean){
  const [tasks,setTasks]=useState<RuntimeTask[]>([]);
  const [loading,setLoading]=useState(desktop);
  const revision=useRef(0);
- const inFlight=useRef<number|null>(null);
+ // Guard each backend independently. A hanging player status must not
+ // prevent polling the ZHS or rain-classroom runtime.
+ const inFlight=useRef<Array<number|null>>([null,null,null]);
+ const requestSequence=useRef(0);
  const refresh=useCallback(async()=>{
-  if(!desktop||inFlight.current!==null)return;
-  const request=++revision.current;
-  inFlight.current=request;
-  try {
-  const results=await Promise.allSettled([
-   invoke<{state:LegacyTaskState;courseKey:string|null;runId:string|null;exitCode:number|null}>('zhidao_player_status'),
-   getLegacyStatus('zhidao'),getLegacyStatus('yuketang')
-  ]);
-  if(request!==revision.current)return;
-  setLoading(false);
-  // Normal process exit clears only that run's hint; an exit is not proof of course completion.
-  for(let index=1;index<=2;index++){
-   const result=results[index];
-   if(result.status!=='fulfilled')continue;
-   const state=result.value;
-   if(!('run_id' in state)||!('exit_code' in state))continue;
-   if(state.state!=='exited'||state.exit_code!==0||!state.run_id)continue;
-   const platform=index===1?'zhidao':'yuketang';
-   if(readTaskRecovery().some(r=>r.platform===platform&&r.runId===state.run_id))
-    discardTaskRecovery(platform,state.run_id);
-  }
-  setTasks(previous=>results.map((result,index)=>{
-   const runner:Runner=index===0?'official':index===1?'zhs':'yuketang';
+  if(!desktop)return;
+  const generation=revision.current;
+  const reads=[
+   ()=>invoke<{state:LegacyTaskState;courseKey:string|null;runId:string|null;exitCode:number|null}>('zhidao_player_status'),
+   ()=>getLegacyStatus('zhidao'),
+   ()=>getLegacyStatus('yuketang')
+  ] as const;
+  const updates=reads.map(async(read,index)=>{
+   if(inFlight.current[index]!==null)return;
+   const token=++requestSequence.current;
+   inFlight.current[index]=token;
+   const runner=runtimeRunners[index];
    const platform:LegacyPlatform=index===2?'yuketang':'zhidao';
-   if(result.status==='rejected')return {...(previous.find(task=>task.runner===runner)??{runner,platform,state:'idle' as const,courseId:null,runId:null,exitCode:null}),unavailable:true};
-   const value=result.value;
-   if('courseKey' in value)return {runner,platform,state:value.state,courseId:value.courseKey,runId:value.runId,exitCode:value.exitCode};
-   return {runner,platform,state:value.state,courseId:value.course_id,runId:value.run_id??null,exitCode:value.exit_code};
-  }));
-  } finally {
-   if(inFlight.current===request)inFlight.current=null;
-  }
+   try{
+    const value=await read();
+    if(generation!==revision.current)return;
+    setLoading(false);
+    if(index>0&&'run_id' in value&&'exit_code' in value&&
+       value.state==='exited'&&value.exit_code===0&&value.run_id&&
+       readTaskRecovery().some(record=>record.platform===platform&&record.runId===value.run_id)){
+      // A clean process exit clears the recovery hint, never certifies study completion.
+      discardTaskRecovery(platform,value.run_id);
+    }
+    const next:RuntimeTask='courseKey' in value
+      ?{runner,platform,state:value.state,courseId:value.courseKey,runId:value.runId,exitCode:value.exitCode}
+      :{runner,platform,state:value.state,courseId:value.course_id,runId:value.run_id??null,exitCode:value.exit_code};
+    setTasks(previous=>upsertRuntimeTask(previous,next));
+   }catch{
+    if(generation!==revision.current)return;
+    setLoading(false);
+    setTasks(previous=>{
+     const prior=previous.find(task=>task.runner===runner);
+     return upsertRuntimeTask(previous,{
+      ...(prior??{runner,platform,state:'idle' as const,courseId:null,runId:null,exitCode:null}),
+      unavailable:true
+     });
+    });
+   }finally{
+    if(inFlight.current[index]===token)inFlight.current[index]=null;
+   }
+  });
+  await Promise.all(updates);
  },[desktop]);
- useEffect(()=>{setLoading(desktop);void refresh();if(!desktop)return;const timer=window.setInterval(()=>void refresh(),2000);return ()=>{revision.current++;inFlight.current=null;window.clearInterval(timer);};},[desktop,refresh]);
+ useEffect(()=>{
+  setLoading(desktop);
+  void refresh();
+  if(!desktop)return;
+  const timer=window.setInterval(()=>void refresh(),2000);
+  return ()=>{
+   revision.current++;
+   inFlight.current=[null,null,null];
+   window.clearInterval(timer);
+  };
+ },[desktop,refresh]);
  return {tasks,refresh,loading};
 }
 export async function stopRuntime(task:RuntimeTask){
