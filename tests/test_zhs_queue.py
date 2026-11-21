@@ -215,6 +215,88 @@ def test_one_chapter_uses_one_lane_even_if_concurrency_is_three(tmp_path):
     assert len(children) == 3
 
 
+def test_single_chapter_resource_mode_fills_slots_without_duplicate_launch(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    targets = [QueueTarget(i, 10, kind, f"资源{i}", "ai-1", "第一章")
+               for i, kind in ((1, "video"), (2, "article"), (3, "ppt"), (4, "video"))]
+    children, started = [], []
+    def launch(target, token):
+        active = sum(child.poll() is None for child in children)
+        assert active < 3, "global process limit exceeded"
+        started.append((target.resource_id, active, token))
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(.25)"], stdin=subprocess.PIPE)
+        children.append(child)
+        return child
+
+    assert supervise(targets, 3, "f" * 32, tmp_path, launch, parallel_mode="resources") == 0
+    assert [item[0] for item in started] == [1, 2, 3, 4]
+    assert [item[1] for item in started[:3]] == [0, 1, 2]
+    assert len({item[2] for item in started}) == 4
+    assert all(child.poll() is not None for child in children)
+    snapshot = json.loads((tmp_path / f"zhs-queue-{'f' * 32}.json").read_text())
+    assert snapshot["parallel_mode"] == "resources"
+    assert all(row["state"] == "exited" for row in snapshot["tasks"])
+
+
+def test_single_chapter_parallel_fairness_prefers_other_chapters(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    targets = [QueueTarget(i, i if i == 3 else 10, "video", None,
+                           "ai-2" if i == 3 else "ai-1")
+               for i in (1, 2, 3, 4)]
+    started, children = [], []
+    def launch(target, token):
+        assert sum(child.poll() is None for child in children) < 2
+        started.append(target.resource_id)
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time;time.sleep(.12)"], stdin=subprocess.PIPE)
+        children.append(child)
+        return child
+
+    assert supervise(targets, 2, "1" * 32, tmp_path, launch, parallel_mode="resources") == 0
+    assert started[:2] == [1, 3]
+    assert sorted(started) == [1, 2, 3, 4]
+
+
+def test_single_chapter_parallel_stop_refills_and_keeps_sibling_alive(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    targets = [QueueTarget(i, 10, "video", None, "ai-1") for i in (1, 2, 3)]
+    children = []
+    def launch(target, token):
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time;time.sleep(.40)"], stdin=subprocess.PIPE)
+        children.append(child)
+        if target.resource_id == 2:
+            command = tmp_path / f"zhs-stop-{'2' * 32}-{targets[0].task_id}"
+            command.write_text(targets[0].task_id)
+        return child
+
+    assert supervise(targets, 2, "2" * 32, tmp_path, launch, parallel_mode="resources") == 0
+    snapshot = json.loads((tmp_path / f"zhs-queue-{'2' * 32}.json").read_text())
+    assert [row["state"] for row in snapshot["tasks"]] == ["stopped", "exited", "exited"]
+    assert all(child.poll() is not None for child in children)
+
+
+def test_single_chapter_parallel_error_stops_every_worker(tmp_path):
+    from studyflow.services.zhs_queue import QueueTarget, supervise
+    targets = [QueueTarget(i, 10, "video", None, "ai-1") for i in (1, 2, 3)]
+    children = []
+    def launch(target, token):
+        child = subprocess.Popen(
+            [sys.executable, "-c",
+             "import time,sys;time.sleep(.1 if int(sys.argv[1])==1 else .8);sys.exit(5 if int(sys.argv[1])==1 else 0)",
+             str(target.resource_id)], stdin=subprocess.PIPE)
+        children.append(child)
+        return child
+
+    assert supervise(targets, 2, "3" * 32, tmp_path, launch,
+                     parallel_mode="resources", stop_on_error=True) == 13
+    snapshot = json.loads((tmp_path / f"zhs-queue-{'3' * 32}.json").read_text())
+    assert [row["state"] for row in snapshot["tasks"]] == ["failed", "stopped", "stopped"]
+    assert len(children) == 2
+    assert all(child.poll() is not None for child in children)
+
+
 def test_catalog_chapter_metadata_is_server_backed(monkeypatch):
     from types import ModuleType
     from studyflow.services.zhs_queue import discover_targets
