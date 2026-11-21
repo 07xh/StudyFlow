@@ -26,7 +26,7 @@ export type LegacyTaskStatus = {
 };
 
 export type ZhsQueueSnapshot={
-  concurrency:number;state:string;stale:boolean;
+  concurrency:number;parallel_mode?:"chapters"|"resources";state:string;stale:boolean;
   tasks:Array<{task_id:string;name:string|null;knowledge_id?:string|null;detail_evidence?:"catalog_empty"|"catalog_mismatch"|"catalog_no_counts"|"catalog_unavailable"|"progress_conflict"|null;chapter_key?:string|null;chapter_name?:string|null;kind:"video"|"ppt"|"article"|"other"|"detail";
     requirement?:"required"|"optional"|"unknown"|"shared"|null;
     state:"queued"|"running"|"exited"|"failed"|"stopped"|"unconfirmed"|"informational"|"unknown";
@@ -98,6 +98,8 @@ export function saveYuketangCourseThreshold(classroom:string,university:string,v
 export type ZhsStoredOptions = {
   speed:number;speed_cap:number;limit_minutes:number;learn_optional:boolean;
   max_videos:number;stop_on_error:boolean;concurrency?:number;
+  /** chapters = original per-chapter serial lanes; resources = opt-in within-chapter parallel. */
+  parallel_mode?:"chapters"|"resources";
   /** null = inherit original ZHS default for the current course type. */
   completion_threshold:number|null;
 };
@@ -109,7 +111,7 @@ export type OriginalZhsOptions = ZhsStoredOptions & {
 };
 export const originalZhsDefaults:Readonly<ZhsStoredOptions> = Object.freeze({
   speed:1.5,speed_cap:2,limit_minutes:0,learn_optional:false,
-  max_videos:0,stop_on_error:false,concurrency:2,completion_threshold:null
+  max_videos:0,stop_on_error:false,concurrency:2,parallel_mode:"chapters",completion_threshold:null
 });
 export function validateZhsStoredOptions(value:ZhsStoredOptions):boolean {
   return !!value && Number.isFinite(value.speed) && value.speed>=1 && value.speed<=2 &&
@@ -117,6 +119,7 @@ export function validateZhsStoredOptions(value:ZhsStoredOptions):boolean {
     Number.isInteger(value.limit_minutes) && value.limit_minutes>=0 && value.limit_minutes<=1440 &&
     Number.isInteger(value.max_videos) && value.max_videos>=0 && value.max_videos<=1000 &&
     (value.concurrency===undefined||(Number.isInteger(value.concurrency)&&value.concurrency>=1&&value.concurrency<=3)) &&
+    (value.parallel_mode===undefined||value.parallel_mode==="chapters"||value.parallel_mode==="resources") &&
     typeof value.learn_optional==="boolean" && typeof value.stop_on_error==="boolean" &&
     (value.completion_threshold===null ||
       (Number.isInteger(value.completion_threshold) &&
