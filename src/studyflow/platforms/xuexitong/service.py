@@ -70,6 +70,7 @@ class XuexitongHeartbeatService:
         self._lock = threading.Lock()
         self._queue: ChapterQueue | None = None
         self._thread: threading.Thread | None = None
+        self._starting = False
         self._config: RunConfig | None = None
         self._course_key = ""
         self._run_id = ""
@@ -100,10 +101,20 @@ class XuexitongHeartbeatService:
             return {"ok": False, "error": "XUEXITONG_INTERNAL_ERROR"}
 
     def start(self, request: dict[str, Any]) -> dict[str, Any]:
+        # Reserve the only start slot *before* session/course discovery.
+        # Otherwise two callers can both observe no live thread and create
+        # overlapping queues for the same course.
         with self._lock:
-            if self._thread is not None and self._thread.is_alive():
+            if self._starting or (self._thread is not None and self._thread.is_alive()):
                 raise ServiceError("XUEXITONG_TASK_ALREADY_RUNNING")
+            self._starting = True
+        try:
+            return self._start_reserved(request)
+        finally:
+            with self._lock:
+                self._starting = False
 
+    def _start_reserved(self, request: dict[str, Any]) -> dict[str, Any]:
         course_key = str(request.get("course_key") or "")
         if not course_key:
             raise ServiceError("XUEXITONG_COURSE_REQUIRED")
@@ -180,7 +191,7 @@ class XuexitongHeartbeatService:
 
         self._record("service.started", {
             "course_key": course_key,
-            "task_count": len(targets),
+            "task_count": queue.task_count,
             "chapter_count": len(chapters),
             "speed": config.speed,
             "jobs": config.max_workers,
@@ -192,7 +203,7 @@ class XuexitongHeartbeatService:
             "started": True,
             "run_id": run_id,
             "course_key": course_key,
-            "task_count": len(targets),
+            "task_count": queue.task_count,
             "chapter_count": len(chapters),
             "speed": config.speed,
             "jobs": config.max_workers,

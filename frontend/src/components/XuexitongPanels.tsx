@@ -13,7 +13,7 @@ const initialSettings:XuexitongSettings={
 };
 const taskLabels:Record<string,string>={
   video:"视频",audio:"音频",document:"文档",workid:"章节测验",
-  read:"阅读",live:"直播"
+  read:"阅读",live:"直播",flash:"交互课件"
 };
 
 export function XuexitongLoginPanel({desktop,onConnected}:{
@@ -257,7 +257,8 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
                 <option value="all">全部类型</option><option value="video">视频</option>
                 <option value="audio">音频</option><option value="document">文档</option>
                 <option value="read">阅读</option><option value="workid">测验</option>
-                <option value="live">直播</option><option value="other">其他</option>
+                <option value="live">直播</option><option value="flash">交互课件</option>
+                <option value="other">其他</option>
               </select>
             </label>
             <label className="sf-xxt-select"><span>任务状态</span>

@@ -143,6 +143,103 @@ def test_missing_completion_flag_remains_unknown(monkeypatch):
     assert [item["completed"] for item in result] == [None, False]
 
 
+
+@pytest.mark.parametrize("module,kind", [
+    ("insertvideo", "video"),
+    ("insertaudio", "audio"),
+    ("insertdoc", "document"),
+    ("insertbook", "read"),
+    ("insertflash", "flash"),
+    ("work", "workid"),
+])
+def test_ocs_resource_module_aliases_are_read_only_metadata(module, kind):
+    from studyflow.platforms.xuexitong.taskparse import normalize_card_fields
+
+    card = {
+        "type": "attachment",
+        "property": {"module": module, "_jobid": "90071992547409935",
+                     "name": "资源名称"},
+    }
+    normalized = normalize_card_fields(card)
+    assert normalized["type"] == kind
+    assert normalized["completed"] is None
+    assert normalized["passed"] is False
+    # Resource discovery must never manufacture a completion flag.
+    card["isPassed"] = False
+    assert normalize_card_fields(card)["completed"] is False
+    card["property"]["isPassed"] = True
+    assert normalize_card_fields(card)["completed"] is False
+
+
+def test_chapter_tasks_read_nested_modules_preserve_identity_and_status(monkeypatch):
+    large_id = "90071992547409935"
+    document = {
+        "type": "attachment",
+        "property": {"module": "insertdoc", "_jobid": large_id,
+                     "name": "PPT 课件", "isPassed": True},
+    }
+    payload = {
+        "attachments": [document],
+        "defaults": {"attachments": [
+            dict(document),
+            {"type": "attachment", "property": {
+                "module": "insertflash", "mid": "flash-1", "name": "交互课件",
+            }},
+            {"property": {"module": "work", "_jobid": "quiz-4",
+                          "name": "章节练习", "isPassed": False}},
+        ]},
+    }
+    fake = Session(CHAPTER_HTML, "mArg=" + json.dumps(payload, ensure_ascii=False) + ";")
+    monkeypatch.setattr(adapter, "_session", lambda: fake)
+    tasks = adapter.XuexitongAdapter().list_chapter_tasks("9:8:7", "42")
+    assert [(task["type"], task["id"], task["completed"]) for task in tasks] == [
+        ("document", "document:" + large_id, True),
+        ("flash", "flash:flash-1", None),
+        ("workid", "workid:quiz-4", False),
+    ]
+    assert len({task["id"] for task in tasks}) == len(tasks)
+    assert all(task["chapter_id"] == "42" for task in tasks)
+    assert not any("cookie" in str(task).lower() for task in tasks)
+
+
+def test_video_discovery_dedupes_same_chapter_resource_before_status_request(monkeypatch):
+    media = {
+        "type": "video", "jobid": "job-1", "objectId": "object-1",
+        "otherInfo": "nodeId_1-rt_1", "playTime": 0, "isPassed": False,
+        "property": {"name": "学习视频"},
+    }
+    payload = {"attachments": [media, dict(media)]}
+
+    class StatusResponse(Response):
+        def json(self):
+            return {"status": "success", "dtoken": "private-token", "duration": 120}
+
+    class MediaSession(Session):
+        cookies = {"fid": "1024"}
+
+        def __init__(self):
+            super().__init__(CHAPTER_HTML, "mArg=" + json.dumps(payload) + ";")
+            self.status_calls = 0
+
+        def get(self, url, *, params, **kwargs):
+            if url.startswith(adapter.STATUS_URL):
+                self.status_calls += 1
+                return StatusResponse("")
+            return super().get(url, params=params, **kwargs)
+
+        def close(self):
+            self.closed = True
+
+    fake = MediaSession()
+    monkeypatch.setattr(adapter, "_session", lambda: fake)
+    targets = adapter.XuexitongAdapter().list_video_tasks("9:8:7")
+    assert len(targets) == 1
+    assert targets[0].chapter_id == "42"
+    assert targets[0].job_id == "job-1"
+    assert fake.status_calls == 1
+    assert fake.closed
+
+
 def test_rejects_chapter_not_in_course(monkeypatch):
     fake = Session(CHAPTER_HTML, "")
     monkeypatch.setattr(adapter, "_session", lambda: fake)

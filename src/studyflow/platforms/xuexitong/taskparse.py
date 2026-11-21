@@ -20,6 +20,17 @@ from typing import Any, Iterator
 
 _MARG_ASSIGNMENT = re.compile(r"\bmArg\s*=\s*")
 _VIDEO_KINDS = frozenset({"video", "audio"})
+# OCS exposes some Chaoxing cards through property.module rather than card.type.
+# This is only a read-only classification table, not an execution strategy.
+_MODULE_KINDS = {
+    "insertvideo": "video",
+    "insertaudio": "audio",
+    "insertdoc": "document",
+    "insertbook": "read",
+    "insertflash": "flash",
+    "work": "workid",
+}
+CATALOG_KINDS = frozenset({"video", "audio", "document", "workid", "read", "live", "flash"})
 
 
 def extract_marg_payload(text: str) -> dict[str, Any] | None:
@@ -139,6 +150,14 @@ def normalize_card_fields(card: dict[str, Any]) -> dict[str, Any]:
         return ""
 
     kind = first(card.get("type"), prop.get("type")).lower()
+    module = first(prop.get("module"), card.get("module")).lower()
+    if kind not in CATALOG_KINDS:
+        kind = _MODULE_KINDS.get(kind, _MODULE_KINDS.get(module, kind))
+    completed = card.get("isPassed")
+    if type(completed) is not bool:
+        completed = prop.get("isPassed")
+    if type(completed) is not bool:
+        completed = None
     object_id = first(
         card.get("objectId"), card.get("objectid"),
         prop.get("objectId"), prop.get("objectid"),
@@ -160,6 +179,7 @@ def normalize_card_fields(card: dict[str, Any]) -> dict[str, Any]:
     return {
         "type": kind,
         "is_media": kind in _VIDEO_KINDS,
+        "completed": completed,
         "passed": card.get("isPassed") is True or prop.get("isPassed") is True,
         "object_id": object_id[:160],
         "job_id": job_id[:160],

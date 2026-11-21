@@ -16,7 +16,8 @@ from bs4 import BeautifulSoup
 from studyflow.core.models import Course, Platform
 from studyflow.core.platform_api import ConnectionInfo
 from . import credentials
-from .taskparse import extract_marg_payload, iter_media_cards
+from .taskparse import (CATALOG_KINDS, extract_marg_payload, iter_attachments,
+                        iter_media_cards, normalize_card_fields)
 
 COURSES_URL = "https://mooc2-ans.chaoxing.com/mooc2-ans/visit/courselistdata"
 CHAPTERS_URL = "https://mooc2-ans.chaoxing.com/mooc2-ans/mycourse/studentcourse"
@@ -223,32 +224,29 @@ class XuexitongAdapter:
                 data = _embedded_marg(_checked(response))
                 if not data:
                     continue
-                attachments = data.get("attachments", [])
-                if not isinstance(attachments, list):
-                    continue
-                for index, card in enumerate(attachments):
-                    if not isinstance(card, dict):
-                        continue
-                    kind = str(card.get("type") or "").lower()
-                    if kind not in {"video", "audio", "document", "workid", "read", "live"}:
+                # Shared decoder also handles mArg.defaults / mArg.data cards.
+                for index, card in enumerate(iter_attachments(data)):
+                    normalized = normalize_card_fields(card)
+                    kind = normalized["type"]
+                    if kind not in CATALOG_KINDS:
                         continue
                     prop = card.get("property")
                     if not isinstance(prop, dict):
                         prop = {}
-                    identifier = str(card.get("jobid") or prop.get("jobid") or
-                                     card.get("objectId") or f"{card_num}-{index}")[:160]
+                    # Preserve large server IDs as strings; never convert them to JS numbers.
+                    identifier = (normalized["job_id"] or
+                                  str(prop.get("_jobid") or prop.get("mid") or
+                                      normalized["object_id"] or f"{card_num}-{index}"))[:160]
                     key = kind + ":" + identifier
                     if key in seen:
                         continue
                     seen.add(key)
-                    name = str(prop.get("name") or prop.get("title") or card.get("name")
-                               or kind)[:180]
                     result.append({
                         "id": key,
                         "type": kind,
-                        "title": name,
+                        "title": normalized["title"],
                         "chapter_id": chapter_id,
-                        "completed": card.get("isPassed") if type(card.get("isPassed")) is bool else None,
+                        "completed": normalized["completed"],
                     })
             return result
 
@@ -259,6 +257,7 @@ class XuexitongAdapter:
             chapters = self.list_chapters(course_key, session=session)
             fid = session.cookies.get("fid", "1024")
             results: list[VideoTask] = []
+            seen_media: set[tuple[str, str, str]] = set()
             for chapter in chapters:
                 if chapter["completed"] or chapter["locked"]:
                     continue
@@ -280,6 +279,9 @@ class XuexitongAdapter:
                         dtype = "Audio" if card["type"] == "audio" else "Video"
                         object_id = card["object_id"]
                         job_id = card["job_id"]
+                        identity = (chapter["id"], object_id, job_id)
+                        if identity in seen_media:
+                            continue
                         video_response = session.get(STATUS_URL + quote(object_id, safe=""),
                             params={"k": fid, "flag": "normal"}, timeout=(5, 12), allow_redirects=False)
                         if video_response.status_code != 200 or video_response.is_redirect:
@@ -307,6 +309,9 @@ class XuexitongAdapter:
                             att_duration_enc=card["att_duration_enc"],
                             dtype=dtype,
                         ))
+                        # Same resource can appear in several card pages. Queue each
+                        # course/chapter/object/job identity only once.
+                        seen_media.add(identity)
             return results
         finally:
             session.close()

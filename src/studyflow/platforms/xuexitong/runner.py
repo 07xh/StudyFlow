@@ -526,6 +526,9 @@ class ChapterQueue:
         self._sleeper = sleeper
         self._lock = threading.Lock()
         self._chapters: dict[str, list[VideoTarget]] = {}
+        # Identity spans all chapters in this queue; snapshots and runners
+        # must never compete for the same task_id.
+        self._scheduled_task_ids: set[str] = set()
         self._runners: dict[str, HeartbeatTaskRunner] = {}
         self._cancelled = threading.Event()
         self._paused = threading.Event()
@@ -534,8 +537,22 @@ class ChapterQueue:
         with self._lock:
             if chapter_id in self._chapters:
                 return False
-            self._chapters[chapter_id] = list(targets)
+            # One queue can receive overlapping card pages or provider data.
+            # Keep distinct jobs in their original order, but never dispatch
+            # the same course/chapter/object/job identity twice.
+            unique: list[VideoTarget] = []
+            for target in targets:
+                if target.task_id in self._scheduled_task_ids:
+                    continue
+                self._scheduled_task_ids.add(target.task_id)
+                unique.append(target)
+            self._chapters[chapter_id] = unique
             return True
+
+    @property
+    def task_count(self) -> int:
+        with self._lock:
+            return sum(len(targets) for targets in self._chapters.values())
 
     @property
     def paused(self) -> bool:

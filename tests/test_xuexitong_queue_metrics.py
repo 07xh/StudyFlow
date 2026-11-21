@@ -99,6 +99,23 @@ class TestQueueMetrics(unittest.TestCase):
         self.assertEqual(states[self.first.task_id], "interrupted")
         self.assertEqual(states[self.second.task_id], "not_started")
 
+    def test_duplicate_task_identity_is_only_scheduled_once(self) -> None:
+        from dataclasses import replace
+
+        queue = ChapterQueue(object(), self.config)
+        another_job = replace(self.first, job_id="job-other")
+        self.assertTrue(queue.submit_chapter("1", [
+            self.first, self.first, another_job, self.second, self.second,
+        ]))
+        # Provider data from another chapter must not re-enqueue the same ID.
+        self.assertTrue(queue.submit_chapter("2", [self.first, self.third, self.third]))
+        self.assertFalse(queue.submit_chapter("1", [self.first]))
+        self.assertEqual(queue.task_count, 4)
+        snapshots = queue.status_snapshots(running=True)
+        self.assertEqual(len(snapshots), 4)
+        self.assertEqual(len({item.task_id for item in snapshots}), 4)
+        self.assertTrue(all(item.state == "pending" for item in snapshots))
+
     def test_other_course_has_no_live_queue_or_private_tasks(self) -> None:
         result = self.service.status("elsewhere")
         self.assertIsNone(result["queue"])
