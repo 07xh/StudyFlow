@@ -440,6 +440,16 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         knowledge_id = request.get("knowledge_id")
         kid = knowledge_id if isinstance(knowledge_id, str) else str(knowledge_id or "")
         try:
+            # The background worker uses the service directly. Prevent a
+            # concurrent manual write from overwriting its in-flight paper.
+            if operation in {
+                "zhidao.mastery.round.start", "zhidao.mastery.round.answer",
+                "zhidao.mastery.round.submit", "zhidao.mastery.round.discard",
+            }:
+                from studyflow.platforms.zhidao import zhs_mastery_auto as mastery_auto
+                active = mastery_auto.status(course_key)
+                if active.get("state") in {"starting", "running", "paused", "stopping"}:
+                    raise mastery.MasteryError("MASTERY_AUTO_RUNNING")
             if operation == "zhidao.mastery.auto.start":
                 from studyflow.platforms.zhidao import zhs_mastery_auto as mastery_auto
                 data = mastery_auto.start(course_key, request.get("settings"))
