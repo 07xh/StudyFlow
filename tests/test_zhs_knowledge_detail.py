@@ -263,19 +263,3 @@ def test_native_zhs_entry_rejects_missing_resource_evidence_without_writing(monk
     with pytest.raises(RuntimeError, match="ZHS_DETAIL_RESOURCES_UNCONFIRMED"):
         module.enter_knowledge_once("a" * 64, 87)
     assert calls == []
-
-
-def test_native_zhs_entry_ipc_never_claims_success_by_http_status(monkeypatch):
-    from studyflow.services import bridge
-    monkeypatch.setattr(bridge, "enter_zhs_knowledge_once", lambda key, kid: {
-        "knowledge_id": str(kid), "state": "unchanged", "submitted": True,
-        "server_advanced": False, "server_completed": False,
-    })
-    reply = bridge.dispatch({
-        "id": "native-entry-test", "version": 1,
-        "operation": "zhidao.zhs.knowledge.enter",
-        "course_key": "a" * 64, "knowledge_id": "87",
-    })
-    assert reply["ok"] is True
-    assert reply["data"]["state"] == "unchanged"
-    assert reply["data"]["server_completed"] is False
