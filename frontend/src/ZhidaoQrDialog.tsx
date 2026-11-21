@@ -1,4 +1,5 @@
 import {useCallback,useEffect,useRef,useState} from "react";
+import {createPortal} from "react-dom";
 import {RefreshCw,ShieldCheck,X} from "lucide-react";
 import {zhidaoQrCommand,type ZhidaoQrStage,type ZhidaoQrState} from "./bridge";
 
@@ -89,7 +90,7 @@ export default function ZhidaoQrDialog({dark,onClose,onVerified}:Props){
   };
   const image=state.image_png_base64;
   const showImage=(state.stage==="ready"||state.stage==="requesting")&&Boolean(image);
-  return <div className="qr-backdrop" data-theme={dark?"dark":"light"} role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)void cancel();}}>
+  return createPortal(<div className="qr-backdrop" data-theme={dark?"dark":"light"} role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)void cancel();}}>
     <section className="qr-dialog" role="dialog" aria-modal="true" aria-labelledby="qr-title">
       <div className="qr-header"><h3 id="qr-title">知到扫码登录</h3>
         <button className="qr-icon-button" aria-label="关闭扫码窗口" onClick={()=>void cancel()}><X size={19}/></button>
@@ -107,5 +108,5 @@ export default function ZhidaoQrDialog({dark,onClose,onVerified}:Props){
       </div>
       <p className="qr-privacy">二维码仅用于本次登录，结束后自动清除。</p>
     </section>
-  </div>;
+  </div>,document.body);
 }
