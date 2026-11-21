@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct QueueTask {
     pub task_id: String,
     pub name: Option<String>,
-    pub knowledge_id: Option<u64>,
+    pub knowledge_id: Option<String>,
     pub detail_evidence: Option<String>,
     pub chapter_key: Option<String>,
     pub chapter_name: Option<String>,
@@ -90,7 +90,9 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
             Some(raw) => {
                 let id = raw.as_u64()?;
                 if id == 0 || id > i64::MAX as u64 { return None; }
-                Some(id)
+                // JSON numbers above 2^53 lose precision in JavaScript.
+                // Serialize decimal identifiers as strings for the UI.
+                Some(id.to_string())
             }
         };
         if (kind == "detail") != knowledge_id.is_some() { return None; }
@@ -277,12 +279,13 @@ mod tests {
         let mut data = sample();
         data["tasks"][0]["name"] = json!("历任校首");
         data["tasks"][0]["kind"] = json!("detail");
-        data["tasks"][0]["knowledge_id"] = json!(87);
+        data["tasks"][0]["knowledge_id"] = json!(1876171149646368768_u64);
         data["tasks"][0]["detail_evidence"] = json!("catalog_empty");
         data["tasks"][0]["state"] = json!("informational");
         data["tasks"][0]["percent"] = Value::Null;
         let decoded = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
         assert_eq!(decoded.tasks[0].state, "informational");
+        assert_eq!(decoded.tasks[0].knowledge_id.as_deref(), Some("1876171149646368768"));
         assert!(decoded.tasks[0].percent.is_none());
         data["tasks"][0]["state"] = json!("exited");
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
