@@ -27,9 +27,9 @@ export type LegacyTaskStatus = {
 
 export type ZhsQueueSnapshot={
   concurrency:number;state:string;stale:boolean;
-  tasks:Array<{task_id:string;name:string|null;chapter_key?:string|null;chapter_name?:string|null;kind:"video"|"ppt"|"article"|"other";
+  tasks:Array<{task_id:string;name:string|null;chapter_key?:string|null;chapter_name?:string|null;kind:"video"|"ppt"|"article"|"other"|"detail";
     requirement?:"required"|"optional"|"unknown"|"shared"|null;
-    state:"queued"|"running"|"exited"|"failed"|"stopped"|"unconfirmed"|"unknown";
+    state:"queued"|"running"|"exited"|"failed"|"stopped"|"unconfirmed"|"informational"|"unknown";
     percent:number|null;playback_phase?:"playing"|"paused"|"answering"|null;stale:boolean;exit_code:number|null}>;
 };
 
@@ -291,6 +291,7 @@ export function legacyExitMessage(status: LegacyTaskStatus): string {
     case 12: return "已达到设置的视频数量或任务时长上限；不代表服务器确认课程完成。";
     case 13: return "视频处理遇到错误，已按本次停止策略结束任务；请检查诊断信息。";
     case 14: return "指定的视频或知识点已不在当前真实课程目录中，请重新同步并选择。";
+    case 18: return "目录中存在只有详情、没有可执行资源的知识点；未提交学习进度，请在官方知识点详情页学习或检查课程建设状态。";
     case 1: return "ZHS 已启动但原版执行失败，请检查登录、课程状态及运行环境。";
     default: return `ZHS 意外退出（代码 ${status.exit_code ?? "未知"}），尚未确认执行成功。`;
   }
