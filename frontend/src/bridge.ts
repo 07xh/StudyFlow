@@ -663,6 +663,8 @@ export function masteryWrongQuestions(
 
 export type MasteryAutoSettings = {
   target: number; max_rounds: number; stagnation_rounds: number; max_minutes: number;
+  first_round_mode: "bank_only" | "bank_ai" | "ai_first";
+  max_ai_calls: number; api_key?: string;
 };
 export type MasteryAutoTask = {
   knowledge_id: string; name: string; theme: string;
@@ -676,6 +678,8 @@ export type MasteryAutoStatus = {
   current?: {knowledge_id:string;name:string;theme:string}|null;
   submitting?: {knowledge_id:string;exam_test_id:number}|null;
   tasks: MasteryAutoTask[]; updated_at?: string;
+  ai_calls?: number; ai_used?: number; ai_errors?: number;
+  bank_hits?: number; trials?: number;
 };
 export function masteryAutoStart(courseKey: string, settings: MasteryAutoSettings): Promise<MasteryAutoStatus> {
   return request<MasteryAutoStatus>({operation:"zhidao.mastery.auto.start",course_key:courseKey,settings});
