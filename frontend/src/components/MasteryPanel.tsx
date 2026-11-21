@@ -50,6 +50,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
   const [busy,setBusy]=useState("");
   const [result,setResult]=useState<MasterySubmitResult|null>(null);
   const [notice,setNotice]=useState("");
+  const [submissionCheck,setSubmissionCheck]=useState(false);
   const loadToken=useRef(0);
 
   const loadCatalog=useCallback(async()=>{
@@ -71,7 +72,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
   useEffect(()=>{void loadCatalog();},[loadCatalog]);
 
   const openKnowledge=useCallback(async(item:MasteryKnowledge)=>{
-    setSelected(item);setRound(null);setResult(null);setDraft({});setSaved({});setNotice("");
+    setSelected(item);setRound(null);setResult(null);setDraft({});setSaved({});setNotice("");setSubmissionCheck(false);
     setBusy("open");
     try{
       const active=await masteryActiveRound(courseKey,item.knowledge_id);
@@ -86,7 +87,11 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
         // 服务端已经收下这些答案，回填时直接标成"已保存"，避免重复写。
         setDraft(active.draft||{});
         setSaved(Object.fromEntries(Object.keys(active.draft||{}).map(key=>[key,true])));
-        setNotice(`恢复了一轮未提交的练习（${active.answered}/${active.total} 已保存）。`);
+        const checking=Boolean(active.submission_state&&active.submission_state!=="draft");
+        setSubmissionCheck(checking);
+        setNotice(checking
+          ?"这一轮的提交状态尚待核验；再次点击只会读取服务器状态，不会重复提交。"
+          :`恢复了一轮未提交的练习（${active.answered}/${active.total} 已保存）。`);
       }else{
         const started=await masteryStartRound(courseKey,item.knowledge_id);
         setRound(started);
@@ -100,7 +105,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
 
   const restart=useCallback(async()=>{
     if(!selected)return;
-    setBusy("open");setNotice("");setResult(null);setDraft({});setSaved({});
+    setBusy("open");setNotice("");setResult(null);setDraft({});setSaved({});setSubmissionCheck(false);
     try{
       const started=await masteryStartRound(courseKey,selected.knowledge_id);
       setRound(started);
@@ -147,27 +152,45 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
 
   const submitRound=useCallback(async()=>{
     if(!round||!selected)return;
-    const pending=round.questions
-      .map(item=>String(item.question_id))
-      .filter(id=>draft[id]===undefined);
-    if(pending.length){setNotice(`还有 ${pending.length} 道题没有作答；可以先只提交已答部分。`);}
-    if(dirtyIds.length){
-      const ok=await persistDrafts(dirtyIds);
-      if(!ok)return;
+    if(!submissionCheck){
+      const pending=round.questions
+        .map(item=>String(item.question_id))
+        .filter(id=>draft[id]===undefined);
+      if(pending.length){setNotice(`还有 ${pending.length} 道题没有作答；可以先只提交已答部分。`);}
+      if(dirtyIds.length){
+        const ok=await persistDrafts(dirtyIds);
+        if(!ok)return;
+      }
     }
     setBusy("submit");setNotice("");
     try{
       const submitted=await masterySubmitRound(courseKey,selected.knowledge_id);
       setLastQuestions(round.questions);
       setResult(submitted);
-      setRound(null);
+      setRound(null);setSubmissionCheck(false);
+      await loadCatalog();
+    }catch(cause){
+      const code=cause instanceof Error?cause.message:"";
+      if(code==="SUBMIT_STATUS_UNKNOWN"||code==="SUBMIT_IN_PROGRESS")setSubmissionCheck(true);
+      setNotice(friendlyBridgeError(cause));
+    }finally{
+      setBusy("");
+    }
+  },[courseKey,dirtyIds,loadCatalog,persistDrafts,round,selected,submissionCheck]);
+
+  const recheckResult=useCallback(async()=>{
+    if(!selected)return;
+    setBusy("verify");setNotice("");
+    try{
+      const checked=await masterySubmitRound(courseKey,selected.knowledge_id);
+      setResult(checked);
       await loadCatalog();
     }catch(cause){
       setNotice(friendlyBridgeError(cause));
     }finally{
       setBusy("");
     }
-  },[courseKey,dirtyIds,loadCatalog,persistDrafts,round,selected]);
+  },[courseKey,loadCatalog,selected]);
 
   const discard=useCallback(async()=>{
     if(!selected)return;
@@ -258,11 +281,11 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
         </div>
         <div className="sf-mastery-round-actions">
           <button className="secondary" type="button" disabled={Boolean(busy)} onClick={()=>void discard()}>放弃本轮</button>
-          <button className="secondary" type="button" disabled={Boolean(busy)||!dirtyIds.length} onClick={()=>void saveOnly()}>
+          <button className="secondary" type="button" disabled={Boolean(busy)||submissionCheck||!dirtyIds.length} onClick={()=>void saveOnly()}>
             {busy==="save"?"保存中…":`保存答案${dirtyIds.length?`（${dirtyIds.length}）`:""}`}
           </button>
           <button type="button" disabled={Boolean(busy)} onClick={()=>void submitRound()}>
-            {busy==="submit"?"提交中…":"提交本轮"}
+            {busy==="submit"?"核验中…":submissionCheck?"核验提交状态":"提交本轮"}
           </button>
         </div>
       </div>
@@ -282,6 +305,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
             <p className="sf-mastery-stem">{question.content}</p>
             {fill?<input className="sf-mastery-fill" type="text"
               placeholder="多个空用 | 分隔，例如：生产力|生产关系"
+              disabled={submissionCheck}
               value={typeof value==="string"?value:(Array.isArray(value)?value.join("|"):"")}
               onChange={event=>{
                 const raw=event.target.value;
@@ -296,7 +320,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
                   :value===option.id;
                 return <li key={option.id}>
                   <label className={picked?"is-picked":undefined}>
-                    <input type={multi?"checkbox":"radio"} name={key} checked={picked}
+                    <input type={multi?"checkbox":"radio"} name={key} checked={picked} disabled={submissionCheck}
                       onChange={()=>toggleOption(question.question_id,option.id,multi)}/>
                     <span>{option.content||`选项 ${option.sort??""}`}</span>
                   </label>
@@ -313,8 +337,8 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
         <div>
           <span className="eyebrow">{selected?.name||""}</span>
           <h4>
-            本轮 {result.round_score.correct}/{result.round_score.total}
-            {result.round_score.percent!==null?` · ${result.round_score.percent}%`:""}
+            {result.grading_pending?"本轮判分待确认":`本轮 ${result.round_score.correct}/${result.round_score.total}`}
+            {!result.grading_pending&&result.round_score.percent!==null?` · ${result.round_score.percent}%`:""}
           </h4>
           <p className="sf-muted">
             这是本轮正确率，不是历史最高掌握度（历史最高 {result.mastery_before.high??"—"} 分）。
@@ -322,10 +346,16 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
         </div>
         <div className="sf-mastery-round-actions">
           <button className="secondary" type="button" onClick={()=>{setResult(null);setSelected(null);}}>返回知识点</button>
-          <button type="button" disabled={Boolean(busy)} onClick={()=>void restart()}>再练一轮</button>
+          {result.verification_pending&&<button type="button" disabled={Boolean(busy)}
+            onClick={()=>void recheckResult()}>{busy==="verify"?"核验中…":"重新核对结果"}</button>}
+          <button type="button" disabled={Boolean(busy)||result.verification_pending}
+            onClick={()=>void restart()}>再练一轮</button>
         </div>
       </div>
 
+      {result.verification_pending&&<p className="sf-mastery-notice" role="status">
+        本轮已发送提交，但判分或掌握度回读尚不完整。可重新核对结果，不会重复提交习题。
+      </p>}
       <dl className="sf-mastery-mastery">
         <div>
           <dt>本轮开始前</dt>
