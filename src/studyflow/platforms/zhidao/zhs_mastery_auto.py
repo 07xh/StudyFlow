@@ -123,6 +123,10 @@ def _identity(question: dict[str, Any]) -> tuple[str, list[tuple[int, str]]]:
     qtype = question.get("question_type")
     options = question.get("options") or []
     pairs: list[tuple[int, str]] = []
+    # Fill-in questions sometimes carry placeholder optionVos with empty
+    # content. These do not identify the question or form a usable choice.
+    if qtype == 3:
+        options = []
     for option in options:
         if type(option.get("id")) is not int:
             return "", []
@@ -169,11 +173,20 @@ class AnswerBank:
             raise ValueError("题目或选项不完整，需要手动处理")
         known = self._known(identity)
         if qtype == 3:
-            # Known fill answers may only come from a prior officially released
-            # answer. Trial text is not fabricated.
-            if known is None:
-                raise ValueError("填空题没有已验证答案，需要手动补充")
-            return known if len(known) > 1 else known[0], identity, known
+            if known is not None:
+                return known if len(known) > 1 else known[0], identity, known
+            # The platform may publish the answer *after* grading. Try a
+            # clearly labelled placeholder only once for each distinct stem.
+            # This isn't an answer key and is never marked verified.
+            placeholder = ["待复习"]
+            key = json.dumps(placeholder, ensure_ascii=False)
+            already_tried = self.db.execute(
+                "SELECT 1 FROM trials WHERE identity=? AND choice_texts=?",
+                (identity, key),
+            ).fetchone()
+            if already_tried:
+                raise ValueError("未知填空题占位尝试过一次，官方未公布可确认的答案")
+            return placeholder[0], identity, placeholder
         if qtype not in CHOICE_TYPES or not (2 <= len(pairs) <= 8):
             raise ValueError("当前题型或选项数量不支持自动试答")
         by_text = {text: option_id for option_id, text in pairs}
@@ -215,9 +228,12 @@ class AnswerBank:
             if graded.get("isCorrect") is True:
                 answer_texts = chosen_texts
             else:
+                # Preserve original letter case and punctuation. Some fill-in
+                # questions are case-sensitive or have multiple blanks.
                 answer_texts = [
-                    _normalize(text) for text in graded.get("correctTexts") or []
-                    if _normalize(text)
+                    unescape(re.sub(r"<[^>]*>", " ", str(text))).strip()
+                    for text in graded.get("correctTexts") or []
+                    if isinstance(text, str) and text.strip()
                 ]
         else:
             correct_ids = {str(v) for v in (graded.get("correctOptionIds") or [])}
@@ -284,11 +300,13 @@ def _execute_point(
             # submission marker before preparing a fresh paper.
             _update(submitting=None)
             graded = {str(item["questionId"]): item for item in result.get("graded", [])}
+            unknown_fill_not_revealed = False
             for question, identity, texts in selections:
                 entry = graded.get(str(question["question_id"]))
                 bank.attempted(identity, texts)
-                if entry is not None:
-                    bank.confirm(question, entry, texts)
+                confirmed = bank.confirm(question, entry, texts) if entry is not None else False
+                if question.get("question_type") == 3 and not confirmed:
+                    unknown_fill_not_revealed = True
             latest = result.get("high_mastery_now")
             if latest is None:
                 return False, "服务器未返回可确认的掌握度", score
@@ -300,6 +318,8 @@ def _execute_point(
             _progress(point, rounds=round_index, mastery=score, reason="本轮已核验")
             if score >= config["target"]:
                 return True, "掌握度达到目标", score
+            if unknown_fill_not_revealed:
+                return False, "未知填空题已占位作答一次，但平台未公布正确答案；请手动补充", score
             if stagnant >= config["stagnation_rounds"]:
                 return False, "连续多轮无进步，已停止该知识点", score
         except StopRequested:
