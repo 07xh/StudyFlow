@@ -28,6 +28,7 @@ class QueueTarget:
     chapter_name: str | None = None
     requirement: str = "unknown"
     baseline_progress: int | None = None
+    detail_evidence: str | None = None
 
     @property
     def task_id(self) -> str:
@@ -97,6 +98,23 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             manager = AiCourseManager(session)
             cid, cls = int(course["courseId"]), int(course["classId"])
             info = manager.get_knowledge_points(cid, cls)
+            # A distinct official chapter catalog carries resourceCount and
+            # finishedResourceCount. It is read-only, and 0/0 is NOT a fake
+            # completion or a progress heartbeat.
+            from studyflow.platforms.zhidao.zhs_knowledge_detail import (
+                official_catalog_entry, _counts,
+            )
+            resource_catalog = None
+            try:
+                response = manager._ai_query(
+                    f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic",
+                    {"courseId": cid, "classId": cls},
+                )
+                resource_catalog = response.get("data") if isinstance(response, dict) else None
+            except Exception:
+                # Never stop original ZHS videos for an optional read-only
+                # directory evidence query. A failed read remains unknown.
+                resource_catalog = None
             # A cake theme is the chapter boundary. Keep the server's theme and
             # knowledge-point order, then process resources in their original order.
             points = {
@@ -120,9 +138,17 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                     # while its resource tab has no playable / finishable item.
                     # Preserve that observation without inventing a resource UID
                     # or sending a completion request.
+                    catalog_total, catalog_done = _counts(
+                        official_catalog_entry(resource_catalog, kid))
+                    evidence = (
+                        "catalog_empty" if catalog_total == 0 else
+                        "catalog_mismatch" if catalog_total is not None else
+                        "catalog_unavailable"
+                    )
                     targets.append(QueueTarget(
                         0, kid, "detail", safe_resource_title(point.knowledge_name),
-                        f"ai-{theme_index}", chapter_name, "unknown"))
+                        f"ai-{theme_index}", chapter_name, "unknown",
+                        detail_evidence=evidence))
                 else:
                     targets.extend(resource_targets(
                         kid, resources, options,
@@ -275,6 +301,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     directory.mkdir(parents=True, exist_ok=True)
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
              "knowledge_id": t.knowledge_id if t.kind == "detail" else None,
+             "detail_evidence": t.detail_evidence if t.kind == "detail" else None,
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
              "requirement": t.requirement,
              "state": "informational" if t.kind == "detail" else "queued",
