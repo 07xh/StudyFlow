@@ -61,9 +61,9 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         if !matches!(kind, "video" | "ppt" | "article" | "other" | "detail") { return None; }
         let row_state = row.get("state")?.as_str()?;
         if !matches!(row_state, "queued" | "running" | "exited" | "failed" | "stopped" | "unconfirmed" | "informational") { return None; }
-        // A detail-only knowledge point is visible for diagnosis, but can
-        // never be represented as a completed/active ZHS resource.
-        if (kind == "detail") != (row_state == "informational") { return None; }
+        // Only an independently verified server readback may mark an
+        // empty-resource entry exited; unresolved nodes stay informational.
+        if kind != "detail" && row_state == "informational" { return None; }
         let requirement = match row.get("requirement") {
             None | Some(Value::Null) => None,
             Some(value) => {
@@ -147,14 +147,25 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
             Some(row.get("exit_code")?.as_i64()?)
         };
-        // Reject raw progress or exit evidence before it is masked by the
-        // normal non-running-state parser. A detail-only item has no sender.
-        if row_state == "informational" && (
-            !row.get("percent")?.is_null()
-            || !row.get("exit_code")?.is_null()
-            || !row.get("playback_phase").unwrap_or(&Value::Null).is_null()
-        ) {
-            return None;
+        // Detail does not contain video samples. Only catalog_empty can
+        // execute, and success requires the worker's confirmed readback.
+        if kind == "detail" {
+            if !row.get("percent")?.is_null()
+                || !row.get("playback_phase").unwrap_or(&Value::Null).is_null()
+            {
+                return None;
+            }
+            if row_state != "informational" && detail_evidence.as_deref() != Some("catalog_empty") {
+                return None;
+            }
+            let valid_exit = match row_state {
+                "exited" => exit_code == Some(0),
+                "unconfirmed" => matches!(exit_code, Some(16 | 17)),
+                "failed" => matches!(exit_code, Some(1 | 2 | 13)),
+                "informational" | "queued" | "running" | "stopped" => exit_code.is_none(),
+                _ => false,
+            };
+            if !valid_exit { return None; }
         }
         tasks.push(QueueTask {task_id: id.into(), name, knowledge_id, detail_evidence, chapter_key, chapter_name,
             kind: kind.into(), requirement, state: row_state.into(),
@@ -287,9 +298,19 @@ mod tests {
         assert_eq!(decoded.tasks[0].state, "informational");
         assert_eq!(decoded.tasks[0].knowledge_id.as_deref(), Some("1234567890123456789"));
         assert!(decoded.tasks[0].percent.is_none());
+        data["tasks"][0]["state"] = json!("queued");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
+        data["tasks"][0]["state"] = json!("running");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
         data["tasks"][0]["state"] = json!("exited");
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+        data["tasks"][0]["exit_code"] = json!(0);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
+        data["tasks"][0]["state"] = json!("unconfirmed");
+        data["tasks"][0]["exit_code"] = json!(16);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
         data["tasks"][0]["state"] = json!("informational");
+        data["tasks"][0]["exit_code"] = Value::Null;
         data["tasks"][0]["percent"] = json!(100.0);
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
         data["tasks"][0]["percent"] = Value::Null;
