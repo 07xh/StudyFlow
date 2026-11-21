@@ -784,3 +784,65 @@ def test_three_requirement_modes_are_exclusive_and_backward_compatible():
         validate_run_settings({**base,"requirement_mode":"forged"})
     with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
         validate_run_settings({**base,"custom_key":"untrusted"})
+
+
+def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_path, monkeypatch):
+    """A knowledge detail tab with an empty resource list is informational only."""
+    from types import ModuleType
+    import sys
+    from studyflow.services.zhs_queue import discover_targets, supervise
+
+    zhs = ModuleType("zhs")
+    zhs.__path__ = []
+    cli = ModuleType("zhs.cli")
+    cli.__path__ = []
+    ai = ModuleType("zhs.ai")
+    ai.__path__ = []
+    bootstrap = ModuleType("zhs.cli.bootstrap")
+    course_module = ModuleType("zhs.ai.course")
+    session = NS(close=lambda: None)
+    bootstrap.load_config_and_session = lambda **_kwargs: (None, session)
+
+    class Manager:
+        def __init__(self, _session): pass
+
+        def get_knowledge_points(self, _cid, _cls):
+            return NS(cake_theme_list=[NS(theme_name="绪论", knowledge_list=[
+                NS(knowledge_id=87, knowledge_name="历任校首", study_progress=0)])])
+
+        def list_knowledge_resources(self, _cid, _cls, _kid):
+            return []  # The mobile app's 资源 tab says 暂无资源.
+
+    course_module.AiCourseManager = Manager
+    for name, module in (
+        ("zhs", zhs), ("zhs.cli", cli), ("zhs.ai", ai),
+        ("zhs.cli.bootstrap", bootstrap), ("zhs.ai.course", course_module)
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+
+    options = {**zhs_settings.DEFAULTS, "scope_mode": "all",
+               "selected_ids": [], "resource_mode": "all"}
+    targets, limited = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert limited is False
+    assert len(targets) == 1
+    assert targets[0].kind == "detail"
+    assert targets[0].resource_id == 0  # No real resource UID exists.
+    assert targets[0].knowledge_id == 87
+    assert targets[0].name == "历任校首"
+
+    def forbidden_launch(_target, _token):
+        raise AssertionError("A detail-only point must not start any sender")
+
+    token = "d" * 32
+    assert supervise(targets, 2, token, tmp_path, forbidden_launch) == 18
+    snapshot = json.loads((tmp_path / f"zhs-queue-{token}.json").read_text())
+    assert snapshot["tasks"][0]["state"] == "informational"
+    assert snapshot["tasks"][0]["percent"] is None
+    assert snapshot["tasks"][0]["exit_code"] is None
+
+    # Video-only selection should not create a synthetic detail task.
+    video_only, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2},
+        {**options, "resource_mode": "video"})
+    assert video_only == []
