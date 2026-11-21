@@ -10,6 +10,8 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
 struct QrBridgeWorker {
     child: Child,
@@ -819,11 +821,54 @@ fn launch_zhidao_legacy() -> Result<(), String> {
     Ok(())
 }
 
+// Restore the existing renderer and its live IPC state; never open a second window.
+fn show_main_from_tray(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(Mutex::new(None::<QrBridgeWorker>)))
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
+        .setup(|app| {
+            // Built-in Windows tray; no OCS UI or second browser/HTTP listener.
+            let show = MenuItem::with_id(app, "tray-show", "显示学序", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "tray-quit", "完全退出学序", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let icon = app.default_window_icon().ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "StudyFlow icon missing")
+            })?.clone();
+            TrayIconBuilder::new()
+                .icon(icon)
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| {
+                    match event.id().as_ref() {
+                        "tray-show" => show_main_from_tray(app),
+                        "tray-quit" => {
+                            shutdown_owned_services(app);
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if matches!(event, TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    }) {
+                        show_main_from_tray(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
@@ -834,8 +879,21 @@ pub fn run() {
             legacy_tasks::zhs_queue_stop_video
         ])
         .on_window_event(|window, event| {
-            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
-                shutdown_owned_services(window.app_handle());
+            if window.label() != "main" { return; }
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    // Hiding is not destroying: keep the same authenticated
+                    // renderer and existing Sidecar alive while in the tray.
+                    // The explicit tray Quit entry performs graceful cleanup.
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                tauri::WindowEvent::Destroyed => {
+                    // Last-resort cleanup if the main WebView is actually
+                    // destroyed by the OS or another native path.
+                    shutdown_owned_services(window.app_handle());
+                }
+                _ => {}
             }
         })
         .run(tauri::generate_context!())
