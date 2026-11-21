@@ -2,9 +2,11 @@ import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {BookOpen,CheckCircle2,CircleHelp,RefreshCw,Play,XCircle} from "lucide-react";
 import {
   masteryActiveRound,masteryCatalog,masteryDiscardRound,masterySaveAnswer,
-  masteryStartRound,masterySubmitRound,friendlyBridgeError,
+  masteryStartRound,masterySubmitRound,
+  masteryAutoStart,masteryAutoStatus,masteryAutoPause,masteryAutoResume,masteryAutoStop,
+  friendlyBridgeError,
   type MasteryCatalog,type MasteryKnowledge,type MasteryQuestion,
-  type MasteryRound,type MasterySubmitResult,
+  type MasteryRound,type MasterySubmitResult,type MasteryAutoStatus,
 } from "../bridge";
 import "./MasteryPanel.css";
 
@@ -52,6 +54,62 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
   const [notice,setNotice]=useState("");
   const [submissionCheck,setSubmissionCheck]=useState(false);
   const loadToken=useRef(0);
+  const [auto,setAuto]=useState<MasteryAutoStatus|null>(null);
+  const [autoBusy,setAutoBusy]=useState(false);
+  const [autoError,setAutoError]=useState("");
+  const [autoTarget,setAutoTarget]=useState(90);
+  const [autoRounds,setAutoRounds]=useState(3);
+  const [autoNext,setAutoNext]=useState(true);
+  const [autoKnowledge,setAutoKnowledge]=useState("");
+  const [autoAi,setAutoAi]=useState(false);
+  const [autoKey,setAutoKey]=useState("");
+
+  useEffect(()=>{
+    if(!desktop)return;
+    let cancelled=false;
+    const sync=async()=>{
+      try{
+        const value=await masteryAutoStatus();
+        if(!cancelled)setAuto(value);
+      }catch{
+        // Existing read-only mastery views remain usable even if auto task is unavailable.
+      }
+    };
+    void sync();
+    const timer=setInterval(()=>{void sync();},2500);
+    return ()=>{cancelled=true;clearInterval(timer);};
+  },[desktop]);
+
+  const startAuto=useCallback(async()=>{
+    setAutoBusy(true);setAutoError("");
+    try{
+      const value=await masteryAutoStart(courseKey,{
+        target:autoTarget,max_rounds:autoRounds,max_minutes:30,max_ai_calls:30,
+        auto_next:autoNext,use_ai:autoAi,
+        ...(autoKnowledge?{knowledge_id:autoKnowledge}:{}),
+        ...(autoAi?{api_key:autoKey.trim()}:{}),
+      });
+      setAuto(value);
+      setAutoKey(""); // The API Key must never persist in frontend state after dispatch.
+    }catch(cause){
+      setAutoError(friendlyBridgeError(cause));
+    }finally{
+      setAutoBusy(false);
+    }
+  },[courseKey,autoTarget,autoRounds,autoNext,autoAi,autoKey,autoKnowledge]);
+
+  const controlAuto=useCallback(async(action:"pause"|"resume"|"stop")=>{
+    setAutoBusy(true);setAutoError("");
+    try{
+      const value=action==="pause"?await masteryAutoPause()
+        :action==="resume"?await masteryAutoResume():await masteryAutoStop();
+      setAuto(value);
+    }catch(cause){
+      setAutoError(friendlyBridgeError(cause));
+    }finally{
+      setAutoBusy(false);
+    }
+  },[]);
 
   const loadCatalog=useCallback(async()=>{
     if(!desktop){setError("掌握度需要在桌面版中运行。");return;}
@@ -238,6 +296,80 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
 
     {error&&<p className="sf-mastery-error" role="alert">{error}</p>}
     {notice&&<p className="sf-mastery-notice" role="status">{notice}</p>}
+
+    <div className="sf-mastery-auto" aria-label="掌握度后台自动任务">
+      <div className="sf-mastery-auto-head">
+        <div>
+          <h4>后台自动习题</h4>
+          <p className="sf-muted">
+            题库优先，AI 可选。自动读取、解题、保存、提交及回读服务器掌握度，
+            无可靠答案或结果未确认时停止，不伪造完成。
+          </p>
+        </div>
+        <strong>{auto?.phase||"未启动"}</strong>
+      </div>
+      <div className="sf-mastery-auto-controls">
+        <label>目标掌握度
+          <input type="number" min={1} max={100} value={autoTarget}
+            disabled={autoBusy||Boolean(auto?.running)}
+            onChange={event=>setAutoTarget(Number(event.target.value))}/>
+        </label>
+        <label>单知识点最多轮次
+          <input type="number" min={1} max={10} value={autoRounds}
+            disabled={autoBusy||Boolean(auto?.running)}
+            onChange={event=>setAutoRounds(Number(event.target.value))}/>
+        </label>
+        <label>任务范围
+          <select value={autoKnowledge} disabled={autoBusy||Boolean(auto?.running)}
+            onChange={event=>setAutoKnowledge(event.target.value)}>
+            <option value="">所有未达标知识点</option>
+            {(catalog?.knowledge||[]).filter(item=>!item.free_exam).map(item=>
+              <option key={item.knowledge_id} value={item.knowledge_id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label className="sf-mastery-auto-check">
+          <input type="checkbox" checked={autoNext}
+            disabled={autoBusy||Boolean(auto?.running)}
+            onChange={event=>setAutoNext(event.target.checked)}/> 自动继续下一知识点
+        </label>
+        <label className="sf-mastery-auto-check">
+          <input type="checkbox" checked={autoAi}
+            disabled={autoBusy||Boolean(auto?.running)}
+            onChange={event=>setAutoAi(event.target.checked)}/> 题库未命中时使用 DeepSeek
+        </label>
+        {autoAi&&<label className="sf-mastery-auto-key">DeepSeek API Key（仅本次任务使用）
+          <input type="password" autoComplete="off" value={autoKey}
+            disabled={autoBusy||Boolean(auto?.running)}
+            onChange={event=>setAutoKey(event.target.value)}
+            placeholder="填写本人的 DeepSeek API Key"/>
+        </label>}
+      </div>
+      {autoAi&&<p className="sf-muted">启用 AI 会向 DeepSeek 发送当前习题题干与选项；密钥不写入本地配置。</p>}
+      <div className="sf-mastery-round-actions">
+        {!auto?.running
+          ?<button type="button" disabled={autoBusy||!desktop||!catalog||(autoAi&&!autoKey.trim())}
+              onClick={()=>void startAuto()}>启动后台自动习题</button>
+          :<>
+            {auto.state==="paused"
+              ?<button className="secondary" type="button" disabled={autoBusy}
+                  onClick={()=>void controlAuto("resume")}>继续</button>
+              :<button className="secondary" type="button" disabled={autoBusy||auto.state==="stopping"}
+                  onClick={()=>void controlAuto("pause")}>暂停</button>}
+            <button type="button" disabled={autoBusy||auto.state==="stopping"}
+              onClick={()=>void controlAuto("stop")}>停止</button>
+          </>}
+      </div>
+      {autoError&&<p className="sf-mastery-error" role="alert">{autoError}</p>}
+      {auto&&<div className="sf-mastery-auto-status" role="status">
+        <p>{auto.message||auto.phase}</p>
+        <p>知识点 {auto.points_done}/{auto.points_total} · 轮次 {auto.round} ·
+          当前掌握度 {auto.mastery??"—"} · 题库 {auto.bank_hit} ·
+          AI 解题 {auto.ai_count}（请求 {auto.ai_calls}）</p>
+        {auto.knowledge&&<p>当前：{auto.knowledge}</p>}
+        {auto.logs?.length>0&&<ul>{auto.logs.slice(-6).map((line,index)=>
+          <li key={index}>{line}</li>)}</ul>}
+      </div>}
+    </div>
 
     {!round&&!result&&<div className="sf-mastery-body">
       <ul className="sf-mastery-list">
