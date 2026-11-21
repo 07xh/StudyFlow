@@ -84,6 +84,7 @@ def install_mock_zhs(monkeypatch, *, resource_count=0, finished_count=0, main_co
 def test_zhs_detail_reads_genuine_metadata_without_any_heartbeat(monkeypatch):
     events = install_mock_zhs(monkeypatch, main_content="<p>真实图文知识点</p>")
     detail = read_knowledge_detail("a" * 64, 87)
+    assert detail["knowledge_id"] == "87"
     assert detail["name"] == "历任校首"
     assert detail["content"] == "真实图文知识点"
     assert detail["content_available"] is True
@@ -125,11 +126,11 @@ def test_zhs_detail_ipc_is_scoped_and_reports_only_readonly_evidence(monkeypatch
                         (calls.append((course_key, knowledge_id)) or expected))
     request = {"id": "detail-read-1", "version": 1,
                "operation": "zhidao.zhs.knowledge.detail",
-               "course_key": "a" * 64, "knowledge_id": 87}
+               "course_key": "a" * 64, "knowledge_id": "1876171149646368768"}
     response = bridge.dispatch(request)
     assert response == {"id": "detail-read-1", "ok": True, "data": expected}
-    assert calls == [("a" * 64, 87)]
-    for invalid in (0, -2, True, "87", 2**64):
+    assert calls == [("a" * 64, 1876171149646368768)]
+    for invalid in (0, -2, True, 87, 2**64, "", "0", "-1", "01", "9"*20, "abc"):
         response = bridge.dispatch({**request, "knowledge_id": invalid})
         assert response["ok"] is False
         assert response["error"] == "INVALID_REQUEST"
