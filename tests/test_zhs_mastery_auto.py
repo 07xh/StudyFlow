@@ -59,10 +59,38 @@ def test_bank_unverified_guess_becomes_verified_after_official_result():
     bank.close()
 
 
-def test_unknown_fill_is_not_fabricated():
+def test_unknown_fill_uses_placeholder_once_and_stops_without_official_answer():
     bank = auto.AnswerBank()
-    with pytest.raises(ValueError,match="填空"):
-        bank.choose(question(kind=3))
+    fill = question(kind=3)
+    candidate, identity, texts = bank.choose(fill)
+    assert candidate == "待复习"
+    assert texts == ["待复习"]
+    bank.attempted(identity, texts)
+    with pytest.raises(ValueError,match="尝试过一次"):
+        bank.choose(fill)
+    # Incorrect own answer without published correct text must not enter bank.
+    assert bank.confirm(fill, {"isCorrect":False,"correctTexts":[]}, texts) is False
+    bank.close()
+
+
+def test_official_fill_answer_can_replace_placeholder_next_round():
+    bank = auto.AnswerBank()
+    fill = question(kind=3)
+    candidate, identity, texts = bank.choose(fill)
+    bank.attempted(identity, texts)
+    assert bank.confirm(fill, {"isCorrect":False,
+                               "correctTexts":["PhotoSynthesis"]}, texts) is True
+    answer, _, _ = bank.choose(fill)
+    assert answer == "PhotoSynthesis", "must preserve official answer case"
+    bank.close()
+
+
+def test_fake_fill_options_do_not_block_identity():
+    bank = auto.AnswerBank()
+    fill = question(kind=3)
+    fill["options"] = [{"id":99, "content":""}]
+    candidate, _, _ = bank.choose(fill)
+    assert candidate == "待复习"
     bank.close()
 
 
