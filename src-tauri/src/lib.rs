@@ -258,9 +258,9 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && opts.get("max_minutes").and_then(|v| v.as_u64()).is_some_and(|n| (1..=720).contains(&n))
                     && opts.get("stagnation_rounds").and_then(|v| v.as_u64()).is_some_and(|n| (1..=10).contains(&n))
                     && opts.get("max_ai_calls").and_then(|v| v.as_u64()).is_some_and(|n| (1..=100).contains(&n))
-                    && opts.get("api_key").map_or(mode == "bank_only", |k| k.as_str()
+                    && opts.get("api_key").map_or(matches!(mode, "bank_only" | "arbitrary_first"), |k| k.as_str()
                         .is_some_and(|s| s.len() <= 256 && !s.contains('\r') && !s.contains('\n')
-                            && (mode == "bank_only" || !s.trim().is_empty())))
+                            && (matches!(mode, "bank_only" | "arbitrary_first") || !s.trim().is_empty())))
             }) => Ok(()),
         "zhidao.mastery.auto.status" if request.get("course_key").and_then(|x| x.as_str())
             .is_some_and(|key| key.len() == 64
