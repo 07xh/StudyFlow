@@ -93,9 +93,22 @@ class MasteryHttpClient:
                timestamp: bool = True, json_body: bool = False) -> Any:
         base = BASE_AI if family == "ai" else BASE_EXAM
         params = self._secure(data, family=family, timestamp=timestamp)
-        result = self.session.api_query(
-            base + path, params, method=method,
-            content_type="json" if json_body else "form")
+        origin = ("https://ai-smart-course-student-pro.zhihuishu.com"
+                  if family == "ai" else "https://studentexamcomh5.zhihuishu.com")
+        client = self.session._get_client()
+        request_kwargs = {
+            "headers": {"Origin": origin, "Referer": origin + "/"},
+            "timeout": 30.0,
+        }
+        if method == "GET":
+            request_kwargs["params"] = params
+        elif json_body:
+            request_kwargs["json"] = params
+        else:
+            request_kwargs["data"] = params
+        response = client.request(method, base + path, **request_kwargs)
+        response.raise_for_status()
+        result = response.json()
         return _data(result, 200 if family == "ai" else 0)
 
     def paper(self, course_id: int, class_id: int, knowledge_id: int) -> Paper:
