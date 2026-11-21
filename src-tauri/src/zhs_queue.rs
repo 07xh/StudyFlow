@@ -125,7 +125,13 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
             Some(row.get("exit_code")?.as_i64()?)
         };
-        if row_state == "informational" && (percent.is_some() || playback_phase.is_some() || exit_code.is_some()) {
+        // Reject raw progress or exit evidence before it is masked by the
+        // normal non-running-state parser. A detail-only item has no sender.
+        if row_state == "informational" && (
+            !row.get("percent")?.is_null()
+            || !row.get("exit_code")?.is_null()
+            || !row.get("playback_phase").unwrap_or(&Value::Null).is_null()
+        ) {
             return None;
         }
         tasks.push(QueueTask {task_id: id.into(), name, chapter_key, chapter_name,
