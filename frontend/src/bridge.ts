@@ -105,7 +105,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.progress.verify"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.player.target"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.course.detail"; course_key: string}
-  | {id: string; version: 1; operation: "zhidao.zhs.knowledge.detail"; course_key: string; knowledge_id: number}
+  | {id: string; version: 1; operation: "zhidao.zhs.knowledge.detail"; course_key: string; knowledge_id: string}
   | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
   | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
@@ -164,7 +164,7 @@ export type YuketangCourseProgress = {
   items:YuketangVideoProgress[];
 };
 export type ZhsKnowledgeDetail = {
-  course_key:string;knowledge_id:number;name:string;content:string;
+  course_key:string;knowledge_id:string;name:string;content:string;
   content_available:boolean;detail_metadata_present:boolean;
   listed_resource_count:number;official_resource_count:number|null;
   official_finished_resource_count:number|null;catalog_mismatch:boolean;
