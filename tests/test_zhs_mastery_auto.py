@@ -46,7 +46,7 @@ def reset_worker(tmp_path, monkeypatch):
 
 
 def _wait():
-    for _ in range(100):
+    for _ in range(550):  # covers two 1-second read-only verification waits
         snap = auto.status()
         if snap["state"] not in ("running", "paused", "stopping"):
             return snap
