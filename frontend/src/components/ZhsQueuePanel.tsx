@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import {Square,RefreshCw} from "lucide-react";
 import {stopZhsVideo,legacyError,legacyExitMessage,zhsDiagnosticMessage,type LegacyTaskStatus} from "../legacyPlayback";
-import {friendlyBridgeError,request,type ZhsKnowledgeDetail} from "../bridge";
+import {friendlyBridgeError,request,type ZhsKnowledgeDetail,type ZhsKnowledgeEntryResult} from "../bridge";
 
 const labels:Record<string,string>={queued:"排队中",running:"运行中",exited:"本轮结束 · 待核验",
   failed:"执行失败",unconfirmed:"服务器未确认",stopped:"已停止",informational:"只有详情 · 暂无可执行资源",unknown:"状态待核实"};
@@ -14,6 +14,8 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const [message,setMessage]=useState("");
   const [detail,setDetail]=useState<ZhsKnowledgeDetail|null>(null);
   const [detailBusy,setDetailBusy]=useState(false);
+  const [entryBusy,setEntryBusy]=useState(false);
+  const [attemptedEntries,setAttemptedEntries]=useState<Set<string>>(new Set());
   const [detailMessage,setDetailMessage]=useState("");
   const [serverComparison,setServerComparison]=useState("");
   const currentRun=useRef(status.run_id);
@@ -21,6 +23,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   useEffect(()=>{
     setRequested(new Set());setMessage("");
     setDetail(null);setDetailMessage("");setDetailBusy(false);
+    setEntryBusy(false);setAttemptedEntries(new Set());
     setServerComparison("");
   },[status.run_id]);
   const queue=status.zhs_queue;
@@ -90,6 +93,37 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       setDetailMessage("知识点详情读取失败："+friendlyBridgeError(error));
     }finally{
       if(run===currentRun.current)setDetailBusy(false);
+    }
+  }
+  async function enterKnowledge(){
+    const item=detail;
+    const courseKey=status.course_id;
+    const run=status.run_id;
+    if(!item||!courseKey||entryBusy||detailBusy||attemptedEntries.has(item.knowledge_id)||
+       item.official_resource_count!==0||item.catalog_mismatch||item.progress_sources_disagree)return;
+    // A page-entry log has unverified completion semantics; allow only one
+    // user-initiated entry per point/run and never silently retry the write.
+    setAttemptedEntries(previous=>new Set([...previous,item.knowledge_id]));
+    setEntryBusy(true);setDetailMessage("");
+    try{
+      const result=await request<ZhsKnowledgeEntryResult>({
+        operation:"zhidao.zhs.knowledge.enter",course_key:courseKey,
+        knowledge_id:item.knowledge_id
+      });
+      if(run!==currentRun.current||result.knowledge_id!==item.knowledge_id)return;
+      const updated=result.server_advanced?
+        result.server_completed?"ZHS 服务器已确认该知识点完成。":"ZHS 服务器已确认该知识点学习进度增加。":
+        result.state==="already_complete"?"服务器原本已完成，无须再次进入。":
+        result.state==="progress_conflict"?"两个服务器目录进度不一致，本次没有发送进入记录。":
+        result.state==="verification_unavailable"?"已发送一次知识点进入记录，但服务器进度暂无法核验；不能认定完成。":
+        "已发送一次官方知识点进入记录，但服务器学习进度未增加；不认定完成，也不会自动重复上报。";
+      setServerComparison(updated);
+      if(result.server_advanced)await inspectDetail(item.knowledge_id);
+    }catch(error){
+      if(run!==currentRun.current)return;
+      setDetailMessage("ZHS 原生进入记录失败或未能核验："+friendlyBridgeError(error));
+    }finally{
+      if(run===currentRun.current)setEntryBusy(false);
     }
   }
   type Row=NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number];
@@ -186,7 +220,13 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         移动版目录学习进度：{detail.mobile_knowledge_progress_percent}%（独立回读，并非本次操作新增）
       </p>}
       <div className="actions">
-        <button className="secondary" type="button" disabled={detailBusy}
+        {detail.official_resource_count===0&&!detail.progress_sources_disagree&&
+          detail.knowledge_progress_percent<100&&<button
+            className="secondary" type="button" disabled={detailBusy||entryBusy||attemptedEntries.has(detail.knowledge_id)}
+            onClick={()=>void enterKnowledge()}>
+            {entryBusy?"ZHS 核验中…":attemptedEntries.has(detail.knowledge_id)?"已尝试一次":"ZHS 内进入此知识点并核验"}
+          </button>}
+        <button className="secondary" type="button" disabled={detailBusy||entryBusy}
           onClick={()=>void inspectDetail(detail.knowledge_id)}>
           <RefreshCw size={14}/>{detailBusy?"核验中…":"核验服务器进度"}
         </button>
@@ -198,7 +238,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>
         {detail.content_available?detail.content:"官方知识点接口未提供可展示的正文；请在知到原页面查看完整详情。"}
       </div>
-      <small className="sf-muted">本页面只读，不发送学习心跳或完成请求；进度来自真实课程服务器记录。</small>
+      <small className="sf-muted">ZHS 仅在你点击进入时发送一次官方页面进入日志并立即回读服务器；它不是视频心跳，接口成功不等于学习完成。未证实有效前不会自动重复发送。</small>
     </section>}
     {detailMessage&&<p role="status" className="sf-muted">{detailMessage}</p>}
     {informational.length>0&&<p role="status" className="sf-muted">
