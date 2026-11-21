@@ -97,6 +97,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.clear"}
   | {id: string; version: 1; operation: "yuketang.settings.get"}
   | {id: string; version: 1; operation: "yuketang.settings.save"; settings: OriginalYktOptions}
+  | {id: string; version: 1; operation: "zhidao.mastery.settings.get"}
+  | {id: string; version: 1; operation: "zhidao.mastery.settings.save"; settings: {target:number;max_rounds:number;max_api_calls:number;max_minutes:number;auto_next:boolean;next_scope:"course"|"chapter";browser:"msedge"|"chrome";use_ai:boolean;api_key?:string;entry_url?:string}}
   | {id: string; version: 1; operation: "zhidao.zhs.settings.get"; course_key?:string}
   | {id: string; version: 1; operation: "zhidao.zhs.settings.save"; course_key?:string; settings: ZhsStoredOptions}
   | {id: string; version: 1; operation: "zhidao.cookie.import"; content: string; mode: "file" | "text"}
@@ -237,7 +239,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "PLATFORM_NOT_READY", "UNKNOWN_OPERATION", "CREDENTIAL_STORAGE_FAILED", "INVALID_YUKETANG_CONFIGURATION", "UPDATE_FAILED", "INVALID_UPDATE_SETTINGS",
                              "UPDATE_NETWORK_FAILED", "UPDATE_RATE_LIMITED", "UPDATE_RELEASE_INVALID", "UPDATE_ASSET_UNAVAILABLE",
                              "UPDATE_DOWNLOAD_FAILED", "UPDATE_CHECKSUM_FAILED", "UPDATE_STORAGE_FAILED", "UPDATE_REDIRECT_REJECTED", "UPDATE_MIRROR_UNAVAILABLE",
-                             "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
+                             "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED", "MASTERY_SETTINGS_UNAVAILABLE", "MASTERY_INVALID_SETTINGS",
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
                              "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
@@ -446,6 +448,8 @@ export function friendlyBridgeError(value: unknown): string {
     case "COURSE_ROUTE_UNAVAILABLE": return "当前课程缺少原版播放器需要的安全路由信息，请重新同步课程。";
     case "PLAYER_SETTINGS_UNAVAILABLE": return "知到播放器设置读取或保存失败，旧设置保持不变。";
     case "INVALID_PLAYER_SETTINGS": return "知到播放器参数无效，未保存。";
+    case "MASTERY_SETTINGS_UNAVAILABLE": return "掌握度设置无法读取或保存，请检查本机文件权限。";
+    case "MASTERY_INVALID_SETTINGS": return "掌握度参数不符合范围，或练习链接不是官方 HTTPS 地址。";
     case "ZHS_SETTINGS_UNAVAILABLE": return "ZHS 参数读取或保存失败，原版设置未修改。";
     case "INVALID_ZHS_SETTINGS": return "ZHS 参数超出原版支持范围，未保存。";
     case "ZHIDAO_DIAGNOSE_FAILED": return "知到连接诊断未能完成。";

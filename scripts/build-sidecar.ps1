@@ -7,10 +7,11 @@ python -m studyflow.services.zhs_upstream_patch prepare $stage
 if ($LASTEXITCODE -ne 0) { throw 'Reviewed upstream ZHS sources do not match this installation' }
 $flags = @('--noconfirm','--clean','--onefile','--console',
   '--name','studyflow-bridge','--paths','src','--paths',$stage,
-  '--collect-all','keyring','--collect-all','zhs','--copy-metadata','zhs',
+  '--collect-all','keyring','--collect-all','zhs','--collect-all','playwright','--copy-metadata','zhs',
   '--add-data',"$((Resolve-Path 'legacy/yuketang/main.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/yuketang/exe_entry.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/zhidao').Path);legacy/zhidao",
+  '--collect-all','playwright',
   '--hidden-import','dotenv','--hidden-import','websocket',
   '--distpath','packaging/sidecar','--workpath','build/pyinstaller',
   '--specpath','build/specs','packaging/bridge_entry.py')
