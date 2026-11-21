@@ -343,7 +343,7 @@ def start(course_key: str, options: dict[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("INVALID_REQUEST")
     opts = {
-        "target": options.get("target", 90),
+        "target": options.get("target", 100),
         "max_rounds": options.get("max_rounds", 3),
         "max_minutes": options.get("max_minutes", 30),
         "auto_next": options.get("auto_next", False),
