@@ -24,6 +24,7 @@ import {useZhidaoAutoVerify} from "./zhidaoAutoVerify";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {MasteryPanel} from "./components/MasteryPanel";
+import {MasteryAutoPanel} from "./components/MasteryAutoPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
 import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangPlayedVideo,verifyYuketangCourse,getYuketangVideoSummary,subscribeYuketangVerification,getYuketangVerificationRevision} from "./components/YuketangCourseDetailPanel";
 import {UpdatePanel} from "./components/UpdatePanel";
@@ -863,8 +864,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         </CollapsibleSection>
         <CollapsibleSection id={scope+"mastery"} title="AI 掌握度" defaultExpanded={false} lazy>
           {course.course_type==="ai"
-            ?<MasteryPanel key={"mastery:"+course.course_id} courseKey={course.course_id}
-              courseTitle={course.title} desktop={desktop}/>
+            ?<>
+              <MasteryAutoPanel key={"mastery-auto:"+course.course_id}
+                courseKey={course.course_id} desktop={desktop}/>
+              <MasteryPanel key={"mastery:"+course.course_id} courseKey={course.course_id}
+                courseTitle={course.title} desktop={desktop}/>
+            </>
             :<p className="sf-muted" role="note">
               掌握度习题只存在于知到 AI 课程。当前课程是共享课，
               知识点掌握度请以课程页的服务器进度为准。
