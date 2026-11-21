@@ -136,6 +136,16 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": uc_heartbeat}
         return {"id": request_id, "ok": False,
                 "error": str(uc_heartbeat.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
+    if operation in ("zhidao.mastery.settings.get", "zhidao.mastery.settings.save"):
+        try:
+            from studyflow.platforms.zhidao.mastery_helper.settings import public_settings, save_settings
+            data = (public_settings() if operation.endswith(".get")
+                    else save_settings(request.get("settings")))
+            return {"id": request_id, "ok": True, "data": data}
+        except (ValueError, TypeError):
+            return {"id": request_id, "ok": False, "error": "MASTERY_INVALID_SETTINGS"}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "MASTERY_SETTINGS_UNAVAILABLE"}
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
     if operation in ("zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"):
