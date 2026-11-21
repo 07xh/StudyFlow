@@ -152,9 +152,13 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         <strong>{detail.name} · 服务器只读</strong>
         <button className="secondary" type="button" onClick={()=>setDetail(null)}>收起详情</button>
       </div>
-      <p>知识点进度：{detail.knowledge_progress_percent}% ·
-        平台目录资源：{detail.official_resource_count==null?"未提供":detail.official_resource_count} ·
-        已完成资源：{detail.official_finished_resource_count==null?"未提供":detail.official_finished_resource_count}</p>
+      <p>ZHS 原会话知识点进度：{detail.knowledge_progress_percent}% ·
+        资源目录来源：{detail.catalog_source==="mobile"?"移动版":detail.catalog_source==="desktop"?"桌面版":"未确认"} ·
+        目录资源数：{detail.official_resource_count==null?"接口未提供":detail.official_resource_count} ·
+        已完成资源数：{detail.official_finished_resource_count==null?"接口未提供":detail.official_finished_resource_count}</p>
+      {detail.mobile_knowledge_progress_percent!=null&&<p>
+        移动版目录学习进度：{detail.mobile_knowledge_progress_percent}%（独立回读，并非本次操作新增）
+      </p>}
       {detail.catalog_mismatch&&<p role="status">资源目录与 ZHS 返回数量不一致；本次不能认定无资源。</p>}
       {detail.official_resource_count===0&&<p>官方目录记录为 0 项资源。这类知识点没有可调用的视频/PPT 资源心跳，不能凭打开详情就标记学习完成。</p>}
       <div style={{whiteSpace:"pre-wrap",maxHeight:320,overflowY:"auto"}}>
