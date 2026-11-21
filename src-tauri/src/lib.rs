@@ -762,7 +762,7 @@ fn zhs_knowledge_learning_url(course_id: &str, knowledge_id: &str, class_id: &st
             && input.parse::<u64>().is_ok_and(|n| n > 0)
     };
     if !valid_decimal(course_id) || !valid_decimal(class_id) || !valid_decimal(knowledge_id)
-        || knowledge_id.parse::<u64>().ok().is_none_or(|id| id > i64::MAX as u64)
+        || knowledge_id.parse::<u64>().ok().map_or(true, |id| id > i64::MAX as u64)
     {
         return Err("ZHS_KNOWLEDGE_ROUTE_INVALID".into());
     }
