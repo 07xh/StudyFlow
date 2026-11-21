@@ -786,7 +786,7 @@ def test_three_requirement_modes_are_exclusive_and_backward_compatible():
         validate_run_settings({**base,"custom_key":"untrusted"})
 
 
-def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_path, monkeypatch):
+def test_zero_resource_ai_point_uses_existing_worker_and_server_readback(tmp_path, monkeypatch):
     """A knowledge detail tab with an empty resource list is informational only."""
     from types import ModuleType
     import sys
@@ -852,17 +852,23 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     assert targets[0].name == "历任校首"
     assert targets[0].detail_evidence == "catalog_empty"
 
-    def forbidden_launch(_target, _token):
-        raise AssertionError("A detail-only point must not start any sender")
+    class FakeWorker:
+        stdin = None
+        def poll(self):
+            return 16  # Official readback unchanged; do NOT claim completion.
+
+    def launch(target, _token):
+        assert target.kind == "detail" and target.detail_evidence == "catalog_empty"
+        return FakeWorker()
 
     token = "d" * 32
-    assert supervise(targets, 2, token, tmp_path, forbidden_launch) == 18
+    assert supervise(targets, 2, token, tmp_path, launch) == 13
     snapshot = json.loads((tmp_path / f"zhs-queue-{token}.json").read_text())
-    assert snapshot["tasks"][0]["state"] == "informational"
+    assert snapshot["tasks"][0]["state"] == "unconfirmed"
     assert snapshot["tasks"][0]["knowledge_id"] == 87
     assert snapshot["tasks"][0]["detail_evidence"] == "catalog_empty"
     assert snapshot["tasks"][0]["percent"] is None
-    assert snapshot["tasks"][0]["exit_code"] is None
+    assert snapshot["tasks"][0]["exit_code"] == 16
 
     # On the uploaded recording the directory shows completed points,
     # even though mastery stays at 0%; those must not become fake jobs.
