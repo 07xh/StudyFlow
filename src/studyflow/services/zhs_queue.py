@@ -274,6 +274,7 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     """Bounded chapter lanes: sequential within each chapter, parallel across chapters."""
     directory.mkdir(parents=True, exist_ok=True)
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
+             "knowledge_id": t.knowledge_id if t.kind == "detail" else None,
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
              "requirement": t.requirement,
              "state": "informational" if t.kind == "detail" else "queued",
