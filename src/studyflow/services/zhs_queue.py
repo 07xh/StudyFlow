@@ -28,6 +28,7 @@ class QueueTarget:
     chapter_name: str | None = None
     requirement: str = "unknown"
     baseline_progress: int | None = None
+    detail_evidence: str | None = None
 
     @property
     def task_id(self) -> str:
@@ -97,6 +98,16 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             manager = AiCourseManager(session)
             cid, cls = int(course["courseId"]), int(course["classId"])
             info = manager.get_knowledge_points(cid, cls)
+            # A distinct official chapter catalog carries resourceCount and
+            # finishedResourceCount. It is read-only, and 0/0 is NOT a fake
+            # completion or a progress heartbeat.
+            from studyflow.platforms.zhidao.zhs_knowledge_detail import (
+                official_catalog_entry, _counts, read_course_catalogs,
+                mobile_study_progress,
+            )
+            # Resource counts and mobile studyProgress are distinct server
+            # signals. Read each without sending a completion request.
+            catalogs = read_course_catalogs(manager, session, cid, cls)
             # A cake theme is the chapter boundary. Keep the server's theme and
             # knowledge-point order, then process resources in their original order.
             points = {
@@ -109,9 +120,42 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             for kid, (point, theme_index, chapter_name) in points.items():
                 if (selected and kid not in selected) or point.study_progress >= 101:
                     continue
-                targets.extend(resource_targets(
-                    kid, manager.list_knowledge_resources(cid, cls, kid), options,
-                    chapter_key=f"ai-{theme_index}", chapter_name=chapter_name))
+                resources = manager.list_knowledge_resources(cid, cls, kid)
+                mobile_entry = official_catalog_entry(catalogs.get("mobile"), kid)
+                mobile_progress = mobile_study_progress(mobile_entry)
+                desktop_complete = point.study_progress >= 100
+                mobile_complete = mobile_progress is not None and mobile_progress >= 100
+                progress_disagrees = (
+                    mobile_progress is not None and desktop_complete != mobile_complete
+                )
+                if not resources and desktop_complete and not progress_disagrees:
+                    # A verified server-complete knowledge point has no
+                    # resource task to run. When mobile and ZHS disagree,
+                    # fail closed rather than reporting a false completion.
+                    continue
+                if not resources and options.get("resource_mode", "all") == "all":
+                    # A directory knowledge point can contain detail-page text
+                    # while its resource tab has no playable / finishable item.
+                    # Preserve that observation without inventing a resource UID
+                    # or sending a completion request.
+                    desktop_entry = official_catalog_entry(catalogs.get("desktop"), kid)
+                    entry = desktop_entry if desktop_entry is not None else mobile_entry
+                    catalog_total, _ = _counts(entry)
+                    evidence = (
+                        "progress_conflict" if progress_disagrees else
+                        "catalog_empty" if catalog_total == 0 else
+                        "catalog_mismatch" if catalog_total is not None else
+                        "catalog_no_counts" if entry is not None else
+                        "catalog_unavailable"
+                    )
+                    targets.append(QueueTarget(
+                        0, kid, "detail", safe_resource_title(point.knowledge_name),
+                        f"ai-{theme_index}", chapter_name, "unknown",
+                        detail_evidence=evidence))
+                else:
+                    targets.extend(resource_targets(
+                        kid, resources, options,
+                        chapter_key=f"ai-{theme_index}", chapter_name=chapter_name))
         else:
             from zhs.zhidao.course import ZhidaoCourseManager
             manager = ZhidaoCourseManager(session)
@@ -259,9 +303,13 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     """Bounded chapter lanes: sequential within each chapter, parallel across chapters."""
     directory.mkdir(parents=True, exist_ok=True)
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
+             "knowledge_id": t.knowledge_id if t.kind == "detail" else None,
+             "detail_evidence": t.detail_evidence if t.kind == "detail" else None,
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
              "requirement": t.requirement,
-             "state": "queued", "percent": None, "playback_phase": None, "stale": False, "exit_code": None} for t in targets]
+             "state": ("informational" if t.kind == "detail"
+                       and t.detail_evidence != "catalog_empty" else "queued"),
+             "percent": None, "playback_phase": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
     started_at: dict[int, float] = {}
     had_sample: set[int] = set()
@@ -405,7 +453,9 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
             except OSError:
                 # A diagnostic-file problem cannot change the real task result.
                 pass
-    return exit_code
+    # A knowledge entry returns success only after official server readback.
+    # Unverifiable catalogue nodes remain informational and never launch.
+    return exit_code or (18 if any(row["state"] == "informational" for row in rows) else 0)
 
 
 def run_queue(course_key: str, token: str, options: dict) -> int:
@@ -532,15 +582,32 @@ def video_worker(args: list[str]) -> int:
         options = validate_run_settings(json.loads(args[2]))
         data = json.loads(args[3])
         target = QueueTarget(**data)
-        ids = (target.resource_id,) if target.knowledge_id is None else (target.resource_id, target.knowledge_id)
+        is_detail = target.kind == "detail"
+        ids = ((target.knowledge_id,) if is_detail
+               else (target.resource_id,) if target.knowledge_id is None
+               else (target.resource_id, target.knowledge_id))
         if (any(type(i) is not int or not 0 < i <= 2**63 - 1 for i in ids)
                 or options["concurrency"] != 1 or options["scope_mode"] != "selected"
                 or options["selected_ids"] != [target.knowledge_id or target.resource_id]
-                or target.kind not in ("video", "ppt", "article", "other")):
+                or (is_detail and (target.resource_id != 0
+                                   or target.detail_evidence != "catalog_empty"
+                                   or options.get("resource_mode", "all") != "all"))
+                or (not is_detail and target.kind not in ("video", "ppt", "article", "other"))):
             return 2
     except (ValueError, TypeError, KeyError):
         return 2
     watch_parent_pipe()
+    if target.kind == "detail":
+        # Reuse the existing one-time authenticated entry + server readback.
+        # Never treat log acceptance as study completion, never loop writes.
+        from studyflow.platforms.zhidao.zhs_knowledge_detail import enter_knowledge_once
+        try:
+            result = enter_knowledge_once(args[0], target.knowledge_id)
+            if result["server_completed"] or result["state"] == "already_complete":
+                return 0
+            return 16 if result["state"] in ("unchanged", "advanced") else 17
+        except Exception:
+            return 17
     code = run_zhidao_original(args[0], args[1], options,
                                target_resource=(target.knowledge_id, target.resource_id))
     return code if code != 0 else verify_server_advancement(args[0], target)

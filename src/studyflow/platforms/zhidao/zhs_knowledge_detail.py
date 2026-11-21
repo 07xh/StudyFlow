@@ -1,0 +1,339 @@
+"""Read-only AI knowledge detail and official resource counters for ZHS mode.
+
+This is NOT a video heartbeat, completion RPC or fake study session. It reads
+the authenticated server catalog and detail page using the bundled ZHS crypto
+and the user's own session, then reports only observable server evidence.
+"""
+from __future__ import annotations
+
+import re
+from datetime import datetime, timezone
+from html.parser import HTMLParser
+from typing import Any
+
+
+class _ReadableText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in ("script", "style"):
+            self.hidden += 1
+        if not self.hidden and tag in ("p", "br", "div", "li", "tr", "h1", "h2", "h3"):
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("script", "style") and self.hidden:
+            self.hidden -= 1
+        if not self.hidden and tag in ("p", "div", "li", "tr"):
+            self.parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def _plain_text(source: Any, limit: int = 12000) -> str:
+    if not isinstance(source, str):
+        return ""
+    parser = _ReadableText()
+    # Do not parse more than a bounded response; script/style are never shown.
+    parser.feed(source[:limit * 4])
+    text = "".join(parser.parts)
+    text = re.sub(r"[\t\r ]+", " ", text)
+    text = re.sub(r"\n[\n ]*\n+", "\n\n", text)
+    return text.strip()[:limit]
+
+
+def _integer(value: Any) -> int | None:
+    if type(value) is int and 0 <= value <= 2**63 - 1:
+        return value
+    if isinstance(value, str) and re.fullmatch(r"[0-9]{1,19}", value):
+        parsed = int(value)
+        return parsed if parsed <= 2**63 - 1 else None
+    return None
+
+
+def official_catalog_entry(payload: Any, knowledge_id: int) -> dict | None:
+    """Locate a real node in the official learning directory, never assume 0/0 = done."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("themeList"), list):
+        return None
+    for theme in payload["themeList"][:1000]:
+        if not isinstance(theme, dict):
+            continue
+        subthemes = theme.get("subThemeList")
+        if not isinstance(subthemes, list):
+            continue
+        for sub in subthemes[:2000]:
+            if not isinstance(sub, dict):
+                continue
+            knowledge = sub.get("knowledgeList")
+            if not isinstance(knowledge, list):
+                continue
+            for entry in knowledge[:5000]:
+                if isinstance(entry, dict) and _integer(entry.get("knowledgeId")) == knowledge_id:
+                    return entry
+    return None
+
+
+def _counts(entry: dict | None) -> tuple[int | None, int | None]:
+    if not isinstance(entry, dict):
+        return None, None
+    total = _integer(entry.get("resourceCount"))
+    finished = _integer(entry.get("finishedResourceCount"))
+    if total is None or finished is None or finished > total:
+        return None, None
+    return total, finished
+
+
+def read_course_catalogs(manager, session, course_id: int, class_id: int) -> dict[str, dict]:
+    """Read BOTH official ZHS directories independently; neither is a write API.
+
+    Desktop provides resource counts. The 2026 mobile catalog exposes the
+    knowledge's own studyProgress, and omits resource counters. Using only
+    the first successful directory hides real server-side disagreements.
+    """
+    urls = getattr(session, "urls", None)
+    result: dict[str, dict] = {}
+    for source, base, suffix in (
+        ("desktop", getattr(urls, "ai", None),
+         "/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
+        ("mobile", getattr(urls, "ai_task", None),
+         "/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
+    ):
+        if not isinstance(base, str) or not base.startswith("https://"):
+            continue
+        try:
+            reply = manager._ai_query(
+                base.rstrip("/") + suffix,
+                {"courseId": course_id, "classId": class_id},
+            )
+            data = reply.get("data") if isinstance(reply, dict) else None
+            if isinstance(data, dict) and isinstance(data.get("themeList"), list):
+                result[source] = data
+        except Exception:
+            # A secondary catalog failing must never alter ZHS video behavior.
+            continue
+    return result
+
+
+def mobile_study_progress(entry: dict | None) -> int | None:
+    if not isinstance(entry, dict):
+        return None
+    progress = _integer(entry.get("studyProgress"))
+    return progress if progress is not None and progress <= 100 else None
+
+
+def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
+    """Read one validated knowledge node via ZHS' own signed session.
+
+    Does not send study logs, resource completion, play/pause, or heartbeat.
+    """
+    # Validate untrusted UI parameters before importing the optional bundled
+    # ZHS runtime, so malformed requests cannot launch a network client.
+    if type(knowledge_id) is not int or not 0 < knowledge_id <= 2**63 - 1:
+        raise ValueError("INVALID_KNOWLEDGE_ID")
+    from studyflow.platforms.zhidao.legacy_runtime import resolve_course
+    course = resolve_course(course_key)
+    if course["course_type"] != "ai":
+        raise ValueError("INVALID_KNOWLEDGE_ID")
+    cid, class_id = int(course["course_id"]), int(course["class_id"])
+    from zhs.cli.bootstrap import load_config_and_session
+    from zhs.ai.course import AiCourseManager
+
+    loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
+    if loaded is None:
+        raise RuntimeError("LOGIN_REQUIRED")
+    _, session = loaded
+    try:
+        manager = AiCourseManager(session)
+        catalog = manager.get_knowledge_points(cid, class_id)
+        points = [point for theme in catalog.cake_theme_list
+                  for point in theme.knowledge_list
+                  if point.knowledge_id == knowledge_id]
+        if len(points) != 1:
+            raise RuntimeError("KNOWLEDGE_NOT_FOUND")
+        point = points[0]
+
+        # Desktop and mobile AI pages use different *read-only* endpoints.
+        # Use ZHS' existing authenticated query transport in both cases.
+        # A response is accepted only when its nodeUid matches this course's
+        # already verified knowledge ID; never infer success from HTTP 200.
+        detail = None
+        detail_source = None
+        detail_params = {"courseId": cid, "classId": class_id, "knowledgeId": knowledge_id}
+        for source, url in (
+            ("desktop", f"{session.urls.ai}/run/gateway/t/stu/maptree/get-map-tree-node-detail"),
+            ("mobile", f"{session.urls.ai_task}/student/gateway/t/stu/maptree/get-map-tree-node-detail-with-mastery"),
+        ):
+            try:
+                result = manager._ai_query(url, detail_params)
+                candidate = result.get("data") if isinstance(result, dict) else None
+                if isinstance(candidate, dict) and _integer(candidate.get("nodeUid")) == knowledge_id:
+                    detail, detail_source = candidate, source
+                    break
+            except Exception:
+                # Unsupported deployment or unauthenticated mobile endpoint;
+                # the original video playback remains unaffected.
+                continue
+        if detail is None:
+            raise RuntimeError("KNOWLEDGE_DETAIL_UNAVAILABLE")
+
+        catalogs = read_course_catalogs(manager, session, cid, class_id)
+        desktop_entry = official_catalog_entry(catalogs.get("desktop"), knowledge_id)
+        mobile_entry = official_catalog_entry(catalogs.get("mobile"), knowledge_id)
+        # Mobile studyProgress is independently read even when the desktop
+        # catalog succeeds; it is NOT inferred from resourceCount or mastery.
+        mobile_progress = mobile_study_progress(mobile_entry)
+        resource_count, finished_count = _counts(desktop_entry)
+        catalog_source = "desktop" if desktop_entry is not None else (
+            "mobile" if mobile_entry is not None else None
+        )
+        if resource_count is None and mobile_entry is not None:
+            resource_count, finished_count = _counts(mobile_entry)
+        resources = manager.list_knowledge_resources(cid, class_id, knowledge_id)
+        # A server resource-list mismatch must not be silently reported as
+        # "there is nothing to study".
+        mismatch = resource_count is not None and resource_count != len(resources)
+
+        chunks: list[str] = []
+        body = _plain_text(detail.get("mainContent"))
+        if body:
+            chunks.append(body)
+        descriptions = detail.get("knowledgeDescList")
+        if not isinstance(descriptions, list):
+            descriptions = []
+        for item in descriptions[:80]:
+            if isinstance(item, dict):
+                part = _plain_text(item.get("itemName"), limit=1000)
+                if part:
+                    chunks.append(part)
+        content = "\n\n".join(chunks)[:12000]
+
+        name = str(detail.get("nodeName") or point.knowledge_name)
+        if not name or len(name) > 200 or any(ord(c) < 32 for c in name):
+            name = str(point.knowledge_name)[:200]
+        return {
+            "course_key": course_key,
+            "knowledge_id": str(knowledge_id),
+            "name": name,
+            "content": content,
+            "content_available": bool(content),
+            "detail_metadata_present": bool(descriptions or detail.get("mainContent")),
+            "listed_resource_count": len(resources),
+            "official_resource_count": resource_count,
+            "official_finished_resource_count": finished_count,
+            "catalog_mismatch": mismatch,
+            "catalog_source": catalog_source,
+            "detail_source": detail_source,
+            # Mobile 2026 directory contains per-knowledge studyProgress but
+            # does not include resourceCount/finishedResourceCount. Distinguish
+            # its independently reported value from the desktop snapshot.
+            "mobile_knowledge_progress_percent": mobile_progress,
+            "knowledge_progress_percent": max(0, min(100, int(point.study_progress))),
+            "progress_sources_disagree": (
+                mobile_progress is not None
+                and (mobile_progress >= 100) != (int(point.study_progress) >= 100)
+            ),
+            "verification": "read_only",
+            "verified_at": datetime.now(timezone.utc).isoformat(),
+            "study_record_submitted": False,
+        }
+    finally:
+        session.close()
+
+
+def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
+    """Reproduce one *page-entry* log using the authenticated ZHS session.
+
+    The official webpage emits saveStudentPointLog on mount; it is NOT a
+    periodic video heartbeat and a successful HTTP response does NOT imply
+    the knowledge point is complete. This method never invents a resource UID
+    or retries the write. Only server-side progress readback proves movement.
+    """
+    if type(knowledge_id) is not int or not 0 < knowledge_id <= 2**63 - 1:
+        raise ValueError("INVALID_KNOWLEDGE_ID")
+    from studyflow.platforms.zhidao.legacy_runtime import resolve_course
+
+    before = read_knowledge_detail(course_key, knowledge_id)
+    desktop_before = before["knowledge_progress_percent"]
+    mobile_before = before["mobile_knowledge_progress_percent"]
+    if (before["listed_resource_count"] != 0
+            or before["official_resource_count"] != 0
+            or before["catalog_mismatch"]):
+        raise RuntimeError("ZHS_DETAIL_RESOURCES_UNCONFIRMED")
+    if before["progress_sources_disagree"]:
+        return {"knowledge_id": str(knowledge_id), "state": "progress_conflict",
+                "submitted": False, "server_advanced": False, "server_completed": False}
+    if desktop_before >= 100 and (mobile_before is None or mobile_before >= 100):
+        return {"knowledge_id": str(knowledge_id), "state": "already_complete",
+                "submitted": False, "server_advanced": False, "server_completed": True}
+
+    course = resolve_course(course_key)
+    if course["course_type"] != "ai":
+        raise ValueError("INVALID_KNOWLEDGE_ID")
+    cid, class_id = int(course["course_id"]), int(course["class_id"])
+    from zhs.cli.bootstrap import load_config_and_session
+    from zhs.ai.course import AiCourseManager
+
+    loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
+    if loaded is None:
+        raise RuntimeError("LOGIN_REQUIRED")
+    _, session = loaded
+    submitted = False
+    try:
+        manager = AiCourseManager(session)
+        # The ZHS queue already validated the course and resource catalog;
+        # read_knowledge_detail above rechecked the same point. No repeated
+        # catalog fetch here: submit this single entry record and read back.
+        # Captured first-party frontend: taskId is an optional route query;
+        # without it, the official page's JSON payload omits that field.
+        # Exactly ONE call. No forged watch time, resource UID, or periodic retry.
+        manager._ai_query(
+            f"{session.urls.ai}/run/gateway/t/stu/task/saveStudentPointLog",
+            {"courseId": cid, "classId": class_id, "knowledgeId": knowledge_id},
+        )
+        submitted = True
+    finally:
+        session.close()
+
+    try:
+        after = read_knowledge_detail(course_key, knowledge_id)
+    except Exception:
+        return {"knowledge_id": str(knowledge_id), "state": "verification_unavailable",
+                "submitted": submitted, "server_advanced": False, "server_completed": False}
+    desktop_after = after["knowledge_progress_percent"]
+    mobile_after = after["mobile_knowledge_progress_percent"]
+    # A server may commit the knowledge record after acknowledging the log.
+    # Retry ONLY the read once, never the write; a 200 response is not proof.
+    if (desktop_after <= desktop_before
+            and (mobile_after is None or mobile_before is None
+                 or mobile_after <= mobile_before)):
+        import time
+        time.sleep(1.0)
+        try:
+            after = read_knowledge_detail(course_key, knowledge_id)
+            desktop_after = after["knowledge_progress_percent"]
+            mobile_after = after["mobile_knowledge_progress_percent"]
+        except Exception:
+            pass
+    desktop_advanced = desktop_after > desktop_before
+    mobile_advanced = (mobile_before is not None and mobile_after is not None
+                       and mobile_after > mobile_before)
+    advanced = bool(desktop_advanced or mobile_advanced)
+    completed = (desktop_after >= 100
+                 and (mobile_after is None or mobile_after >= 100)
+                 and not after["progress_sources_disagree"])
+    return {
+        "knowledge_id": str(knowledge_id),
+        "state": "completed" if completed and advanced else "advanced" if advanced else "unchanged",
+        "submitted": submitted,
+        "server_advanced": advanced,
+        "server_completed": bool(completed and advanced),
+        "before_progress_percent": desktop_before,
+        "after_progress_percent": desktop_after,
+        "before_mobile_progress_percent": mobile_before,
+        "after_mobile_progress_percent": mobile_after,
+    }

@@ -784,3 +784,136 @@ def test_three_requirement_modes_are_exclusive_and_backward_compatible():
         validate_run_settings({**base,"requirement_mode":"forged"})
     with pytest.raises(ValueError, match="INVALID_ZHS_SETTINGS"):
         validate_run_settings({**base,"custom_key":"untrusted"})
+
+
+def test_zero_resource_ai_point_uses_existing_worker_and_server_readback(tmp_path, monkeypatch):
+    """A knowledge detail tab with an empty resource list is informational only."""
+    from types import ModuleType
+    import sys
+    from studyflow.services.zhs_queue import discover_targets, supervise
+
+    zhs = ModuleType("zhs")
+    zhs.__path__ = []
+    cli = ModuleType("zhs.cli")
+    cli.__path__ = []
+    ai = ModuleType("zhs.ai")
+    ai.__path__ = []
+    bootstrap = ModuleType("zhs.cli.bootstrap")
+    course_module = ModuleType("zhs.ai.course")
+    session = NS(close=lambda: None, urls=NS(
+        ai="https://kg-ai-run.zhihuishu.com",
+        ai_task="https://kg-run-student.zhihuishu.com"))
+    bootstrap.load_config_and_session = lambda **_kwargs: (None, session)
+
+    class Manager:
+        progress = 0
+        catalog_total = 0
+        desktop_missing = False
+        mobile_progress = 0
+        def __init__(self, _session): pass
+
+        def _ai_query(self, url, params):
+            assert params == {"courseId": 1, "classId": 2}
+            if url.endswith("/get-course-knowledge-dic") and self.desktop_missing:
+                raise RuntimeError("desktop catalog temporarily unavailable")
+            if url.endswith("/get-course-knowledge-dic-wx-three"):
+                return {"data": {"themeList": [{"subThemeList": [{"knowledgeList": [
+                    {"knowledgeId": 87, "studyProgress": self.mobile_progress}
+                ]}]}]}}
+            assert url.endswith("/get-course-knowledge-dic")
+            return {"data": {"themeList": [{"subThemeList": [{"knowledgeList": [
+                {"knowledgeId": 87, "resourceCount": self.catalog_total,
+                 "finishedResourceCount": 0}
+            ]}]}]}}
+
+        def get_knowledge_points(self, _cid, _cls):
+            return NS(cake_theme_list=[NS(theme_name="绪论", knowledge_list=[
+                NS(knowledge_id=87, knowledge_name="历任校首", study_progress=self.progress)])])
+
+        def list_knowledge_resources(self, _cid, _cls, _kid):
+            return []  # The mobile app's 资源 tab says 暂无资源.
+
+    course_module.AiCourseManager = Manager
+    for name, module in (
+        ("zhs", zhs), ("zhs.cli", cli), ("zhs.ai", ai),
+        ("zhs.cli.bootstrap", bootstrap), ("zhs.ai.course", course_module)
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+
+    options = {**zhs_settings.DEFAULTS, "scope_mode": "all",
+               "selected_ids": [], "resource_mode": "all"}
+    targets, limited = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert limited is False
+    assert len(targets) == 1
+    assert targets[0].kind == "detail"
+    assert targets[0].resource_id == 0  # No real resource UID exists.
+    assert targets[0].knowledge_id == 87
+    assert targets[0].name == "历任校首"
+    assert targets[0].detail_evidence == "catalog_empty"
+
+    class FakeWorker:
+        stdin = None
+        def poll(self):
+            return 16  # Official readback unchanged; do NOT claim completion.
+
+    def launch(target, _token):
+        assert target.kind == "detail" and target.detail_evidence == "catalog_empty"
+        return FakeWorker()
+
+    token = "d" * 32
+    assert supervise(targets, 2, token, tmp_path, launch) == 13
+    snapshot = json.loads((tmp_path / f"zhs-queue-{token}.json").read_text())
+    assert snapshot["tasks"][0]["state"] == "unconfirmed"
+    assert snapshot["tasks"][0]["knowledge_id"] == 87
+    assert snapshot["tasks"][0]["detail_evidence"] == "catalog_empty"
+    assert snapshot["tasks"][0]["percent"] is None
+    assert snapshot["tasks"][0]["exit_code"] == 16
+
+    # On the uploaded recording the directory shows completed points,
+    # even though mastery stays at 0%; those must not become fake jobs.
+    Manager.progress = 100
+    Manager.mobile_progress = 100
+    completed, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert completed == []
+    Manager.progress = 0
+    Manager.mobile_progress = 0
+
+    # Both signed directories must agree before silently skipping a
+    # zero-resource knowledge point. Desktop=0/mobile=100 is unresolved.
+    Manager.mobile_progress = 100
+    conflict, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(conflict) == 1
+    assert conflict[0].detail_evidence == "progress_conflict"
+    Manager.mobile_progress = 0
+    Manager.progress = 100
+    opposite, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(opposite) == 1
+    assert opposite[0].detail_evidence == "progress_conflict"
+    Manager.progress = 0
+
+    # A non-empty official catalog and an empty ZHS resource endpoint is a
+    # mismatch, never evidence that the user already completed the content.
+    Manager.catalog_total = 3
+    mismatch, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(mismatch) == 1
+    assert mismatch[0].detail_evidence == "catalog_mismatch"
+    Manager.catalog_total = 0
+
+    # Mobile 2026 endpoint lacks resource totals: never call 0/0 completed.
+    Manager.desktop_missing = True
+    mobile, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(mobile) == 1
+    assert mobile[0].detail_evidence == "catalog_no_counts"
+    Manager.desktop_missing = False
+
+    # Video-only selection should not create a synthetic detail task.
+    video_only, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2},
+        {**options, "resource_mode": "video"})
+    assert video_only == []

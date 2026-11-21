@@ -13,6 +13,7 @@ from contextlib import redirect_stdout
 from typing import Any
 
 from studyflow.platforms.zhidao.adapter import ZhidaoAdapter
+from studyflow.platforms.zhidao.zhs_knowledge_detail import read_knowledge_detail as read_zhs_knowledge_detail
 from studyflow.platforms.zhidao.zhs_settings import read_settings as read_zhs_settings, save_settings as save_zhs_settings
 from studyflow.platforms.zhidao import qr_runtime
 from studyflow.platforms.zhidao.cookie_import import import_cookie
@@ -410,6 +411,28 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": error}
         except Exception:
             return {"id": request_id, "ok": False, "error": "COURSE_ROUTE_UNAVAILABLE"}
+    if operation == "zhidao.zhs.knowledge.detail":
+        knowledge_id = request.get("knowledge_id")
+        course_key = request.get("course_key")
+        # Frontend knowledge IDs are decimal strings: 19-digit platform
+        # values must never round-trip through a JavaScript number.
+        if (not isinstance(knowledge_id, str) or not knowledge_id.isascii()
+                or not knowledge_id.isdecimal() or not 1 <= len(knowledge_id) <= 19
+                or knowledge_id[0] == "0"
+                or int(knowledge_id) > 2**63 - 1
+                or not isinstance(course_key, str) or len(course_key) != 64):
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        try:
+            return {"id": request_id, "ok": True,
+                    "data": read_zhs_knowledge_detail(course_key, int(knowledge_id))}
+        except ValueError:
+            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
+        except RuntimeError as exc:
+            error = ("KNOWLEDGE_NOT_FOUND" if str(exc) == "KNOWLEDGE_NOT_FOUND"
+                     else "ZHS_DETAIL_UNAVAILABLE")
+            return {"id": request_id, "ok": False, "error": error}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHS_DETAIL_UNAVAILABLE"}
     if operation == "zhidao.zhs.settings.get":
         try:
             return {"id": request_id, "ok": True, "data": read_zhs_settings(request.get("course_key"))}

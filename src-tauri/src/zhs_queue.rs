@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 pub struct QueueTask {
     pub task_id: String,
     pub name: Option<String>,
+    pub knowledge_id: Option<String>,
+    pub detail_evidence: Option<String>,
     pub chapter_key: Option<String>,
     pub chapter_name: Option<String>,
     pub kind: String,
@@ -56,9 +58,12 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let id = row.get("task_id")?.as_str()?;
         if !valid_id(id) || !seen.insert(id.to_owned()) { return None; }
         let kind = row.get("kind")?.as_str()?;
-        if !matches!(kind, "video" | "ppt" | "article" | "other") { return None; }
+        if !matches!(kind, "video" | "ppt" | "article" | "other" | "detail") { return None; }
         let row_state = row.get("state")?.as_str()?;
-        if !matches!(row_state, "queued" | "running" | "exited" | "failed" | "stopped" | "unconfirmed") { return None; }
+        if !matches!(row_state, "queued" | "running" | "exited" | "failed" | "stopped" | "unconfirmed" | "informational") { return None; }
+        // Only an independently verified server readback may mark an
+        // empty-resource entry exited; unresolved nodes stay informational.
+        if kind != "detail" && row_state == "informational" { return None; }
         let requirement = match row.get("requirement") {
             None | Some(Value::Null) => None,
             Some(value) => {
@@ -80,6 +85,26 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         };
         // Older rc.23 snapshots have no chapter fields. Accept those for a
         // seamless upgrade but reject malformed or unsafe new metadata.
+        let knowledge_id = match row.get("knowledge_id") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let id = raw.as_u64()?;
+                if id == 0 || id > i64::MAX as u64 { return None; }
+                // JSON numbers above 2^53 lose precision in JavaScript.
+                // Serialize decimal identifiers as strings for the UI.
+                Some(id.to_string())
+            }
+        };
+        if (kind == "detail") != knowledge_id.is_some() { return None; }
+        let detail_evidence = match row.get("detail_evidence") {
+            None | Some(Value::Null) => None,
+            Some(raw) => {
+                let value = raw.as_str()?;
+                if !matches!(value, "catalog_empty" | "catalog_mismatch" | "catalog_no_counts" | "catalog_unavailable" | "progress_conflict") { return None; }
+                Some(value.to_owned())
+            }
+        };
+        if kind != "detail" && detail_evidence.is_some() { return None; }
         let chapter_key = match row.get("chapter_key") {
             None | Some(Value::Null) => None,
             Some(raw) => {
@@ -122,7 +147,27 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
             Some(row.get("exit_code")?.as_i64()?)
         };
-        tasks.push(QueueTask {task_id: id.into(), name, chapter_key, chapter_name,
+        // Detail does not contain video samples. Only catalog_empty can
+        // execute, and success requires the worker's confirmed readback.
+        if kind == "detail" {
+            if !row.get("percent")?.is_null()
+                || !row.get("playback_phase").unwrap_or(&Value::Null).is_null()
+            {
+                return None;
+            }
+            if row_state != "informational" && detail_evidence.as_deref() != Some("catalog_empty") {
+                return None;
+            }
+            let valid_exit = match row_state {
+                "exited" => exit_code == Some(0),
+                "unconfirmed" => matches!(exit_code, Some(16 | 17)),
+                "failed" => matches!(exit_code, Some(1 | 2 | 13)),
+                "informational" | "queued" | "running" | "stopped" => exit_code.is_none(),
+                _ => false,
+            };
+            if !valid_exit { return None; }
+        }
+        tasks.push(QueueTask {task_id: id.into(), name, knowledge_id, detail_evidence, chapter_key, chapter_name,
             kind: kind.into(), requirement, state: row_state.into(),
             percent, playback_phase, stale: row_stale, exit_code});
     }
@@ -240,4 +285,37 @@ mod tests {
         data["tasks"].as_array_mut().unwrap().push(duplicate);
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32),101.0).is_none());
     }
+    #[test]
+    fn detail_only_knowledge_is_informational_and_never_claims_progress() {
+        let mut data = sample();
+        data["tasks"][0]["name"] = json!("历任校首");
+        data["tasks"][0]["kind"] = json!("detail");
+        data["tasks"][0]["knowledge_id"] = json!(1234567890123456789_u64);
+        data["tasks"][0]["detail_evidence"] = json!("catalog_empty");
+        data["tasks"][0]["state"] = json!("informational");
+        data["tasks"][0]["percent"] = Value::Null;
+        let decoded = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
+        assert_eq!(decoded.tasks[0].state, "informational");
+        assert_eq!(decoded.tasks[0].knowledge_id.as_deref(), Some("1234567890123456789"));
+        assert!(decoded.tasks[0].percent.is_none());
+        data["tasks"][0]["state"] = json!("queued");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
+        data["tasks"][0]["state"] = json!("running");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
+        data["tasks"][0]["state"] = json!("exited");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+        data["tasks"][0]["exit_code"] = json!(0);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
+        data["tasks"][0]["state"] = json!("unconfirmed");
+        data["tasks"][0]["exit_code"] = json!(16);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_some());
+        data["tasks"][0]["state"] = json!("informational");
+        data["tasks"][0]["exit_code"] = Value::Null;
+        data["tasks"][0]["percent"] = json!(100.0);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+        data["tasks"][0]["percent"] = Value::Null;
+        data["tasks"][0]["exit_code"] = json!(0);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+    }
+
 }
