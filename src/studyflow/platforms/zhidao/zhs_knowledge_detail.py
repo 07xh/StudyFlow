@@ -243,3 +243,87 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
         }
     finally:
         session.close()
+
+
+def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
+    """Reproduce one *page-entry* log using the authenticated ZHS session.
+
+    The official webpage emits saveStudentPointLog on mount; it is NOT a
+    periodic video heartbeat and a successful HTTP response does NOT imply
+    the knowledge point is complete. This method never invents a resource UID
+    or retries the write. Only server-side progress readback proves movement.
+    """
+    if type(knowledge_id) is not int or not 0 < knowledge_id <= 2**63 - 1:
+        raise ValueError("INVALID_KNOWLEDGE_ID")
+    from studyflow.platforms.zhidao.legacy_runtime import resolve_course
+    from zhs.cli.bootstrap import load_config_and_session
+    from zhs.ai.course import AiCourseManager
+
+    before = read_knowledge_detail(course_key, knowledge_id)
+    desktop_before = before["knowledge_progress_percent"]
+    mobile_before = before["mobile_knowledge_progress_percent"]
+    if (before["listed_resource_count"] != 0
+            or before["official_resource_count"] != 0
+            or before["catalog_mismatch"]):
+        raise RuntimeError("ZHS_DETAIL_RESOURCES_UNCONFIRMED")
+    if before["progress_sources_disagree"]:
+        return {"knowledge_id": str(knowledge_id), "state": "progress_conflict",
+                "submitted": False, "server_advanced": False, "server_completed": False}
+    if desktop_before >= 100 and (mobile_before is None or mobile_before >= 100):
+        return {"knowledge_id": str(knowledge_id), "state": "already_complete",
+                "submitted": False, "server_advanced": False, "server_completed": True}
+
+    course = resolve_course(course_key)
+    if course["course_type"] != "ai":
+        raise ValueError("INVALID_KNOWLEDGE_ID")
+    cid, class_id = int(course["course_id"]), int(course["class_id"])
+    loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
+    if loaded is None:
+        raise RuntimeError("LOGIN_REQUIRED")
+    _, session = loaded
+    submitted = False
+    try:
+        manager = AiCourseManager(session)
+        # Recheck the resource identity in the authenticated write session.
+        points = [
+            point for theme in manager.get_knowledge_points(cid, class_id).cake_theme_list
+            for point in theme.knowledge_list if point.knowledge_id == knowledge_id
+        ]
+        if len(points) != 1 or manager.list_knowledge_resources(cid, class_id, knowledge_id):
+            raise RuntimeError("ZHS_DETAIL_RESOURCES_UNCONFIRMED")
+        # Captured first-party frontend: taskId is an optional route query;
+        # without it, the official page's JSON payload omits that field.
+        # Exactly ONE call. No forged watch time, resource UID, or periodic retry.
+        manager._ai_query(
+            f"{session.urls.ai}/run/gateway/t/stu/task/saveStudentPointLog",
+            {"courseId": cid, "classId": class_id, "knowledgeId": knowledge_id},
+        )
+        submitted = True
+    finally:
+        session.close()
+
+    try:
+        after = read_knowledge_detail(course_key, knowledge_id)
+    except Exception:
+        return {"knowledge_id": str(knowledge_id), "state": "verification_unavailable",
+                "submitted": submitted, "server_advanced": False, "server_completed": False}
+    desktop_after = after["knowledge_progress_percent"]
+    mobile_after = after["mobile_knowledge_progress_percent"]
+    desktop_advanced = desktop_after > desktop_before
+    mobile_advanced = (mobile_before is not None and mobile_after is not None
+                       and mobile_after > mobile_before)
+    advanced = bool(desktop_advanced or mobile_advanced)
+    completed = (desktop_after >= 100
+                 and (mobile_after is None or mobile_after >= 100)
+                 and not after["progress_sources_disagree"])
+    return {
+        "knowledge_id": str(knowledge_id),
+        "state": "completed" if completed and advanced else "advanced" if advanced else "unchanged",
+        "submitted": submitted,
+        "server_advanced": advanced,
+        "server_completed": bool(completed and advanced),
+        "before_progress_percent": desktop_before,
+        "after_progress_percent": desktop_after,
+        "before_mobile_progress_percent": mobile_before,
+        "after_mobile_progress_percent": mobile_after,
+    }
