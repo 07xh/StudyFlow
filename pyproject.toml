@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["requests>=2.31,<3", "python-dotenv>=1,<2", "beautifulsoup4>=4.12,<5", "cryptography>=42,<50"]
 
 [project.optional-dependencies]
-desktop = ["keyring>=25,<27", "websocket-client>=1.8,<2", "zhs==0.1.5", "playwright==1.64.1"]
+desktop = ["keyring>=25,<27", "websocket-client>=1.8,<2", "zhs==0.1.5"]
 dev = ["pytest>=8", "pyinstaller>=6"]
 
 [tool.setuptools.packages.find]
