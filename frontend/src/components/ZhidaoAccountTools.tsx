@@ -122,7 +122,7 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:P
             void invoke("studyflow_open_author_site").catch(()=>{
               setMessage("无法打开作者博客，请在浏览器访问 https://0701000.xyz/");
             });
-          }}><ExternalLink size={14}/>小慌的博客 · 0701000.xyz</a>
+          }}><ExternalLink size={14}/>开发者网站 · 0701000.xyz</a>
         {docs.map(item=><button key={item.id} className="text-button" disabled={!desktop||documentBusy} onClick={()=>void openDocument(item.id)}><item.icon size={14}/>{item.label}</button>)}
       </div>}
       {view==="account"&&diagnostic&&<div className="sf-zd-diagnostic">
