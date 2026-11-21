@@ -116,6 +116,8 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.mastery.round.submit"; course_key: string; knowledge_id: string}
   | {id: string; version: 1; operation: "zhidao.mastery.round.discard"; course_key: string; knowledge_id: string}
   | {id: string; version: 1; operation: "zhidao.mastery.wrong"; course_key: string; knowledge_id: string; exam_test_id?: string}
+  | {id: string; version: 1; operation: "zhidao.mastery.auto.start"; course_key: string; options: MasteryAutoOptions}
+  | {id: string; version: 1; operation: "zhidao.mastery.auto.status" | "zhidao.mastery.auto.pause" | "zhidao.mastery.auto.resume" | "zhidao.mastery.auto.stop"}
   | {id: string; version: 1; operation: "studyflow.consent.status" | "studyflow.consent.accept"}
   | {id: string; version: 1; operation: "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"}
   | {id:string;version:1;operation:"xuexitong.heartbeat.start";course_id:string;
@@ -250,7 +252,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
                              "LOGIN_REQUIRED", "NOT_AI_COURSE", "MASTERY_UNAVAILABLE", "PAPER_UNAVAILABLE", "PAPER_EMPTY",
                              "NO_ACTIVE_ROUND", "ROUND_EXPIRED", "QUESTION_NOT_IN_ROUND", "EMPTY_ANSWER",
-                             "ANSWER_SAVE_FAILED", "SUBMIT_FAILED", "SUBMIT_IN_PROGRESS", "SUBMIT_STATUS_UNKNOWN", "ROUND_ALREADY_SUBMITTED", "ZHS_MASTERY_UNAVAILABLE",
+                             "ANSWER_SAVE_FAILED", "SUBMIT_FAILED", "SUBMIT_IN_PROGRESS", "SUBMIT_STATUS_UNKNOWN", "ROUND_ALREADY_SUBMITTED", "MASTERY_AUTO_ALREADY_RUNNING", "ZHS_MASTERY_UNAVAILABLE",
                              "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED",
                              "XUEXITONG_COURSE_REQUIRED", "XUEXITONG_TASK_ALREADY_RUNNING",
                              "XUEXITONG_INVALID_PARAMETER", "XUEXITONG_INVALID_TARGET",
@@ -472,6 +474,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "SUBMIT_IN_PROGRESS": return "本轮提交还在处理中，请不要重复操作。";
     case "SUBMIT_STATUS_UNKNOWN": return "提交结果尚未确认，点击核验提交状态；不会再次发送提交。";
     case "ROUND_ALREADY_SUBMITTED": return "本轮已提交或状态未确认，不能再保存答案，请先核对结果。";
+    case "MASTERY_AUTO_ALREADY_RUNNING": return "掌握度后台任务正在运行，请先停止或完成当前任务。";
     case "ZHS_MASTERY_UNAVAILABLE": return "掌握度服务读取失败，稍后再试。";
     case "ZHIDAO_DIAGNOSE_FAILED": return "知到连接诊断未能完成。";
     case "ZHIDAO_DATA_CLEAR_FAILED": return "知到本地数据清理失败；未删除未列入清单的数据。";
@@ -655,4 +658,52 @@ export function masteryWrongQuestions(
   courseKey: string, knowledgeId: string, examTestId?: string,
 ): Promise<{knowledge_id: string; mastery: number | null; questions: unknown[]; count: number}> {
   return request({operation: "zhidao.mastery.wrong", course_key: courseKey, knowledge_id: knowledgeId, exam_test_id: examTestId});
+}
+
+
+/** 掌握度后台习题，不启动浏览器；DeepSeek Key 仅在本次 IPC 中使用，不写入本地设置。 */
+export type MasteryAutoOptions = {
+  target: number;
+  max_rounds: number;
+  max_minutes: number;
+  max_ai_calls: number;
+  auto_next: boolean;
+  use_ai: boolean;
+  knowledge_id?: string;
+  api_key?: string;
+};
+
+export type MasteryAutoStatus = {
+  state: "idle" | "running" | "paused" | "stopping" | "stopped" | "completed" | "needs_attention" | "error";
+  phase: string;
+  message: string;
+  course_key: string;
+  knowledge: string;
+  mastery: number | null;
+  round: number;
+  points_done: number;
+  points_total: number;
+  bank_hit: number;
+  ai_count: number;
+  ai_calls: number;
+  logs: string[];
+  running: boolean;
+};
+
+export function masteryAutoStart(courseKey: string, options: MasteryAutoOptions): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({
+    operation: "zhidao.mastery.auto.start", course_key: courseKey, options,
+  });
+}
+export function masteryAutoStatus(): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({operation: "zhidao.mastery.auto.status"});
+}
+export function masteryAutoPause(): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({operation: "zhidao.mastery.auto.pause"});
+}
+export function masteryAutoResume(): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({operation: "zhidao.mastery.auto.resume"});
+}
+export function masteryAutoStop(): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({operation: "zhidao.mastery.auto.stop"});
 }

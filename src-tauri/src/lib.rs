@@ -245,6 +245,55 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
         "zhidao.document.read" if request.get("document_id").and_then(|x| x.as_str())
             .is_some_and(|id| matches!(id, "terms" | "privacy" | "license" | "source")) => Ok(()),
+        // Both manual mastery rounds and automatic mastery tasks must use the
+        // same persistent JSONL Python process: active rounds are held there.
+        "zhidao.mastery.catalog" | "zhidao.mastery.round.active"
+        | "zhidao.mastery.round.start" | "zhidao.mastery.round.submit"
+        | "zhidao.mastery.round.discard" | "zhidao.mastery.wrong"
+            if request.get("course_key").and_then(|x| x.as_str())
+                .is_some_and(|key| key.len() == 64
+                    && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
+            && (matches!(operation, "zhidao.mastery.catalog")
+                || request.get("knowledge_id").and_then(|x| x.as_str())
+                    .is_some_and(|id| !id.is_empty() && id.len() <= 24
+                        && id.bytes().all(|ch| ch.is_ascii_digit()))) => Ok(()),
+        "zhidao.mastery.round.answer"
+            if request.get("course_key").and_then(|x| x.as_str())
+                .is_some_and(|key| key.len() == 64 && key.bytes().all(|ch|
+                    ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
+            && request.get("knowledge_id").and_then(|x| x.as_str())
+                .is_some_and(|id| !id.is_empty() && id.len() <= 24
+                    && id.bytes().all(|ch| ch.is_ascii_digit()))
+            && request.get("question_id").and_then(|x| x.as_str())
+                .is_some_and(|id| !id.is_empty() && id.len() <= 24
+                    && id.bytes().all(|ch| ch.is_ascii_digit()))
+            && request.get("answer").is_some_and(|value|
+                value.as_str().is_some_and(|x| !x.is_empty() && x.len() <= 4000)
+                || value.as_i64().is_some()
+                || value.as_array().is_some_and(|arr|
+                    !arr.is_empty() && arr.len() <= 30 && arr.iter().all(|x|
+                        x.as_i64().is_some() || x.as_str().is_some_and(|s| s.len() <= 4000)))) => Ok(()),
+        "zhidao.mastery.auto.status" | "zhidao.mastery.auto.pause"
+        | "zhidao.mastery.auto.resume" | "zhidao.mastery.auto.stop" => Ok(()),
+        "zhidao.mastery.auto.start"
+            if request.get("course_key").and_then(|x| x.as_str())
+                .is_some_and(|key| key.len() == 64
+                    && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))
+            && request.get("options").and_then(|x| x.as_object()).is_some_and(|opts|
+                opts.len() <= 8 && opts.keys().all(|key| matches!(key.as_str(),
+                    "target" | "max_rounds" | "max_minutes" | "max_ai_calls"
+                    | "auto_next" | "knowledge_id" | "use_ai" | "api_key"))
+                && opts.get("target").map_or(true, |x| x.as_u64().is_some_and(|n| (1..=100).contains(&n)))
+                && opts.get("max_rounds").map_or(true, |x| x.as_u64().is_some_and(|n| (1..=10).contains(&n)))
+                && opts.get("max_minutes").map_or(true, |x| x.as_u64().is_some_and(|n| (1..=120).contains(&n)))
+                && opts.get("max_ai_calls").map_or(true, |x| x.as_u64().is_some_and(|n| (1..=100).contains(&n)))
+                && opts.get("auto_next").map_or(true, |x| x.as_bool().is_some())
+                && opts.get("use_ai").map_or(true, |x| x.as_bool().is_some())
+                && opts.get("knowledge_id").map_or(true, |x| x.as_str().is_some_and(|id|
+                    id.is_empty() || (id.len() <= 24 && id.bytes().all(|ch| ch.is_ascii_digit()))))
+                && opts.get("api_key").map_or(true, |x| x.as_str()
+                    .is_some_and(|key| key.len() <= 256 && !key.contains('\n') && !key.contains('\r'))))
+                    => Ok(()),
         "courses.list" if matches!(request.get("platform").and_then(|p| p.as_str()), Some("zhidao" | "yuketang" | "xuexitong" | "ucampus")) => Ok(()),
         "ucampus.monitor.status" | "ucampus.monitor.tick" => Ok(()),
         "ucampus.monitor.configure" if request.get("enabled").and_then(|v| v.as_bool())
@@ -440,6 +489,7 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     // Python process; ordinary requests keep their one-shot behavior.
     let is_persistent = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr.")
+                        || op.starts_with("zhidao.mastery.")
                         || op.starts_with("xuexitong.heartbeat.")
                         || op.starts_with("ucampus.heartbeat.")
                         || op.starts_with("ucampus.socket.")

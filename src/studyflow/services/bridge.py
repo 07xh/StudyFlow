@@ -433,6 +433,29 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": error}
         except Exception:
             return {"id": request_id, "ok": False, "error": "ZHS_DETAIL_UNAVAILABLE"}
+    if operation.startswith("zhidao.mastery.auto."):
+        from studyflow.platforms.zhidao import zhs_mastery_auto as mastery_auto
+        try:
+            if operation == "zhidao.mastery.auto.start":
+                data = mastery_auto.start(request.get("course_key"), request.get("options"))
+            elif operation == "zhidao.mastery.auto.status":
+                data = mastery_auto.status()
+            elif operation == "zhidao.mastery.auto.pause":
+                data = mastery_auto.pause()
+            elif operation == "zhidao.mastery.auto.resume":
+                data = mastery_auto.resume()
+            elif operation == "zhidao.mastery.auto.stop":
+                data = mastery_auto.stop()
+            else:
+                return {"id": request_id, "ok": False, "error": "UNKNOWN_OPERATION"}
+            return {"id": request_id, "ok": True, "data": data}
+        except ValueError as error:
+            code = str(error)
+            if code != "MASTERY_AUTO_ALREADY_RUNNING":
+                code = "INVALID_REQUEST"
+            return {"id": request_id, "ok": False, "error": code}
+        except Exception:
+            return {"id": request_id, "ok": False, "error": "ZHS_MASTERY_UNAVAILABLE"}
     if operation.startswith("zhidao.mastery."):
         from studyflow.platforms.zhidao import zhs_mastery_service as mastery
 

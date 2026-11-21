@@ -62,6 +62,23 @@ function bridgeMock(state){
       return state.submitResult??submitted;
     },
     masteryDiscardRound:async()=>{calls.push(['discard']);return {discarded:true};},
+    masteryAutoStatus:async()=>state.autoCurrent||{
+      state:'idle',phase:'未启动',message:'',knowledge:'',course_key:'',
+      mastery:null,round:0,points_done:0,points_total:0,bank_hit:0,
+      ai_count:0,ai_calls:0,logs:[],running:false,
+    },
+    masteryAutoStart:async(courseKey,options)=>{
+      calls.push(['auto.start',courseKey,options]);
+      state.autoCurrent={
+        state:'running',phase:'自动练习中',message:'',knowledge:'',course_key:courseKey,
+        mastery:40,round:1,points_done:0,points_total:1,bank_hit:0,
+        ai_count:0,ai_calls:0,logs:[],running:true,
+      };
+      return state.autoCurrent;
+    },
+    masteryAutoPause:async()=>{calls.push(['auto.pause']);state.autoCurrent={...state.autoCurrent,state:'paused',running:true};return state.autoCurrent;},
+    masteryAutoResume:async()=>{calls.push(['auto.resume']);state.autoCurrent={...state.autoCurrent,state:'running',running:true};return state.autoCurrent;},
+    masteryAutoStop:async()=>{calls.push(['auto.stop']);state.autoCurrent={...state.autoCurrent,state:'stopped',running:false};return state.autoCurrent;},
   };
 }
 
@@ -202,4 +219,35 @@ test('unknown submission switches UI to status check and prevents answer edits',
   state.submitError=null;
   await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('核验提交状态')).props.onClick();});
   assert.match(textOf(view.root),/本轮 1\/1/);
+});
+
+
+test('auto mastery task can start and stop within the existing panel',async()=>{
+  const state={};
+  const view=await mount(bridgeMock(state));
+  assert.match(textOf(view.root),/后台自动习题/);
+  const start=view.root.findAllByType('button')
+    .find(node=>textOf(node).includes('启动后台自动习题'));
+  assert.equal(start.props.disabled,false);
+  await act(async()=>{start.props.onClick();});
+  const called=state.calls.find(call=>call[0]==='auto.start');
+  assert.equal(called[1],key);
+  assert.equal(called[2].target,100);
+  assert.equal(called[2].max_rounds,3);
+  assert.equal(called[2].use_ai,false);
+  assert.match(textOf(view.root),/知识点 0\/1/);
+  const stop=view.root.findAllByType('button').find(node=>textOf(node)==='停止');
+  await act(async()=>{stop.props.onClick();});
+  assert.equal(state.calls.filter(call=>call[0]==='auto.stop').length,1);
+});
+
+test('AI auto mode refuses to start without a transient key',async()=>{
+  const state={};
+  const view=await mount(bridgeMock(state));
+  const toggle=view.root.findAllByType('input')
+    .find(node=>node.props.type==='checkbox' && node.props.checked===false
+      && !node.props.disabled);
+  await act(async()=>{toggle.props.onChange({target:{checked:true}});});
+  const start=view.root.findAllByType('button').find(node=>textOf(node).includes('启动后台自动习题'));
+  assert.equal(start.props.disabled,true);
 });
