@@ -6,12 +6,12 @@ import "./ZhidaoMasteryPanel.css";
 type Settings={
   target:number;max_rounds:number;max_api_calls:number;max_minutes:number;
   auto_next:boolean;next_scope:"course"|"chapter";browser:"msedge"|"chrome";
-  has_saved_entry:boolean;
+  use_ai:boolean;has_api_key:boolean;has_saved_entry:boolean;
 };
 type Detail={
   state?:string;phase?:string;message?:string;course?:string;chapter?:string;knowledge?:string;
   mastery?:number|null;round?:number;points_completed?:number;points_skipped?:number;
-  bank_hit?:number;trial_count?:number;question?:string;logs?:string[];
+  bank_hit?:number;trial_count?:number;ai_count?:number;api_calls?:number;question?:string;logs?:string[];
 };
 type Status={running:boolean;state:string;detail:Detail};
 const EMPTY:Status={running:false,state:"idle",detail:{}};
@@ -19,6 +19,7 @@ const EMPTY:Status={running:false,state:"idle",detail:{}};
 export function ZhidaoMasteryPanel({desktop,courseTitle}:{desktop:boolean;courseTitle:string}){
   const [settings,setSettings]=useState<Settings|null>(null);
   const [entryUrl,setEntryUrl]=useState("");
+  const [apiKey,setApiKey]=useState("");
   const [status,setStatus]=useState<Status>(EMPTY);
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
@@ -45,9 +46,11 @@ export function ZhidaoMasteryPanel({desktop,courseTitle}:{desktop:boolean;course
       target:settings.target,max_rounds:settings.max_rounds,
       max_api_calls:settings.max_api_calls,max_minutes:settings.max_minutes,
       auto_next:settings.auto_next,next_scope:settings.next_scope,browser:settings.browser,
+      use_ai:settings.use_ai,
+      ...(apiKey.trim()?{api_key:apiKey.trim()}:{}),
       ...(entryUrl.trim()?{entry_url:entryUrl.trim()}:{}),
     }});
-    setSettings(result);setEntryUrl("");
+    setSettings(result);setEntryUrl("");setApiKey("");
     return result;
   };
   const action=async(kind:"save"|"login"|"run"|"pause"|"stop")=>{
@@ -57,6 +60,7 @@ export function ZhidaoMasteryPanel({desktop,courseTitle}:{desktop:boolean;course
       if(kind==="save"){await save();setMessage("设置已保存。");return;}
       if(kind==="login"||kind==="run"){
         const result=await save();
+        if(kind==="run"&&result.use_ai&&!result.has_api_key){setMessage("请先配置 DeepSeek API Key，或关闭 AI 模式。");return;}
         if(kind==="run"&&!result.has_saved_entry){
           setMessage("请先点击「设置起点」，在官方浏览器中打开一道掌握度习题。");
           return;
@@ -89,12 +93,14 @@ export function ZhidaoMasteryPanel({desktop,courseTitle}:{desktop:boolean;course
     ["已跳过",d.points_skipped||0],
     ["题库命中",d.bank_hit||0],
     ["本地试答",d.trial_count||0],
+    ["AI 解题",d.ai_count||0],
+    ["API 请求",d.api_calls||0],
   ];
   return <section className="sf-mastery-panel" aria-label="知到掌握度">
     <header className="sf-mastery-heading">
       <div>
         <h3>掌握度练习</h3>
-        <p>无 AI：优先使用官方已确认答案与本地题库；未知题按历史记录试答，读取平台公布的解析后修正。</p>
+        <p>题库优先，未命中的题目可选 DeepSeek AI 或本地试答；提交后读取平台解析，持续修正本地题库。</p>
       </div>
       <span className="sf-mastery-state">{running?(d.phase||"运行中"):status.state==="completed"?"已完成":status.state==="ready"?"起点就绪":status.state==="error"?"需要处理":"未运行"}</span>
     </header>
@@ -104,6 +110,8 @@ export function ZhidaoMasteryPanel({desktop,courseTitle}:{desktop:boolean;course
           disabled={!settings||running} onChange={e=>update({target:Number(e.target.value)})}/></label>
         <label>每知识点轮次上限<input type="number" min={1} max={30} value={settings?.max_rounds??20}
           disabled={!settings||running} onChange={e=>update({max_rounds:Number(e.target.value)})}/></label>
+        <label>AI 请求上限<input type="number" min={1} max={1000} value={settings?.max_api_calls??100}
+          disabled={!settings||running} onChange={e=>update({max_api_calls:Number(e.target.value)})}/></label>
         <label>运行时长上限（分钟）<input type="number" min={1} max={240} value={settings?.max_minutes??60}
           disabled={!settings||running} onChange={e=>update({max_minutes:Number(e.target.value)})}/></label>
         <label>浏览器<select disabled={!settings||running} value={settings?.browser??"msedge"}
@@ -112,6 +120,13 @@ export function ZhidaoMasteryPanel({desktop,courseTitle}:{desktop:boolean;course
         <label>处理范围<select disabled={!settings||running} value={settings?.next_scope??"course"}
           onChange={e=>update({next_scope:e.target.value as Settings["next_scope"]})}>
           <option value="course">本课程后续知识点</option><option value="chapter">仅当前章节</option></select></label>
+        <label className="sf-mastery-check"><input type="checkbox" disabled={!settings||running}
+          checked={settings?.use_ai??true} onChange={e=>update({use_ai:e.target.checked})}/>
+          启用 DeepSeek AI 答题（未命中题库时调用）</label>
+        <label className="sf-mastery-wide">DeepSeek API Key（{settings?.has_api_key?"已加密保存":"未设置"}）
+          <input type="password" autoComplete="off" value={apiKey} disabled={!settings||running||!settings.use_ai}
+            placeholder={settings?.has_api_key?"留空保持原密钥":"输入自己的 DeepSeek Key"}
+            onChange={e=>setApiKey(e.target.value)}/></label>
         <label className="sf-mastery-wide">练习入口链接（可选）
           <input type="url" disabled={!settings||running} value={entryUrl}
             placeholder={settings?.has_saved_entry?"已保存起点；留空继续使用":"也可以先点击「设置起点」在官方浏览器选择"}
@@ -135,7 +150,7 @@ export function ZhidaoMasteryPanel({desktop,courseTitle}:{desktop:boolean;course
       {d.question&&<p className="sf-mastery-desc">当前题目：{d.question}</p>}
       {Array.isArray(d.logs)&&d.logs.length>0&&<details><summary>运行日志</summary>
         <div className="sf-mastery-logs">{d.logs.map((line,i)=><p key={i}>{line}</p>)}</div></details>}
-      <p className="sf-mastery-footnote">100% 是可设置的目标，不保证每题正确；未公布答案、题型不支持或达到次数上限时停止，成绩以平台结果为准。本模块与 ZHS 视频任务相互独立。</p>
+      <p className="sf-mastery-footnote">100% 是目标，不保证所有知识点都达成；平台解析和服务器结果为准。启用 DeepSeek 需要自己的 Key，API 请求可能产生费用。本模块与 ZHS 视频任务相互独立。</p>
     </>}
   </section>;
 }
