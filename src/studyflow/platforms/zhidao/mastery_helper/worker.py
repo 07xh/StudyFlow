@@ -20,7 +20,7 @@ class Reporter:
         self.started = time.time()
         self.state = {"state": "starting", "phase": "准备运行", "message": "",
                       "mastery": None, "round": 0, "points_completed": 0,
-                      "points_skipped": 0, "bank_hit": 0, "trial_count": 0,
+                      "points_skipped": 0, "bank_hit": 0, "trial_count": 0, "ai_count": 0,
                       "api_calls": 0, "course": "", "chapter": "",
                       "knowledge": "", "question": "", "logs": [], "updated_at": self.started}
         self.stop_file.unlink(missing_ok=True)
@@ -48,7 +48,7 @@ class Reporter:
         elif kind == "score":
             self.state["mastery"] = values.get("mastery")
         elif kind == "answered":
-            key = "bank_hit" if values.get("source") == "bank" else "trial_count"
+            key = "bank_hit" if values.get("source") == "bank" else ("ai_count" if values.get("source") == "ai" else "trial_count")
             self.state[key] += 1
         elif kind == "metrics":
             self.state["api_calls"] = int(values.get("api_calls", 0))
@@ -152,7 +152,14 @@ def main(mode: str = "run") -> int:
                         reporter.emit("phase", status="起点已保存", message="已保存练习入口和登录状态，可以关闭官方浏览器并启动后台练习")
                     else:
                         reporter.emit("phase", status="运行中", message="开始按题库及官方反馈处理掌握度练习")
-                        score = m.run_course(context, page, cfg, bank, limits, ai=LocalTrial())
+                        if cfg.get("use_ai", True):
+                            api_key = PrivateStore(DATA).load_key()
+                            if not api_key:
+                                raise m.Halt("DeepSeek 模式需要先在学序掌握度设置中填写 API Key")
+                            solver = m.DeepSeek(cfg, limits, api_key=api_key)
+                        else:
+                            solver = LocalTrial()
+                        score = m.run_course(context, page, cfg, bank, limits, ai=solver)
                         reporter.state["mastery"] = score
                         reporter.state["state"] = "completed"
                         reporter.emit("phase", status="已完成", message="当前知识点范围已处理完成")
