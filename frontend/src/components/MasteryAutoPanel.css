@@ -24,3 +24,8 @@
 .sf-mastery-auto-detail li>span:last-of-type{color:var(--muted);display:inline-flex;gap:3px;align-items:center}
 .sf-mastery-auto-detail li small{flex-basis:100%;color:var(--muted)}
 @media(max-width:760px){.sf-mastery-auto-settings{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.sf-mastery-auto-preference{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.sf-mastery-auto-preference label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted)}
+.sf-mastery-auto-preference select,.sf-mastery-auto-preference input{min-width:0;width:100%;border-radius:8px;border:1px solid var(--line);background:var(--panel-raised);color:var(--text);padding:8px 9px;font-size:13px;box-sizing:border-box}
+.sf-mastery-auto-preference select:focus,.sf-mastery-auto-preference input:focus{outline:1px solid var(--accent)}
