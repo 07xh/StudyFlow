@@ -256,8 +256,6 @@ def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
     if type(knowledge_id) is not int or not 0 < knowledge_id <= 2**63 - 1:
         raise ValueError("INVALID_KNOWLEDGE_ID")
     from studyflow.platforms.zhidao.legacy_runtime import resolve_course
-    from zhs.cli.bootstrap import load_config_and_session
-    from zhs.ai.course import AiCourseManager
 
     before = read_knowledge_detail(course_key, knowledge_id)
     desktop_before = before["knowledge_progress_percent"]
@@ -277,6 +275,9 @@ def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
     if course["course_type"] != "ai":
         raise ValueError("INVALID_KNOWLEDGE_ID")
     cid, class_id = int(course["course_id"]), int(course["class_id"])
+    from zhs.cli.bootstrap import load_config_and_session
+    from zhs.ai.course import AiCourseManager
+
     loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
     if loaded is None:
         raise RuntimeError("LOGIN_REQUIRED")
