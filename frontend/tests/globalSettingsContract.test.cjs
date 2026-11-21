@@ -13,6 +13,8 @@ test("global settings is one floating workspace, not a route",()=>{
  assert.match(app,/globalSettingsTab==="general"/);
  assert.match(app,/globalSettingsTab==="updates"/);
  assert.match(app,/globalSettingsTab==="about"/);
+ assert.match(app,/globalSettingsTab==="developer"/);
+ assert.match(source("ui/GlobalSettingsModal.tsx"),/label:"开发者网站"/);
  assert.match(app,/<UpdatePanel desktop=\{desktop&&consentAccepted\}/);
  assert.match(app,/<ZhidaoAccountTools desktop=\{desktop\} dark=\{dark\} view="about"\/>/);
 });

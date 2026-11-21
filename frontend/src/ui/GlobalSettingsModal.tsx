@@ -1,13 +1,14 @@
 import {useEffect,useId,useRef,useState,type KeyboardEvent,type MouseEvent,type PointerEvent as ReactPointerEvent,type ReactNode} from "react";
 import {createPortal} from "react-dom";
-import {Info,Palette,RefreshCw,X} from "lucide-react";
+import {Globe2,Info,Palette,RefreshCw,X} from "lucide-react";
 import "./globalSettings.css";
 
-export type GlobalSettingsTab="general"|"updates"|"about";
+export type GlobalSettingsTab="general"|"updates"|"about"|"developer";
 const groups=[
   {id:"general" as const,label:"通用设置",icon:Palette},
   {id:"updates" as const,label:"版本与更新",icon:RefreshCw},
-  {id:"about" as const,label:"关于与开源",icon:Info}
+  {id:"about" as const,label:"关于与开源",icon:Info},
+  {id:"developer" as const,label:"开发者网站",icon:Globe2}
 ];
 const WIDTH_KEY="studyflow.settings.nav-width.v1";
 const MIN_WIDTH=150,MAX_WIDTH=340,DEFAULT_WIDTH=208;
