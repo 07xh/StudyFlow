@@ -109,9 +109,19 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             for kid, (point, theme_index, chapter_name) in points.items():
                 if (selected and kid not in selected) or point.study_progress >= 101:
                     continue
-                targets.extend(resource_targets(
-                    kid, manager.list_knowledge_resources(cid, cls, kid), options,
-                    chapter_key=f"ai-{theme_index}", chapter_name=chapter_name))
+                resources = manager.list_knowledge_resources(cid, cls, kid)
+                if not resources and options.get("resource_mode", "all") == "all":
+                    # A directory knowledge point can contain detail-page text
+                    # while its resource tab has no playable / finishable item.
+                    # Preserve that observation without inventing a resource UID
+                    # or sending a completion request.
+                    targets.append(QueueTarget(
+                        0, kid, "detail", safe_resource_title(point.knowledge_name),
+                        f"ai-{theme_index}", chapter_name, "unknown"))
+                else:
+                    targets.extend(resource_targets(
+                        kid, resources, options,
+                        chapter_key=f"ai-{theme_index}", chapter_name=chapter_name))
         else:
             from zhs.zhidao.course import ZhidaoCourseManager
             manager = ZhidaoCourseManager(session)
@@ -261,7 +271,8 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
     rows = [{"task_id": t.task_id, "name": t.name, "kind": t.kind,
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
              "requirement": t.requirement,
-             "state": "queued", "percent": None, "playback_phase": None, "stale": False, "exit_code": None} for t in targets]
+             "state": "informational" if t.kind == "detail" else "queued",
+             "percent": None, "playback_phase": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
     started_at: dict[int, float] = {}
     had_sample: set[int] = set()
@@ -405,7 +416,9 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
             except OSError:
                 # A diagnostic-file problem cannot change the real task result.
                 pass
-    return exit_code
+    # Detail-only knowledge points have no server resource UID and never run a
+    # worker. Do not return success when any such point remained informational.
+    return exit_code or (18 if any(row["state"] == "informational" for row in rows) else 0)
 
 
 def run_queue(course_key: str, token: str, options: dict) -> int:
