@@ -442,6 +442,40 @@ def save_answer(course_key: str, knowledge_id: str, question_id: str, answer: An
     }
 
 
+
+def check_saved_answers(course_key: str, knowledge_id: str) -> dict[str, Any]:
+    """Check the *server* answer count before an automatic submission.
+
+    A saveAnswer HTTP success alone is not sufficient. This is a read-only
+    check and does not retry an ambiguous submit.
+    """
+    state = _active_round(course_key, knowledge_id)
+    if state.get("submission_state") != "draft":
+        raise MasteryError("SUBMIT_IN_PROGRESS")
+    session, _ = _open_session(course_key)
+    try:
+        reply = _exam_query(
+            session, f"{_exam_root(session)}/exam/user/getExamSheetInfo",
+            {"examTestId": state["exam_test_id"], "examPaperId": state["exam_paper_id"]},
+            method="GET",
+        )
+        progress = parse_sheet_progress(reply.get("data") or {})
+        expected = {str(q["question_id"]) for q in state["questions"]}
+        actual = {str(q["questionId"]) for q in progress.entries}
+        return {
+            "answered": progress.answer_count,
+            "total": progress.question_count,
+            "complete": (
+                progress.complete and actual == expected
+                and progress.answer_count == len(expected)
+                and progress.question_count == len(expected)
+                and not progress.pending
+            ),
+        }
+    finally:
+        session.close()
+
+
 def submit_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
     """提交掌握度习题并回读；任何回读异常都不能导致第二次提交。
 
