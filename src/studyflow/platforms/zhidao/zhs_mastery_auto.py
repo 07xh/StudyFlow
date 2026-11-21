@@ -434,7 +434,18 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
                 continue
             passed, reason, final_score = _execute_point(course_key, item, bank, config, deadline, api_key)
             _step(course_key, item, done=passed, reason=reason, mastery=final_score)
-        _update(state="completed", current=None, submitting=None,
+            if _STATUS.get("submitting") is not None:
+                # A POST might have been accepted by the server. Do not clear
+                # this marker, create new papers or continue submitting other
+                # knowledge points until a human verifies the affected round.
+                pending_id = _STATUS["submitting"].get("knowledge_id")
+                blocked = list(_STATUS.get("blocked", []))
+                if pending_id and pending_id not in blocked:
+                    blocked.append(pending_id)
+                _update(state="needs_attention", blocked=blocked, current=None,
+                        message="交卷状态或判分尚未确认；保留待核验记录，已停止后续自动提交")
+                return
+        _update(state="completed", current=None,
                 message="已扫描课程全部章节；未达标或需手动处理的知识点已单独标明")
     except StopRequested as error:
         _update(state="stopped", message=str(error), current=None)
