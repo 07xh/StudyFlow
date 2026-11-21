@@ -2,7 +2,7 @@
 
 ## 实际实现
 
-- 仅作用于 ZHS 原版模式，`resource_mode=all`。官方目录明确 `resourceCount=0`、ZHS 资源列表确实为空且学习进度未确认完成的知识点，以 `detail` 类型进入**现有章节并发队列**。
+- 仅作用于 ZHS 原版模式，`resource_mode=all` 或 `reading`（文章/PPT）。官方目录明确 `resourceCount=0`、ZHS 资源列表确实为空且学习进度未确认完成的知识点，以 `detail` 类型进入**现有章节并发队列**。
 - **不添加第二套调度或心跳引擎**。`--zhs-video-worker` 已有子进程根据任务类型调用已有的 `enter_knowledge_once`；只使用 ZHS 授权会话。每个任务执行时发送一次官方页面的 `saveStudentPointLog` 进入事件，再只读核验服务器进度，不循环伪造播放时长或资源 UID。
 - 只有服务器确认该知识点完成时退出码为 0；未增加进度以 16 表示未确认，读取失败以 17 表示未确认，不能把 HTTP 200 或进程运行成功当作知识点学习完成。
 - 学习完成状态优先采用移动版 `studyProgress`，若移动版字段缺失则采用 ZHS 原进度。两端不一致仅提示，不再重复阻止知识点执行；资源数缺失、目录读取失败或资源列表异常仍保持 `informational`。

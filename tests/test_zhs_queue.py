@@ -917,3 +917,10 @@ def test_zero_resource_ai_point_uses_existing_worker_and_server_readback(tmp_pat
         {"courseType": "ai", "courseId": 1, "classId": 2},
         {**options, "resource_mode": "video"})
     assert video_only == []
+    # Detail-page content is reading-like: include it under article/PPT.
+    reading_only, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2},
+        {**options, "resource_mode": "reading"})
+    assert len(reading_only) == 1
+    assert reading_only[0].kind == "detail"
+    assert reading_only[0].detail_evidence == "catalog_empty"

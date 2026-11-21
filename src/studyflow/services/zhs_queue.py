@@ -129,7 +129,7 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                     # Knowledge completion comes from mobile studyProgress when
                     # available; the ZHS catalog is its fallback only.
                     continue
-                if not resources and options.get("resource_mode", "all") == "all":
+                if not resources and options.get("resource_mode", "all") in ("all", "reading"):
                     # A directory knowledge point can contain detail-page text
                     # while its resource tab has no playable / finishable item.
                     # Preserve that observation without inventing a resource UID
@@ -586,7 +586,7 @@ def video_worker(args: list[str]) -> int:
                 or options["selected_ids"] != [target.knowledge_id or target.resource_id]
                 or (is_detail and (target.resource_id != 0
                                    or target.detail_evidence != "catalog_empty"
-                                   or options.get("resource_mode", "all") != "all"))
+                                   or options.get("resource_mode", "all") not in ("all", "reading")))
                 or (not is_detail and target.kind not in ("video", "ppt", "article", "other"))):
             return 2
     except (ValueError, TypeError, KeyError):
