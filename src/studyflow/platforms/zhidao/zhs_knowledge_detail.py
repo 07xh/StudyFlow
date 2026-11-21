@@ -118,24 +118,49 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
             raise RuntimeError("KNOWLEDGE_NOT_FOUND")
         point = points[0]
 
-        # This endpoint and these exact parameters are evidenced by the user's
-        # own HAR and its captured official client code. _ai_query uses the
-        # pinned ZHS 0.1.5 authentication/encryption stack unchanged.
-        url = f"{session.urls.ai}/run/gateway/t/stu/maptree/get-map-tree-node-detail"
-        detail_response = manager._ai_query(url, {
-            "courseId": cid, "classId": class_id, "knowledgeId": knowledge_id,
-        })
-        detail = detail_response.get("data") if isinstance(detail_response, dict) else None
-        if not isinstance(detail, dict) or _integer(detail.get("nodeUid")) != knowledge_id:
+        # Desktop and mobile AI pages use different *read-only* endpoints.
+        # Use ZHS' existing authenticated query transport in both cases.
+        # A response is accepted only when its nodeUid matches this course's
+        # already verified knowledge ID; never infer success from HTTP 200.
+        detail = None
+        detail_source = None
+        detail_params = {"courseId": cid, "classId": class_id, "knowledgeId": knowledge_id}
+        for source, url in (
+            ("desktop", f"{session.urls.ai}/run/gateway/t/stu/maptree/get-map-tree-node-detail"),
+            ("mobile", f"{session.urls.ai_task}/student/gateway/t/stu/maptree/get-map-tree-node-detail-with-mastery"),
+        ):
+            try:
+                result = manager._ai_query(url, detail_params)
+                candidate = result.get("data") if isinstance(result, dict) else None
+                if isinstance(candidate, dict) and _integer(candidate.get("nodeUid")) == knowledge_id:
+                    detail, detail_source = candidate, source
+                    break
+            except Exception:
+                # Unsupported deployment or unauthenticated mobile endpoint;
+                # the original video playback remains unaffected.
+                continue
+        if detail is None:
             raise RuntimeError("KNOWLEDGE_DETAIL_UNAVAILABLE")
 
-        directory = manager._ai_query(
-            f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic",
-            {"courseId": cid, "classId": class_id},
-        )
-        catalog_data = directory.get("data") if isinstance(directory, dict) else None
-        entry = official_catalog_entry(catalog_data, knowledge_id)
+        entry = None
+        catalog_source = None
+        for source, url in (
+            ("desktop", f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
+            ("mobile", f"{session.urls.ai_task}/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
+        ):
+            try:
+                result = manager._ai_query(url, {"courseId": cid, "classId": class_id})
+                data = result.get("data") if isinstance(result, dict) else None
+                candidate = official_catalog_entry(data, knowledge_id)
+                if candidate is not None:
+                    entry, catalog_source = candidate, source
+                    break
+            except Exception:
+                continue
         resource_count, finished_count = _counts(entry)
+        mobile_progress = _integer(entry.get("studyProgress")) if catalog_source == "mobile" else None
+        if mobile_progress is not None and mobile_progress > 100:
+            mobile_progress = None
         resources = manager.list_knowledge_resources(cid, class_id, knowledge_id)
         # A server resource-list mismatch must not be silently reported as
         # "there is nothing to study".
@@ -169,6 +194,12 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
             "official_resource_count": resource_count,
             "official_finished_resource_count": finished_count,
             "catalog_mismatch": mismatch,
+            "catalog_source": catalog_source,
+            "detail_source": detail_source,
+            # Mobile 2026 directory contains per-knowledge studyProgress but
+            # does not include resourceCount/finishedResourceCount. Distinguish
+            # its independently reported value from the desktop snapshot.
+            "mobile_knowledge_progress_percent": mobile_progress,
             "knowledge_progress_percent": max(0, min(100, int(point.study_progress))),
             "verification": "read_only",
             "verified_at": datetime.now(timezone.utc).isoformat(),
