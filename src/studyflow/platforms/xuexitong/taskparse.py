@@ -180,7 +180,7 @@ def normalize_card_fields(card: dict[str, Any]) -> dict[str, Any]:
         "type": kind,
         "is_media": kind in _VIDEO_KINDS,
         "completed": completed,
-        "passed": completed is True,
+        "passed": card.get("isPassed") is True or prop.get("isPassed") is True,
         "object_id": object_id[:160],
         "job_id": job_id[:160],
         "title": first(prop.get("name"), prop.get("title"), card.get("name"), kind)[:180],
