@@ -18,8 +18,8 @@ def question(qid=100, kind=1):
         "question_type": kind,
         "content": "<p>测试问题</p>",
         "options": [
-            {"id": 11, "content": "甲"},
-            {"id": 12, "content": "乙"},
+            {"id": 11, "content": "Alpha"},
+            {"id": 12, "content": "Beta"},
         ] if kind != 3 else [],
     }
 
@@ -129,7 +129,7 @@ def test_full_course_runs_multiple_rounds_then_advances(monkeypatch):
             "verification_pending":False,
             "graded":[{
                 "questionId":100,"isCorrect":number==2,
-                "correctOptionIds":[12], "correctTexts":["乙"],
+                "correctOptionIds":[12], "correctTexts":["Beta"],
             }],
             "high_mastery_now": 65 if number==1 else 100,
         }
