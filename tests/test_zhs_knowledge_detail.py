@@ -138,10 +138,10 @@ def test_zhs_detail_ipc_is_scoped_and_reports_only_readonly_evidence(monkeypatch
                         (calls.append((course_key, knowledge_id)) or expected))
     request = {"id": "detail-read-1", "version": 1,
                "operation": "zhidao.zhs.knowledge.detail",
-               "course_key": "a" * 64, "knowledge_id": "1876171149646368768"}
+               "course_key": "a" * 64, "knowledge_id": "1234567890123456789"}
     response = bridge.dispatch(request)
     assert response == {"id": "detail-read-1", "ok": True, "data": expected}
-    assert calls == [("a" * 64, 1876171149646368768)]
+    assert calls == [("a" * 64, 1234567890123456789)]
     for invalid in (0, -2, True, 87, 2**64, "", "0", "-1", "01", "9"*20, "abc"):
         response = bridge.dispatch({**request, "knowledge_id": invalid})
         assert response["ok"] is False
