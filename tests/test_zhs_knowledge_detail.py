@@ -104,10 +104,14 @@ def test_zhs_detail_reads_genuine_metadata_without_any_heartbeat(monkeypatch):
     assert detail["official_finished_resource_count"] == 0
     assert detail["catalog_mismatch"] is False
     assert detail["knowledge_progress_percent"] == 32
+    assert detail["mobile_knowledge_progress_percent"] == 100
+    assert detail["progress_sources_disagree"] is True
+    assert detail["catalog_source"] == "desktop"
     assert detail["verification"] == "read_only"
     assert detail["study_record_submitted"] is False
     assert [event[1] for event in events if isinstance(event, tuple) and event[0] == "read"] == [
-        "get-map-tree-node-detail", "get-course-knowledge-dic"
+        "get-map-tree-node-detail", "get-course-knowledge-dic",
+        "get-course-knowledge-dic-wx-three"
     ]
     assert events[-1] == "close"
 
@@ -159,6 +163,7 @@ def test_mobile_2026_detail_fallback_uses_read_only_api_without_resource_count(m
     assert detail["official_finished_resource_count"] is None
     assert detail["mobile_knowledge_progress_percent"] == 100
     assert detail["knowledge_progress_percent"] == 32
+    assert detail["progress_sources_disagree"] is True
     assert detail["study_record_submitted"] is False
     calls = [event[1] for event in events if isinstance(event, tuple) and event[0] == "read"]
     assert calls == ["get-map-tree-node-detail",
