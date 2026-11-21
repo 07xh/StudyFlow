@@ -332,3 +332,67 @@ def test_invalid_ai_response_falls_back_to_bounded_trial(monkeypatch):
     done,_,score=auto._execute_point(COURSE,point,bank,opts,auto.time.monotonic()+10,"sk-temporary")
     assert done and score==100 and sends==[11]
     bank.close()
+
+
+def test_arbitrary_first_round_answers_all_types_without_bank():
+    first_single, ident, texts = auto._arbitrary_first_answer(question())
+    assert first_single == 11 and texts == ["alpha"]
+    assert ident
+    first_multi, _, multi_texts = auto._arbitrary_first_answer(question(kind=2))
+    assert first_multi == [11] and multi_texts == ["alpha"]
+    first_fill, _, fill_texts = auto._arbitrary_first_answer(question(kind=3))
+    assert first_fill == "待复习" and fill_texts == ["待复习"]
+
+
+def test_arbitrary_first_ignores_existing_bank_and_uses_graded_answer_second_round(monkeypatch):
+    point, rounds, sends = _wire_strategy_rounds(monkeypatch, grades=(70, 100))
+    bank = auto.AnswerBank()
+    # Deliberately seed an answer at odds with the first option. The first
+    # arbitrary round must bypass verified bank regardless of what's cached.
+    bank.confirm(question(), {"isCorrect": True, "correctOptionIds": [12]}, ["beta"])
+    monkeypatch.setattr(auto, "ai_suggest", lambda *args:
+                        pytest.fail("arbitrary mode must not call AI"))
+    opts = {**auto.DEFAULTS, "first_round_mode": "arbitrary_first", "max_rounds": 3}
+    done, reason, score = auto._execute_point(
+        COURSE, point, bank, opts, auto.time.monotonic() + 10, ""
+    )
+    assert done and score == 100, reason
+    assert sends == [11, 11], "first is arbitrary, second uses server-confirmed answer"
+    bank.close()
+
+
+def test_arbitrary_first_unknown_fill_uses_official_answer_next_round(monkeypatch):
+    point = {"knowledge_id": "1001", "name": "A", "theme": "章节",
+             "mastery": 15, "free_exam": False}
+    sent = []
+    submissions = []
+    monkeypatch.setattr(auto.service, "active_round", lambda *args: None)
+    monkeypatch.setattr(auto.service, "start_round", lambda *args: {
+        "exam_test_id": len(submissions) + 1, "questions": [question(kind=3)],
+    })
+    monkeypatch.setattr(auto.service, "save_answer", lambda *args: sent.append(args[-1]))
+    monkeypatch.setattr(auto.service, "check_saved_answers", lambda *args: {
+        "complete": True, "answered": 1, "total": 1,
+    })
+    def submit(*args):
+        submissions.append(1)
+        return {
+            "verification_pending": False,
+            "graded": [{
+                "questionId": 100, "graded": True, "isCorrect": len(submissions) == 2,
+                "correctOptionIds": [], "correctTexts": ["正确填空"],
+            }],
+            "high_mastery_now": 60 if len(submissions) == 1 else 100,
+        }
+    monkeypatch.setattr(auto.service, "submit_round", submit)
+    auto._STATUS.update({"course_key": COURSE, "tasks": [{**point,
+                         "state": "pending", "rounds": 0, "reason": ""}]})
+    bank = auto.AnswerBank()
+    opts = {**auto.DEFAULTS, "first_round_mode": "arbitrary_first", "max_rounds": 3}
+    done, reason, score = auto._execute_point(
+        COURSE, point, bank, opts, auto.time.monotonic() + 10
+    )
+    assert done and score == 100, reason
+    assert sent == ["待复习", "正确填空"]
+    assert len(submissions) == 2
+    bank.close()
