@@ -110,6 +110,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
   | {id: string; version: 1; operation: "zhidao.mastery.catalog"; course_key: string; with_mastery?: boolean}
+  | {id: string; version: 1; operation: "zhidao.mastery.auto.start"; course_key: string; settings: MasteryAutoSettings}
+  | {id: string; version: 1; operation: "zhidao.mastery.auto.status"; course_key: string}
+  | {id: string; version: 1; operation: "zhidao.mastery.auto.control"; course_key: string; action: "pause"|"resume"|"stop"}
   | {id: string; version: 1; operation: "zhidao.mastery.round.start"; course_key: string; knowledge_id: string}
   | {id: string; version: 1; operation: "zhidao.mastery.round.active"; course_key: string; knowledge_id: string}
   | {id: string; version: 1; operation: "zhidao.mastery.round.answer"; course_key: string; knowledge_id: string; question_id: string; answer: string | number | Array<string | number>}
@@ -655,4 +658,31 @@ export function masteryWrongQuestions(
   courseKey: string, knowledgeId: string, examTestId?: string,
 ): Promise<{knowledge_id: string; mastery: number | null; questions: unknown[]; count: number}> {
   return request({operation: "zhidao.mastery.wrong", course_key: courseKey, knowledge_id: knowledgeId, exam_test_id: examTestId});
+}
+
+
+export type MasteryAutoSettings = {
+  target: number; max_rounds: number; stagnation_rounds: number; max_minutes: number;
+};
+export type MasteryAutoTask = {
+  knowledge_id: string; name: string; theme: string;
+  mastery: number | null; state: "pending"|"working"|"done"|"skipped";
+  rounds: number; reason: string;
+};
+export type MasteryAutoStatus = {
+  run_id?: string; course_key?: string; course_name?: string;
+  state: "idle"|"starting"|"running"|"paused"|"stopping"|"stopped"|"completed"|"error"|"interrupted";
+  message?: string; total: number; processed: number; done: number; skipped: number;
+  current?: {knowledge_id:string;name:string;theme:string}|null;
+  submitting?: {knowledge_id:string;exam_test_id:number}|null;
+  tasks: MasteryAutoTask[]; updated_at?: string;
+};
+export function masteryAutoStart(courseKey: string, settings: MasteryAutoSettings): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({operation:"zhidao.mastery.auto.start",course_key:courseKey,settings});
+}
+export function masteryAutoStatus(courseKey: string): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({operation:"zhidao.mastery.auto.status",course_key:courseKey});
+}
+export function masteryAutoControl(courseKey: string, action: "pause"|"resume"|"stop"): Promise<MasteryAutoStatus> {
+  return request<MasteryAutoStatus>({operation:"zhidao.mastery.auto.control",course_key:courseKey,action});
 }
