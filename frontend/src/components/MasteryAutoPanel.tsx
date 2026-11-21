@@ -49,6 +49,8 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         if(alive)setStatus(value);
       }).catch(()=>{});
     },2500);
+    // Node render tests must not be kept alive only by the status timer.
+    (timer as unknown as {unref?:()=>void}).unref?.();
     return ()=>{alive=false;window.clearInterval(timer);};
   },[courseKey,desktop]);
 
@@ -162,6 +164,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       <span>题库命中 <b>{status.bank_hits??0}</b></span>
       <span>AI 使用 <b>{status.ai_used??0}</b> / {status.ai_calls??0} 次</span>
       <span>试答 <b>{status.trials??0}</b></span>
+      {(status.ai_errors??0)>0&&<span>AI 失败已回退 <b>{status.ai_errors}</b> 次</span>
     </div>
     <div className="sf-mastery-auto-progress" role="progressbar"
       aria-label="全课程知识点处理进度" aria-valuemin={0}
