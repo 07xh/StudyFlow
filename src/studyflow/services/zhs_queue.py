@@ -307,7 +307,8 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
              "detail_evidence": t.detail_evidence if t.kind == "detail" else None,
              "chapter_key": t.chapter_key, "chapter_name": t.chapter_name,
              "requirement": t.requirement,
-             "state": "informational" if t.kind == "detail" else "queued",
+             "state": ("informational" if t.kind == "detail"
+                       and t.detail_evidence != "catalog_empty" else "queued"),
              "percent": None, "playback_phase": None, "stale": False, "exit_code": None} for t in targets]
     running = {}  # row index -> (owned process, private telemetry nonce)
     started_at: dict[int, float] = {}
@@ -452,8 +453,8 @@ def supervise(targets: list[QueueTarget], concurrency: int, token: str, director
             except OSError:
                 # A diagnostic-file problem cannot change the real task result.
                 pass
-    # Detail-only knowledge points have no server resource UID and never run a
-    # worker. Do not return success when any such point remained informational.
+    # A knowledge entry returns success only after official server readback.
+    # Unverifiable catalogue nodes remain informational and never launch.
     return exit_code or (18 if any(row["state"] == "informational" for row in rows) else 0)
 
 
@@ -581,15 +582,32 @@ def video_worker(args: list[str]) -> int:
         options = validate_run_settings(json.loads(args[2]))
         data = json.loads(args[3])
         target = QueueTarget(**data)
-        ids = (target.resource_id,) if target.knowledge_id is None else (target.resource_id, target.knowledge_id)
+        is_detail = target.kind == "detail"
+        ids = ((target.knowledge_id,) if is_detail
+               else (target.resource_id,) if target.knowledge_id is None
+               else (target.resource_id, target.knowledge_id))
         if (any(type(i) is not int or not 0 < i <= 2**63 - 1 for i in ids)
                 or options["concurrency"] != 1 or options["scope_mode"] != "selected"
                 or options["selected_ids"] != [target.knowledge_id or target.resource_id]
-                or target.kind not in ("video", "ppt", "article", "other")):
+                or (is_detail and (target.resource_id != 0
+                                   or target.detail_evidence != "catalog_empty"
+                                   or options.get("resource_mode", "all") != "all"))
+                or (not is_detail and target.kind not in ("video", "ppt", "article", "other"))):
             return 2
     except (ValueError, TypeError, KeyError):
         return 2
     watch_parent_pipe()
+    if target.kind == "detail":
+        # Reuse the existing one-time authenticated entry + server readback.
+        # Never treat log acceptance as study completion, never loop writes.
+        from studyflow.platforms.zhidao.zhs_knowledge_detail import enter_knowledge_once
+        try:
+            result = enter_knowledge_once(args[0], target.knowledge_id)
+            if result["server_completed"] or result["state"] == "already_complete":
+                return 0
+            return 16 if result["state"] in ("unchanged", "advanced") else 17
+        except Exception:
+            return 17
     code = run_zhidao_original(args[0], args[1], options,
                                target_resource=(target.knowledge_id, target.resource_id))
     return code if code != 0 else verify_server_advancement(args[0], target)
