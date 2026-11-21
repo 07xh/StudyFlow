@@ -98,7 +98,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.settings.get"}
   | {id: string; version: 1; operation: "yuketang.settings.save"; settings: OriginalYktOptions}
   | {id: string; version: 1; operation: "zhidao.mastery.settings.get"}
-  | {id: string; version: 1; operation: "zhidao.mastery.settings.save"; settings: {target:number;max_rounds:number;max_api_calls:number;max_minutes:number;auto_next:boolean;next_scope:"course"|"chapter";browser:"msedge"|"chrome";use_ai:boolean;api_key?:string;entry_url?:string}}
+  | {id: string; version: 1; operation: "zhidao.mastery.settings.save"; settings: {target:number;max_rounds:number;max_api_calls:number;max_minutes:number;auto_next:boolean;next_scope:"course"|"chapter"}}
   | {id: string; version: 1; operation: "zhidao.zhs.settings.get"; course_key?:string}
   | {id: string; version: 1; operation: "zhidao.zhs.settings.save"; course_key?:string; settings: ZhsStoredOptions}
   | {id: string; version: 1; operation: "zhidao.cookie.import"; content: string; mode: "file" | "text"}
