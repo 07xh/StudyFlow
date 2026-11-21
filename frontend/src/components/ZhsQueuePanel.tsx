@@ -47,10 +47,10 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
       setMessage(legacyError(error));
     }
   }
-  async function inspectDetail(knowledgeId:number){
+  async function inspectDetail(knowledgeId:string){
     const courseKey=status.course_id;
     const run=status.run_id;
-    if(!courseKey||!Number.isSafeInteger(knowledgeId)||knowledgeId<=0)return;
+    if(!courseKey||!/^[1-9][0-9]{0,18}$/.test(knowledgeId))return;
     setDetailBusy(true);setDetailMessage("");
     try{
       const result=await request<ZhsKnowledgeDetail>({
