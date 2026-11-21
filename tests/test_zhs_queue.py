@@ -809,6 +809,7 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
         progress = 0
         catalog_total = 0
         desktop_missing = False
+        mobile_progress = 0
         def __init__(self, _session): pass
 
         def _ai_query(self, url, params):
@@ -817,7 +818,7 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
                 raise RuntimeError("desktop catalog temporarily unavailable")
             if url.endswith("/get-course-knowledge-dic-wx-three"):
                 return {"data": {"themeList": [{"subThemeList": [{"knowledgeList": [
-                    {"knowledgeId": 87, "studyProgress": 0}
+                    {"knowledgeId": 87, "studyProgress": self.mobile_progress}
                 ]}]}]}}
             assert url.endswith("/get-course-knowledge-dic")
             return {"data": {"themeList": [{"subThemeList": [{"knowledgeList": [
@@ -866,9 +867,26 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     # On the uploaded recording the directory shows completed points,
     # even though mastery stays at 0%; those must not become fake jobs.
     Manager.progress = 100
+    Manager.mobile_progress = 100
     completed, _ = discover_targets(
         {"courseType": "ai", "courseId": 1, "classId": 2}, options)
     assert completed == []
+    Manager.progress = 0
+    Manager.mobile_progress = 0
+
+    # Both signed directories must agree before silently skipping a
+    # zero-resource knowledge point. Desktop=0/mobile=100 is unresolved.
+    Manager.mobile_progress = 100
+    conflict, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(conflict) == 1
+    assert conflict[0].detail_evidence == "progress_conflict"
+    Manager.mobile_progress = 0
+    Manager.progress = 100
+    opposite, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(opposite) == 1
+    assert opposite[0].detail_evidence == "progress_conflict"
     Manager.progress = 0
 
     # A non-empty official catalog and an empty ZHS resource endpoint is a
