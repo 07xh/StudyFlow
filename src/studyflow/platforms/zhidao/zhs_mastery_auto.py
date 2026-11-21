@@ -143,8 +143,9 @@ def _ai_answer(question: dict[str, Any], key: str, remaining: float) -> Any:
                         "填空返回各空的答案字符串。无法判断则返回空数组。",
     }, ensure_ascii=False)
     body = json.dumps({
-        "model": "deepseek-chat",
-        "temperature": 0.1,
+        "model": "deepseek-flash",
+        "thinking": {"type": "disabled"},
+        "max_tokens": 800,
         "messages": [
             {"role": "system", "content": "你是知识点习题解题助手。仅输出合法 JSON，不要编造选项 ID。"},
             {"role": "user", "content": prompt},
