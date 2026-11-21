@@ -250,7 +250,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
                              "LOGIN_REQUIRED", "NOT_AI_COURSE", "MASTERY_UNAVAILABLE", "PAPER_UNAVAILABLE", "PAPER_EMPTY",
                              "NO_ACTIVE_ROUND", "ROUND_EXPIRED", "QUESTION_NOT_IN_ROUND", "EMPTY_ANSWER",
-                             "ANSWER_SAVE_FAILED", "SUBMIT_FAILED", "ZHS_MASTERY_UNAVAILABLE",
+                             "ANSWER_SAVE_FAILED", "SUBMIT_FAILED", "SUBMIT_IN_PROGRESS", "SUBMIT_STATUS_UNKNOWN", "ROUND_ALREADY_SUBMITTED", "ZHS_MASTERY_UNAVAILABLE",
                              "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED",
                              "XUEXITONG_COURSE_REQUIRED", "XUEXITONG_TASK_ALREADY_RUNNING",
                              "XUEXITONG_INVALID_PARAMETER", "XUEXITONG_INVALID_TARGET",
@@ -468,7 +468,10 @@ export function friendlyBridgeError(value: unknown): string {
     case "QUESTION_NOT_IN_ROUND": return "这道题不属于当前这一轮。";
     case "EMPTY_ANSWER": return "请先选择或填写答案。";
     case "ANSWER_SAVE_FAILED": return "这一题没保存成功，可以重试。";
-    case "SUBMIT_FAILED": return "提交没有成功，掌握度未更新。";
+    case "SUBMIT_FAILED": return "提交失败，请核对服务器状态。";
+    case "SUBMIT_IN_PROGRESS": return "本轮提交还在处理中，请不要重复操作。";
+    case "SUBMIT_STATUS_UNKNOWN": return "提交结果尚未确认，点击核验提交状态；不会再次发送提交。";
+    case "ROUND_ALREADY_SUBMITTED": return "本轮已提交或状态未确认，不能再保存答案，请先核对结果。";
     case "ZHS_MASTERY_UNAVAILABLE": return "掌握度服务读取失败，稍后再试。";
     case "ZHIDAO_DIAGNOSE_FAILED": return "知到连接诊断未能完成。";
     case "ZHIDAO_DATA_CLEAR_FAILED": return "知到本地数据清理失败；未删除未列入清单的数据。";
@@ -575,6 +578,7 @@ export type MasteryActiveRound = {
   total: number;
   high_mastery: number | null;
   opened_at: string;
+  submission_state?: "draft" | "sending" | "submitted" | "unknown";
 };
 
 export type MasteryAnswerResult = {
@@ -602,7 +606,9 @@ export type MasterySubmitResult = {
   exam_test_id: number;
   exam_paper_id: number;
   submitted: boolean;
-  round_score: {correct: number; total: number; percent: number | null};
+  grading_pending?: boolean;
+  verification_pending?: boolean;
+  round_score: {correct: number | null; total: number; percent: number | null};
   graded: MasteryGraded[];
   mastery_before: {high: number | null; this_round_start: number | null};
   mastery_after: {mastery: number; band: MasteryBand; reached_threshold: boolean} | null;

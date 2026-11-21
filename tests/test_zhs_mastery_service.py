@@ -225,3 +225,128 @@ def test_unknown_knowledge_is_rejected_before_any_request(monkeypatch):
         service.save_answer("k" * 64, KNOWLEDGE, "1", 671372791)
     assert raised.value.code == "QUESTION_NOT_IN_ROUND"
     assert not [call for call in session.calls if call[1].endswith("/answer/saveAnswer")]
+
+
+
+def test_submit_readback_failure_does_not_post_twice(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    service.start_round("k" * 64, KNOWLEDGE)
+    service.save_answer("k" * 64, KNOWLEDGE, "939136618", 671372794)
+    original = session.ai_exam_query
+    fail_once = {"yes": True}
+
+    def flaky_read(url, data, method="POST"):
+        if session.submitted and url.endswith("/question/getExamQuestionInfo") and fail_once["yes"]:
+            fail_once["yes"] = False
+            raise ConnectionError("readback dropped")
+        return original(url, data, method=method)
+
+    monkeypatch.setattr(session, "ai_exam_query", flaky_read)
+    partial = service.submit_round("k" * 64, KNOWLEDGE)
+    assert partial["submitted"] is True
+    assert partial["grading_pending"] is True
+    assert partial["verification_pending"] is True
+    assert partial["round_score"] == {"correct": None, "total": 2, "percent": None}
+    assert service.active_round("k" * 64, KNOWLEDGE)["submission_state"] == "submitted"
+
+    confirmed = service.submit_round("k" * 64, KNOWLEDGE)
+    assert confirmed["grading_pending"] is False
+    assert confirmed["round_score"]["percent"] == 50
+    assert len([call for call in session.calls if call[0] == "submit"]) == 1
+    assert service.active_round("k" * 64, KNOWLEDGE) is None
+
+
+def test_empty_grading_reply_never_becomes_zero_percent(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    service.start_round("k" * 64, KNOWLEDGE)
+    original = session.ai_exam_query
+
+    def missing_one(url, data, method="POST"):
+        if session.submitted and url.endswith("/question/getExamQuestionInfo") and data["questionId"] == 939136619:
+            return {"code": 0, "data": dict(QUESTIONS[939136619])}
+        return original(url, data, method=method)
+
+    monkeypatch.setattr(session, "ai_exam_query", missing_one)
+    partial = service.submit_round("k" * 64, KNOWLEDGE)
+    assert partial["round_score"]["correct"] is None
+    assert partial["round_score"]["total"] == 2
+    assert partial["round_score"]["percent"] is None
+    assert partial["grading_pending"] is True
+    assert len(partial["graded"]) == 1
+    assert len([call for call in session.calls if call[0] == "submit"]) == 1
+
+
+def test_timeout_after_server_acceptance_only_checks_status(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    service.start_round("k" * 64, KNOWLEDGE)
+    original_submit = session.ai_exam_submit
+    original_query = session.ai_exam_query
+
+    def accepted_but_timeout(url, data):
+        original_submit(url, data)
+        raise TimeoutError("response lost")
+
+    def exam_status(url, data, method="POST"):
+        if url.endswith("/exam/user/getExamTestUserInfo"):
+            session.calls.append(("exam", url, dict(data), method))
+            return {"code": 0, "data": {"examState": 6, "submitTime": "2026-11-22T00:00:00"}}
+        return original_query(url, data, method=method)
+
+    monkeypatch.setattr(session, "ai_exam_submit", accepted_but_timeout)
+    monkeypatch.setattr(session, "ai_exam_query", exam_status)
+    with pytest.raises(service.MasteryError) as error:
+        service.submit_round("k" * 64, KNOWLEDGE)
+    assert error.value.code == "SUBMIT_STATUS_UNKNOWN"
+    assert service.active_round("k" * 64, KNOWLEDGE)["submission_state"] == "unknown"
+
+    checked = service.submit_round("k" * 64, KNOWLEDGE)
+    assert checked["submitted"] is True
+    assert checked["grading_pending"] is False
+    assert len([call for call in session.calls if call[0] == "submit"]) == 1
+    assert any(call[1].endswith("/exam/user/getExamTestUserInfo") for call in session.calls)
+
+
+def test_unknown_submission_never_reposts_when_not_confirmed(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    service.start_round("k" * 64, KNOWLEDGE)
+    original_query = session.ai_exam_query
+
+    def timeout_without_ack(url, data):
+        session.calls.append(("submit", url, dict(data)))
+        raise TimeoutError("no ack")
+
+    def not_yet_submitted(url, data, method="POST"):
+        if url.endswith("/exam/user/getExamTestUserInfo"):
+            return {"code": 0, "data": {"examState": 3, "submitTime": None}}
+        return original_query(url, data, method=method)
+
+    monkeypatch.setattr(session, "ai_exam_submit", timeout_without_ack)
+    monkeypatch.setattr(session, "ai_exam_query", not_yet_submitted)
+    with pytest.raises(service.MasteryError):
+        service.submit_round("k" * 64, KNOWLEDGE)
+    with pytest.raises(service.MasteryError) as error:
+        service.submit_round("k" * 64, KNOWLEDGE)
+    assert error.value.code == "SUBMIT_STATUS_UNKNOWN"
+    assert len([call for call in session.calls if call[0] == "submit"]) == 1
+    with pytest.raises(service.MasteryError) as saved:
+        service.save_answer("k" * 64, KNOWLEDGE, "939136618", 671372794)
+    assert saved.value.code == "ROUND_ALREADY_SUBMITTED"
+
+
+def test_answer_with_null_correctness_is_not_a_confirmed_zero(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    service.start_round("k" * 64, KNOWLEDGE)
+    original = session.ai_exam_query
+
+    def delayed_grade(url, data, method="POST"):
+        if session.submitted and url.endswith("/question/getExamQuestionInfo"):
+            question = dict(QUESTIONS[data["questionId"]])
+            question["userAnswerVo"] = [{"answer": "671372794", "isCorrect": None}]
+            return {"code": 0, "data": question}
+        return original(url, data, method=method)
+
+    monkeypatch.setattr(session, "ai_exam_query", delayed_grade)
+    result = service.submit_round("k" * 64, KNOWLEDGE)
+    assert result["grading_pending"] is True
+    assert result["round_score"] == {"correct": None, "total": 2, "percent": None}
+    assert result["graded"] == []

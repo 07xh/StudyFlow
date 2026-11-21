@@ -509,7 +509,14 @@ def parse_question_result(question: Mapping[str, Any]) -> dict[str, Any]:
         analysis_text = str(analysis.get("analysis") or analysis.get("content") or "")
     elif isinstance(analysis, str):
         analysis_text = analysis
-    graded = bool(answers_payload)
+    # userAnswerVo 存在不代表判分已经完成：服务端可能先返回答案，
+    # 而 isCorrect 仍为 null。不能把 null 当作“错误”计入 0 分。
+    graded = bool(answers_payload) and all(
+        isinstance(item, dict)
+        and type(item.get("isCorrect")) is int
+        and item["isCorrect"] in (0, 1)
+        for item in user_answers
+    )
     return {
         "questionId": question.get("id"),
         "questionType": question.get("questionType"),
