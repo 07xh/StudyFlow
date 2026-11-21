@@ -77,6 +77,8 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
     };
     void sync();
     const timer=setInterval(()=>{void sync();},2500);
+    // Node regression tests do not keep a process alive solely for UI polling.
+    (timer as unknown as {unref?:()=>void}).unref?.();
     return ()=>{cancelled=true;clearInterval(timer);};
   },[desktop]);
 
