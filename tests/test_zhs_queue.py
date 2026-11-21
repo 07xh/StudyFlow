@@ -800,12 +800,21 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     ai.__path__ = []
     bootstrap = ModuleType("zhs.cli.bootstrap")
     course_module = ModuleType("zhs.ai.course")
-    session = NS(close=lambda: None)
+    session = NS(close=lambda: None, urls=NS(ai="https://kg-ai-run.zhihuishu.com"))
     bootstrap.load_config_and_session = lambda **_kwargs: (None, session)
 
     class Manager:
         progress = 0
+        catalog_total = 0
         def __init__(self, _session): pass
+
+        def _ai_query(self, url, params):
+            assert url.endswith("/get-course-knowledge-dic")
+            assert params == {"courseId": 1, "classId": 2}
+            return {"data": {"themeList": [{"subThemeList": [{"knowledgeList": [
+                {"knowledgeId": 87, "resourceCount": self.catalog_total,
+                 "finishedResourceCount": 0}
+            ]}]}]}}
 
         def get_knowledge_points(self, _cid, _cls):
             return NS(cake_theme_list=[NS(theme_name="绪论", knowledge_list=[
@@ -831,6 +840,7 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     assert targets[0].resource_id == 0  # No real resource UID exists.
     assert targets[0].knowledge_id == 87
     assert targets[0].name == "历任校首"
+    assert targets[0].detail_evidence == "catalog_empty"
 
     def forbidden_launch(_target, _token):
         raise AssertionError("A detail-only point must not start any sender")
@@ -839,6 +849,8 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
     assert supervise(targets, 2, token, tmp_path, forbidden_launch) == 18
     snapshot = json.loads((tmp_path / f"zhs-queue-{token}.json").read_text())
     assert snapshot["tasks"][0]["state"] == "informational"
+    assert snapshot["tasks"][0]["knowledge_id"] == 87
+    assert snapshot["tasks"][0]["detail_evidence"] == "catalog_empty"
     assert snapshot["tasks"][0]["percent"] is None
     assert snapshot["tasks"][0]["exit_code"] is None
 
@@ -849,6 +861,15 @@ def test_detail_only_ai_point_is_discovered_but_never_sent_as_a_resource(tmp_pat
         {"courseType": "ai", "courseId": 1, "classId": 2}, options)
     assert completed == []
     Manager.progress = 0
+
+    # A non-empty official catalog and an empty ZHS resource endpoint is a
+    # mismatch, never evidence that the user already completed the content.
+    Manager.catalog_total = 3
+    mismatch, _ = discover_targets(
+        {"courseType": "ai", "courseId": 1, "classId": 2}, options)
+    assert len(mismatch) == 1
+    assert mismatch[0].detail_evidence == "catalog_mismatch"
+    Manager.catalog_total = 0
 
     # Video-only selection should not create a synthetic detail task.
     video_only, _ = discover_targets(
