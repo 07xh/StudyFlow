@@ -160,7 +160,7 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
             name = str(point.knowledge_name)[:200]
         return {
             "course_key": course_key,
-            "knowledge_id": knowledge_id,
+            "knowledge_id": str(knowledge_id),
             "name": name,
             "content": content,
             "content_available": bool(content),
