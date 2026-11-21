@@ -27,7 +27,7 @@ test("close hides the existing main window but explicit exit still cleans up Sid
   assert.match(source,/api\.prevent_close\(\);\s*let _ = window\.hide\(\);/);
   assert.match(source,/tauri::WindowEvent::Destroyed => \{[^}]*shutdown_owned_services\(window\.app_handle\(\)\);/s);
   assert.match(source,/fn studyflow_exit\(app: tauri::AppHandle\) \{\s*shutdown_owned_services\(&app\);\s*app\.exit\(0\);/);
-  assert.match(shell,/aria-label="收起到系统托盘"/);
+  assert.match(shell,/aria-label="关闭窗口（收起到系统托盘）"/);
   assert.match(shell,/getCurrentWindow\(\)\.close\(\)/);
   assert.doesNotMatch(shell,/\bnew Window\(|window\.open\(/);
 });
