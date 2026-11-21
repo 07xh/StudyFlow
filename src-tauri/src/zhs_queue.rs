@@ -56,9 +56,12 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let id = row.get("task_id")?.as_str()?;
         if !valid_id(id) || !seen.insert(id.to_owned()) { return None; }
         let kind = row.get("kind")?.as_str()?;
-        if !matches!(kind, "video" | "ppt" | "article" | "other") { return None; }
+        if !matches!(kind, "video" | "ppt" | "article" | "other" | "detail") { return None; }
         let row_state = row.get("state")?.as_str()?;
-        if !matches!(row_state, "queued" | "running" | "exited" | "failed" | "stopped" | "unconfirmed") { return None; }
+        if !matches!(row_state, "queued" | "running" | "exited" | "failed" | "stopped" | "unconfirmed" | "informational") { return None; }
+        // A detail-only knowledge point is visible for diagnosis, but can
+        // never be represented as a completed/active ZHS resource.
+        if (kind == "detail") != (row_state == "informational") { return None; }
         let requirement = match row.get("requirement") {
             None | Some(Value::Null) => None,
             Some(value) => {
@@ -122,6 +125,9 @@ pub fn parse(bytes: &[u8], token: &str, now: f64) -> Option<QueueSnapshot> {
         let exit_code = if row.get("exit_code")?.is_null() { None } else {
             Some(row.get("exit_code")?.as_i64()?)
         };
+        if row_state == "informational" && (percent.is_some() || playback_phase.is_some() || exit_code.is_some()) {
+            return None;
+        }
         tasks.push(QueueTask {task_id: id.into(), name, chapter_key, chapter_name,
             kind: kind.into(), requirement, state: row_state.into(),
             percent, playback_phase, stale: row_stale, exit_code});
