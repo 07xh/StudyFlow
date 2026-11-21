@@ -110,6 +110,11 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
                 if (selected and kid not in selected) or point.study_progress >= 101:
                     continue
                 resources = manager.list_knowledge_resources(cid, cls, kid)
+                if not resources and point.study_progress >= 100:
+                    # A mastered/not mastered score is separate from the
+                    # server's knowledge-learning progress. The mobile
+                    # directory may already mark zero-resource points done.
+                    continue
                 if not resources and options.get("resource_mode", "all") == "all":
                     # A directory knowledge point can contain detail-page text
                     # while its resource tab has no playable / finishable item.
