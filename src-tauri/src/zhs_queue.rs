@@ -246,4 +246,24 @@ mod tests {
         data["tasks"].as_array_mut().unwrap().push(duplicate);
         assert!(parse(data.to_string().as_bytes(), &"a".repeat(32),101.0).is_none());
     }
+    #[test]
+    fn detail_only_knowledge_is_informational_and_never_claims_progress() {
+        let mut data = sample();
+        data["tasks"][0]["name"] = json!("历任校首");
+        data["tasks"][0]["kind"] = json!("detail");
+        data["tasks"][0]["state"] = json!("informational");
+        data["tasks"][0]["percent"] = Value::Null;
+        let decoded = parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).unwrap();
+        assert_eq!(decoded.tasks[0].state, "informational");
+        assert!(decoded.tasks[0].percent.is_none());
+        data["tasks"][0]["state"] = json!("exited");
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+        data["tasks"][0]["state"] = json!("informational");
+        data["tasks"][0]["percent"] = json!(100.0);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+        data["tasks"][0]["percent"] = Value::Null;
+        data["tasks"][0]["exit_code"] = json!(0);
+        assert!(parse(data.to_string().as_bytes(), &"a".repeat(32), 101.0).is_none());
+    }
+
 }
