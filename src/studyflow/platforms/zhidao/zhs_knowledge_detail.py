@@ -88,6 +88,44 @@ def _counts(entry: dict | None) -> tuple[int | None, int | None]:
     return total, finished
 
 
+def read_course_catalogs(manager, session, course_id: int, class_id: int) -> dict[str, dict]:
+    """Read BOTH official ZHS directories independently; neither is a write API.
+
+    Desktop provides resource counts. The 2026 mobile catalog exposes the
+    knowledge's own studyProgress, and omits resource counters. Using only
+    the first successful directory hides real server-side disagreements.
+    """
+    urls = getattr(session, "urls", None)
+    result: dict[str, dict] = {}
+    for source, base, suffix in (
+        ("desktop", getattr(urls, "ai", None),
+         "/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
+        ("mobile", getattr(urls, "ai_task", None),
+         "/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
+    ):
+        if not isinstance(base, str) or not base.startswith("https://"):
+            continue
+        try:
+            reply = manager._ai_query(
+                base.rstrip("/") + suffix,
+                {"courseId": course_id, "classId": class_id},
+            )
+            data = reply.get("data") if isinstance(reply, dict) else None
+            if isinstance(data, dict) and isinstance(data.get("themeList"), list):
+                result[source] = data
+        except Exception:
+            # A secondary catalog failing must never alter ZHS video behavior.
+            continue
+    return result
+
+
+def mobile_study_progress(entry: dict | None) -> int | None:
+    if not isinstance(entry, dict):
+        return None
+    progress = _integer(entry.get("studyProgress"))
+    return progress if progress is not None and progress <= 100 else None
+
+
 def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
     """Read one validated knowledge node via ZHS' own signed session.
 
@@ -143,25 +181,18 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
         if detail is None:
             raise RuntimeError("KNOWLEDGE_DETAIL_UNAVAILABLE")
 
-        entry = None
-        catalog_source = None
-        for source, url in (
-            ("desktop", f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
-            ("mobile", f"{session.urls.ai_task}/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
-        ):
-            try:
-                result = manager._ai_query(url, {"courseId": cid, "classId": class_id})
-                data = result.get("data") if isinstance(result, dict) else None
-                candidate = official_catalog_entry(data, knowledge_id)
-                if candidate is not None:
-                    entry, catalog_source = candidate, source
-                    break
-            except Exception:
-                continue
-        resource_count, finished_count = _counts(entry)
-        mobile_progress = _integer(entry.get("studyProgress")) if catalog_source == "mobile" else None
-        if mobile_progress is not None and mobile_progress > 100:
-            mobile_progress = None
+        catalogs = read_course_catalogs(manager, session, cid, class_id)
+        desktop_entry = official_catalog_entry(catalogs.get("desktop"), knowledge_id)
+        mobile_entry = official_catalog_entry(catalogs.get("mobile"), knowledge_id)
+        # Mobile studyProgress is independently read even when the desktop
+        # catalog succeeds; it is NOT inferred from resourceCount or mastery.
+        mobile_progress = mobile_study_progress(mobile_entry)
+        resource_count, finished_count = _counts(desktop_entry)
+        catalog_source = "desktop" if desktop_entry is not None else (
+            "mobile" if mobile_entry is not None else None
+        )
+        if resource_count is None and mobile_entry is not None:
+            resource_count, finished_count = _counts(mobile_entry)
         resources = manager.list_knowledge_resources(cid, class_id, knowledge_id)
         # A server resource-list mismatch must not be silently reported as
         # "there is nothing to study".
@@ -202,6 +233,10 @@ def read_knowledge_detail(course_key: str, knowledge_id: int) -> dict:
             # its independently reported value from the desktop snapshot.
             "mobile_knowledge_progress_percent": mobile_progress,
             "knowledge_progress_percent": max(0, min(100, int(point.study_progress))),
+            "progress_sources_disagree": (
+                mobile_progress is not None
+                and (mobile_progress >= 100) != (int(point.study_progress) >= 100)
+            ),
             "verification": "read_only",
             "verified_at": datetime.now(timezone.utc).isoformat(),
             "study_record_submitted": False,
