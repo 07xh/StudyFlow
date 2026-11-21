@@ -310,6 +310,19 @@ def enter_knowledge_once(course_key: str, knowledge_id: int) -> dict:
                 "submitted": submitted, "server_advanced": False, "server_completed": False}
     desktop_after = after["knowledge_progress_percent"]
     mobile_after = after["mobile_knowledge_progress_percent"]
+    # A server may commit the knowledge record after acknowledging the log.
+    # Retry ONLY the read once, never the write; a 200 response is not proof.
+    if (desktop_after <= desktop_before
+            and (mobile_after is None or mobile_before is None
+                 or mobile_after <= mobile_before)):
+        import time
+        time.sleep(1.0)
+        try:
+            after = read_knowledge_detail(course_key, knowledge_id)
+            desktop_after = after["knowledge_progress_percent"]
+            mobile_after = after["mobile_knowledge_progress_percent"]
+        except Exception:
+            pass
     desktop_advanced = desktop_after > desktop_before
     mobile_advanced = (mobile_before is not None and mobile_after is not None
                        and mobile_after > mobile_before)
