@@ -107,7 +107,7 @@ def discover_targets(course: dict, options: dict) -> tuple[list[QueueTarget], bo
             resource_catalog = None
             for source, url in (
                 ("desktop", f"{session.urls.ai}/run/gateway/t/stu/knowledge-study/get-course-knowledge-dic"),
-                ("mobile", f"{session.urls.ai_task}/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
+                ("mobile", f"{getattr(session.urls, 'ai_task', '')}/student/gateway/t/stu/knowledge-study/get-course-knowledge-dic-wx-three"),
             ):
                 try:
                     response = manager._ai_query(
