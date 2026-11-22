@@ -1013,11 +1013,17 @@ pub fn run() {
             if window.label() != "main" { return; }
             match event {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
-                    // Hiding is not destroying: keep the same authenticated
-                    // renderer and existing Sidecar alive while in the tray.
-                    // The explicit tray Quit entry performs graceful cleanup.
+                    // Default behavior is hide-to-tray and keeps the Sidecar.
+                    // An explicit --exit-on-close launch uses the SAME graceful
+                    // cleanup path as tray Quit; Windows installation tests
+                    // need to exercise real exit without force-killing the app.
                     api.prevent_close();
-                    let _ = window.hide();
+                    if std::env::args_os().any(|arg| arg == "--exit-on-close") {
+                        shutdown_owned_services(window.app_handle());
+                        window.app_handle().exit(0);
+                    } else {
+                        let _ = window.hide();
+                    }
                 }
                 tauri::WindowEvent::Destroyed => {
                     // Last-resort cleanup if the main WebView is actually
