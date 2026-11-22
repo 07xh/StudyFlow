@@ -126,22 +126,22 @@ def test_future_provider_uses_shared_vault_without_yanxi_token_pattern(monkeypat
 
 
 def test_multiline_import_is_atomic_deduplicated_and_provider_scoped(monkeypatch):
-    imported = bank.import_tokens("yanxi", "\\n".join([ONE, TWO, ONE, "", TWO]))
+    imported = bank.import_tokens("yanxi", "\n".join([ONE, TWO, ONE, "", TWO]))
     assert imported["added"] == 2 and imported["skipped"] == 2
     assert imported["rotation_modes"]["yanxi"] == "round_robin"
     assert len(imported["tokens"]) == 2
     assert ONE not in repr(imported) and TWO not in repr(imported)
-    again = bank.import_tokens("yanxi", "\\n".join([ONE, TWO]))
+    again = bank.import_tokens("yanxi", "\n".join([ONE, TWO]))
     assert again["added"] == 0 and again["skipped"] == 2
     assert len(again["tokens"]) == 2
     encrypted_before = bank.STORE_PATH.read_bytes()
     with pytest.raises(bank.QuestionBankError):
-        bank.import_tokens("yanxi", TWO + "\\n" + "invalid token with spaces")
+        bank.import_tokens("yanxi", TWO + "\n" + "invalid token with spaces")
     assert bank.STORE_PATH.read_bytes() == encrypted_before
 
 
 def test_round_robin_advances_once_per_request_and_explicit_token_stays_pinned(monkeypatch):
-    state = bank.import_tokens("yanxi", ONE + "\\n" + TWO)
+    state = bank.import_tokens("yanxi", ONE + "\n" + TWO)
     ids = [token["id"] for token in state["tokens"]]
     used = []
     def lookup(title, opts, typ, *, token):
@@ -168,7 +168,7 @@ def test_round_robin_advances_once_per_request_and_explicit_token_stays_pinned(m
 def test_bulk_import_bridge_preserves_plaintext_boundary():
     result = bridge.dispatch({"id": "bulk1", "version": 1,
         "operation": "questionbank.tokens.import", "provider_id": "yanxi",
-        "lines": ONE + "\\n" + TWO})
+        "lines": ONE + "\n" + TWO})
     assert result["ok"] and result["data"]["added"] == 2
     assert ONE not in repr(result) and TWO not in repr(result)
     changed = bridge.dispatch({"id": "bulk2", "version": 1,
