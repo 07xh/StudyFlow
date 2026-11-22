@@ -257,7 +257,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       <span>剩余 <b>{remaining}</b></span>
       <span>已验证本地题库命中 <b>{status.bank_hits??0}</b></span>
       <span>外部题库参考 <b>{status.external_hits??0}</b> / {status.external_calls??0} 次</span>
-      {(status.external_errors??0)>0&&<span>外部查询错误 <b>{status.external_errors}</b> 次</span>
+      {(status.external_errors??0)>0&&<span>外部查询错误 <b>{status.external_errors}</b> 次</span>}
       <span>AI 使用 <b>{status.ai_used??0}</b> / {status.ai_calls??0} 次</span>
       <span>试答 <b>{status.trials??0}</b></span>
       {(status.ai_errors??0)>0&&<span>AI 失败已回退 <b>{status.ai_errors}</b> 次</span>}
