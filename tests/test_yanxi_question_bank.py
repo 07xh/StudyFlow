@@ -97,6 +97,7 @@ def test_shared_bridge_rejects_legacy_apis_and_never_echoes_tokens(tmp_path, mon
     assert TOKEN not in repr(lookup)
 
 def test_missing_or_bad_question_does_not_use_token(monkeypatch):
-    monkeypatch.setattr(yanxi.urllib.request, "build_opener",\n                        lambda *_: pytest.fail("invalid query must not contact provider"))
+    monkeypatch.setattr(yanxi.urllib.request, "build_opener",
+                        lambda *_: pytest.fail("invalid query must not contact provider"))
     with pytest.raises(yanxi.QuestionBankError, match="YANXI_INVALID_QUERY"):
         yanxi.search("", token=TOKEN)
