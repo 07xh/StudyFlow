@@ -133,7 +133,6 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const missingExternalToken=Boolean(settings.use_external_bank)&&!configuredBankTokens
     .some(t=>t.id===settings.external_token_id);
   const running=ACTIVE.has(status.state);
-  const work=status.state==="running"||status.state==="starting";
   const pausing=status.state==="pausing";
   const canResume=pausing||status.state==="paused";
   const scopeMode=settings.scope_mode||"all";
