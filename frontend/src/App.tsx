@@ -137,6 +137,9 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const [platformSettingsSection,setPlatformSettingsSection]=useState<PlatformSettingsSection>("parameters");
   const [yuketangScopeJumpRequest,setYuketangScopeJumpRequest]=useState(0);
   const [courseLogsOpen,setCourseLogsOpen]=useState(false);
+  // Open a prominent mastery task page without mounting a second auto worker.
+  // Keep the course identity so switching courses never opens the wrong panel.
+  const [masteryDialogCourseKey,setMasteryDialogCourseKey]=useState<string|null>(null);
   const [platformLoginExpanded,setPlatformLoginExpanded]=useState<Record<Platform,boolean>>(readPlatformLoginExpanded);
   useEffect(()=>{
     try{window.localStorage.setItem(PLATFORM_LOGIN_EXPANDED_KEY,JSON.stringify(platformLoginExpanded));}
@@ -797,6 +800,11 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       <div className="sf-course-detail-topline">
         <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
         <div className="sf-course-top-actions">
+          {course.platform==="zhidao"&&<button
+            className="secondary sf-course-mastery-action" type="button"
+            onClick={()=>setMasteryDialogCourseKey(course.course_id)}>
+            <ListChecks size={15}/>全自动掌握度
+          </button>}
           <button className="secondary sf-course-settings-action" type="button"
             onClick={()=>{
               setCourseLogsOpen(false);
@@ -865,8 +873,13 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         <CollapsibleSection id={scope+"mastery"} title="AI 掌握度" defaultExpanded={false} lazy>
           {course.course_type==="ai"
             ?<>
-              <MasteryAutoPanel key={"mastery-auto:"+course.course_id}
-                courseKey={course.course_id} desktop={desktop}/>
+              <div className="sf-mastery-start-shortcut">
+                <span>全课程自动练习：四种首轮策略、后台续轮、服务器掌握度核验。</span>
+                <button type="button" className="secondary"
+                  onClick={()=>setMasteryDialogCourseKey(course.course_id)}>
+                  <ListChecks size={15}/>配置并启动全自动
+                </button>
+              </div>
               <MasteryPanel key={"mastery:"+course.course_id} courseKey={course.course_id}
                 courseTitle={course.title} desktop={desktop}/>
             </>
@@ -895,6 +908,22 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
             connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
         </CollapsibleSection>
       </>}
+      {course.platform==="zhidao"&&<SettingsDialog
+        open={masteryDialogCourseKey===course.course_id} dark={dark}
+        kicker="知到 · 后台学习任务"
+        title={course.title+" · 全自动掌握度"}
+        onClose={()=>setMasteryDialogCourseKey(null)}>
+        {course.course_type==="ai"
+          ?<MasteryAutoPanel key={"mastery-auto:"+course.course_id}
+            courseKey={course.course_id} desktop={desktop}/>
+          :<div role="note" className="sf-mastery-course-notice">
+            <strong>当前课程不能启动 AI 掌握度自动练习</strong>
+            <p>{course.course_type==="shared"
+              ?"当前课程标记为共享课，平台没有这类 AI 掌握度练习。"
+              :"尚未识别到这门课的 AI 课程类型。"}请先同步课程数据，
+              确认在知到官方课程页面中存在掌握度习题。不会把共享课误当成 AI 课程提交。</p>
+          </div>}
+      </SettingsDialog>}
       <SettingsDialog open={courseLogsOpen} dark={dark} title={course.title+" · 日志与诊断"}
         onClose={()=>setCourseLogsOpen(false)}>
         <ZhidaoActivityPanel embedded events={courseEvents(activity,course.platform,course.course_id)}/>

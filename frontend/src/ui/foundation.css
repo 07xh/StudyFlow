@@ -2279,3 +2279,22 @@
 .sf-shell .sf-course-scope-note details p{margin:6px 0 0;line-height:1.6}
 .sf-shell .sf-record-verification-meta{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--muted);font-size:10px;line-height:1.5}
 .sf-shell .sf-record-pending{margin:0;color:var(--warning);font-size:11px}
+
+
+/* Mastery auto-run is a first-class course action, not hidden in the
+   collapsed manual exercise section. Keep it visible on narrow windows. */
+.sf-shell .sf-course-top-actions .sf-course-mastery-action{
+  color:var(--accent-text);border-color:var(--accent);
+  background:var(--soft-accent);font-weight:650;
+}
+.sf-shell .sf-course-top-actions .sf-course-mastery-action:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+.sf-shell .sf-mastery-start-shortcut{
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+  color:var(--muted);background:var(--panel-raised);font-size:12px;
+}
+.sf-shell .sf-mastery-start-shortcut button{display:inline-flex;align-items:center;gap:6px}
+.sf-shell .sf-mastery-course-notice{font-size:13px;line-height:1.7;color:var(--text)}
+.sf-shell .sf-mastery-course-notice p{color:var(--muted)}

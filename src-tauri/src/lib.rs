@@ -482,10 +482,14 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
     message.push(b'\n');
     let expected_id = request.get("id").and_then(|value| value.as_str())
         .ok_or("Invalid request id")?.to_string();
-    // QR and the persistent Xuexitong heartbeat runner share one long-lived
-    // Python process; ordinary requests keep their one-shot behavior.
+    // QR, heartbeat and mastery exercise workflows must share a long-lived
+    // Python process. Mastery start launches a background daemon thread and
+    // its active exam/submit state lives in that process. If it were routed as
+    // a one-shot request, child.wait_with_output() would close stdin and the
+    // Python process would exit immediately, terminating the thread.
     let is_persistent = request.get("operation").and_then(|x| x.as_str())
         .map_or(false, |op| op.starts_with("zhidao.qr.")
+                        || op.starts_with("zhidao.mastery.")
                         || op.starts_with("xuexitong.heartbeat.")
                         || op.starts_with("ucampus.heartbeat.")
                         || op.starts_with("ucampus.socket.")
@@ -494,8 +498,9 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
                         || matches!(op, "xuexitong.session.configure" | "xuexitong.session.clear"
                             | "ucampus.session.login" | "ucampus.session.configure" | "ucampus.session.clear"));
     if is_persistent {
-        // QR start/status/cancel must share the same Python process; ordinary
-        // requests intentionally retain the existing one-shot behavior.
+        // These stateful operations share a single process and its
+        // scheduler, answer draft, submission and QR state. Other operations
+        // deliberately retain the one-shot behavior.
         let shared = app.state::<QrBridgeState>().inner().clone();
         return tauri::async_runtime::spawn_blocking(move || {
             let mut slot = shared.lock().map_err(|_| "QR service lock failed")?;
