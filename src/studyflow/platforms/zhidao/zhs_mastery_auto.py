@@ -24,6 +24,8 @@ _LOCK = threading.RLock()
 _STOP = threading.Event()
 _PAUSE = threading.Event()
 _THREAD: threading.Thread | None = None
+_PAUSED_AT: float | None = None
+_PAUSED_SECONDS = 0.0
 _STATE: dict[str, Any] = {
     "state": "idle", "phase": "未启动", "message": "", "knowledge": "",
     "course_key": "", "round": 0, "points_done": 0, "points_total": 0,
@@ -56,16 +58,26 @@ def status() -> dict[str, Any]:
                 "running": _STATE.get("state") in ("running", "paused", "stopping")}
 
 
+def _active_now() -> float:
+    """Monotonic runtime clock excluding time spent paused by the user."""
+    with _LOCK:
+        now = time.monotonic()
+        paused = _PAUSED_SECONDS
+        if _PAUSED_AT is not None:
+            paused += now - _PAUSED_AT
+        return now - paused
+
+
 def _checkpoint(deadline: float) -> None:
     if _STOP.is_set():
         raise AutoStop()
-    if time.monotonic() >= deadline:
+    if _active_now() >= deadline:
         raise AutoNeedsInput("已达到后台运行时长上限")
     while _PAUSE.is_set():
         _emit(state="paused", phase="已暂停")
         if _STOP.wait(0.15):
             raise AutoStop()
-        if time.monotonic() >= deadline:
+        if _active_now() >= deadline:
             raise AutoNeedsInput("已达到后台运行时长上限")
     with _LOCK:
         if _STATE.get("state") == "paused":
@@ -219,7 +231,7 @@ def _learn_result(round_data: dict[str, Any], result: dict[str, Any], course_key
 
 
 def _run(course_key: str, opts: dict[str, Any], api_key: str) -> None:
-    deadline = time.monotonic() + opts["max_minutes"] * 60
+    deadline = _active_now() + opts["max_minutes"] * 60
     try:
         _checkpoint(deadline)
         _emit(state="running", phase="读取知识点")
@@ -283,7 +295,7 @@ def _run(course_key: str, opts: dict[str, Any], api_key: str) -> None:
                             if _STATE["ai_calls"] >= opts["max_ai_calls"]:
                                 raise AutoNeedsInput("已达到 AI 请求次数上限")
                             _STATE["ai_calls"] += 1
-                        answer = _ai_answer(question, api_key, deadline - time.monotonic())
+                        answer = _ai_answer(question, api_key, deadline - _active_now())
                     _checkpoint(deadline)
                     mastery.save_answer(course_key, kid, qid, answer)
                     used[qid] = answer
@@ -371,12 +383,14 @@ def start(course_key: str, options: dict[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("INVALID_REQUEST")
 
-    global _THREAD
+    global _THREAD, _PAUSED_AT, _PAUSED_SECONDS
     with _LOCK:
         if _THREAD is not None and _THREAD.is_alive():
             raise ValueError("MASTERY_AUTO_ALREADY_RUNNING")
         _STOP.clear()
         _PAUSE.clear()
+        _PAUSED_AT = None
+        _PAUSED_SECONDS = 0.0
         _STATE.update({
             "state": "running", "phase": "启动中", "message": "",
             "course_key": course_key, "knowledge": "", "round": 0,
@@ -392,24 +406,34 @@ def start(course_key: str, options: dict[str, Any]) -> dict[str, Any]:
 
 
 def pause() -> dict[str, Any]:
+    global _PAUSED_AT
     with _LOCK:
         if _STATE.get("state") == "running":
+            _PAUSED_AT = time.monotonic()
             _PAUSE.set()
             _STATE["state"], _STATE["phase"] = "paused", "已暂停"
     return status()
 
 
 def resume() -> dict[str, Any]:
-    _PAUSE.clear()
+    global _PAUSED_AT, _PAUSED_SECONDS
     with _LOCK:
         if _STATE.get("state") == "paused":
+            if _PAUSED_AT is not None:
+                _PAUSED_SECONDS += time.monotonic() - _PAUSED_AT
+                _PAUSED_AT = None
+            _PAUSE.clear()
             _STATE["state"], _STATE["phase"] = "running", "自动练习中"
     return status()
 
 
 def stop() -> dict[str, Any]:
+    global _PAUSED_AT, _PAUSED_SECONDS
     with _LOCK:
         if _THREAD is not None and _THREAD.is_alive():
+            if _PAUSED_AT is not None:
+                _PAUSED_SECONDS += time.monotonic() - _PAUSED_AT
+                _PAUSED_AT = None
             _STATE["state"], _STATE["phase"] = "stopping", "正在停止"
             _STOP.set()
             _PAUSE.clear()
