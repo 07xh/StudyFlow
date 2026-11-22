@@ -75,3 +75,53 @@ test("large opaque shell surfaces do not spend compositor time on blur for every
   assert.match(css,/@keyframes sf-zhs-progress-wait\{from\{transform:translateX\(0\)\}/,
     "indeterminate status animation should be compositor-driven, not left/width layout");
 });
+
+test("mastery status polling is single-flight and ignores timestamp-only updates",async()=>{
+  const oldWindow=global.window;
+  let tick;
+  let reads=0;
+  let stamp=0;
+  let hold=false;
+  let release;
+  global.window={
+    setInterval:fn=>{tick=fn;return 1;},clearInterval:()=>{},
+    setTimeout:()=>2,clearTimeout:()=>{}
+  };
+  const mock={
+    friendlyBridgeError:e=>String(e?.message||e),
+    masteryAutoControl:async()=>{throw Error("not used");},
+    masteryAutoStart:async()=>{throw Error("not used");},
+    masteryAutoStatus:async()=>{
+      reads++;
+      if(hold)await new Promise(resolve=>{release=resolve;});
+      return {state:"running",total:3,processed:1,done:1,skipped:0,
+        tasks:[{knowledge_id:"1",name:"K",theme:"Chapter",state:"done",mastery:100,rounds:1}],
+        updated_at:"new-"+(++stamp),message:"工作中"};
+    }
+  };
+  const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":mock});
+  let renders=0;
+  let view;
+  try{
+    await act(async()=>{view=create(React.createElement(React.Profiler,{
+      id:"mastery",onRender:()=>{renders++;}
+    },React.createElement(MasteryAutoPanel,{courseKey:"a".repeat(64),desktop:true})));});
+    assert.equal(reads,1);
+    const before=renders;
+    await act(async()=>{tick();await Promise.resolve();});
+    assert.equal(reads,2);
+    assert.equal(renders,before,"only updated_at changed, so no task-list reconciliation");
+    hold=true;
+    await act(async()=>{tick();tick();await Promise.resolve();});
+    assert.equal(reads,3,"overlapping native reads must not be enqueued");
+    await act(async()=>{release();await Promise.resolve();});
+    hold=false;
+    await act(async()=>{tick();await Promise.resolve();});
+    assert.equal(reads,4,"next poll resumes after previous read completes");
+    assert.equal(renders,before);
+  }finally{
+    if(view)await act(async()=>view.unmount());
+    if(oldWindow===undefined)delete global.window;
+    else global.window=oldWindow;
+  }
+});
