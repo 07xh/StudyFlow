@@ -24,7 +24,12 @@ test("close hides the existing main window but explicit exit still cleans up Sid
   const source=read("src-tauri/src/lib.rs");
   const shell=read("frontend/src/ui/AppShell.tsx");
   assert.match(source,/tauri::WindowEvent::CloseRequested \{ api, \.\. \} => \{/);
-  assert.match(source,/api\.prevent_close\(\);\s*let _ = window\.hide\(\);/);
+  // Normal desktop launch still hides the existing window to tray.
+  // Explicit --exit-on-close (used only by the installer smoke) exercises
+  // graceful app exit instead of merely hiding it.
+  assert.match(source,/api\.prevent_close\(\);/);
+  assert.match(source,/std::env::args_os\(\)\.any\(\|arg\| arg == "--exit-on-close"\)/);
+  assert.match(source,/if std::env::args_os\(\)\.any\([^)]+\) \{\s*shutdown_owned_services\(window\.app_handle\(\)\);\s*window\.app_handle\(\)\.exit\(0\);\s*\} else \{\s*let _ = window\.hide\(\);/s);
   assert.match(source,/tauri::WindowEvent::Destroyed => \{[^}]*shutdown_owned_services\(window\.app_handle\(\)\);/s);
   assert.match(source,/fn studyflow_exit\(app: tauri::AppHandle\) \{\s*shutdown_owned_services\(&app\);\s*app\.exit\(0\);/);
   assert.match(shell,/aria-label="关闭窗口（收起到系统托盘）"/);
