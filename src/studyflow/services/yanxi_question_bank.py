@@ -1,8 +1,8 @@
 """Local Yanxi question-bank adapter for the packaged Windows StudyFlow sidecar.
 
-Only an explicit user-initiated lookup contacts Yanxi. No ZHS account data,
-course IDs, Cookies, grades or credentials are sent upstream. The token is
-stored on Windows using the current user's DPAPI, never in status.json.
+Only a caller with an explicitly selected shared-vault Token contacts Yanxi. No ZHS account data,
+course IDs, Cookies, grades or credentials are sent upstream. The old DPAPI file is read only for one-time migration by question_bank.py.
+The adapter never writes a separate credential store.
 """
 from __future__ import annotations
 
@@ -67,36 +67,7 @@ def _valid_token(token: Any) -> str:
     return token
 
 
-def configured() -> dict[str, bool]:
-    # No decryption and no network request during status checks.
-    return {"configured": STORE_PATH.is_file()}
-
-
-def save_token(value: Any) -> dict[str, bool]:
-    token = _valid_token(value)
-    encrypted = _dpapi(token.encode("ascii"), protect=True)
-    try:
-        STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        temporary = STORE_PATH.with_suffix(".tmp")
-        with temporary.open("wb") as handle:
-            handle.write(encrypted)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary.replace(STORE_PATH)
-    except OSError as exc:
-        raise QuestionBankError("YANXI_TOKEN_STORAGE_FAILED") from exc
-    return {"configured": True}
-
-
-def delete_token() -> dict[str, bool]:
-    try:
-        STORE_PATH.unlink(missing_ok=True)
-    except OSError as exc:
-        raise QuestionBankError("YANXI_TOKEN_STORAGE_FAILED") from exc
-    return {"configured": False}
-
-
-def _load_token() -> str:
+def _load_legacy_token() -> str:
     try:
         encrypted = STORE_PATH.read_bytes()
     except FileNotFoundError as exc:
@@ -156,11 +127,11 @@ def _parse_result(payload: Any) -> dict[str, Any]:
 
 
 def search(title: Any, options: Any = "", question_type: Any = "",
-           *, token: str | None = None) -> dict[str, Any]:
+           *, token: str) -> dict[str, Any]:
     stem = _field(title, maximum=4000, required=True)
     answers = _field(options, maximum=4000)
     kind = _field(question_type, maximum=40)
-    token = _load_token() if token is None else _valid_token(token)
+    token = _valid_token(token)
     query = urllib.parse.urlencode({
         "token": token, "title": stem, "options": answers, "type": kind,
     })
