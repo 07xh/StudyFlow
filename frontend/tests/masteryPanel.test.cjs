@@ -86,7 +86,14 @@ test('mastery panel answers, saves, submits and shows this round score apart fro
   const row=view.root.findAllByType('button').find(node=>textOf(node).includes('知识点甲'));
   await act(async()=>{row.props.onClick();});
   assert.deepEqual(state.calls.filter(c=>c[0]==='active').length,1,
-    '打开知识点应先查是否有未提交的一轮');
+    '选择知识点应先只读检查已有草稿');
+  assert.equal(state.calls.filter(c=>c[0]==='start').length,0,
+    '仅查看知识点不得自动创建服务器试卷');
+  assert.match(textOf(view.root),/查看分数不会新建试卷/);
+  await act(async()=>{
+    view.root.findAllByType('button').find(node=>textOf(node).includes('开始练习')).props.onClick();
+  });
+  assert.equal(state.calls.filter(c=>c[0]==='start').length,1);
   assert.match(textOf(view.root),/中国特色社会主义进入/);
 
   const option=optionInput(view,'新时代');
@@ -177,6 +184,8 @@ test('partial grading displays pending status and refresh does not masquerade as
   }};
   const view=await mount(bridgeMock(state));
   await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('知识点甲')).props.onClick();});
+  assert.equal(state.calls.filter(c=>c[0]==='start').length,0,'reading a point cannot create a paper');
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('开始练习')).props.onClick();});
   await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('提交本轮')).props.onClick();});
   assert.match(textOf(view.root),/本轮判分待确认/);
   assert.doesNotMatch(textOf(view.root),/本轮 0\/1/);
@@ -194,6 +203,8 @@ test('unknown submission switches UI to status check and prevents answer edits',
   const state={submitError:new Error('SUBMIT_STATUS_UNKNOWN')};
   const view=await mount(bridgeMock(state));
   await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('知识点甲')).props.onClick();});
+  assert.equal(state.calls.filter(c=>c[0]==='start').length,0,'reading a point cannot create a paper');
+  await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('开始练习')).props.onClick();});
   await act(async()=>{view.root.findAllByType('button').find(node=>textOf(node).includes('提交本轮')).props.onClick();});
   assert.match(textOf(view.root),/核验提交状态/);
   const options=view.root.findAllByType('input').filter(x=>x.props.type==='radio');
