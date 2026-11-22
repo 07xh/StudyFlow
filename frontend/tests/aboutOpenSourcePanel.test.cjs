@@ -10,7 +10,7 @@ function button(view,label){
  assert.ok(node,"missing button: "+label);
  return node;
 }
-function setup({desktop=true,documentResult}={}){
+function setup({desktop=true,documentResult,versionError=false}={}){
  const calls=[],visited=[];
  const invoke=async (name,args={})=>{
   calls.push({name,args});
@@ -19,7 +19,7 @@ function setup({desktop=true,documentResult}={}){
   return null;
  };
  const Panel=load("ui/AboutOpenSourcePanel.tsx",{
-  "@tauri-apps/api/app":{getVersion:async()=>"0.1.1-rc.63"},
+  "@tauri-apps/api/app":{getVersion:async()=>{if(versionError)throw Error("VERSION_FAILED");return "0.1.1-rc.65";}},
   "@tauri-apps/api/core":{invoke},
   "../bridge":{friendlyBridgeError:()=>"文档读取失败"},
  }).AboutOpenSourcePanel;
@@ -33,7 +33,7 @@ test("About is a dedicated product workspace with live version and developer nav
   desktop:true,onOpenDeveloper:()=>{developerCount++;}
  }));});
  assert.match(textOf(view.root),/学序 StudyFlow/);
- assert.match(textOf(view.root),/v0.1.1-rc.63/);
+ assert.match(textOf(view.root),/v0.1.1-rc.65/);
  assert.match(textOf(view.root),/Windows 桌面应用/);
  assert.match(textOf(view.root),/独立第三方项目/);
  assert.equal(view.root.findAllByProps({role:"tab"}).length,2);
@@ -125,4 +125,64 @@ test("offline About documents include current cross-platform source provenance",
  assert.match(rust,/STUDYFLOW_SOURCE_PROVENANCE\.md/);
  assert.match(rust,/THIRD_PARTY_LICENSES_ADDENDUM\.md/);
  assert.match(rust,/"yuketang" => Ok\("https:\/\/github\.com\/07xh\/yuketang-heartbeat"\)/);
+});
+
+test("legal document search navigates highlighted literal matches and resets on return",async()=>{
+ const {Panel}=setup({documentResult:{
+  id:"license",title:"GNU GPL v3",content:"GPL License\nGPL license\n第三方 GPL (v3) end.",
+ }});
+ let view;
+ await act(async()=>{view=create(React.createElement(Panel,{desktop:true,onOpenDeveloper:()=>{}}));});
+ await act(async()=>button(view,"开源与许可").props.onClick());
+ await act(async()=>button(view,"GNU GPL v3 开源许可").props.onClick());
+ const search=view.root.findAllByType("input").find(x=>x.props.type==="search");
+ assert.ok(search,"long legal documents need a searchable input");
+ await act(async()=>search.props.onChange({currentTarget:{value:"gpl"}}));
+ assert.match(textOf(view.root),/第 1 \/ 3 处/);
+ const marks=view.root.findAllByType("mark");
+ assert.equal(marks.length,3);
+ assert.equal(marks[0].props.className,"sf-about-match-active");
+ const next=view.root.findAllByType("button").find(x=>x.props["aria-label"]==="下一处匹配");
+ const prev=view.root.findAllByType("button").find(x=>x.props["aria-label"]==="上一处匹配");
+ await act(async()=>next.props.onClick());
+ assert.equal(view.root.findAllByType("mark")[1].props.className,"sf-about-match-active");
+ assert.match(textOf(view.root),/第 2 \/ 3 处/);
+ await act(async()=>prev.props.onClick());
+ assert.match(textOf(view.root),/第 1 \/ 3 处/);
+ await act(async()=>search.props.onChange({currentTarget:{value:"(v3)"}}));
+ assert.match(textOf(view.root),/第 1 \/ 1 处/);
+ await act(async()=>search.props.onChange({currentTarget:{value:"not-here"}}));
+ assert.match(textOf(view.root),/没有匹配/);
+ assert.equal(view.root.findAllByType("mark").length,0);
+ assert.equal(view.root.findAllByType("button")
+   .find(x=>x.props["aria-label"]==="下一处匹配").props.disabled,true);
+ await act(async()=>button(view,"返回开源与许可").props.onClick());
+ assert.equal(view.root.findAllByType("input").filter(x=>x.props.type==="search").length,0);
+});
+
+test("About keyboard tabs use Arrow, Home and End without closing settings",async()=>{
+ const {Panel}=setup();
+ let view;
+ await act(async()=>{view=create(React.createElement(Panel,{desktop:true,onOpenDeveloper:()=>{}}));});
+ let tabs=view.root.findAllByProps({role:"tab"});
+ assert.equal(tabs[0].props.tabIndex,0);
+ let prevented=false;
+ await act(async()=>tabs[0].props.onKeyDown({key:"ArrowRight",preventDefault(){prevented=true;}}));
+ assert.ok(prevented);
+ tabs=view.root.findAllByProps({role:"tab"});
+ assert.equal(tabs[1].props["aria-selected"],true);
+ assert.equal(tabs[1].props.tabIndex,0);
+ assert.equal(tabs[0].props.tabIndex,-1);
+ await act(async()=>tabs[1].props.onKeyDown({key:"Home",preventDefault(){}}));
+ assert.equal(view.root.findAllByProps({role:"tab"})[0].props["aria-selected"],true);
+ await act(async()=>tabs[0].props.onKeyDown({key:"End",preventDefault(){}}));
+ assert.equal(view.root.findAllByProps({role:"tab"})[1].props["aria-selected"],true);
+});
+
+test("failed native version discovery displays a terminal fallback, not permanent loading",async()=>{
+ const {Panel}=setup({versionError:true});
+ let view;
+ await act(async()=>{view=create(React.createElement(Panel,{desktop:true,onOpenDeveloper:()=>{}}));});
+ assert.match(textOf(view.root),/版本暂不可用/);
+ assert.doesNotMatch(textOf(view.root),/读取版本中/);
 });
