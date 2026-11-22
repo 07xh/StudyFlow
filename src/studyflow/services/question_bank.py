@@ -23,6 +23,18 @@ MAX_TOKENS = 100
 LOCK = threading.RLock()
 QuestionBankError = yanxi.QuestionBankError
 
+# Diagnostics expose stable status codes only. Do not allow a provider's raw
+# message (possibly including URLs, queries, or credentials) onto IPC.
+_SAFE_CHECK_REASONS = frozenset({
+    "unrecognized_response", "provider_rejected", "provider_recognized",
+    "rate_limited", "network_or_provider_error",
+    "balance_not_reported", "balance_unavailable",
+})
+
+
+def _safe_check_reason(value: Any) -> str | None:
+    return value if isinstance(value, str) and value in _SAFE_CHECK_REASONS else None
+
 # Extend this registry with a provider adapter; UI and bridge remain unchanged.
 PROVIDERS: dict[str, dict[str, Any]] = {
     "yanxi": {
@@ -137,7 +149,7 @@ def _public(data: dict[str, Any]) -> dict[str, Any]:
                     "checked_at": item.get("checked_at"),
                     "remaining": item.get("remaining"),
                     "balance_at": item.get("balance_at"),
-                    "check_reason": item.get("check_reason")}
+                    "check_reason": _safe_check_reason(item.get("check_reason"))}
                    for item in data["tokens"]],
     }
 
@@ -263,7 +275,7 @@ def check_token(token_id: Any, include_quota: bool = False) -> dict[str, Any]:
         if token is None:
             raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
         token["validity"] = validity
-        token["check_reason"] = str(report.get("reason", ""))[:50]
+        token["check_reason"] = _safe_check_reason(report.get("reason")) or "unrecognized_response"
         token["checked_at"] = now
         if report.get("quota_checked") is True and remaining is not None:
             token["remaining"] = remaining
@@ -307,10 +319,13 @@ def remove_token(token_id: Any) -> dict[str, Any]:
 
 
 def _question_field(value: Any, *, maximum: int, required: bool = False) -> str:
-    try:
-        return yanxi._field(value, maximum=maximum, required=required)
-    except QuestionBankError as exc:
-        raise QuestionBankError("QUESTIONBANK_INVALID_QUESTION") from exc
+    # Keep the shared question schema independent of the first provider adapter.
+    if not isinstance(value, str):
+        raise QuestionBankError("QUESTIONBANK_INVALID_QUESTION")
+    text = value.strip()
+    if len(text) > maximum or (required and not text):
+        raise QuestionBankError("QUESTIONBANK_INVALID_QUESTION")
+    return text
 
 
 def _normalize_question(question: Any) -> tuple[str, str, str]:
