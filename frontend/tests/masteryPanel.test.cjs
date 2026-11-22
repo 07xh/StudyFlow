@@ -48,6 +48,10 @@ function bridgeMock(state){
   state.calls=calls;
   return {
     friendlyBridgeError:error=>String(error?.message||error),
+    yanxiStatus:async()=>({configured:false}),
+    yanxiSaveToken:async()=>({configured:true}),
+    yanxiClearToken:async()=>({configured:false}),
+    yanxiQuery:async()=>({found:false,answer:"",remaining:null,status:"not_found"}),
     masteryCatalog:async(courseKey,withMastery)=>{
       calls.push(['catalog',courseKey,withMastery]);return catalog;
     },
