@@ -24,7 +24,7 @@ function chapterOf(item:Lesson){return (item.chapter_name||item.theme||"").trim(
 function groupName(item:Lesson){return chapterOf(item)||"其他内容";}
 // Default to the introductory chapter even if the server returns it out of order.
 function isIntroductionChapter(name:string):boolean{
-  return /^(?:第[零〇一二三四五六七八九十百0-9]+章[\\s:：、]*)?绪论(?:$|[\\s:：、（(])/.test(name.trim());
+  return /^(?:第[零〇一二三四五六七八九十百0-9]+章[\s:：、]*)?绪论(?:$|[\s:：、（(])/.test(name.trim());
 }
 /** A cached server record remains historical evidence after an overnight break. */
 const SERVER_EVIDENCE_FRESH_MS=5*60*1000;
