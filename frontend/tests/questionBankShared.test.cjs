@@ -22,7 +22,7 @@ function mockBridge(){
   },
   questionBankImportTokens:async(provider_id,lines)=>{
    calls.push(["import",provider_id,lines]);
-   const rows=lines.split(/\\r?\\n/).map(t=>t.trim()).filter(Boolean);
+   const rows=lines.split(/\r?\n/).map(t=>t.trim()).filter(Boolean);
    let added=0;
    for(const raw of rows){
     if(stored.some(t=>t.secret===raw))continue;
