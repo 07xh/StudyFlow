@@ -670,6 +670,59 @@ def discard_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
     return {"knowledge_id": str(knowledge_id), "discarded": existed}
 
 
+
+def verify_previous_submission(
+    course_key: str, knowledge_id: str, exam_test_id: int,
+    exam_paper_id: int, question_ids: list[int],
+) -> dict[str, Any]:
+    """Read-only recovery of a pending submission after the Python worker exits.
+
+    A recorded POST is NEVER sent again. An explicit submitted status, graded
+    response for every original question, and a readable mastery statistic are
+    all required before the automatic scheduler can advance to a new paper.
+    """
+    if (not all(type(x) is int and 0 < x <= 2**63 - 1 for x in (exam_test_id, exam_paper_id))
+            or not isinstance(question_ids, list) or not 1 <= len(question_ids) <= 1000
+            or not all(type(x) is int and 0 < x <= 2**63 - 1 for x in question_ids)
+            or len(set(question_ids)) != len(question_ids)):
+        raise MasteryError("INVALID_REQUEST")
+    kid = _int(knowledge_id)
+    if kid is None or kid <= 0:
+        raise MasteryError("INVALID_REQUEST")
+    session, course = _open_session(course_key)
+    try:
+        course_id, _ = _course_ids(course)
+        reply = _exam_query(
+            session, f"{_exam_root(session)}/exam/user/getExamTestUserInfo",
+            {"examTestId": str(exam_test_id), "examPaperId": str(exam_paper_id)}, method="GET",
+        )
+        info = reply.get("data") if isinstance(reply, dict) else None
+        submitted = isinstance(info, dict) and (
+            bool(info.get("submitTime")) or _int(info.get("examState")) == 6
+        )
+        if not submitted:
+            return {"submitted": False, "grading_complete": False, "mastery": None}
+        for question_id in question_ids:
+            try:
+                detail = _exam_query(
+                    session, f"{_exam_root(session)}/question/getExamQuestionInfo",
+                    {"examTestId": exam_test_id, "examPaperId": exam_paper_id,
+                     "questionId": question_id, "version": 1}, method="GET",
+                )
+                raw = detail.get("data") if isinstance(detail, dict) else None
+                if not isinstance(raw, dict) or parse_question_result(raw).get("graded") is not True:
+                    return {"submitted": True, "grading_complete": False, "mastery": None}
+            except Exception:
+                return {"submitted": True, "grading_complete": False, "mastery": None}
+        try:
+            stat = read_mastery_stat(session, course_id, kid)
+        except Exception:
+            return {"submitted": True, "grading_complete": True, "mastery": None}
+        return {"submitted": True, "grading_complete": True, "mastery": stat["mastery"]}
+    finally:
+        session.close()
+
+
 def read_wrong_questions(course_key: str, knowledge_id: str, exam_test_id: str | None = None) -> dict[str, Any]:
     """官方"错题推荐"：``bd/get-test-question``，只读。"""
     session, course = _open_session(course_key)
