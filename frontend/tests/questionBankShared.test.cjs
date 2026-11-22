@@ -204,3 +204,16 @@ test("retired Yanxi IPC cannot be reintroduced beside shared provider vault",()=
  assert.match(bridgeError,/case "QUESTIONBANK_TOKEN_NOT_FOUND":/);
  assert.match(bridgeError,/case "YANXI_QUOTA_EXHAUSTED":/);
 });
+
+test("provider-neutral validation and error wording stay in the shared bank",()=>{
+ const fs=require("node:fs");
+ const path=require("node:path");
+ const root=path.resolve(__dirname,"../..");
+ const python=fs.readFileSync(path.join(root,"src/studyflow/services/question_bank.py"),"utf8");
+ const frontend=fs.readFileSync(path.join(root,"frontend/src/bridge.ts"),"utf8");
+ const shared=python.slice(python.indexOf("def _question_field("),python.indexOf("def _normalize_question("));
+ assert.doesNotMatch(shared,/yanxi\._field/);
+ assert.match(shared,/QUESTIONBANK_INVALID_QUESTION/);
+ assert.match(frontend,/case "QUESTIONBANK_INVALID_TOKEN":/);
+ assert.match(python,/_safe_check_reason\(item.get\("check_reason"\)\)/);
+});
