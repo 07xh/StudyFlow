@@ -562,3 +562,93 @@ def test_current_mastery_does_not_inherit_an_old_historical_high(monkeypatch):
     assert passed is False
     assert score == 20
     assert "最大轮次" in reason
+
+
+
+def test_course_snapshots_survive_switching_and_retain_pending_submission():
+    """Starting another course cannot delete a different course's recovery data."""
+    course_b = "b" * 64
+    pending = {"knowledge_id": "1001", "exam_test_id": 31,
+               "exam_paper_id": 41, "question_ids": [100]}
+    auto._save({
+        "course_key": COURSE, "state": "needs_attention",
+        "submitting": pending, "blocked": ["1001"],
+        "pending_submissions": {"1001": pending},
+        "tasks": [], "total": 0, "processed": 0, "done": 0, "skipped": 0,
+    })
+    auto._save({
+        "course_key": course_b, "state": "completed",
+        "submitting": None, "blocked": [], "pending_submissions": {},
+        "tasks": [], "total": 0, "processed": 0, "done": 0, "skipped": 0,
+    })
+    state_a = auto.status(COURSE)
+    assert state_a["state"] == "needs_attention"
+    assert state_a["submitting"] == pending
+    assert state_a["pending_submissions"]["1001"] == pending
+    assert auto.status(course_b)["state"] == "completed"
+
+    # Restart the process: recover each original course, never the last course.
+    auto._STATUS.clear()
+    assert auto._loaded(COURSE)["blocked"] == ["1001"]
+    assert auto._loaded(course_b)["blocked"] == []
+
+
+def test_course_snapshot_migrates_legacy_last_run_file():
+    import json
+    marker = {"knowledge_id": "1001", "exam_test_id": 31}
+    auto.STATUS_PATH.write_text(json.dumps({
+        "course_key": COURSE, "state": "running",
+        "submitting": marker, "blocked": ["1001"],
+    }), encoding="utf-8")
+    recovered = auto._loaded(COURSE)
+    assert recovered["state"] == "interrupted"
+    assert recovered["submitting"] == marker
+    assert auto._loaded("b" * 64) == {}
+    assert not auto._course_status_path(COURSE).exists()
+
+
+def test_course_journal_rejects_unsafe_file_name():
+    with pytest.raises(ValueError):
+        auto._course_status_path("../" + "a" * 64)
+
+
+
+def test_new_run_restores_own_course_marker_not_last_opened_course(monkeypatch):
+    """The latest unrelated course must not hide an older unresolved POST."""
+    course_b = "b" * 64
+    marker = {"knowledge_id": "1001", "exam_test_id": 31,
+              "exam_paper_id": 41, "question_ids": [100]}
+    auto._save({"course_key": COURSE, "state": "needs_attention",
+                "submitting": marker, "blocked": ["1001"],
+                "pending_submissions": {"1001": marker}})
+    auto._save({"course_key": course_b, "state": "completed",
+                "submitting": None, "blocked": [], "pending_submissions": {}})
+    monkeypatch.setattr(auto, "_run", lambda *args: None)
+    resumed = auto.start(COURSE)
+    auto._THREAD.join(1)
+    assert resumed["blocked"] == ["1001"]
+    assert resumed["pending_submissions"]["1001"] == marker
+    assert resumed["submitting"] is None
+    assert auto._course_status_path(course_b).exists()
+
+
+
+def test_upgrade_migrates_old_course_before_new_course_overwrites_last_run():
+    import json
+    course_b = "b" * 64
+    old_marker = {"knowledge_id": "1001", "exam_test_id": 31,
+                  "exam_paper_id": 41, "question_ids": [100]}
+    # Simulate rc.55: only the legacy global status exists.
+    auto.STATUS_PATH.write_text(json.dumps({
+        "course_key": COURSE, "state": "needs_attention",
+        "submitting": old_marker, "blocked": ["1001"],
+        "pending_submissions": {"1001": old_marker},
+    }), encoding="utf-8")
+    assert not auto._course_status_path(COURSE).exists()
+    # First rc.56 write belongs to unrelated course B.
+    auto._save({"course_key": course_b, "state": "completed",
+                "blocked": [], "pending_submissions": {}, "submitting": None})
+    old = auto._loaded(COURSE)
+    assert old["blocked"] == ["1001"]
+    assert old["pending_submissions"]["1001"] == old_marker
+    assert auto._loaded(course_b)["state"] == "completed"
