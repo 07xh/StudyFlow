@@ -61,7 +61,7 @@ def _read() -> dict[str, Any]:
         # Migration from rc.57. The legacy DPAPI token remains valid under the
         # same Windows user; transfer it before deleting the legacy blob.
         if yanxi.STORE_PATH.is_file():
-            token = yanxi._load_token()
+            token = yanxi._load_legacy_token()
             migrated = {"version": 1, "tokens": [{
                 "id": uuid.uuid4().hex, "provider_id": "yanxi",
                 "label": "原有言溪 Token", "token": token,
