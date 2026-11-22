@@ -35,5 +35,8 @@ test("background worker stays independent of dialog lifecycle",()=>{
   assert.match(panel,/masteryAutoStatus\(courseKey\)/);
   assert.match(panel,/masteryAutoStart\(courseKey,options\)/);
   assert.match(panel,/masteryAutoControl\(courseKey,action\)/);
-  assert.match(panel,/开始全部章节/);
+  assert.match(panel,/开始执行/);
+  assert.match(panel,/只做一章/);
+  assert.match(panel,/前 N 章/);
+  assert.match(panel,/完成当前项后暂停/);
 });
