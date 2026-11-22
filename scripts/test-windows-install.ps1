@@ -133,12 +133,16 @@ try {
     if ($null -eq $oldYktHome) { Remove-Item Env:YKT_HOME -ErrorAction SilentlyContinue }
     else { $env:YKT_HOME = $oldYktHome }
     $executable = Join-Path $root 'studyflow.exe'
-    $app = Start-Process -FilePath $executable -PassThru
+    # The default window close hides StudyFlow to its tray, by design.
+    # For package smoke checks, explicitly opt into the same graceful
+    # shutdown path as the tray's "Quit" action. Never force-kill the EXE.
+    $app = Start-Process -FilePath $executable -ArgumentList @('--exit-on-close') -PassThru
     Start-Sleep -Seconds 5
     $app.Refresh()
     if ($app.HasExited) { throw "Installed desktop app exited early: $($app.ExitCode)" }
-    # Exercise normal user exit, not a hard kill. Hard-killing the desktop
-    # bypasses Tauri window-destroyed cleanup and can orphan its Python bridge.
+    # Exercise graceful exit-on-close, not a hard kill. The default app close
+    # intentionally minimizes to tray, so without the launch flag this smoke
+    # would wait forever despite correct user-facing product behavior.
     # On GitHub's headless Windows runner, the borderless WebView can take
     # longer to finish its native teardown than in the interactive PR smoke.
     # Retry only the close request; never force an exit or pass on a live app.
