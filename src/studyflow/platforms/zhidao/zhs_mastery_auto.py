@@ -477,7 +477,9 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
                         and type(verified.get("mastery")) in (int, float)):
                     _step(course_key, item, done=False,
                           reason="上次提交的判分或掌握度仍待核验；不会重复交卷")
-                    continue
+                    _update(state="needs_attention", current=None,
+                            message="旧试卷未能完整核验，已保护整门课不再继续自动交卷")
+                    return
                 # Server confirmed both the prior POST and every grading
                 # response. Remove just this point's persisted block.
                 remaining_blocks = [
