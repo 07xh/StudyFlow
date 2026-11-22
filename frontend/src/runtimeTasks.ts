@@ -25,7 +25,20 @@ function upsertRuntimeTask(previous:RuntimeTask[], next:RuntimeTask):RuntimeTask
 }
 export function useRuntimeTasks(desktop:boolean){
  const [tasks,setTasks]=useState<RuntimeTask[]>([]);
+ const snapshot=useRef<RuntimeTask[]>([]);
  const [loading,setLoading]=useState(desktop);
+ const loadingPending=useRef(desktop);
+ const publish=useCallback((next:RuntimeTask)=>{
+   const updated=upsertRuntimeTask(snapshot.current,next);
+   if(updated===snapshot.current)return;
+   snapshot.current=updated;
+   setTasks(updated);
+ },[]);
+ const finishLoading=useCallback(()=>{
+   if(!loadingPending.current)return;
+   loadingPending.current=false;
+   setLoading(false);
+ },[]);
  const revision=useRef(0);
  // Guard each backend independently. A hanging player status must not
  // prevent polling the ZHS or rain-classroom runtime.
@@ -48,7 +61,7 @@ export function useRuntimeTasks(desktop:boolean){
    try{
     const value=await read();
     if(generation!==revision.current)return;
-    setLoading(false);
+    finishLoading();
     if(index>0&&'run_id' in value&&'exit_code' in value&&
        value.state==='exited'&&value.exit_code===0&&value.run_id&&
        readTaskRecovery().some(record=>record.platform===platform&&record.runId===value.run_id)){
@@ -58,24 +71,23 @@ export function useRuntimeTasks(desktop:boolean){
     const next:RuntimeTask='courseKey' in value
       ?{runner,platform,state:value.state,courseId:value.courseKey,runId:value.runId,exitCode:value.exitCode}
       :{runner,platform,state:value.state,courseId:value.course_id,runId:value.run_id??null,exitCode:value.exit_code};
-    setTasks(previous=>upsertRuntimeTask(previous,next));
+    publish(next);
    }catch{
     if(generation!==revision.current)return;
-    setLoading(false);
-    setTasks(previous=>{
-     const prior=previous.find(task=>task.runner===runner);
-     return upsertRuntimeTask(previous,{
+    finishLoading();
+    const prior=snapshot.current.find(task=>task.runner===runner);
+    publish({
       ...(prior??{runner,platform,state:'idle' as const,courseId:null,runId:null,exitCode:null}),
       unavailable:true
-     });
     });
    }finally{
     if(inFlight.current[index]===token)inFlight.current[index]=null;
    }
   });
   await Promise.all(updates);
- },[desktop]);
+ },[desktop,finishLoading,publish]);
  useEffect(()=>{
+  loadingPending.current=desktop;
   setLoading(desktop);
   void refresh();
   if(!desktop)return;
