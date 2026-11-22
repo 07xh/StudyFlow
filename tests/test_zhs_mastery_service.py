@@ -422,3 +422,45 @@ def test_previous_submission_rejects_incomplete_metadata_before_network(monkeypa
         service.verify_previous_submission("k" * 64, KNOWLEDGE, 3, 0, [939136618])
     assert caught.value.code == "INVALID_REQUEST"
     assert session.calls == []
+
+
+
+def test_scoped_session_reuses_login_and_detects_account_change(monkeypatch, tmp_path):
+    import sys
+    import types
+    from studyflow.platforms.zhidao import legacy_runtime
+
+    cookie_path = tmp_path / ".zhs" / "cookies.json"
+    cookie_path.parent.mkdir()
+    cookie_path.write_text("first-login-cookie", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(legacy_runtime, "resolve_course", lambda key: COURSE)
+
+    count = []
+    session = FakeSession()
+    def bootstrap(debug, console_log, proxy):
+        count.append("opened")
+        return object(), session
+    zhs = types.ModuleType("zhs")
+    zhs.__path__ = []
+    cli = types.ModuleType("zhs.cli")
+    cli.__path__ = []
+    module = types.ModuleType("zhs.cli.bootstrap")
+    module.load_config_and_session = bootstrap
+    monkeypatch.setitem(sys.modules, "zhs", zhs)
+    monkeypatch.setitem(sys.modules, "zhs.cli", cli)
+    monkeypatch.setitem(sys.modules, "zhs.cli.bootstrap", module)
+
+    with service.mastery_session_scope("k" * 64):
+        first, course = service._open_session("k" * 64)
+        assert course["course_type"] == "ai"
+        first.close()
+        second, _ = service._open_session("k" * 64)
+        second.close()
+        assert count == ["opened"], "one CAS session, not one per question"
+        assert session.closed == 0, "borrowed session close must be deferred"
+        cookie_path.write_text("different-account", encoding="utf-8")
+        with pytest.raises(service.MasteryError) as raised:
+            service._open_session("k" * 64)
+        assert raised.value.code == "LOGIN_UNCONFIRMED"
+    assert session.closed == 1, "the owned session is closed at scope exit"
