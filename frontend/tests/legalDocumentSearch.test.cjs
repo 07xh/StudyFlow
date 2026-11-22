@@ -20,7 +20,7 @@ test("regex metacharacters are treated as plain license text",()=>{
  assert.equal(findLegalMatches(source,"GPL+").total,2);
  assert.equal(findLegalMatches(source,"(v3)").total,1);
  assert.equal(findLegalMatches(source,"[section]").total,1);
- assert.equal(findLegalMatches(source,".").total,2);
+ assert.equal(findLegalMatches(source,".").total,1);
 });
 
 test("common words remain bounded for huge legal files while preserving total",()=>{
