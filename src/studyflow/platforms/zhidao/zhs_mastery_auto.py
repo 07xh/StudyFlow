@@ -46,24 +46,48 @@ def _utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _save(snapshot: dict[str, Any]) -> None:
-    DATA.mkdir(parents=True, exist_ok=True)
-    temp = STATUS_PATH.with_suffix(".tmp")
+def _course_status_path(course_key: str) -> Path:
+    """Use a validated course key as the only on-disk journal filename."""
+    if not isinstance(course_key, str) or not re.fullmatch(r"[0-9a-f]{64}", course_key):
+        raise ValueError("Invalid course status key")
+    return DATA / "courses" / f"{course_key}.json"
+
+
+def _write_snapshot(path: Path, snapshot: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
     temp.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
-    temp.replace(STATUS_PATH)
+    temp.replace(path)
 
 
-def _loaded() -> dict[str, Any]:
-    try:
-        data = json.loads(STATUS_PATH.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
-            return {}
-        if data.get("state") in {"running", "paused", "stopping", "starting"}:
-            data["state"] = "interrupted"
-            data["message"] = "应用上次退出时任务尚未结束。不会自动重发交卷请求。"
-        return data
-    except (OSError, ValueError):
-        return {}
+def _save(snapshot: dict[str, Any]) -> None:
+    # Preserve the legacy last-run file for older installations while keeping
+    # each course's unresolved submissions independent. A later course start
+    # must never erase another course's pending-paper evidence.
+    _write_snapshot(STATUS_PATH, snapshot)
+    course_key = snapshot.get("course_key")
+    if isinstance(course_key, str) and re.fullmatch(r"[0-9a-f]{64}", course_key):
+        _write_snapshot(_course_status_path(course_key), snapshot)
+
+
+def _loaded(course_key: str | None = None) -> dict[str, Any]:
+    candidates = [STATUS_PATH]
+    if course_key is not None:
+        candidates.insert(0, _course_status_path(course_key))
+    for path in candidates:
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                continue
+            if course_key is not None and data.get("course_key") != course_key:
+                continue
+            if data.get("state") in {"running", "paused", "stopping", "starting"}:
+                data["state"] = "interrupted"
+                data["message"] = "应用上次退出时任务尚未结束。不会自动重发交卷请求。"
+            return data
+        except (OSError, ValueError):
+            continue
+    return {}
 
 
 def _update(**fields: Any) -> None:
@@ -559,14 +583,13 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
         global _THREAD
         if _THREAD is not None and _THREAD.is_alive():
             raise service.MasteryError("MASTERY_AUTO_RUNNING")
-        prior = _loaded()
-        same_course = prior.get("course_key") == course_key
-        blocked = list(prior.get("blocked", [])) if same_course else []
-        pending = dict(prior.get("pending_submissions") or {}) if same_course else {}
+        prior = _loaded(course_key)
+        blocked = list(prior.get("blocked", []))
+        pending = dict(prior.get("pending_submissions") or {})
         # Preserve the original paper identifiers across restarts. A missing
         # examPaperId / question IDs in an older record stays blocked rather
         # than silently creating a replacement paper.
-        if same_course and isinstance(prior.get("submitting"), dict):
+        if isinstance(prior.get("submitting"), dict):
             marker = prior["submitting"]
             pending_id = marker.get("knowledge_id")
             if isinstance(pending_id, str):
@@ -595,7 +618,7 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
 
 def status(course_key: str) -> dict[str, Any]:
     with _LOCK:
-        snapshot = deepcopy(_STATUS) if _STATUS else _loaded()
+        snapshot = deepcopy(_STATUS) if _STATUS.get("course_key") == course_key else _loaded(course_key)
     if snapshot.get("course_key") != course_key:
         return {"state": "idle", "total": 0, "processed": 0, "done": 0,
                 "skipped": 0, "tasks": [], "message": "", "current": None}
