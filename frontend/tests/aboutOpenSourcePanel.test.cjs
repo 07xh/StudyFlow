@@ -74,6 +74,13 @@ test("Open Source links are attributed, and legal documents replace content rath
  await act(async()=>button(view,"返回开源与许可").props.onClick());
  assert.match(textOf(view.root),/使用条款与第三方声明/);
  assert.doesNotMatch(textOf(view.root),/这里是完整的文档正文/);
+ await act(async()=>button(view,"隐私政策与数据说明").props.onClick());
+ const reader=view.root.findByProps({className:"sf-about-reader"});
+ let prevented=false,stopped=false;
+ await act(async()=>reader.props.onKeyDown({key:"Escape",preventDefault(){prevented=true;},stopPropagation(){stopped=true;}}));
+ assert.ok(prevented&&stopped,"Escape must not propagate to outer settings dialog");
+ assert.match(textOf(view.root),/GNU GPL v3 开源许可/);
+ assert.doesNotMatch(textOf(view.root),/这里是完整的文档正文/);
 });
 
 test("invalid legal document payload cannot render a mismatched document",async()=>{
