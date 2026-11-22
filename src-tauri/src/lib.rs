@@ -207,6 +207,44 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     }
     let operation = request.get("operation").and_then(|v| v.as_str()).unwrap_or("");
     match operation {
+        "questionbank.providers" | "questionbank.tokens.list" => Ok(()),
+        "questionbank.tokens.add"
+            if request.get("provider_id").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.is_empty() && v.len() <= 40
+                    && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
+            && request.get("label").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.trim().is_empty() && v.chars().count() <= 50)
+            && request.get("token").and_then(|v| v.as_str())
+                .is_some_and(|v| (8..=256).contains(&v.len())
+                    && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
+            => Ok(()),
+        "questionbank.tokens.select" | "questionbank.tokens.remove"
+            if request.get("token_id").and_then(|v| v.as_str())
+                .is_some_and(|v| v.len() == 32 && v.bytes().all(|c| c.is_ascii_hexdigit()))
+            => Ok(()),
+        "questionbank.query"
+            if request.get("provider_id").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.is_empty() && v.len() <= 40
+                    && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
+            && request.get("token_id").map_or(true, |v| v.as_str()
+                .is_some_and(|s| s.len() == 32 && s.bytes().all(|c| c.is_ascii_hexdigit())))
+            && request.get("question").and_then(|q| q.as_object()).is_some_and(|q| {
+                q.get("title").and_then(|v| v.as_str())
+                    .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= 4000)
+                && q.get("question_type").map_or(true, |v| v.as_str()
+                    .is_some_and(|s| s.chars().count() <= 40))
+                && q.get("options").map_or(true, |v| {
+                    v.as_str().is_some_and(|s| s.chars().count() <= 4000)
+                    || v.as_array().is_some_and(|items| items.len() <= 20
+                        && items.iter().all(|item| item.as_object().is_some_and(|entry| {
+                            entry.get("key").map_or(true, |value| value.as_str()
+                                .is_some_and(|s| s.chars().count() <= 10))
+                            && entry.get("text").and_then(|value| value.as_str())
+                                .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= 500)
+                        })))
+                })
+            })
+            => Ok(()),
         "questionbank.yanxi.status" | "questionbank.yanxi.clear" => Ok(()),
         "questionbank.yanxi.save"
             if request.get("token").and_then(|v| v.as_str())
