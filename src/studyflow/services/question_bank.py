@@ -168,21 +168,28 @@ def remove_token(token_id: Any) -> dict[str, Any]:
         return _public(data)
 
 
+def _question_field(value: Any, *, maximum: int, required: bool = False) -> str:
+    try:
+        return yanxi._field(value, maximum=maximum, required=required)
+    except QuestionBankError as exc:
+        raise QuestionBankError("QUESTIONBANK_INVALID_QUESTION") from exc
+
+
 def _normalize_question(question: Any) -> tuple[str, str, str]:
     if not isinstance(question, dict):
         raise QuestionBankError("QUESTIONBANK_INVALID_QUESTION")
-    title = yanxi._field(question.get("title"), maximum=4000, required=True)
-    qtype = yanxi._field(question.get("question_type", ""), maximum=40)
+    title = _question_field(question.get("title"), maximum=4000, required=True)
+    qtype = _question_field(question.get("question_type", ""), maximum=40)
     raw_options = question.get("options", [])
     if isinstance(raw_options, str):
-        options = yanxi._field(raw_options, maximum=4000)
+        options = _question_field(raw_options, maximum=4000)
     elif isinstance(raw_options, list) and len(raw_options) <= 20:
         parts = []
         for row in raw_options:
             if not isinstance(row, dict):
                 raise QuestionBankError("QUESTIONBANK_INVALID_QUESTION")
-            key = yanxi._field(row.get("key", ""), maximum=10)
-            text = yanxi._field(row.get("text"), maximum=500, required=True)
+            key = _question_field(row.get("key", ""), maximum=10)
+            text = _question_field(row.get("text"), maximum=500, required=True)
             parts.append((key + ". " if key else "") + text)
         options = "\n".join(parts)
         if len(options) > 4000:
