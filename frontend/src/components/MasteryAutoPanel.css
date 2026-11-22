@@ -29,3 +29,20 @@
 .sf-mastery-auto-preference label{display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted)}
 .sf-mastery-auto-preference select,.sf-mastery-auto-preference input{min-width:0;width:100%;border-radius:8px;border:1px solid var(--line);background:var(--panel-raised);color:var(--text);padding:8px 9px;font-size:13px;box-sizing:border-box}
 .sf-mastery-auto-preference select:focus,.sf-mastery-auto-preference input:focus{outline:1px solid var(--accent)}
+
+
+/* Course-toolbar launch is always visible; no need to expand the lazy mastery fold. */
+.sf-shell .sf-course-top-actions .sf-course-mastery-action{
+  border-color:var(--accent);color:var(--accent-text);background:var(--soft-accent);
+  font-weight:650;
+}
+.sf-shell .sf-course-top-actions .sf-course-mastery-action:hover{filter:brightness(.98)}
+.sf-mastery-start-shortcut{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:11px 13px;margin-bottom:12px;border:1px solid var(--line);
+  background:var(--panel);border-radius:10px;font-size:12px;color:var(--muted);
+}
+.sf-mastery-start-shortcut button{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.sf-mastery-course-notice{padding:12px;font-size:13px;line-height:1.6}
+.sf-mastery-course-notice p{color:var(--muted);margin:8px 0 0}
+@media(max-width:760px){.sf-mastery-start-shortcut button{white-space:normal}}
