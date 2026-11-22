@@ -2,7 +2,7 @@ import {useEffect,useRef,useState,type MouseEvent} from "react";
 import {getVersion} from "@tauri-apps/api/app";
 import {invoke} from "@tauri-apps/api/core";
 import {ArrowLeft,BookOpen,CheckCircle2,ChevronRight,ExternalLink,FileCode2,FileText,Globe2,Info,Layers3,Scale,ShieldCheck} from "lucide-react";
-import {friendlyBridgeError,request,type ZhidaoDocument} from "../bridge";
+import {friendlyBridgeError,type ZhidaoDocument} from "../bridge";
 import "./aboutOpenSource.css";
 
 type Section="overview"|"source";
@@ -50,7 +50,7 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
   },[desktop]);
   useEffect(()=>()=>{requestRevision.current+=1;},[]);
   useEffect(()=>{
-    if(!viewer)return;
+    if(!viewer||typeof window==="undefined")return;
     const frame=window.requestAnimationFrame(()=>backButton.current?.focus());
     return ()=>window.cancelAnimationFrame(frame);
   },[viewer]);
@@ -70,7 +70,7 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
     opener.current=event.currentTarget;
     setReading(id);setError("");setViewer(null);
     try{
-      const data=await request<ZhidaoDocument>({operation:"zhidao.document.read",document_id:id});
+      const data=await invoke<ZhidaoDocument>("studyflow_read_document",{documentId:id});
       if(revision!==requestRevision.current)return;
       if(data.id!==id||typeof data.title!=="string"||typeof data.content!=="string")
         throw new Error("INVALID_DOCUMENT");
@@ -86,7 +86,7 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
     requestRevision.current+=1;
     setViewer(null);setReading(null);setError("");
     scrollTop();
-    window.requestAnimationFrame(()=>opener.current?.focus());
+    if(typeof window!=="undefined")window.requestAnimationFrame(()=>opener.current?.focus());
   }
   function openExternal(event:MouseEvent<HTMLAnchorElement>,kind:SourceKind){
     if(!desktop)return;
