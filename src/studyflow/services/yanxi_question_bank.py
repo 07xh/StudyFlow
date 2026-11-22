@@ -135,16 +135,22 @@ def _parse_result(payload: Any) -> dict[str, Any]:
     remaining = remaining if type(remaining) is int and remaining >= 0 else None
     raw_answer = data.get("answer")
     answer = raw_answer.strip()[:8000] if isinstance(raw_answer, str) else ""
-    message = str(payload.get("message") or "")
-    if any(term in (message + " " + answer) for term in ("次数不足", "次数已用完", "余额不足")):
+    message = " ".join(str(payload.get(key) or "") for key in ("message", "msg", "error"))
+    notice = (message + " " + answer).casefold()
+    if any(term in notice for term in ("次数不足", "次数已用完", "余额不足", "额度不足")):
         raise QuestionBankError("YANXI_QUOTA_EXHAUSTED")
+    if any(term in notice for term in ("token错误", "token无效", "无效token",
+                                       "token已失效", "token不存在", "登录过期")):
+        raise QuestionBankError("YANXI_TOKEN_REJECTED")
+    # A textual error must not masquerade as a reference answer.
+    if any(term in notice for term in ("未找到答案", "没有找到答案", "暂无答案", "未找到题目", "无匹配结果")):
+        return {"found": False, "answer": "", "remaining": remaining,
+                "status": "not_found"}
     # Public adapters disagree on 0/1 but both publish data.answer.
     # Never infer a successful lookup from the response code alone.
     if payload.get("code") not in (0, 1) or not answer:
         return {"found": False, "answer": "", "remaining": remaining,
                 "status": "not_found"}
-    if any(term in answer for term in ("Token错误", "token无效", "无效Token", "请登录")):
-        raise QuestionBankError("YANXI_TOKEN_REJECTED")
     return {"found": True, "answer": answer, "remaining": remaining,
             "status": "matched", "source": "yanxi_external_unverified"}
 
