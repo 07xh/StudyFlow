@@ -315,6 +315,26 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && opts.get("use_external_bank").map_or(true, |v| v.is_boolean())
                     && opts.get("max_external_calls").map_or(true, |v| v.as_u64()
                         .is_some_and(|n| (1..=200).contains(&n)))
+                    && matches!(opts.get("scope_mode").and_then(|v| v.as_str()).unwrap_or("all"),
+                                "all" | "first_n" | "single" | "selected")
+                    && opts.get("chapter_count").map_or(true, |v| v.as_u64()
+                        .is_some_and(|n| (1..=200).contains(&n)))
+                    && opts.get("chapter_indices").map_or(true, |v| v.as_array()
+                        .is_some_and(|items| items.len() <= 200
+                            && items.iter().all(|item| item.as_u64()
+                                .is_some_and(|n| (1..=200).contains(&n)))
+                            && {
+                                let indices: std::collections::HashSet<_> = items.iter()
+                                    .filter_map(|item| item.as_u64()).collect();
+                                indices.len() == items.len()
+                            }))
+                    && (match opts.get("scope_mode").and_then(|v| v.as_str()).unwrap_or("all") {
+                        "single" => opts.get("chapter_indices").and_then(|v| v.as_array())
+                            .is_some_and(|arr| arr.len() == 1),
+                        "selected" => opts.get("chapter_indices").and_then(|v| v.as_array())
+                            .is_some_and(|arr| !arr.is_empty()),
+                        _ => true,
+                    })
                     && (opts.get("use_external_bank").and_then(|v| v.as_bool()) != Some(true)
                         || (opts.get("external_provider_id").and_then(|v| v.as_str())
                             .is_some_and(|s| !s.is_empty() && s.len() <= 40
