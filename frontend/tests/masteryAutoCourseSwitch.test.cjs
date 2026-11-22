@@ -65,6 +65,10 @@ test("switching courses allows B status and chapters while A is pending, then ig
     await act(async()=>{
       newCatalog.resolve({knowledge:[{chapter_index:2,theme:"新课程第二章",knowledge_id:"2001"}]});
     });
+    // In "all chapters" mode the selector is intentionally collapsed; switch
+    // to single-chapter mode before asserting its visible option label.
+    await act(async()=>view.root.findAllByType("button")
+      .find(button=>textOf(button)==="只做一章").props.onClick());
     visible=textOf(view.root);
     assert.match(visible,/新课程第二章/);
     assert.doesNotMatch(visible,/旧课程第一章/);
