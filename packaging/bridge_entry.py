@@ -8,6 +8,20 @@ from __future__ import annotations
 import sys
 
 
+def _anchor_zhs_data_directory() -> None:
+    """ZHS 0.1.5 resolves .zhs from cwd, not Path.home().
+
+    The Tauri sidecar inherits the GUI's working directory, which may be the
+    install directory. Anchor it once at process startup, before QR login,
+    session verification or mastery imports the ZHS runtime. This is a
+    dedicated child process, so no other application's cwd is changed.
+    """
+    import os
+    from pathlib import Path
+
+    os.chdir(Path.home())
+
+
 def _prepare_jsonl_stdout():
     """Preserve the protocol pipe and redirect incidental process output to stderr.
 
@@ -34,6 +48,7 @@ def _prepare_jsonl_stdout():
 
 
 def main() -> int:
+    _anchor_zhs_data_directory()
     if len(sys.argv) > 1:
         mode = sys.argv[1]
         if mode == "--zhs-video-worker":
