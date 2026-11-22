@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from "react";
 import {
-  friendlyBridgeError,questionBankImportTokens,questionBankList,questionBankQuery,
+  friendlyBridgeError,questionBankCheckToken,questionBankImportTokens,questionBankList,questionBankQuery,
   questionBankRemoveToken,questionBankSelectToken,questionBankSetRotation,
   type QuestionBankAnswer,type QuestionBankState,
 } from "../bridge";
@@ -19,6 +19,7 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
   const [options,setOptions]=useState("");
   const [questionType,setQuestionType]=useState("");
   const [answer,setAnswer]=useState<QuestionBankAnswer|null>(null);
+  const [checkingId,setCheckingId]=useState("");
   useEffect(()=>{
     if(!desktop)return;
     let active=true;
@@ -57,6 +58,25 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
         :"已启用固定使用：始终使用当前默认 Token。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
+  };
+  const check=async(id:string,includeQuota=false)=>{
+    if(busy)return;
+    setBusy(true);setCheckingId(id);setError("");setNotice("");
+    try{
+      setState(await questionBankCheckToken(id,includeQuota));
+      setNotice(includeQuota
+        ?"检测完成。余量仅在题库返回可用数字时更新，检测本身可能消耗一次查询额度。"
+        :"检测完成。网络故障或接口变化会显示无法确认，不会删除 Token。");
+    }catch(cause){setError(friendlyBridgeError(cause));}
+    finally{setCheckingId("");setBusy(false);}
+  };
+  const validityLabel=(status?:string)=>{
+    switch(status){
+      case "valid":return "服务已识别";
+      case "invalid":return "可能无效";
+      case "unknown":return "无法确认";
+      default:return "未检测";
+    }
   };
   const select=async(id:string)=>{
     if(busy)return;
@@ -115,7 +135,15 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
           <summary>查看已保存的 {available.length} 条 Token（仅显示备注）</summary>
           {available.map(item=><div className="sf-qb-token" key={item.id}>
             <div><strong>{item.label}</strong>
-              <small>{item.active?"默认 Token":"已加密保存"}</small></div>
+              <small>{item.active?"默认 Token · ":""}{validityLabel(item.validity)} ·
+                {" "}剩余次数：{item.remaining??"未知"}</small>
+              {item.checked_at&&<small>最近检测：{item.checked_at.replace("T"," ").slice(0,19)} UTC</small>}
+              {item.balance_at&&<small>余量记录：{item.balance_at.replace("T"," ").slice(0,19)} UTC</small>}
+            </div>
+            <button className="secondary" type="button" disabled={busy}
+              onClick={()=>void check(item.id)}>{checkingId===item.id?"检测中…":"检测是否可用"}</button>
+            <button className="secondary" type="button" disabled={busy}
+              onClick={()=>void check(item.id,true)}>读取余量（可能扣 1 次）</button>
             <button className="secondary" type="button" disabled={busy||item.active}
               onClick={()=>void select(item.id)}>{item.active?"当前默认":"设为默认"}</button>
             <button className="secondary" type="button" disabled={busy}
@@ -133,7 +161,7 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
         <button type="button" disabled={busy||loading||!tokenLines.trim()}
           onClick={()=>void add()}>批量导入并加密保存</button>
       </div>
-      <p className="sf-qb-hint">自动去除空行和重复值，不覆盖旧 Token；单个题库最多 100 条。导入多条后默认开启轮流使用。每次查询仅发送一条 Token，不会因限流或额度不足自动反复换号。</p>
+      <p className="sf-qb-hint">自动去除空行和重复值，不覆盖旧 Token；单个题库最多 100 条。保存不会主动检测。可在上方列表检测每条 Token；读取余量可能消耗 1 次额度，不自动轮询或因限流换号。</p>
     </div>
     <section className="sf-qb-manual" aria-label="手动搜题">
       <h4>手动查询参考资料</h4>
