@@ -106,3 +106,20 @@ def test_bridge_shared_operations_are_safe_and_dont_echo_tokens(monkeypatch):
     assert dispatch("questionbank.tokens.remove",token_id=token_id)["ok"]
     assert dispatch("questionbank.query",provider_id="yanxi",
                     question={"title":"x"})["error"] == "QUESTIONBANK_TOKEN_NOT_FOUND"
+
+
+def test_future_provider_uses_shared_vault_without_yanxi_token_pattern(monkeypatch):
+    calls = []
+    monkeypatch.setitem(bank.PROVIDERS, "custom", {
+        "name": "测试扩展题库", "description": "测试适配器",
+        "lookup": lambda title, options, kind, *, token:
+            (calls.append((title, token)) or
+             {"found": True, "answer": "示例说明", "remaining": None,
+              "status": "matched", "source": "custom_unverified"}),
+    })
+    state = bank.add_token("custom", "专用令牌", "api.key:custom_123")
+    assert state["tokens"][0]["provider_id"] == "custom"
+    result = bank.query_question("custom", {"title": "示例", "options": []})
+    assert calls == [("示例", "api.key:custom_123")]
+    assert result["provider_name"] == "测试扩展题库" and result["verified"] is False
+    assert "api.key:custom_123" not in repr(state) + repr(result)
