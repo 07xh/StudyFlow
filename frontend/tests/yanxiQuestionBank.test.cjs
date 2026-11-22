@@ -34,7 +34,7 @@ test("Yanxi settings and reference query are explicit and do not submit an exerc
   assert.equal(calls.filter(x=>x[0]==="query").length,0);
   await act(async()=>button("查询参考答案").props.onClick());
   assert.deepEqual(calls.find(x=>x[0]==="query"),
-    ["query","题干一","A. 错误\\nB. 正确","单选"]);
+    ["query","题干一","A. 错误\nB. 正确","单选"]);
   assert.match(textOf(view.root),/言溪参考答案（未验证）/);
   assert.match(textOf(view.root),/剩余次数：5/);
   await act(async()=>button("清除").props.onClick());
