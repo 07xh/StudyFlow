@@ -18,7 +18,7 @@ const sourceLinks:Readonly<Record<SourceKind,string>>={
 };
 const licenses=[
   {id:"license" as const,title:"GNU GPL v3 开源许可",detail:"完整许可证正文",icon:Scale},
-  {id:"source" as const,title:"原版源码与来源",detail:"知到原版及对应源码说明",icon:FileCode2},
+  {id:"source" as const,title:"原版源码与来源",detail:"知到、雨课堂、学习通及许可来源登记",icon:FileCode2},
   {id:"terms" as const,title:"使用条款与第三方声明",detail:"产品与平台之间的关系",icon:FileText},
   {id:"privacy" as const,title:"隐私政策与数据说明",detail:"本机数据和凭据的处理方式",icon:ShieldCheck},
 ];
