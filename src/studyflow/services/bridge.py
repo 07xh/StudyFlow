@@ -157,7 +157,8 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "YANXI_UNAVAILABLE"}
     if operation in ("questionbank.providers", "questionbank.tokens.list",
                      "questionbank.tokens.add", "questionbank.tokens.select",
-                     "questionbank.tokens.remove", "questionbank.query"):
+                     "questionbank.tokens.remove", "questionbank.tokens.import",
+                     "questionbank.tokens.rotation", "questionbank.query"):
         from studyflow.services import question_bank as bank
         try:
             if operation in ("questionbank.providers", "questionbank.tokens.list"):
@@ -165,6 +166,10 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             elif operation == "questionbank.tokens.add":
                 data = bank.add_token(request.get("provider_id"),
                                       request.get("label"), request.get("token"))
+            elif operation == "questionbank.tokens.import":
+                data = bank.import_tokens(request.get("provider_id"), request.get("lines"))
+            elif operation == "questionbank.tokens.rotation":
+                data = bank.set_rotation(request.get("provider_id"), request.get("mode"))
             elif operation == "questionbank.tokens.select":
                 data = bank.select_token(request.get("token_id"))
             elif operation == "questionbank.tokens.remove":
