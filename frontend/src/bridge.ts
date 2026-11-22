@@ -378,10 +378,27 @@ export function friendlyUpdateError(value: unknown): string {
     case "UPDATE_CHECKSUM_FAILED": return "安装包 SHA-256 校验失败，未保存不可信安装包，请从官方发布页重新下载。";
     case "UPDATE_STORAGE_FAILED": return "无法写入学序更新目录，请检查磁盘空间和文件夹权限。";
     case "UPDATE_REDIRECT_REJECTED": return "下载地址跳转到未认可的网站，已中止以保护安装包安全。";
-    case "BRIDGE_BINARY_MISSING":
-    case "BRIDGE_START_FAILED":
-    case "BRIDGE_PROTOCOL_FAILED":
-    case "BRIDGE_PROCESS_FAILED":
+    case "BRIDGE_NOT_READY":
+    case "BRIDGE_RESPONSE_INVALID": return friendlyBridgeError(value);
+    default:
+      if (code.startsWith("BRIDGE_") || code.startsWith("QUESTIONBANK_") || code.startsWith("YANXI_"))
+        return friendlyBridgeError(value);
+      return "更新操作失败，原因暂未识别。可从学序 GitHub 官方发布页手动下载安装。";
+  }
+}
+
+export function friendlyBridgeError(value: unknown): string {
+  const code = value instanceof Error ? value.message : typeof value === "string" ? value : "";
+  switch (code) {
+    case "BRIDGE_NOT_READY": return "学序 Windows IPC 服务不可用；请检查桌面版和 Python sidecar。";
+    case "BRIDGE_BINARY_MISSING": return "安装包缺少 Python Sidecar（studyflow-bridge.exe）；请安装最新完整 Windows 安装包。";
+    case "BRIDGE_START_FAILED": return "Python Sidecar 启动失败；请检查 Windows 安全软件是否隔离了 studyflow-bridge.exe。";
+    case "BRIDGE_PROTOCOL_FAILED": return "Python Sidecar 已启动，但 JSONL 响应无效；请更新完整安装包。";
+    case "BRIDGE_RESPONSE_INVALID": return "Python Sidecar 返回无效数据，本次读取已停止。";
+    case "BRIDGE_PROCESS_FAILED": return "Python Sidecar 在处理请求时异常退出。";
+    case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
+    case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
+    case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
     case "QUESTIONBANK_UNKNOWN_PROVIDER": return "该题库尚未接入学序，请在设置里选择已支持的题库。";
     case "QUESTIONBANK_INVALID_LABEL": return "Token 备注须为 1 至 50 个字符。";
     case "QUESTIONBANK_INVALID_TOKEN_ID": return "Token 标识无效，请重新加载题库列表。";
@@ -406,25 +423,6 @@ export function friendlyUpdateError(value: unknown): string {
     case "YANXI_NETWORK_FAILED": return "连接言溪题库失败，请检查网络。";
     case "YANXI_BAD_RESPONSE": return "言溪接口响应格式异常，未采用该结果。";
     case "YANXI_UPSTREAM_UNAVAILABLE": return "言溪查询服务暂时不可用。";
-    case "YANXI_UNAVAILABLE": return "言溪本地适配器不可用，请检查安装包版本。";
-    case "BRIDGE_NOT_READY":
-    case "BRIDGE_RESPONSE_INVALID": return friendlyBridgeError(value);
-    default: return "更新操作失败，原因暂未识别。可从学序 GitHub 官方发布页手动下载安装。";
-  }
-}
-
-export function friendlyBridgeError(value: unknown): string {
-  const code = value instanceof Error ? value.message : typeof value === "string" ? value : "";
-  switch (code) {
-    case "BRIDGE_NOT_READY": return "学序 Windows IPC 服务不可用；请检查桌面版和 Python sidecar。";
-    case "BRIDGE_BINARY_MISSING": return "安装包缺少 Python Sidecar（studyflow-bridge.exe）；请安装最新完整 Windows 安装包。";
-    case "BRIDGE_START_FAILED": return "Python Sidecar 启动失败；请检查 Windows 安全软件是否隔离了 studyflow-bridge.exe。";
-    case "BRIDGE_PROTOCOL_FAILED": return "Python Sidecar 已启动，但 JSONL 响应无效；请更新完整安装包。";
-    case "BRIDGE_RESPONSE_INVALID": return "Python Sidecar 返回无效数据，本次读取已停止。";
-    case "BRIDGE_PROCESS_FAILED": return "Python Sidecar 在处理请求时异常退出。";
-    case "BRIDGE_RESOURCE_DIR_FAILED": return "学序安装资源目录无法定位，请重新安装完整版本。";
-    case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
-    case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
     case "UCAMPUS_SOCKET_TOKEN_REQUIRED": return "请先在 U校园账号设置中填写本人会话的内容授权令牌。";
     case "UCAMPUS_SOCKET_HANDSHAKE_UNVERIFIED": return "旧版 WebSocket 握手未通过，当前接口可能不兼容 U校园5.0。";
     case "UCAMPUS_SOCKET_NAMESPACE_UNVERIFIED": return "旧版 Socket.IO 命名空间认证未通过。";
