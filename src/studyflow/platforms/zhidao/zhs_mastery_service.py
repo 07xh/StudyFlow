@@ -26,9 +26,12 @@
 """
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from studyflow.platforms.zhidao.zhs_mastery import (
@@ -67,6 +70,47 @@ class MasteryError(RuntimeError):
 # 连接与鉴权
 # --------------------------------------------------------------------------
 
+# The background scheduler can save many questions in a single knowledge
+# point. Re-authenticating with CAS for every answer was both slow and prone
+# to transient errors. Scope one verified SDK session to a worker thread,
+# rotating it periodically; unrelated IPC requests retain their own sessions.
+_SESSION_LOCAL = threading.local()
+SESSION_SCOPE_TTL = 120.0
+
+
+class _BorrowedSession:
+    """Delegate requests but never close the scope-owned upstream session."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def close(self) -> None:
+        pass
+
+
+@contextmanager
+def mastery_session_scope(course_key: str):
+    """Reuse authentication only within one background knowledge-point run."""
+    prior = getattr(_SESSION_LOCAL, "scope", None)
+    if prior is not None:
+        if prior["course_key"] != course_key:
+            raise MasteryError("INVALID_REQUEST")
+        yield
+        return
+    scope = {"course_key": course_key, "session": None, "course": None,
+             "fingerprint": None, "opened_at": 0.0}
+    _SESSION_LOCAL.scope = scope
+    try:
+        yield
+    finally:
+        _SESSION_LOCAL.scope = None
+        session = scope.get("session")
+        if session is not None:
+            session.close()
+
 
 def _open_session(course_key: str):
     """解析课程并复用已授权登录态。返回 ``(session, course)``。"""
@@ -74,6 +118,16 @@ def _open_session(course_key: str):
 
     if not isinstance(course_key, str) or len(course_key) != 64:
         raise MasteryError("INVALID_REQUEST")
+    scope = getattr(_SESSION_LOCAL, "scope", None)
+    if scope is not None and scope["course_key"] == course_key and scope["session"] is not None:
+        # Detect local account switches even while the network session is reused.
+        fingerprint = _cookie_fingerprint()
+        if fingerprint is None or fingerprint != scope["fingerprint"]:
+            raise MasteryError("LOGIN_UNCONFIRMED")
+        if time.monotonic() - scope["opened_at"] < SESSION_SCOPE_TTL:
+            return _BorrowedSession(scope["session"]), scope["course"]
+        scope["session"].close()
+        scope["session"] = None
     try:
         course = resolve_course(course_key)
     except RuntimeError as error:
@@ -82,15 +136,28 @@ def _open_session(course_key: str):
     if course.get("course_type") != "ai":
         raise MasteryError("NOT_AI_COURSE")
 
+    # The packaged ZHS 0.1.5 runtime resolves .zhs relative to the home
+    # directory (anchored at the sidecar entry). An absent local session is
+    # different from a transient CAS / network verification failure.
+    if not (Path.home() / ".zhs" / "cookies.json").is_file():
+        raise MasteryError("LOGIN_REQUIRED")
     from zhs.cli.bootstrap import load_config_and_session
 
     try:
         loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
-    except Exception as error:  # 登录态损坏/文件不可读
-        raise MasteryError("LOGIN_REQUIRED", str(error)[:200]) from error
+    except Exception as error:
+        raise MasteryError("LOGIN_CHECK_UNAVAILABLE") from error
     if loaded is None:
-        raise MasteryError("LOGIN_REQUIRED")
+        raise MasteryError("LOGIN_UNCONFIRMED")
     _, session = loaded
+    if scope is not None and scope["course_key"] == course_key:
+        fingerprint = _cookie_fingerprint()
+        if fingerprint is None:
+            session.close()
+            raise MasteryError("LOGIN_UNCONFIRMED")
+        scope.update(session=session, course=course, fingerprint=fingerprint,
+                     opened_at=time.monotonic())
+        return _BorrowedSession(session), course
     return session, course
 
 
@@ -199,32 +266,60 @@ def read_mastery_stat(session, course_id: int, knowledge_id: int) -> dict[str, A
     }
 
 
-def read_catalog(course_key: str, *, with_mastery: bool = True) -> dict[str, Any]:
-    """课程知识点 + 每个点的掌握度（掌握度走只读接口，失败逐点降级）。"""
-    session, course = _open_session(course_key)
-    course_id, class_id = _course_ids(course)
+def _cookie_fingerprint() -> str | None:
+    """Only a process-local fingerprint; no raw Cookie or hash is persisted."""
     try:
+        cookies = (Path.home() / ".zhs" / "cookies.json").read_bytes()
+    except OSError:
+        return None
+    if not cookies or len(cookies) > 262_144:
+        return None
+    return hashlib.sha256(cookies).hexdigest()
+
+
+def _mastery_cache_key(course_id: int, knowledge_id: str) -> str | None:
+    """Account-scoped in-memory score cache; disabled without local proof."""
+    scope = _cookie_fingerprint()
+    return f"{scope}:{course_id}:{knowledge_id}" if scope else None
+
+
+def read_catalog(
+    course_key: str, *, with_mastery: bool = True, force_refresh: bool = False,
+) -> dict[str, Any]:
+    """Read the catalog only; do not generate a new paper when refreshing.
+
+    Only cache scores within the same authenticated Cookie file. A refresh
+    bypasses the short TTL so a user-requested check cannot show old data.
+    """
+    session, course = _open_session(course_key)
+    try:
+        course_id, class_id = _course_ids(course)
         points = _knowledge_points(session, course_id, class_id)
-        if with_mastery:
-            for point in points:
-                key = f"{course_id}:{point['knowledge_id']}"
-                cached = _MASTERY_CACHE.get(key)
-                if cached is not None and time.time() - cached[0] < MASTERY_TTL_SECONDS:
-                    point["mastery"] = cached[1]["mastery"]
-                    point["band"] = cached[1]["band"]
-                    continue
-                try:
-                    stat = read_mastery_stat(session, course_id, int(point["knowledge_id"]))
-                except Exception as error:
-                    point["mastery"] = None
-                    point["band"] = None
-                    point["mastery_error"] = getattr(error, "code", None) or type(error).__name__
-                    continue
-                _MASTERY_CACHE[key] = (time.time(), stat)
-                point["mastery"] = stat["mastery"]
-                point["band"] = stat["band"]
-                time.sleep(0.12)
-        scored = [item["mastery"] for item in points if item.get("mastery") is not None]
+        for point in points:
+            point["mastery"] = None
+            point["band"] = None
+            if not with_mastery:
+                continue
+            key = _mastery_cache_key(course_id, point["knowledge_id"])
+            with _LOCK:
+                cached = _MASTERY_CACHE.get(key) if key is not None else None
+            if (not force_refresh and cached is not None
+                    and time.time() - cached[0] < MASTERY_TTL_SECONDS):
+                point["mastery"] = cached[1]["mastery"]
+                point["band"] = cached[1]["band"]
+                continue
+            try:
+                stat = read_mastery_stat(session, course_id, int(point["knowledge_id"]))
+            except Exception as error:
+                point["mastery_error"] = getattr(error, "code", None) or type(error).__name__
+                continue
+            if key is not None:
+                with _LOCK:
+                    _MASTERY_CACHE[key] = (time.time(), stat)
+            point["mastery"] = stat["mastery"]
+            point["band"] = stat["band"]
+            time.sleep(0.12)
+        scored = [item["mastery"] for item in points if item["mastery"] is not None]
         return {
             "course_key": course_key,
             "course_id": str(course_id),
@@ -235,14 +330,14 @@ def read_catalog(course_key: str, *, with_mastery: bool = True) -> dict[str, Any
             "count": len(points),
             "pending_count": sum(
                 1 for item in points
-                if item.get("mastery") is not None and item["mastery"] <= HOMEWORK_THRESHOLD_DEFAULT
+                if item["mastery"] is not None and item["mastery"] <= HOMEWORK_THRESHOLD_DEFAULT
             ),
+            "unreadable_count": sum(1 for item in points if item.get("mastery_error")),
             "average_mastery": round(sum(scored) / len(scored)) if scored else None,
             "verified_at": _iso_now(),
         }
     finally:
         session.close()
-
 
 # --------------------------------------------------------------------------
 # 一轮练习：开 → 答 → 交
@@ -594,7 +689,9 @@ def submit_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
     with _LOCK:
         if not verification_pending:
             _ACTIVE_ROUNDS.pop(key, None)
-        _MASTERY_CACHE.pop(f"{state['course_id']}:{state['knowledge_id']}", None)
+        cache_key = _mastery_cache_key(state["course_id"], state["knowledge_id"])
+        if cache_key is not None:
+            _MASTERY_CACHE.pop(cache_key, None)
 
     return {
         "knowledge_id": str(knowledge_id),
@@ -632,6 +729,59 @@ def discard_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
     with _LOCK:
         existed = _ACTIVE_ROUNDS.pop(_round_key(course_key, knowledge_id), None) is not None
     return {"knowledge_id": str(knowledge_id), "discarded": existed}
+
+
+
+def verify_previous_submission(
+    course_key: str, knowledge_id: str, exam_test_id: int,
+    exam_paper_id: int, question_ids: list[int],
+) -> dict[str, Any]:
+    """Read-only recovery of a pending submission after the Python worker exits.
+
+    A recorded POST is NEVER sent again. An explicit submitted status, graded
+    response for every original question, and a readable mastery statistic are
+    all required before the automatic scheduler can advance to a new paper.
+    """
+    if (not all(type(x) is int and 0 < x <= 2**63 - 1 for x in (exam_test_id, exam_paper_id))
+            or not isinstance(question_ids, list) or not 1 <= len(question_ids) <= 1000
+            or not all(type(x) is int and 0 < x <= 2**63 - 1 for x in question_ids)
+            or len(set(question_ids)) != len(question_ids)):
+        raise MasteryError("INVALID_REQUEST")
+    kid = _int(knowledge_id)
+    if kid is None or kid <= 0:
+        raise MasteryError("INVALID_REQUEST")
+    session, course = _open_session(course_key)
+    try:
+        course_id, _ = _course_ids(course)
+        reply = _exam_query(
+            session, f"{_exam_root(session)}/exam/user/getExamTestUserInfo",
+            {"examTestId": str(exam_test_id), "examPaperId": str(exam_paper_id)}, method="GET",
+        )
+        info = reply.get("data") if isinstance(reply, dict) else None
+        submitted = isinstance(info, dict) and (
+            bool(info.get("submitTime")) or _int(info.get("examState")) == 6
+        )
+        if not submitted:
+            return {"submitted": False, "grading_complete": False, "mastery": None}
+        for question_id in question_ids:
+            try:
+                detail = _exam_query(
+                    session, f"{_exam_root(session)}/question/getExamQuestionInfo",
+                    {"examTestId": exam_test_id, "examPaperId": exam_paper_id,
+                     "questionId": question_id, "version": 1}, method="GET",
+                )
+                raw = detail.get("data") if isinstance(detail, dict) else None
+                if not isinstance(raw, dict) or parse_question_result(raw).get("graded") is not True:
+                    return {"submitted": True, "grading_complete": False, "mastery": None}
+            except Exception:
+                return {"submitted": True, "grading_complete": False, "mastery": None}
+        try:
+            stat = read_mastery_stat(session, course_id, kid)
+        except Exception:
+            return {"submitted": True, "grading_complete": True, "mastery": None}
+        return {"submitted": True, "grading_complete": True, "mastery": stat["mastery"]}
+    finally:
+        session.close()
 
 
 def read_wrong_questions(course_key: str, knowledge_id: str, exam_test_id: str | None = None) -> dict[str, Any]:

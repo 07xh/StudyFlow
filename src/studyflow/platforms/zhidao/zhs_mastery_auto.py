@@ -375,7 +375,12 @@ def _execute_point(
                 raise ValueError("服务器尚未确认整卷答案保存，未提交")
             _checkpoint(deadline)
             _progress(point, state="working", reason="正在提交本轮并核验官方结果")
-            _update(submitting={"knowledge_id": kid, "exam_test_id": paper["exam_test_id"]})
+            marker = {
+                "knowledge_id": kid, "exam_test_id": paper["exam_test_id"],
+                "exam_paper_id": paper.get("exam_paper_id"),
+                "question_ids": [q["question_id"] for q in paper["questions"]],
+            }
+            _update(submitting=marker)
             # The service's state machine ensures an unknown POST is never resent.
             result = service.submit_round(course_key, kid)
             for _ in range(3):
@@ -397,9 +402,15 @@ def _execute_point(
                 confirmed = bank.confirm(question, entry, texts) if entry is not None else False
                 if question.get("question_type") == 3 and not confirmed:
                     unknown_fill_not_revealed = True
-            latest = result.get("high_mastery_now")
-            if latest is None:
-                return False, "服务器未返回可确认的掌握度", score
+            # The official *current* mastery is not the historical maximum.
+            # Old test/service fixtures may not yet expose mastery_after, but
+            # a present null mastery_after must never be treated as a score.
+            after = result.get("mastery_after")
+            latest = (after.get("mastery") if isinstance(after, dict)
+                      else result.get("high_mastery_now") if "mastery_after" not in result
+                      else None)
+            if type(latest) not in (int, float) or not 0 <= latest <= 100:
+                return False, "服务器未返回可确认的当前掌握度", score
             if score is not None and latest <= score:
                 stagnant += 1
             else:
@@ -445,9 +456,40 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
             _update(current={"knowledge_id": item["knowledge_id"],
                              "name": item["name"], "theme": item["theme"]})
             if item["knowledge_id"] in _STATUS.get("blocked", []):
-                _step(course_key, item, done=False,
-                      reason="上次交卷状态不确定，已保护该知识点不重复提交")
-                continue
+                pending = (_STATUS.get("pending_submissions") or {}).get(item["knowledge_id"])
+                verified = None
+                # Recover ONLY by authenticated readback. No openExam,
+                # saveAnswer or submit call is made for the old paper.
+                if (isinstance(pending, dict)
+                        and type(pending.get("exam_test_id")) is int
+                        and type(pending.get("exam_paper_id")) is int
+                        and isinstance(pending.get("question_ids"), list)):
+                    try:
+                        verified = service.verify_previous_submission(
+                            course_key, item["knowledge_id"],
+                            pending["exam_test_id"], pending["exam_paper_id"],
+                            pending["question_ids"],
+                        )
+                    except Exception:
+                        verified = None
+                if not (isinstance(verified, dict) and verified.get("submitted") is True
+                        and verified.get("grading_complete") is True
+                        and type(verified.get("mastery")) in (int, float)):
+                    _step(course_key, item, done=False,
+                          reason="上次提交的判分或掌握度仍待核验；不会重复交卷")
+                    _update(state="needs_attention", current=None,
+                            message="旧试卷未能完整核验，已保护整门课不再继续自动交卷")
+                    return
+                # Server confirmed both the prior POST and every grading
+                # response. Remove just this point's persisted block.
+                remaining_blocks = [
+                    kid for kid in _STATUS.get("blocked", [])
+                    if kid != item["knowledge_id"]
+                ]
+                remaining_pending = dict(_STATUS.get("pending_submissions") or {})
+                remaining_pending.pop(item["knowledge_id"], None)
+                _update(blocked=remaining_blocks, pending_submissions=remaining_pending)
+                item = dict(item, mastery=verified["mastery"])
             if item.get("free_exam"):
                 _step(course_key, item, done=False, reason="官方免考知识点")
                 continue
@@ -458,7 +500,10 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
             if value >= config["target"]:
                 _step(course_key, item, done=True, reason="服务器已达标", mastery=value)
                 continue
-            passed, reason, final_score = _execute_point(course_key, item, bank, config, deadline, api_key)
+            # Preserve one authenticated SDK session through this point instead
+            # of performing a fresh CAS exchange for every saved question.
+            with service.mastery_session_scope(course_key):
+                passed, reason, final_score = _execute_point(course_key, item, bank, config, deadline, api_key)
             _step(course_key, item, done=passed, reason=reason, mastery=final_score)
             if _STATUS.get("submitting") is not None:
                 # A POST might have been accepted by the server. Do not clear
@@ -468,7 +513,11 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
                 blocked = list(_STATUS.get("blocked", []))
                 if pending_id and pending_id not in blocked:
                     blocked.append(pending_id)
-                _update(state="needs_attention", blocked=blocked, current=None,
+                pending = dict(_STATUS.get("pending_submissions") or {})
+                if pending_id:
+                    pending[pending_id] = dict(_STATUS["submitting"])
+                _update(state="needs_attention", blocked=blocked,
+                        pending_submissions=pending, current=None,
                         message="交卷状态或判分尚未确认；保留待核验记录，已停止后续自动提交")
                 return
         _update(state="completed", current=None,
@@ -511,13 +560,19 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
         if _THREAD is not None and _THREAD.is_alive():
             raise service.MasteryError("MASTERY_AUTO_RUNNING")
         prior = _loaded()
-        blocked = list(prior.get("blocked", [])) if prior.get("course_key") == course_key else []
-        # A previous process may have died after the POST reached the server.
-        # Never blindly resubmit or create another paper for that point.
-        if prior.get("course_key") == course_key and isinstance(prior.get("submitting"), dict):
-            pending_id = prior["submitting"].get("knowledge_id")
-            if isinstance(pending_id, str) and pending_id not in blocked:
-                blocked.append(pending_id)
+        same_course = prior.get("course_key") == course_key
+        blocked = list(prior.get("blocked", [])) if same_course else []
+        pending = dict(prior.get("pending_submissions") or {}) if same_course else {}
+        # Preserve the original paper identifiers across restarts. A missing
+        # examPaperId / question IDs in an older record stays blocked rather
+        # than silently creating a replacement paper.
+        if same_course and isinstance(prior.get("submitting"), dict):
+            marker = prior["submitting"]
+            pending_id = marker.get("knowledge_id")
+            if isinstance(pending_id, str):
+                pending[pending_id] = dict(marker)
+                if pending_id not in blocked:
+                    blocked.append(pending_id)
         _STOP.clear()
         _RESUME.set()
         _STATUS.clear()
@@ -526,7 +581,8 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
             "state": "starting", "message": "正在启动", "config": config,
             "total": 0, "processed": 0, "done": 0, "skipped": 0,
             "ai_calls": 0, "ai_used": 0, "ai_errors": 0, "bank_hits": 0, "trials": 0,
-            "current": None, "submitting": None, "blocked": blocked, "tasks": [], "updated_at": _utc(),
+            "current": None, "submitting": None, "blocked": blocked,
+            "pending_submissions": pending, "tasks": [], "updated_at": _utc(),
         })
         _save(_STATUS.copy())
         _THREAD = threading.Thread(

@@ -20,7 +20,7 @@ const NON_VISUAL_FIELDS=new Set(["updated_at"]);
 const LABEL:Record<string,string>={
   idle:"未开始",starting:"准备中",running:"后台运行中",paused:"已暂停",
   stopping:"正在停止",stopped:"已停止",completed:"本次扫描完成",
-  error:"运行出错",interrupted:"上次任务中断",
+  error:"运行出错",interrupted:"上次任务中断",needs_attention:"需核验提交状态",
 };
 
 export function MasteryAutoPanel({courseKey,desktop}:{
@@ -193,6 +193,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     <p className="sf-mastery-auto-caption">{status.message||"启动后自动执行，不需要逐轮点击“再练一轮”。"}</p>
     {status.current&&<p className="sf-mastery-auto-current">
       当前：{status.current.theme} / {status.current.name}
+    </p>}
+    {(status.blocked?.length??0)>0&&<p className="sf-mastery-auto-caption" role="status">
+      {status.blocked?.length} 个知识点存在待核验旧试卷。再次开始只会先核验旧试卷状态；未确认前不会新建或提交其他练习。
     </p>}
     {status.submitting&&<p className="sf-mastery-auto-caption" role="status">
       有交卷操作需要核验：本程序不会对状态不确定的试卷自动重复提交。

@@ -460,7 +460,11 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
                 from studyflow.platforms.zhidao import zhs_mastery_auto as mastery_auto
                 data = mastery_auto.control(course_key, request.get("action"))
             elif operation == "zhidao.mastery.catalog":
-                data = mastery.read_catalog(course_key, with_mastery=request.get("with_mastery") is not False)
+                data = mastery.read_catalog(
+                    course_key,
+                    with_mastery=request.get("with_mastery") is not False,
+                    force_refresh=request.get("force_refresh") is True,
+                )
             elif operation == "zhidao.mastery.round.active":
                 data = mastery.active_round(course_key, kid)
             elif operation == "zhidao.mastery.round.start":

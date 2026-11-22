@@ -480,3 +480,85 @@ def test_sidecar_jsonl_start_then_status_uses_same_background_task(monkeypatch):
         release.set()
         if auto._THREAD:
             auto._THREAD.join(3)
+
+
+
+def test_restored_pending_paper_readback_allows_completion_without_another_post(monkeypatch):
+    point = {"knowledge_id": "1001", "name": "A", "theme": "章",
+             "mastery": 10, "free_exam": False}
+    marker = {"knowledge_id": "1001", "exam_test_id": 123,
+              "exam_paper_id": 456, "question_ids": [100]}
+    auto._STATUS.update({"course_key": COURSE, "state": "starting",
+                         "tasks": [], "blocked": ["1001"],
+                         "pending_submissions": {"1001": marker}})
+    monkeypatch.setattr(auto.service, "read_catalog", lambda *args, **kwargs:
+                        {"knowledge": [point], "course_name": "恢复"})
+    recovered = []
+    def verify(course_key, kid, exam_test_id, paper_id, question_ids):
+        recovered.append((course_key, kid, exam_test_id, paper_id, question_ids))
+        return {"submitted": True, "grading_complete": True, "mastery": 100}
+    monkeypatch.setattr(auto.service, "verify_previous_submission", verify)
+    monkeypatch.setattr(auto.service, "start_round", lambda *args: pytest.fail("should not create a new paper"))
+    monkeypatch.setattr(auto.service, "submit_round", lambda *args: pytest.fail("should never rePOST"))
+
+    auto._run(COURSE, {"target": 100, "max_rounds": 2,
+                       "max_minutes": 5, "stagnation_rounds": 2})
+    state = auto.status(COURSE)
+    assert state["state"] == "completed"
+    assert state["done"] == 1
+    assert state["blocked"] == []
+    assert state["pending_submissions"] == {}
+    assert recovered == [(COURSE, "1001", 123, 456, [100])]
+
+
+def test_unconfirmed_previous_paper_stops_entire_course_before_any_write(monkeypatch):
+    points = [{"knowledge_id": str(k), "name": str(k),
+               "theme": "章", "mastery": 5, "free_exam": False}
+              for k in (1001, 1002)]
+    marker = {"knowledge_id": "1001", "exam_test_id": 123,
+              "exam_paper_id": 456, "question_ids": [100]}
+    auto._STATUS.update({"course_key": COURSE, "state": "starting",
+                         "tasks": [], "blocked": ["1001"],
+                         "pending_submissions": {"1001": marker}})
+    monkeypatch.setattr(auto.service, "read_catalog", lambda *args, **kwargs:
+                        {"knowledge": points, "course_name": "恢复"})
+    monkeypatch.setattr(auto.service, "verify_previous_submission", lambda *args:
+                        {"submitted": True, "grading_complete": False, "mastery": None})
+    monkeypatch.setattr(auto.service, "start_round", lambda *args: pytest.fail("must not open a new paper"))
+    monkeypatch.setattr(auto.service, "submit_round", lambda *args: pytest.fail("must not submit"))
+    auto._run(COURSE, {"target": 100, "max_rounds": 2,
+                       "max_minutes": 5, "stagnation_rounds": 2})
+    state = auto.status(COURSE)
+    assert state["state"] == "needs_attention"
+    assert state["processed"] == 1
+    assert state["blocked"] == ["1001"]
+    assert state["tasks"][1]["state"] == "pending"
+
+
+def test_current_mastery_does_not_inherit_an_old_historical_high(monkeypatch):
+    point = {"knowledge_id": "1001", "name": "A", "theme": "章",
+             "mastery": 15, "free_exam": False}
+    auto._STATUS.update({"course_key": COURSE, "state": "running",
+                         "tasks": [{**point, "state": "pending", "rounds": 0, "reason": ""}]})
+    monkeypatch.setattr(auto.service, "active_round", lambda *args: None)
+    monkeypatch.setattr(auto.service, "start_round", lambda *args:
+                        {"exam_test_id": 123, "exam_paper_id": 456, "questions": [question()]})
+    monkeypatch.setattr(auto.service, "save_answer", lambda *args: None)
+    monkeypatch.setattr(auto.service, "check_saved_answers", lambda *args:
+                        {"complete": True, "answered": 1, "total": 1})
+    monkeypatch.setattr(auto.service, "submit_round", lambda *args:
+                        {"verification_pending": False,
+                         "graded": [{"questionId": 100, "isCorrect": True, "correctOptionIds": [11]}],
+                         "mastery_after": {"mastery": 20}, "high_mastery_now": 100})
+    bank = auto.AnswerBank()
+    try:
+        passed, reason, score = auto._execute_point(
+            COURSE, point, bank, {"target": 90, "max_rounds": 1,
+                                  "stagnation_rounds": 3, "max_minutes": 5},
+            auto.time.monotonic() + 5,
+        )
+    finally:
+        bank.close()
+    assert passed is False
+    assert score == 20
+    assert "最大轮次" in reason
