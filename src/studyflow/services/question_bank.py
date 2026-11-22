@@ -27,6 +27,8 @@ QuestionBankError = yanxi.QuestionBankError
 PROVIDERS: dict[str, dict[str, Any]] = {
     "yanxi": {
         "name": "言溪题库",
+        "homepage": "https://tk.enncy.cn/",
+        "quota_unit": "次",
         "lookup": yanxi.search,
         "check": yanxi_diagnostics.check,
         "validate_token": yanxi._valid_token,
@@ -123,7 +125,8 @@ def _write(data: dict[str, Any]) -> None:
 
 def _public(data: dict[str, Any]) -> dict[str, Any]:
     return {
-        "providers": [{"id": key, "name": item["name"], "description": item["description"]}
+        "providers": [{"id": key, "name": item["name"], "description": item["description"],
+                       "homepage": item.get("homepage"), "quota_unit": item.get("quota_unit", "次") }
                       for key, item in PROVIDERS.items()],
         "rotation_modes": {key: data.get("rotation_modes", {}).get(key, "fixed") for key in PROVIDERS},
         "tokens": [{"id": item["id"], "provider_id": item["provider_id"],
