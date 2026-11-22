@@ -35,6 +35,15 @@ const reference = await questionBankQuery("yanxi", {
 - 列表仅回显 Token 备注；输入框保存后清空。Windows DPAPI 继续加密保存密钥。
 - 新增 questionbank.tokens.import（provider_id、lines）与 questionbank.tokens.rotation（provider_id、mode）操作；旧的 add/select/remove/query 保持兼容。
 
+## Token 可用性与额度诊断
+
+- 已保存 Token 的折叠列表提供两个独立按钮：「检测是否可用」与「读取余量（可能扣 1 次）」。
+- 前者利用当前言溪服务返回的认证/参数错误信息判断是否识别该 Token。此方式来自既有客户端行为，**不是题库服务官方稳定的验证协议**；结果分「服务已识别 / 可能无效 / 无法确认 / 未检测」，网络错误不能当作无效。
+- 后者仅在用户主动点击时，先进行同样的验证，再尝试进行一次可能收费的题库查询，从响应 `data.times` 提取余额；若未返回，则余量显示「未知」，绝不伪造 0。
+- 普通题目查询如果直接得到 `data.times`，会将其作为最近一次已知余量缓存，不需要再做付费检查。保存 Token、打开设置、切换题库时不自动触发诊断。
+- 诊断时间、已知剩余次数等状态随 DPAPI 保险库保存；完整 Token、原始错误正文和响应 URL 不回传前端或写日志。误报不会自动删除凭据。
+- 当前仅言溪来源实现此实验性诊断，其他提供方需有各自的已验收状态/余额适配器。
+
 ## 多 Token 与存储
 
 - 采用 Windows 用户级 DPAPI 加密整个保险库：
