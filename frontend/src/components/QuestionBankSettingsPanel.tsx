@@ -1,4 +1,5 @@
-import {useEffect,useMemo,useRef,useState} from "react";
+import {useEffect,useMemo,useRef,useState,type MouseEvent} from "react";
+import {invoke} from "@tauri-apps/api/core";
 import {ChevronRight,ExternalLink,Plus,RefreshCw} from "lucide-react";
 import {
   friendlyBridgeError,questionBankCheckToken,questionBankImportTokens,questionBankList,
@@ -141,6 +142,12 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
   }
+  function openHomepage(event:MouseEvent<HTMLAnchorElement>,url:string){
+    event.preventDefault();setError("");
+    void invoke("studyflow_open_question_bank_site",{url}).catch(()=>{
+      if(mounted.current)setError("暂时无法打开题库官网，请检查系统默认浏览器。");
+    });
+  }
   function openProvider(id:string){
     setSelectedId(id);setTokenLines("");setError("");setNotice("");
   }
@@ -176,7 +183,8 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
           <div className="sf-qb-provider-main">
             <div className="sf-qb-provider-name"><strong>{provider.name}</strong>
               {provider.homepage&&<a href={provider.homepage} target="_blank"
-                rel="noopener noreferrer" aria-label={provider.name+" 官网"}><ExternalLink size={13}/>官网</a>}
+                rel="noopener noreferrer" aria-label={provider.name+" 官网"}
+                onClick={event=>openHomepage(event,provider.homepage||"")}><ExternalLink size={13}/>官网</a>}
             </div>
             <div className="sf-qb-provider-meta">
               <span>Token {stats.tokens}</span><span>可用 {stats.valid}</span>
@@ -199,9 +207,10 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
         <div className="sf-qb-detail-summary">
           <span>Token {selectedStats.tokens}</span><span>已识别可用 {selectedStats.valid}</span>
           <span>已知余额 {quotaLabel(selectedStats,selected.quota_unit||"次")}</span>
-          {selected.homepage&&<a href={selected.homepage} target="_blank" rel="noopener noreferrer">
-            <ExternalLink size={13}/>访问题库官网</a>}
+          {selected.homepage&&<a href={selected.homepage} target="_blank" rel="noopener noreferrer"
+            onClick={event=>openHomepage(event,selected.homepage||"")}><ExternalLink size={13}/>访问题库官网</a>}
         </div>
+        {error&&<p role="alert" className="sf-qb-error">{error}</p>}
         <div className="sf-qb-detail-toolbar">
           <label>Token 使用策略
             <select value={rotation} disabled={busy}
