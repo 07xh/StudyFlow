@@ -46,7 +46,6 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         })
       ]);
       setStatus(previous=>sameStatusSnapshot(previous,value,NON_VISUAL_FIELDS)?previous:value);
-      setError(previous=>previous?"":previous);
     }catch(cause){
       const message=friendlyBridgeError(cause);
       setError(previous=>previous===message?previous:message);
