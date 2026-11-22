@@ -232,6 +232,11 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
             && matches!(request.get("mode").and_then(|v| v.as_str()), Some("fixed" | "round_robin"))
             => Ok(()),
+        "questionbank.tokens.check"
+            if request.get("token_id").and_then(|v| v.as_str())
+                .is_some_and(|v| v.len() == 32 && v.bytes().all(|c| c.is_ascii_hexdigit()))
+            && request.get("include_quota").map_or(true, |v| v.is_boolean())
+            => Ok(()),
         "questionbank.tokens.select" | "questionbank.tokens.remove"
             if request.get("token_id").and_then(|v| v.as_str())
                 .is_some_and(|v| v.len() == 32 && v.bytes().all(|c| c.is_ascii_hexdigit()))
