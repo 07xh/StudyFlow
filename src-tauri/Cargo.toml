@@ -1,6 +1,6 @@
 [package]
 name = "studyflow"
-version = "0.1.1-rc.53"
+version = "0.1.1-rc.54"
 description = "StudyFlow Windows desktop shell"
 authors = ["StudyFlow contributors"]
 edition = "2021"

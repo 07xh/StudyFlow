@@ -15,6 +15,7 @@ async function renderStatus(state,progress){
   getLegacyStatus:async()=>({state,run_id:'1-2'}),getYuketangLiveProgress:async()=>progress};
  new Function('module','exports','require',code)(mod,mod.exports,name=>{
   if(name==='../legacyPlayback')return legacy;
+  if(name==='../statusSnapshot')return require('./helpers/load.cjs')('statusSnapshot.ts');
   if(name==='../taskRecovery')return {rememberTaskRecovery:()=>true,discardTaskRecovery:()=>{}};
   if(name==='./RunParameters')return require('./helpers/load.cjs')('components/RunParameters.tsx');
    if(name==='./ZhsTaskSettingsPanel')return {ZhsTaskSettingsPanel:()=>null};

@@ -1,4 +1,5 @@
-import {useCallback,useEffect,useMemo,useState} from "react";
+import {useCallback,useEffect,useMemo,useRef,useState} from "react";
+import {sameStatusSnapshot} from "../statusSnapshot";
 import {Pause,Play,RotateCcw,Square,CheckCircle2} from "lucide-react";
 import {
   masteryAutoControl,masteryAutoStart,masteryAutoStatus,friendlyBridgeError,
@@ -14,6 +15,8 @@ const IDLE:MasteryAutoStatus={
   state:"idle",total:0,processed:0,done:0,skipped:0,tasks:[],
 };
 const ACTIVE=new Set(["starting","running","paused","stopping"]);
+// Timestamps are diagnostic metadata, not a change to displayed task progress.
+const NON_VISUAL_FIELDS=new Set(["updated_at"]);
 const LABEL:Record<string,string>={
   idle:"未开始",starting:"准备中",running:"后台运行中",paused:"已暂停",
   stopping:"正在停止",stopped:"已停止",completed:"本次扫描完成",
@@ -24,35 +27,50 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   courseKey:string;desktop:boolean;
 }){
   const [status,setStatus]=useState<MasteryAutoStatus>(IDLE);
+  const latestStatus=useRef<MasteryAutoStatus>(IDLE);
+  const applyStatus=useCallback((value:MasteryAutoStatus)=>{
+    // Do not call React's state setter at all if the backend only changes
+    // its bookkeeping timestamp. This also protects a long knowledge list.
+    if(sameStatusSnapshot(latestStatus.current,value,NON_VISUAL_FIELDS))return;
+    latestStatus.current=value;
+    setStatus(value);
+  },[]);
   const [settings,setSettings]=useState<MasteryAutoSettings>(DEFAULT);
   const [busy,setBusy]=useState(false);
   const [aiKey,setAiKey]=useState("");
   const [error,setError]=useState("");
+  const statusInFlight=useRef(false);
   const refresh=useCallback(async()=>{
-    if(!desktop)return;
+    if(!desktop||statusInFlight.current)return;
+    statusInFlight.current=true;
+    let timeoutId:number|undefined;
     try{
-      setStatus(await masteryAutoStatus(courseKey));
+      // One native status read at a time. Without this guard, a slow sidecar
+      // queues extra calls every 2.5 s and makes the dialog feel frozen.
+      const value=await Promise.race<MasteryAutoStatus>([
+        masteryAutoStatus(courseKey),
+        new Promise<never>((_,reject)=>{
+          timeoutId=window.setTimeout(()=>reject(new Error("掌握度状态读取超时，可手动刷新。")),15000);
+        })
+      ]);
+      applyStatus(value);
     }catch(cause){
-      setError(friendlyBridgeError(cause));
+      const message=friendlyBridgeError(cause);
+      setError(previous=>previous===message?previous:message);
+    }finally{
+      if(timeoutId!==undefined)window.clearTimeout(timeoutId);
+      statusInFlight.current=false;
     }
-  },[courseKey,desktop]);
+  },[courseKey,desktop,applyStatus]);
 
   useEffect(()=>{
     if(!desktop)return;
-    let alive=true;
-    void masteryAutoStatus(courseKey)
-      .then(value=>{if(alive)setStatus(value);})
-      .catch(cause=>{if(alive)setError(friendlyBridgeError(cause));});
-    // Polling reads a local snapshot. It never triggers a new paper or submit.
-    const timer=window.setInterval(()=>{
-      void masteryAutoStatus(courseKey).then(value=>{
-        if(alive)setStatus(value);
-      }).catch(()=>{});
-    },2500);
-    // Node render tests must not be kept alive only by the status timer.
+    void refresh();
+    // Polling is read-only, single-flight, and skips unchanged React renders.
+    const timer=window.setInterval(()=>{void refresh();},2500);
     (timer as unknown as {unref?:()=>void}).unref?.();
-    return ()=>{alive=false;window.clearInterval(timer);};
-  },[courseKey,desktop]);
+    return ()=>window.clearInterval(timer);
+  },[desktop,refresh]);
 
   const running=ACTIVE.has(status.state);
   const work=status.state==="running"||status.state==="starting";
@@ -68,7 +86,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     setBusy(true);setError("");
     try{
       const options={...settings,...(["bank_ai","ai_first"].includes(settings.first_round_mode)?{api_key:aiKey.trim()}: {})};
-      setStatus(await masteryAutoStart(courseKey,options));
+      applyStatus(await masteryAutoStart(courseKey,options));
       setAiKey("");
     }catch(cause){
       setError(friendlyBridgeError(cause));
@@ -78,7 +96,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     if(!desktop||busy||!running)return;
     setBusy(true);setError("");
     try{
-      setStatus(await masteryAutoControl(courseKey,action));
+      applyStatus(await masteryAutoControl(courseKey,action));
     }catch(cause){
       setError(friendlyBridgeError(cause));
     }finally{setBusy(false);}

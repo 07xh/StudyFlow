@@ -1,3 +1,4 @@
+import {sameStatusSnapshot} from "../statusSnapshot";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
 import {CirclePlay,RefreshCw,Square} from "lucide-react";
@@ -98,7 +99,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
         })
       ]);
       if(revision!==statusRevision.current||actionInFlight.current)return;
-      setStatus(next);
+      setStatus(previous=>sameStatusSnapshot(previous,next)?previous:next);
       if(next.event&&next.positionSeconds!==null&&next.courseKey&&next.runId&&next.courseKey===selectedRef.current){
         const key=[next.runId,next.courseKey,next.event,next.positionSeconds,next.visible,next.observedAt].join(":");
         if(lastObservation.current!==key){
@@ -109,7 +110,10 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
     }catch(error){
       if(revision===statusRevision.current&&!actionInFlight.current){
         // Last observation is not live playback while native status is unknown.
-        setStatus(previous=>({...previous,positionSeconds:null,durationSeconds:null,observedAt:null}));
+        setStatus(previous=>{
+          const unknown={...previous,positionSeconds:null,durationSeconds:null,observedAt:null};
+          return sameStatusSnapshot(previous,unknown)?previous:unknown;
+        });
         setMessage(error instanceof Error&&error.message==="PLAYER_STATUS_TIMEOUT"
           ?"官方播放器状态查询超时；播放位置待重新读取。":playerError(error));
       }

@@ -1,4 +1,5 @@
 import {RunParameters} from "./RunParameters";
+import {sameStatusSnapshot} from "../statusSnapshot";
 import {ZhsQueuePanel} from "./ZhsQueuePanel";
 import {rememberTaskRecovery,discardTaskRecovery} from "../taskRecovery";
 import type {YuketangScope,YuketangSessionMarker} from "../bridge";
@@ -154,13 +155,13 @@ export function LegacyPlaybackPanel({
       if (platform==="zhidao" && next.state==="running" && next.course_id) {
         setSelection(previous => previous || next.course_id || "");
       }
-      setStatus(next);
+      setStatus(previous=>sameStatusSnapshot(previous,next)?previous:next);
       setStatusReadFailed(false);
       setMessage(previous => previous.startsWith("无法读取本地任务状态；") ? "" : previous);
       if (platform === "yuketang" && next.run_id) {
         try {
           const progress = await getYuketangLiveProgress(next.run_id);
-          if (requestId === latestStatusRequest.current && !taskActionInFlight.current && currentPlatform.current === platform) setYktProgress(progress);
+          if (requestId === latestStatusRequest.current && !taskActionInFlight.current && currentPlatform.current === platform) setYktProgress(previous=>sameStatusSnapshot(previous,progress)?previous:progress);
         } catch {
           if (requestId === latestStatusRequest.current && !taskActionInFlight.current && currentPlatform.current === platform) setYktProgress(null);
         }

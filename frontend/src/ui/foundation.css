@@ -96,7 +96,7 @@
   color:var(--text);
   background:linear-gradient(155deg,rgba(43,50,57,.94),rgba(31,37,43,.96));
   box-shadow:var(--soft-shadow);
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  /* Nearly opaque gradient: full-page background blur forces extra WebView compositing. */
 }
 .sf-shell:not(.dark) .main{background:linear-gradient(155deg,rgba(255,255,255,.97),rgba(245,249,246,.97))}
 .sf-shell .sf-header{
@@ -763,8 +763,7 @@
   color:var(--text);
   background:linear-gradient(160deg,rgba(48,56,64,.96),rgba(29,35,41,.97));
   box-shadow:0 14px 38px rgba(0,0,0,.22);
-  backdrop-filter:blur(22px);
-  -webkit-backdrop-filter:blur(22px);
+  /* Sticky, scrolling sidebar uses its gradient instead of a GPU-heavy blur layer. */
 }
 .sf-shell:not(.dark) .sf-floating-nav{
   background:linear-gradient(160deg,rgba(255,255,255,.98),rgba(239,246,241,.98));
@@ -1455,8 +1454,7 @@
   border-radius:19px;
   background:linear-gradient(155deg,rgba(43,50,57,.94),rgba(31,37,43,.96));
   box-shadow:var(--soft-shadow);
-  backdrop-filter:blur(22px);
-  -webkit-backdrop-filter:blur(22px);
+  /* Header is effectively opaque; avoid a second full-width backdrop blur. */
 }
 .sf-shell:not(.dark) .sf-workspace-header{
   background:linear-gradient(155deg,rgba(255,255,255,.98),rgba(245,249,246,.97));
@@ -2262,7 +2260,8 @@
   content:"";position:absolute;top:0;bottom:0;width:30%;left:-30%;border-radius:99px;
   background:var(--accent);opacity:.50;animation:sf-zhs-progress-wait 1.8s ease-in-out infinite;
 }
-@keyframes sf-zhs-progress-wait{from{left:-30%}to{left:100%}}
+/* Transform animation avoids layout on every frame of an indeterminate task. */
+@keyframes sf-zhs-progress-wait{from{transform:translateX(0)}to{transform:translateX(433.333%)}}
 @media(prefers-reduced-motion:reduce){.sf-shell .sf-zhs-progress-track.is-indeterminate::after{animation:none;left:0;opacity:.24}}
 .sf-shell .sf-zhs-now-playing .sf-zhs-now-footnote{font-size:11px;color:var(--muted);line-height:1.45}
 .sf-shell .sf-zhs-diagnostics{
