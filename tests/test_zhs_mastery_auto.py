@@ -610,3 +610,23 @@ def test_course_snapshot_migrates_legacy_last_run_file():
 def test_course_journal_rejects_unsafe_file_name():
     with pytest.raises(ValueError):
         auto._course_status_path("../" + "a" * 64)
+
+
+
+def test_new_run_restores_own_course_marker_not_last_opened_course(monkeypatch):
+    """The latest unrelated course must not hide an older unresolved POST."""
+    course_b = "b" * 64
+    marker = {"knowledge_id": "1001", "exam_test_id": 31,
+              "exam_paper_id": 41, "question_ids": [100]}
+    auto._save({"course_key": COURSE, "state": "needs_attention",
+                "submitting": marker, "blocked": ["1001"],
+                "pending_submissions": {"1001": marker}})
+    auto._save({"course_key": course_b, "state": "completed",
+                "submitting": None, "blocked": [], "pending_submissions": {}})
+    monkeypatch.setattr(auto, "_run", lambda *args: None)
+    resumed = auto.start(COURSE)
+    auto._THREAD.join(1)
+    assert resumed["blocked"] == ["1001"]
+    assert resumed["pending_submissions"]["1001"] == marker
+    assert resumed["submitting"] is None
+    assert auto._course_status_path(course_b).exists()
