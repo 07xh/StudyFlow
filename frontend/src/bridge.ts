@@ -60,6 +60,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "updates.check"; current_version: string}
   | {id: string; version: 1; operation: "updates.download"; current_version: string; release_version: string}
   | {id: string; version: 1; operation: "updates.changelog"; current_version: string; previous_version?: string; history: boolean}
+  | {id: string; version: 1; operation: "questionbank.yanxi.status" | "questionbank.yanxi.clear"}
+  | {id: string; version: 1; operation: "questionbank.yanxi.save"; token:string}
+  | {id: string; version: 1; operation: "questionbank.yanxi.query"; title:string; options:string; question_type:string}
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
@@ -375,6 +378,19 @@ export function friendlyUpdateError(value: unknown): string {
     case "BRIDGE_START_FAILED":
     case "BRIDGE_PROTOCOL_FAILED":
     case "BRIDGE_PROCESS_FAILED":
+    case "YANXI_WINDOWS_ONLY": return "言溪本地 Token 存储仅支持 Windows EXE。";
+    case "YANXI_INVALID_TOKEN": return "言溪 Token 格式不正确，请检查后重新输入。";
+    case "YANXI_TOKEN_STORAGE_FAILED": return "无法读取或保存本机加密 Token，请重新配置。";
+    case "YANXI_NOT_CONFIGURED": return "请先配置言溪题库 Token。";
+    case "YANXI_INVALID_QUERY": return "请输入有效的题目内容，单题不超过 4000 字。";
+    case "YANXI_QUOTA_EXHAUSTED": return "言溪 Token 查询次数不足，请查看言溪控制台。";
+    case "YANXI_TOKEN_REJECTED": return "言溪服务端未接受 Token，请核对 Token 和权限。";
+    case "YANXI_RATE_LIMITED": return "言溪服务限制了查询频率，请稍后手动重试。";
+    case "YANXI_REDIRECT_BLOCKED": return "言溪接口发生重定向，为保护 Token 已拒绝转发。";
+    case "YANXI_NETWORK_FAILED": return "连接言溪题库失败，请检查网络。";
+    case "YANXI_BAD_RESPONSE": return "言溪接口响应格式异常，未采用该结果。";
+    case "YANXI_UPSTREAM_UNAVAILABLE": return "言溪查询服务暂时不可用。";
+    case "YANXI_UNAVAILABLE": return "言溪本地适配器不可用，请检查安装包版本。";
     case "BRIDGE_NOT_READY":
     case "BRIDGE_RESPONSE_INVALID": return friendlyBridgeError(value);
     default: return "更新操作失败，原因暂未识别。可从学序 GitHub 官方发布页手动下载安装。";
@@ -695,4 +711,22 @@ export function masteryAutoStatus(courseKey: string): Promise<MasteryAutoStatus>
 }
 export function masteryAutoControl(courseKey: string, action: "pause"|"resume"|"stop"): Promise<MasteryAutoStatus> {
   return request<MasteryAutoStatus>({operation:"zhidao.mastery.auto.control",course_key:courseKey,action});
+}
+
+/** Optional third-party lookup; external results must never be marked as ZHS-verified. */
+export type YanxiLookupResult={
+  found:boolean;answer:string;remaining:number|null;status:"matched"|"not_found";
+  source?: "yanxi_external_unverified";
+};
+export function yanxiStatus():Promise<{configured:boolean}>{
+  return request({operation:"questionbank.yanxi.status"});
+}
+export function yanxiSaveToken(token:string):Promise<{configured:boolean}>{
+  return request({operation:"questionbank.yanxi.save",token});
+}
+export function yanxiClearToken():Promise<{configured:boolean}>{
+  return request({operation:"questionbank.yanxi.clear"});
+}
+export function yanxiQuery(title:string,options="",question_type=""):Promise<YanxiLookupResult>{
+  return request<YanxiLookupResult>({operation:"questionbank.yanxi.query",title,options,question_type});
 }
