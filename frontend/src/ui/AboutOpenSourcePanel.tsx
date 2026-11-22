@@ -7,11 +7,12 @@ import "./aboutOpenSource.css";
 
 type Section="overview"|"source";
 type DocumentId="terms"|"privacy"|"license"|"source";
-type SourceKind="repository"|"releases"|"zhs"|"chaoxing";
+type SourceKind="repository"|"releases"|"zhs"|"yuketang"|"chaoxing";
 const sourceLinks:Readonly<Record<SourceKind,string>>={
   repository:"https://github.com/07xh/StudyFlow",
   releases:"https://github.com/07xh/StudyFlow/releases",
   zhs:"https://github.com/pjm314159/zhs",
+  yuketang:"https://github.com/07xh/yuketang-heartbeat",
   chaoxing:"https://github.com/Samueli924/chaoxing",
 };
 const licenses=[
@@ -23,6 +24,7 @@ const licenses=[
 const upstream=[
   {kind:"repository" as const,title:"StudyFlow 源码",detail:"应用、前端与构建代码",note:"项目主仓库"},
   {kind:"zhs" as const,title:"ZHS",detail:"知到原版 Python 项目",note:"上游 · GPL-3.0"},
+  {kind:"yuketang" as const,title:"雨课堂原版项目",detail:"07xh/yuketang-heartbeat · 原版任务与配置来源",note:"原版源码"},
   {kind:"chaoxing" as const,title:"Samueli924/chaoxing",detail:"学习通实现的源码来源记录",note:"上游 · GPL v3"},
 ];
 
