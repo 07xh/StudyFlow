@@ -127,7 +127,7 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
         <label>批量导入 Token（每行一条，同一题库共用此配置）
           <textarea className="sf-qb-secret-lines" rows={5} maxLength={65000}
             autoComplete="off" spellCheck={false} value={tokenLines}
-            disabled={busy||loading} placeholder={"第 1 条 Token\\n第 2 条 Token\\n第 3 条 Token"}
+            disabled={busy||loading} placeholder={"第 1 条 Token\n第 2 条 Token\n第 3 条 Token"}
             onChange={e=>setTokenLines(e.target.value)}/>
         </label>
         <button type="button" disabled={busy||loading||!tokenLines.trim()}
