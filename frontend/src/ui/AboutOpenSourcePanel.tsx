@@ -1,8 +1,9 @@
-import {useEffect,useRef,useState,type MouseEvent} from "react";
+import {useEffect,useId,useMemo,useRef,useState,type KeyboardEvent,type MouseEvent,type ReactNode} from "react";
 import {getVersion} from "@tauri-apps/api/app";
 import {invoke} from "@tauri-apps/api/core";
-import {ArrowLeft,BookOpen,CheckCircle2,ChevronRight,ExternalLink,FileCode2,FileText,Globe2,Info,Layers3,Scale,ShieldCheck} from "lucide-react";
+import {ArrowLeft,BookOpen,CheckCircle2,ChevronLeft,ChevronRight,ExternalLink,FileCode2,FileText,Globe2,Info,Layers3,Scale,Search,ShieldCheck} from "lucide-react";
 import {friendlyBridgeError,type ZhidaoDocument} from "../bridge";
+import {findLegalMatches,LEGAL_SEARCH_MAX_HIGHLIGHTS} from "./legalDocumentSearch";
 import "./aboutOpenSource.css";
 
 type Section="overview"|"source";
@@ -17,7 +18,7 @@ const sourceLinks:Readonly<Record<SourceKind,string>>={
 };
 const licenses=[
   {id:"license" as const,title:"GNU GPL v3 开源许可",detail:"完整许可证正文",icon:Scale},
-  {id:"source" as const,title:"原版源码与来源",detail:"知到原版及对应源码说明",icon:FileCode2},
+  {id:"source" as const,title:"原版源码与来源",detail:"知到、雨课堂、学习通及许可来源登记",icon:FileCode2},
   {id:"terms" as const,title:"使用条款与第三方声明",detail:"产品与平台之间的关系",icon:FileText},
   {id:"privacy" as const,title:"隐私政策与数据说明",detail:"本机数据和凭据的处理方式",icon:ShieldCheck},
 ];
@@ -33,21 +34,41 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
   desktop:boolean;onOpenDeveloper:()=>void;
 }){
   const [section,setSection]=useState<Section>("overview");
-  const [version,setVersion]=useState<string|null>(null);
+  const [version,setVersion]=useState<string|undefined>(undefined);
   const [viewer,setViewer]=useState<ZhidaoDocument|null>(null);
   const [reading,setReading]=useState<DocumentId|null>(null);
   const [error,setError]=useState("");
   const [linkError,setLinkError]=useState("");
+  const [documentQuery,setDocumentQuery]=useState("");
+  const [activeMatch,setActiveMatch]=useState(0);
+  const searchId=useId(),overviewTabId=useId(),sourceTabId=useId(),overviewPanelId=useId(),sourcePanelId=useId();
+  const tabRefs=useRef<Array<HTMLButtonElement|null>>([]);
   const requestRevision=useRef(0);
   const previousDocument=useRef<DocumentId|null>(null);
   const backButton=useRef<HTMLButtonElement|null>(null);
   const root=useRef<HTMLElement|null>(null);
+  const matches=useMemo(()=>findLegalMatches(viewer?.content??"",documentQuery),[viewer?.content,documentQuery]);
+  const highlighted=useMemo<ReactNode>(()=>{
+    if(!viewer||matches.positions.length===0)return viewer?.content??"";
+    const spans:ReactNode[]=[];
+    let offset=0;
+    matches.positions.forEach((hit,index)=>{
+      spans.push(viewer.content.slice(offset,hit.start));
+      spans.push(<mark key={index} data-legal-match={index}
+        className={index===activeMatch?"sf-about-match-active":undefined}>
+        {viewer.content.slice(hit.start,hit.end)}
+      </mark>);
+      offset=hit.end;
+    });
+    spans.push(viewer.content.slice(offset));
+    return spans;
+  },[viewer,matches,activeMatch]);
 
   useEffect(()=>{
     if(!desktop)return;
     let active=true;
     void getVersion().then(value=>{if(active)setVersion(value);})
-      .catch(()=>{if(active)setVersion(null);});
+      .catch(()=>{if(active)setVersion("");});
     return ()=>{active=false;};
   },[desktop]);
   useEffect(()=>()=>{requestRevision.current+=1;},[]);
@@ -57,6 +78,12 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
     return ()=>window.cancelAnimationFrame(frame);
   },[viewer]);
 
+  useEffect(()=>{
+    if(!viewer||!documentQuery.trim()||!matches.positions[activeMatch])return;
+    root.current?.querySelector<HTMLElement>(`mark[data-legal-match="${activeMatch}"]`)
+      ?.scrollIntoView?.({block:"center",behavior:"auto"});
+  },[viewer,documentQuery,activeMatch,matches]);
+
   function scrollTop(){
     const container=root.current?.closest(".sf-global-settings-content");
     if(container)container.scrollTop=0;
@@ -64,13 +91,26 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
   function switchSection(next:Section){
     requestRevision.current+=1;
     setSection(next);setViewer(null);setReading(null);setError("");setLinkError("");
+    setDocumentQuery("");setActiveMatch(0);
     scrollTop();
+  }
+  function onTabKey(event:KeyboardEvent<HTMLButtonElement>,current:Section){
+    let next:Section|undefined;
+    if(event.key==="Home")next="overview";
+    else if(event.key==="End")next="source";
+    else if(event.key==="ArrowRight"||event.key==="ArrowLeft")
+      next=current==="overview"?"source":"overview";
+    if(!next)return;
+    event.preventDefault();
+    switchSection(next);
+    tabRefs.current[next==="overview"?0:1]?.focus();
   }
   async function openDocument(id:DocumentId){
     if(!desktop||reading)return;
     const revision=++requestRevision.current;
     previousDocument.current=id;
     setReading(id);setError("");setViewer(null);
+    setDocumentQuery("");setActiveMatch(0);
     try{
       const data=await invoke<ZhidaoDocument>("studyflow_read_document",{documentId:id});
       if(revision!==requestRevision.current)return;
@@ -87,6 +127,7 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
   function closeDocument(){
     requestRevision.current+=1;
     setViewer(null);setReading(null);setError("");
+    setDocumentQuery("");setActiveMatch(0);
     scrollTop();
     const previous=previousDocument.current;
     if(typeof window!=="undefined")window.requestAnimationFrame(()=>{
@@ -111,22 +152,27 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
         <h2>学序 <span>StudyFlow</span></h2>
         <p>把课程信息、学习任务和进度核验集中在同一个桌面工作台。</p>
       </div>
-      <span className="sf-about-version" aria-label="当前版本">{version?"v"+version:desktop?"版本读取中":"Windows 桌面端"}</span>
+      <span className="sf-about-version" aria-label="当前版本">{!desktop?"Windows 桌面端":version===undefined?"读取版本中":version?"v"+version:"版本暂不可用"}</span>
     </header>
 
     <div className="sf-about-tabs" role="tablist" aria-label="关于页面分类">
-      <button type="button" role="tab" aria-selected={section==="overview"}
+      <button ref={element=>{tabRefs.current[0]=element;}} type="button" role="tab"
+        id={overviewTabId} aria-controls={overviewPanelId} tabIndex={section==="overview"?0:-1}
+        aria-selected={section==="overview"} onKeyDown={event=>onTabKey(event,"overview")}
         className={section==="overview"?"active":""} onClick={()=>switchSection("overview")}>
         <Info size={15}/>产品概览
       </button>
-      <button type="button" role="tab" aria-selected={section==="source"}
+      <button ref={element=>{tabRefs.current[1]=element;}} type="button" role="tab"
+        id={sourceTabId} aria-controls={sourcePanelId} tabIndex={section==="source"?0:-1}
+        aria-selected={section==="source"} onKeyDown={event=>onTabKey(event,"source")}
         className={section==="source"?"active":""} onClick={()=>switchSection("source")}>
         <BookOpen size={15}/>开源与许可
       </button>
     </div>
 
     {viewer
-      ?<section className="sf-about-reader" aria-label="法律文档阅读"
+      ?<section className="sf-about-reader" role="tabpanel" id={sourcePanelId}
+        aria-labelledby={sourceTabId} aria-label="法律文档阅读"
         onKeyDown={event=>{
           if(event.key==="Escape"){event.preventDefault();event.stopPropagation();closeDocument();}
         }}>
@@ -135,10 +181,34 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
             onClick={closeDocument}><ArrowLeft size={15}/>返回开源与许可</button>
           <h3>{viewer.title}</h3>
         </div>
-        <pre className="sf-about-document-text">{viewer.content}</pre>
+        <div className="sf-about-search" role="search" aria-label="在法律文档中查找">
+          <label htmlFor={searchId}><Search size={15}/>文内查找</label>
+          <input id={searchId} type="search" value={documentQuery} maxLength={80}
+            placeholder="查找关键词、协议条款或项目名"
+            onChange={event=>{setDocumentQuery(event.currentTarget.value);setActiveMatch(0);}}/>
+          <span className="sf-about-search-count" role="status" aria-live="polite">
+            {!documentQuery.trim()?"输入关键词":matches.total===0?"没有匹配":
+              matches.total>matches.positions.length
+                ?`第 ${activeMatch+1} / ${matches.positions.length} 处（共 ${matches.total} 处，仅定位前 ${LEGAL_SEARCH_MAX_HIGHLIGHTS} 处）`
+                :`第 ${activeMatch+1} / ${matches.total} 处`}
+          </span>
+          <div className="sf-about-search-nav">
+            <button type="button" aria-label="上一处匹配" title="上一处匹配"
+              disabled={!matches.positions.length}
+              onClick={()=>setActiveMatch(current=>(current-1+matches.positions.length)%matches.positions.length)}>
+              <ChevronLeft size={16}/>
+            </button>
+            <button type="button" aria-label="下一处匹配" title="下一处匹配"
+              disabled={!matches.positions.length}
+              onClick={()=>setActiveMatch(current=>(current+1)%matches.positions.length)}>
+              <ChevronRight size={16}/>
+            </button>
+          </div>
+        </div>
+        <pre className="sf-about-document-text">{highlighted}</pre>
       </section>
       :section==="overview"
-      ?<div className="sf-about-overview" role="tabpanel">
+      ?<div className="sf-about-overview" role="tabpanel" id={overviewPanelId} aria-labelledby={overviewTabId}>
         <section className="sf-about-section">
           <h3>关于项目</h3>
           <p>StudyFlow 是独立开发的 Windows 学习助手，整合知到、雨课堂、学习通与 U校园的相关功能。各平台的本地任务状态与服务器核验结果分别展示，不将本地执行等同于官方完成记录。</p>
@@ -166,7 +236,7 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
         </section>
         <p className="sf-about-disclaimer">独立第三方项目，不代表相关教学平台官方。开源项目来源和许可证详见「开源与许可」。</p>
       </div>
-      :<div className="sf-about-source" role="tabpanel">
+      :<div className="sf-about-source" role="tabpanel" id={sourcePanelId} aria-labelledby={sourceTabId}>
         <section className="sf-about-section">
           <div className="sf-about-section-heading">
             <h3>源代码与第三方来源</h3><span>保留出处与许可</span>
