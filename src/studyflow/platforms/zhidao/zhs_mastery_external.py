@@ -93,7 +93,7 @@ def convert(question: dict[str, Any], answer: Any) -> tuple[Any, str, list[str]]
             identity, [label for _, label in selected])
 
 
-def suggest(question: dict[str, Any], provider_id: str, token_id: str) -> tuple[Any, str, list[str]] | None:
+def suggest(question: dict[str, Any], provider_id: str, token_id: str | None) -> tuple[Any, str, list[str]] | None:
     """One user-authorized lookup; not a submission or official confirmation."""
     response = question_bank.query_question(provider_id, payload(question), token_id)
     if not response.get("found"):
