@@ -35,12 +35,14 @@ def clean(tmp_path, monkeypatch):
         auto._STATUS.clear()
         auto._THREAD = None
         auto._STOP.clear()
+        auto._PAUSE_REQUEST.clear()
         auto._RESUME.set()
     yield
     with auto._LOCK:
         auto._STATUS.clear()
         auto._THREAD = None
         auto._STOP.clear()
+        auto._PAUSE_REQUEST.clear()
         auto._RESUME.set()
 
 
@@ -221,7 +223,8 @@ def test_pause_stop_signals_do_not_reissue_submission(monkeypatch):
     monkeypatch.setattr(auto,"_run",block_worker)
     auto.start(COURSE)
     assert entered.wait(1)
-    assert auto.control(COURSE,"pause")["state"]=="paused"
+    assert auto.control(COURSE,"pause")["state"]=="pausing"
+    assert auto._PAUSE_REQUEST.is_set()
     assert auto.control(COURSE,"resume")["state"]=="running"
     assert auto.control(COURSE,"stop")["state"]=="stopping"
     release.set()
