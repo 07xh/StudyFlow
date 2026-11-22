@@ -64,6 +64,7 @@ const reference = await questionBankQuery("yanxi", {
   先加密写入新保险库，确认成功后再删除旧文件。
 - 可按来源选择固定或轮流 Token，但不会因配额或限流自动重复请求。
 - 列表 API 只返回提供方、Token ID、备注和默认状态，永不回显明文 Token。
+- 通用题库查询会校验适配器返回的 `found`、`answer`、`status` 与 `remaining`，仅向 IPC 输出稳定字段和共享服务生成的来源标识。未定义的调试字段、原始响应和适配器提供的任意来源字符串均不透传；不符合标准的结果以 `QUESTIONBANK_BAD_RESPONSE` 结束。
 - 题目/答案不写入保险库；没有云端同步，也不需要 Cloudflare。
 - 此 Windows 用户身份下运行的其他本地进程仍可能访问用户级 DPAPI 数据；不是防恶意程序隔离技术。
 
