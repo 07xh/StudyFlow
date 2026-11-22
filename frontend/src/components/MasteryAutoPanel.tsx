@@ -47,6 +47,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const [chapters,setChapters]=useState<Array<{index:number;name:string;count:number}>>([]);
   const [chapterLoading,setChapterLoading]=useState(false);
   const [chapterError,setChapterError]=useState("");
+  const [detailsOpen,setDetailsOpen]=useState(false);
   const [error,setError]=useState("");
   const statusInFlight=useRef(false);
   const refresh=useCallback(async()=>{
@@ -177,171 +178,289 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   };
 
   if(!desktop)return null;
-  return <section className="sf-mastery-auto" aria-label="自动完成全课程掌握度">
-    <div className="sf-mastery-auto-heading">
+  return <section className="sf-mastery-auto" aria-label="知到自动掌握度工作台">
+    <header className="sf-mastery-auto-heading">
       <div>
-        <h4>全课程自动掌握度</h4>
-        <p>一键扫描全部章节知识点，未达标自动开新卷、保存作答、提交并核对官方掌握度，达标后继续下一个。纯 HTTP、无独立窗口，AI 是否参与由首轮策略决定。</p>
+        <span className="sf-mastery-auto-eyebrow">知到 AI · 章节掌握度</span>
+        <h4>自动掌握度工作台</h4>
+        <p>选择执行章节与答题策略，右侧实时查看知识点、轮次和后台状态。</p>
       </div>
-      <strong className="sf-mastery-auto-state" aria-live="polite">{LABEL[status.state]??status.state}</strong>
+      <strong className={"sf-mastery-auto-state is-"+status.state} aria-live="polite">
+        {LABEL[status.state]??status.state}
+      </strong>
+    </header>
+
+    <div className="sf-mastery-auto-layout">
+      <div className="sf-mastery-auto-config" aria-label="任务配置">
+        <section className="sf-mastery-auto-card" aria-label="执行范围">
+          <div className="sf-mastery-auto-card-heading">
+            <strong><Layers3 size={15}/> 01 · 执行范围</strong>
+            <button type="button" className="secondary sf-mastery-auto-mini"
+              disabled={running||busy||chapterLoading} onClick={()=>void reloadChapters()}>
+              <RefreshCw size={12}/>刷新章节
+            </button>
+          </div>
+          <div className="sf-mastery-auto-scope-options" role="group" aria-label="选择处理章节范围">
+            {([
+              ["all","全部章节"],["single","只做一章"],
+              ["first_n","前 N 章"],["selected","自选章节"],
+            ] as const).map(([mode,label])=><button type="button" key={mode}
+              className={scopeMode===mode?"is-selected":""}
+              aria-pressed={scopeMode===mode} disabled={running||busy}
+              onClick={()=>setSettings(previous=>({...previous,scope_mode:mode}))}>
+              {label}
+            </button>)}
+          </div>
+          {scopeMode==="first_n"&&<label className="sf-mastery-auto-inline-field">从第一章开始，依次处理
+            <input type="number" min={1} max={Math.max(1,chapters.length)}
+              disabled={running||busy||chapterLoading} value={settings.chapter_count??1}
+              onChange={event=>setSettings(previous=>({...previous,
+                chapter_count:Number(event.target.value)}))}/>
+            章
+          </label>}
+          {scopeMode==="single"&&<label className="sf-mastery-auto-field">
+            指定一章
+            <select disabled={running||busy||chapterLoading||!chapters.length}
+              value={selectedIndices[0]??""}
+              onChange={event=>setSettings(previous=>({...previous,
+                chapter_indices:[Number(event.target.value)]}))}>
+              {!chapters.length&&<option value="">暂无章节目录</option>}
+              {chapters.map(ch=><option key={ch.index} value={ch.index}>
+                第{ch.index}章 · {ch.name}（{ch.count}知识点）
+              </option>)}
+            </select>
+          </label>}
+          {scopeMode==="selected"&&<div className="sf-mastery-auto-chapter-picker" role="group"
+              aria-label="自定义章节">
+            {chapters.map(ch=><label key={ch.index}>
+              <input type="checkbox" disabled={running||busy} checked={selectedIndices.includes(ch.index)}
+                onChange={event=>setSettings(previous=>{
+                  const original=previous.chapter_indices||[];
+                  const next=event.target.checked
+                    ?[...original,ch.index].sort((a,b)=>a-b)
+                    :original.filter(index=>index!==ch.index);
+                  return {...previous,chapter_indices:next};
+                })}/>
+              <span>第{ch.index}章 · {ch.name}</span>
+              <small>{ch.count} 点</small>
+            </label>)}
+          </div>}
+          <p className="sf-mastery-auto-scope-summary">
+            {chapterLoading?"正在只读加载章节…":chapterError?"章节目录读取失败":
+              chapters.length? `本次选择 ${scopedChapters.length}/${chapters.length} 章 · ${selectedCount} 个知识点`
+                :"尚未加载到章节目录"}
+          </p>
+          {chapterError&&<p className="sf-mastery-auto-error" role="alert">{chapterError}</p>}
+          {missingScope&&<p className="sf-mastery-auto-error">请先选择有效章节，再开始任务。</p>}
+        </section>
+
+        <section className="sf-mastery-auto-card" aria-label="答题方案">
+          <div className="sf-mastery-auto-card-heading">
+            <strong><BookOpen size={15}/> 02 · 答题策略</strong>
+          </div>
+          <label className="sf-mastery-auto-field">首轮处理方式
+            <select disabled={running||busy} value={settings.first_round_mode}
+              onChange={event=>setSettings(previous=>({...previous,
+                first_round_mode:event.target.value as MasteryAutoSettings["first_round_mode"]}))}>
+              <option value="bank_only">本地已验证题库优先 · 未知题有界尝试</option>
+              <option value="bank_ai">已验证题库 → 外部题库 → AI</option>
+              <option value="ai_first">首轮 AI 优先 · 后续使用已验证答案</option>
+              <option value="arbitrary_first">首轮随意作答 · 根据官方判分继续</option>
+            </select>
+          </label>
+          {["bank_ai","ai_first"].includes(settings.first_round_mode)&&<div className="sf-mastery-auto-two-fields">
+            <label className="sf-mastery-auto-field">DeepSeek API Key（仅本次）
+              <input type="password" autoComplete="off" disabled={running||busy}
+                value={aiKey} placeholder="输入 API Key"
+                onChange={event=>setAiKey(event.target.value)}/>
+            </label>
+            <label className="sf-mastery-auto-field">AI 调用上限
+              <input type="number" min={1} max={100} disabled={running||busy}
+                value={settings.max_ai_calls}
+                onChange={event=>update("max_ai_calls",Number(event.target.value))}/>
+            </label>
+          </div>}
+          <div className="sf-mastery-auto-separator"/>
+          <label className="sf-mastery-auto-switch">
+            <input type="checkbox" disabled={running||busy}
+              checked={Boolean(settings.use_external_bank)}
+              onChange={event=>setSettings(previous=>({...previous,
+                use_external_bank:event.target.checked}))}/>
+            <span><strong>自动调用共享题库</strong><small>本地已验证答案未命中时使用，不会自动轮换 Token</small></span>
+          </label>
+          {settings.use_external_bank&&<>
+            <div className="sf-mastery-auto-two-fields">
+              <label className="sf-mastery-auto-field">题库
+                <select disabled={running||busy} value={settings.external_provider_id||""}
+                  onChange={event=>{
+                    const provider=event.target.value;
+                    const chosen=bankState.tokens.find(t=>t.provider_id===provider&&t.active)
+                      ||bankState.tokens.find(t=>t.provider_id===provider);
+                    setSettings(previous=>({...previous,external_provider_id:provider,
+                      external_token_id:chosen?.id||""}));
+                  }}>
+                  {bankState.providers.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+              <label className="sf-mastery-auto-field">本次使用 Token
+                <select value={settings.external_token_id||""}
+                  disabled={running||busy||!configuredBankTokens.length}
+                  onChange={event=>setSettings(previous=>({...previous,
+                    external_token_id:event.target.value}))}>
+                  {!configuredBankTokens.length&&<option value="">暂无 Token</option>}
+                  {configuredBankTokens.map(item=><option key={item.id} value={item.id}>
+                    {item.label}{item.active?"（默认）":""}
+                  </option>)}
+                </select>
+              </label>
+            </div>
+            <div className="sf-mastery-auto-two-fields">
+              <label className="sf-mastery-auto-field">外部查询次数上限
+                <input type="number" min={1} max={200} disabled={running||busy}
+                  value={settings.max_external_calls??40}
+                  onChange={event=>update("max_external_calls",Number(event.target.value))}/>
+              </label>
+              <button className="secondary sf-mastery-auto-refresh-bank" type="button"
+                disabled={busy||running} onClick={()=>void reloadBanks()}>
+                <RefreshCw size={12}/>刷新 Token
+              </button>
+            </div>
+            {missingExternalToken&&<p className="sf-mastery-auto-error">请先到「设置 → 题库与搜题」保存并选择 Token。</p>}
+            {bankError&&<p className="sf-mastery-auto-error" role="alert">{bankError}</p>}
+            <p className="sf-mastery-auto-note">外部查询会发送题干、选项和所选 Token，可能消耗额度；结果以知到官方判分为准。</p>
+          </>}
+        </section>
+
+        <section className="sf-mastery-auto-card" aria-label="运行限制">
+          <div className="sf-mastery-auto-card-heading"><strong>03 · 运行限制</strong></div>
+          <div className="sf-mastery-auto-two-fields">
+            <label className="sf-mastery-auto-field">目标分数
+              <input type="number" min={1} max={100} disabled={running||busy}
+                value={settings.target} onChange={event=>update("target",Number(event.target.value))}/>
+            </label>
+            <label className="sf-mastery-auto-field">每知识点最多轮次
+              <input type="number" min={1} max={30} disabled={running||busy}
+                value={settings.max_rounds} onChange={event=>update("max_rounds",Number(event.target.value))}/>
+            </label>
+            <label className="sf-mastery-auto-field">连续不涨分停止
+              <input type="number" min={1} max={10} disabled={running||busy}
+                value={settings.stagnation_rounds}
+                onChange={event=>update("stagnation_rounds",Number(event.target.value))}/>
+            </label>
+            <label className="sf-mastery-auto-field">最长运行（分钟）
+              <input type="number" min={1} max={720} disabled={running||busy}
+                value={settings.max_minutes} onChange={event=>update("max_minutes",Number(event.target.value))}/>
+            </label>
+          </div>
+        </section>
+      </div>
+
+      <aside className="sf-mastery-auto-monitor" aria-label="执行进度与状态">
+        <div className="sf-mastery-auto-actions">
+          <button type="button" className="sf-mastery-auto-start"
+            disabled={busy||running||missingExternalToken||missingScope||
+              (["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())}
+            onClick={()=>void start()}>
+            <Play size={14}/>{status.total>0?"重新执行选定范围":"开始执行"}
+          </button>
+          <button type="button" className="secondary"
+            disabled={busy||!running||status.state==="stopping"}
+            onClick={()=>void control(canResume?"resume":"pause")}>
+            {canResume?<><RotateCcw size={14}/>{pausing?"取消待暂停":"继续"}</>
+              :<><Pause size={14}/>完成当前项后暂停</>}
+          </button>
+          <button type="button" className="secondary"
+            disabled={busy||!running||status.state==="stopping"}
+            onClick={()=>void control("stop")}><Square size={14}/>停止</button>
+          <button type="button" className="secondary sf-mastery-auto-mini"
+            disabled={busy} onClick={()=>void refresh()}><RefreshCw size={13}/>刷新</button>
+        </div>
+        {error&&<p className="sf-mastery-auto-error" role="alert">{error}</p>}
+        <div className="sf-mastery-auto-live" aria-live="polite">
+          <span className="sf-mastery-auto-eyebrow">当前执行</span>
+          <strong>{status.current?.name||(
+            status.state==="paused"?"已暂停，下一知识点尚未开始":
+            status.state==="pausing"?"正在等待当前知识点结束":
+            status.state==="completed"?"本次选择的章节已处理完":
+            status.state==="idle"?"未开始，先设置左侧参数":"后台正在准备或等待"
+          )}</strong>
+          {status.current&&<small>{status.current.theme} · 第 {currentTask?.rounds||1} 轮</small>}
+          <p>{currentTask?.reason||status.message||"启动后显示当前知识点与实际处理阶段。"}</p>
+          {pausing&&<p className="sf-mastery-auto-pause-notice">
+            <Pause size={12}/> 当前知识点完成后暂停，不会中断保存与判分步骤
+          </p>}
+        </div>
+        <section className="sf-mastery-auto-overview" aria-label="整体处理进度">
+          <div className="sf-mastery-auto-progress-top">
+            <strong>处理进度</strong>
+            <b>{status.processed}/{status.total} <small>知识点</small></b>
+          </div>
+          <div className="sf-mastery-auto-progress" role="progressbar"
+            aria-label="已处理知识点进度" aria-valuemin={0}
+            aria-valuemax={100} aria-valuenow={percent}>
+            <span style={{width:percent+"%"}}/>
+          </div>
+          <div className="sf-mastery-auto-metrics">
+            <div><strong>{status.done}</strong><small>已达标</small></div>
+            <div><strong>{status.skipped}</strong><small>需处理</small></div>
+            <div><strong>{remaining}</strong><small>剩余</small></div>
+            <div><strong>{status.selected_chapters?.length??0}/{status.chapter_total??chapters.length}</strong><small>本次章节</small></div>
+          </div>
+          <p className="sf-mastery-auto-note">{status.message||"尚未启动自动任务"}</p>
+        </section>
+        {chapterProgress.length>0&&<section className="sf-mastery-auto-chapter-progress">
+          <div className="sf-mastery-auto-card-heading">
+            <strong>章节执行情况</strong><small>{chapterProgress.length} 章</small>
+          </div>
+          <div className="sf-mastery-auto-chapter-list">
+            {chapterProgress.map(ch=><div key={ch.index} className={ch.active?"is-active":""}>
+              <div><span>第{ch.index}章 · {ch.name}</span><small>{ch.processed}/{ch.knowledge_count}</small></div>
+              <div className="sf-mastery-auto-progress">
+                <span style={{width:(ch.knowledge_count?
+                  ch.processed/ch.knowledge_count*100:0)+"%"}}/>
+              </div>
+            </div>)}
+          </div>
+        </section>}
+        {status.tasks.length>0&&<section className="sf-mastery-auto-task-list">
+          <button className="secondary" type="button" aria-expanded={detailsOpen}
+            onClick={()=>setDetailsOpen(current=>!current)}>
+            <ChevronDown size={14}/> {detailsOpen?"收起":"展开"}知识点明细（{status.processed}/{status.total}）
+          </button>
+          {detailsOpen&&<ul>{status.tasks.map(item=><li key={item.knowledge_id}>
+            <span>{item.theme} / {item.name}</span>
+            <span>{item.mastery===null?"—":item.mastery+"分"} · {item.rounds}轮 ·
+              {item.state==="done"?<><CheckCircle2 size={12}/>达标</>:
+                item.state==="working"?"进行中":item.state==="pending"?"待处理":"需处理"}</span>
+            {item.reason&&<small>{item.reason}</small>}
+          </li>)}</ul>}
+        </section>}
+        <details className="sf-mastery-auto-diagnostics">
+          <summary>题库和答题统计</summary>
+          <div>
+            <span>已验证本地答案 <b>{status.bank_hits??0}</b></span>
+            <span>外部题库命中 <b>{status.external_hits??0}</b></span>
+            <span>外部请求 <b>{status.external_calls??0}</b></span>
+            <span>外部错误 <b>{status.external_errors??0}</b></span>
+            <span>AI 命中 <b>{status.ai_used??0}</b></span>
+            <span>AI 请求 <b>{status.ai_calls??0}</b></span>
+            <span>本地试答 <b>{status.trials??0}</b></span>
+          </div>
+        </details>
+        {(status.blocked?.length??0)>0&&<p className="sf-mastery-auto-error" role="status">
+          {status.blocked?.length} 个旧试卷待核验；未确认前不会重复交卷。
+        </p>}
+        {status.submitting&&<p className="sf-mastery-auto-error" role="status">
+          当前交卷状态待核验，系统不会重复发送不确定的提交。
+        </p>}
+        {failed.length>0&&<p className="sf-mastery-auto-note">
+          {failed.length} 个知识点未自动达标，原因可在明细中查看。
+        </p>}
+      </aside>
     </div>
-    <div className="sf-mastery-auto-preference">
-      <label>首轮答题方式
-        <select disabled={running||busy} value={settings.first_round_mode}
-          onChange={event=>setSettings(previous=>({...previous,
-            first_round_mode:event.target.value as MasteryAutoSettings["first_round_mode"]
-          }))}>
-          <option value="bank_only">题库与本地有界试答（不调用 AI）</option>
-          <option value="bank_ai">已验证题库优先，未命中询问 AI（推荐）</option>
-          <option value="ai_first">首轮 AI 优先，后续优先用已验证题库</option>
-          <option value="arbitrary_first">首轮随意作答并提交，后续用官方结果与题库</option>
-        </select>
-      </label>
-      {["bank_ai","ai_first"].includes(settings.first_round_mode)&&<>
-        <label>DeepSeek API Key（仅本次执行）
-          <input type="password" autoComplete="off" value={aiKey}
-            disabled={running||busy} placeholder="输入 DeepSeek API Key"
-            onChange={event=>setAiKey(event.target.value)}/>
-        </label>
-        <label>最多 AI 请求次数
-          <input type="number" min={1} max={100} disabled={running||busy}
-            value={settings.max_ai_calls}
-            onChange={event=>update("max_ai_calls",Number(event.target.value))}/>
-        </label>
-      </>}
-    </div>
-    <div className="sf-mastery-auto-preference">
-      <label className="sf-mastery-auto-external-switch">
-        <input type="checkbox" checked={Boolean(settings.use_external_bank)}
-          disabled={running||busy}
-          onChange={event=>setSettings(previous=>({...previous,
-            use_external_bank:event.target.checked}))}/>
-        使用共享题库自动查询未命中题目
-      </label>
-      {settings.use_external_bank&&<>
-        <label>题库来源
-          <select value={settings.external_provider_id||""} disabled={running||busy}
-            onChange={event=>{
-              const id=event.target.value;
-              const selected=bankState.tokens.find(t=>t.provider_id===id&&t.active)
-                ||bankState.tokens.find(t=>t.provider_id===id);
-              setSettings(previous=>({...previous,external_provider_id:id,
-                external_token_id:selected?.id||""}));
-            }}>
-            {bankState.providers.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <label>用于自动查询的 Token
-          <select value={settings.external_token_id||""} disabled={running||busy||!configuredBankTokens.length}
-            onChange={event=>setSettings(previous=>({...previous,
-              external_token_id:event.target.value}))}>
-            {!configuredBankTokens.length&&<option value="">尚未配置 Token</option>}
-            {configuredBankTokens.map(item=><option key={item.id} value={item.id}>
-              {item.label}{item.active?"（默认）":""}
-            </option>)}
-          </select>
-        </label>
-        <label>本次最多外部题库请求
-          <input type="number" min={1} max={200} disabled={running||busy}
-            value={settings.max_external_calls??40}
-            onChange={event=>setSettings(previous=>({...previous,
-              max_external_calls:Number(event.target.value)}))}/>
-        </label>
-        <button className="secondary" type="button" disabled={busy||running}
-          onClick={()=>void reloadBanks()}>刷新题库列表</button>
-      </>}
-    </div>
-    {settings.use_external_bank&&<p className="sf-mastery-auto-caption">
-      已验证本地答案优先；外部查询未命中或不能明确匹配选项时回退到原策略。
-      每道题最多查询一次，按本次次数上限停止外部查询，不会自动切换 Token。
-      查询会向所选题库发送题干、选项和 Token，可能扣除额度，结果仍以平台判分为准。
-      {missingExternalToken?" 请先在全局设置 → 题库与搜题中配置 Token。":""}
-    </p>}
-    {bankError&&settings.use_external_bank&&<p className="sf-mastery-auto-error" role="alert">{bankError}</p>}
-    {["bank_ai","ai_first"].includes(settings.first_round_mode)&&<p className="sf-mastery-auto-caption">
-      启用后仅把题干与选项发送至 DeepSeek；不会上传知到 Cookie、账户信息或题目 ID。
-      AI 答案未经验证，必须以服务器交卷结果确认。
-    </p>}
-    <div className="sf-mastery-auto-settings">
-      <label>目标分数
-        <input type="number" min={1} max={100} disabled={running||busy}
-          value={settings.target} onChange={event=>update("target",Number(event.target.value))}/>
-      </label>
-      <label>每知识点最多轮次
-        <input type="number" min={1} max={30} disabled={running||busy}
-          value={settings.max_rounds} onChange={event=>update("max_rounds",Number(event.target.value))}/>
-      </label>
-      <label>连续不涨分停止
-        <input type="number" min={1} max={10} disabled={running||busy}
-          value={settings.stagnation_rounds} onChange={event=>update("stagnation_rounds",Number(event.target.value))}/>
-      </label>
-      <label>最多运行（分钟）
-        <input type="number" min={1} max={720} disabled={running||busy}
-          value={settings.max_minutes} onChange={event=>update("max_minutes",Number(event.target.value))}/>
-      </label>
-    </div>
-    <div className="sf-mastery-auto-actions">
-      <button type="button" disabled={busy||running||missingExternalToken||(["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())} onClick={()=>void start()}>
-        <Play size={14}/>{status.total>0?"重新扫描全部章节":"开始全部章节"}
-      </button>
-      <button type="button" className="secondary" disabled={busy||!running||status.state==="stopping"}
-        onClick={()=>void control(work?"pause":"resume")}>
-        {work?<><Pause size={14}/>暂停</>:<><RotateCcw size={14}/>继续</>}
-      </button>
-      <button type="button" className="secondary" disabled={busy||!running||status.state==="stopping"}
-        onClick={()=>void control("stop")}>
-        <Square size={14}/>停止
-      </button>
-      <button type="button" className="secondary" disabled={busy} onClick={()=>void refresh()}>
-        刷新状态
-      </button>
-    </div>
-    {error&&<p className="sf-mastery-auto-error" role="alert">{error}</p>}
-    <div className="sf-mastery-auto-metrics">
-      <span>总知识点 <b>{status.total}</b></span>
-      <span>已达标 <b>{status.done}</b></span>
-      <span>需处理 <b>{status.skipped}</b></span>
-      <span>剩余 <b>{remaining}</b></span>
-      <span>已验证本地题库命中 <b>{status.bank_hits??0}</b></span>
-      <span>外部题库参考 <b>{status.external_hits??0}</b> / {status.external_calls??0} 次</span>
-      {(status.external_errors??0)>0&&<span>外部查询错误 <b>{status.external_errors}</b> 次</span>}
-      <span>AI 使用 <b>{status.ai_used??0}</b> / {status.ai_calls??0} 次</span>
-      <span>试答 <b>{status.trials??0}</b></span>
-      {(status.ai_errors??0)>0&&<span>AI 失败已回退 <b>{status.ai_errors}</b> 次</span>}
-    </div>
-    <div className="sf-mastery-auto-progress" role="progressbar"
-      aria-label="全课程知识点处理进度" aria-valuemin={0}
-      aria-valuemax={100} aria-valuenow={percent}>
-      <span style={{width:percent+"%"}}/>
-    </div>
-    <p className="sf-mastery-auto-caption">{status.message||"启动后自动执行，不需要逐轮点击“再练一轮”。"}</p>
-    {status.current&&<p className="sf-mastery-auto-current">
-      当前：{status.current.theme} / {status.current.name}
-    </p>}
-    {(status.blocked?.length??0)>0&&<p className="sf-mastery-auto-caption" role="status">
-      {status.blocked?.length} 个知识点存在待核验旧试卷。再次开始只会先核验旧试卷状态；未确认前不会新建或提交其他练习。
-    </p>}
-    {status.submitting&&<p className="sf-mastery-auto-caption" role="status">
-      有交卷操作需要核验：本程序不会对状态不确定的试卷自动重复提交。
-    </p>}
-    {status.tasks.length>0&&<details className="sf-mastery-auto-detail">
-      <summary>查看全部章节进度（{status.processed}/{status.total}）</summary>
-      <ul>{status.tasks.map(item=><li key={item.knowledge_id}>
-        <span>{item.theme} / {item.name}</span>
-        <span>{item.mastery===null?"—":item.mastery+"分"} · {item.rounds}轮 ·
-          {item.state==="done"?<><CheckCircle2 size={12}/>达标</>:
-            item.state==="working"?"进行中":item.state==="pending"?"待处理":"需处理"}
-        </span>
-        {item.reason&&<small>{item.reason}</small>}
-      </li>)}</ul>
-    </details>}
-    {failed.length>0&&<p className="sf-mastery-auto-caption">
-      {failed.length} 个知识点未自动达标。未验证答案的填空题、未知交卷状态和无进步的练习，会保留供手动处理。
-    </p>}
     <p className="sf-mastery-auto-footnote">
-      目标 100 分不代表保证达到 100 分。本地已验证题库只收录平台公布或明确判对的答案；
-      外部题库答案未经核验，只有官方判分确认后才能加入本地库。
-      未知选择题有界试答，未知填空题仅一次占位尝试。最终掌握度以知到服务器结果为准。
+      暂停会在当前知识点处理结束后生效；停止会在下一个安全检查点生效。
+      已验证答案优先，第三方参考答案须经过官方判分才会收录为正确答案。
     </p>
   </section>;
 }
