@@ -3,34 +3,36 @@ import json
 import urllib.parse
 
 import pytest
-from studyflow.services import bridge
+from studyflow.services import bridge, question_bank as bank
 from studyflow.services import yanxi_question_bank as yanxi
 
 TOKEN = "a" * 32
 
 
-def test_local_token_is_encrypted_and_not_returned(tmp_path, monkeypatch):
-    monkeypatch.setattr(yanxi, "STORE_PATH", tmp_path / "nested" / "token.dpapi")
+def test_rc57_legacy_token_only_reads_and_migrates_into_shared_vault(tmp_path, monkeypatch):
+    old = tmp_path / "old" / "yanxi.dpapi"
+    old.parent.mkdir(parents=True)
+    monkeypatch.setattr(yanxi, "STORE_PATH", old)
+    monkeypatch.setattr(bank, "STORE_PATH", tmp_path / "new" / "providers.dpapi")
     monkeypatch.setattr(yanxi, "_dpapi", lambda value, protect:
                         bytes(part ^ 0x5A for part in value))
-    assert yanxi.configured() == {"configured": False}
-    assert yanxi.save_token(TOKEN) == {"configured": True}
-    raw = yanxi.STORE_PATH.read_bytes()
-    assert TOKEN.encode() not in raw
-    assert yanxi.configured() == {"configured": True}
-    assert yanxi._load_token() == TOKEN
-    assert yanxi.delete_token() == {"configured": False}
-
+    old.write_bytes(yanxi._dpapi(TOKEN.encode("ascii"), protect=True))
+    assert TOKEN.encode() not in old.read_bytes()
+    assert yanxi._load_legacy_token() == TOKEN
+    migrated = bank.list_tokens()
+    assert len(migrated["tokens"]) == 1
+    assert migrated["tokens"][0]["active"]
+    assert bank.STORE_PATH.exists() and not old.exists()
+    assert TOKEN not in repr(migrated)
 
 def test_invalid_token_does_not_touch_disk(tmp_path, monkeypatch):
     monkeypatch.setattr(yanxi, "STORE_PATH", tmp_path / "token.dpapi")
     with pytest.raises(yanxi.QuestionBankError, match="YANXI_INVALID_TOKEN"):
-        yanxi.save_token("token with space")
+        yanxi._valid_token("token with space")
     assert not yanxi.STORE_PATH.exists()
 
 
 def test_query_uses_own_token_and_only_requested_fields(monkeypatch):
-    monkeypatch.setattr(yanxi, "_load_token", lambda: TOKEN)
     seen = []
     class FakeReply:
         status = 200
@@ -44,7 +46,7 @@ def test_query_uses_own_token_and_only_requested_fields(monkeypatch):
             seen.append((request.full_url, timeout))
             return FakeReply()
     monkeypatch.setattr(yanxi.urllib.request, "build_opener", lambda *args: FakeOpener())
-    result = yanxi.search("测试题干", "A. 错\\nB. 对", "单选")
+    result = yanxi.search("测试题干", "A. 错\\nB. 对", "单选", token=TOKEN)
     assert result["found"] is True and result["answer"] == "B"
     assert result["remaining"] == 48
     parsed = urllib.parse.urlparse(seen[0][0])
@@ -72,21 +74,29 @@ def test_token_cannot_leave_via_http_redirect():
     assert yanxi._NoRedirect().redirect_request(None, None, 302, "redirect", {}, "https://evil.example") is None
 
 
-def test_bridge_returns_safe_errors_and_does_not_echo_token(monkeypatch):
-    monkeypatch.setattr(yanxi, "save_token", lambda _: {"configured": True})
-    def reject(*args):
+def test_shared_bridge_rejects_legacy_apis_and_never_echoes_tokens(tmp_path, monkeypatch):
+    monkeypatch.setattr(yanxi, "STORE_PATH", tmp_path / "legacy.dpapi")
+    monkeypatch.setattr(bank, "STORE_PATH", tmp_path / "providers.dpapi")
+    monkeypatch.setattr(yanxi, "_dpapi", lambda value, protect:
+                        bytes(part ^ 0x5A for part in value))
+    bank.add_token("yanxi", "当前 Token", TOKEN)
+    def reject(*_args, **_kwargs):
         raise yanxi.QuestionBankError("YANXI_QUOTA_EXHAUSTED")
-    monkeypatch.setattr(yanxi, "search", reject)
-    saved = bridge.dispatch({"id": "yx1", "version": 1,
-                             "operation": "questionbank.yanxi.save", "token": TOKEN})
-    assert saved == {"id": "yx1", "ok": True, "data": {"configured": True}}
-    lookup = bridge.dispatch({"id": "yx2", "version": 1,
-                              "operation": "questionbank.yanxi.query", "title": "练习题"})
-    assert lookup == {"id": "yx2", "ok": False, "error": "YANXI_QUOTA_EXHAUSTED"}
-    assert TOKEN not in str(saved) + str(lookup)
-
+    monkeypatch.setitem(bank.PROVIDERS["yanxi"], "lookup", reject)
+    lookup = bridge.dispatch({"id": "yx1", "version": 1,
+                              "operation": "questionbank.query",
+                              "provider_id": "yanxi",
+                              "question": {"title": "练习题"}})
+    assert lookup == {"id": "yx1", "ok": False, "error": "YANXI_QUOTA_EXHAUSTED"}
+    for operation in ("questionbank.yanxi.status", "questionbank.yanxi.save",
+                      "questionbank.yanxi.clear", "questionbank.yanxi.query"):
+        result = bridge.dispatch({"id": "yx-old", "version": 1,
+                                  "operation": operation, "token": TOKEN, "title": "练习题"})
+        assert result["error"] == "UNKNOWN_OPERATION"
+        assert TOKEN not in repr(result)
+    assert TOKEN not in repr(lookup)
 
 def test_missing_or_bad_question_does_not_use_token(monkeypatch):
-    monkeypatch.setattr(yanxi, "_load_token", lambda: pytest.fail("invalid query must not read token"))
+    monkeypatch.setattr(yanxi.urllib.request, "build_opener",\n                        lambda *_: pytest.fail("invalid query must not contact provider"))
     with pytest.raises(yanxi.QuestionBankError, match="YANXI_INVALID_QUERY"):
-        yanxi.search("")
+        yanxi.search("", token=TOKEN)
