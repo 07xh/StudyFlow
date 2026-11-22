@@ -27,6 +27,14 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   courseKey:string;desktop:boolean;
 }){
   const [status,setStatus]=useState<MasteryAutoStatus>(IDLE);
+  const latestStatus=useRef<MasteryAutoStatus>(IDLE);
+  const applyStatus=useCallback((value:MasteryAutoStatus)=>{
+    // Do not call React's state setter at all if the backend only changes
+    // its bookkeeping timestamp. This also protects a long knowledge list.
+    if(sameStatusSnapshot(latestStatus.current,value,NON_VISUAL_FIELDS))return;
+    latestStatus.current=value;
+    setStatus(value);
+  },[]);
   const [settings,setSettings]=useState<MasteryAutoSettings>(DEFAULT);
   const [busy,setBusy]=useState(false);
   const [aiKey,setAiKey]=useState("");
@@ -45,7 +53,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
           timeoutId=window.setTimeout(()=>reject(new Error("掌握度状态读取超时，可手动刷新。")),15000);
         })
       ]);
-      setStatus(previous=>sameStatusSnapshot(previous,value,NON_VISUAL_FIELDS)?previous:value);
+      applyStatus(value);
     }catch(cause){
       const message=friendlyBridgeError(cause);
       setError(previous=>previous===message?previous:message);
@@ -53,7 +61,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       if(timeoutId!==undefined)window.clearTimeout(timeoutId);
       statusInFlight.current=false;
     }
-  },[courseKey,desktop]);
+  },[courseKey,desktop,applyStatus]);
 
   useEffect(()=>{
     if(!desktop)return;
@@ -78,7 +86,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     setBusy(true);setError("");
     try{
       const options={...settings,...(["bank_ai","ai_first"].includes(settings.first_round_mode)?{api_key:aiKey.trim()}: {})};
-      setStatus(await masteryAutoStart(courseKey,options));
+      applyStatus(await masteryAutoStart(courseKey,options));
       setAiKey("");
     }catch(cause){
       setError(friendlyBridgeError(cause));
@@ -88,7 +96,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     if(!desktop||busy||!running)return;
     setBusy(true);setError("");
     try{
-      setStatus(await masteryAutoControl(courseKey,action));
+      applyStatus(await masteryAutoControl(courseKey,action));
     }catch(cause){
       setError(friendlyBridgeError(cause));
     }finally{setBusy(false);}
