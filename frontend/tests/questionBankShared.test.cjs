@@ -88,7 +88,7 @@ test("one provider supports newline-separated bulk token import without exposing
 
 test("any question row sends normalized text and options only after explicit search",async()=>{
  const {calls,mock}=mockBridge();
- await mock.questionBankAddToken("yanxi","一号","aaaaaaaaaaaaaaaa");
+ await mock.questionBankImportTokens("yanxi","aaaaaaaaaaaaaaaa");
  calls.length=0;
  const {QuestionBankQuestionAction}=load("components/QuestionBankQuestionAction.tsx",{"bridge.ts":mock});
  const question={title:"示例知到普通作业题",question_type:"单选",
