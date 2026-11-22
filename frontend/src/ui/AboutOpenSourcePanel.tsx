@@ -37,7 +37,7 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
   const [error,setError]=useState("");
   const [linkError,setLinkError]=useState("");
   const requestRevision=useRef(0);
-  const opener=useRef<HTMLButtonElement|null>(null);
+  const previousDocument=useRef<DocumentId|null>(null);
   const backButton=useRef<HTMLButtonElement|null>(null);
   const root=useRef<HTMLElement|null>(null);
 
@@ -64,10 +64,10 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
     setSection(next);setViewer(null);setReading(null);setError("");setLinkError("");
     scrollTop();
   }
-  async function openDocument(id:DocumentId,event:MouseEvent<HTMLButtonElement>){
+  async function openDocument(id:DocumentId){
     if(!desktop||reading)return;
     const revision=++requestRevision.current;
-    opener.current=event.currentTarget;
+    previousDocument.current=id;
     setReading(id);setError("");setViewer(null);
     try{
       const data=await invoke<ZhidaoDocument>("studyflow_read_document",{documentId:id});
@@ -86,7 +86,10 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
     requestRevision.current+=1;
     setViewer(null);setReading(null);setError("");
     scrollTop();
-    if(typeof window!=="undefined")window.requestAnimationFrame(()=>opener.current?.focus());
+    const previous=previousDocument.current;
+    if(typeof window!=="undefined")window.requestAnimationFrame(()=>{
+      if(previous)root.current?.querySelector<HTMLButtonElement>(`button[data-document-id="${previous}"]`)?.focus();
+    });
   }
   function openExternal(event:MouseEvent<HTMLAnchorElement>,kind:SourceKind){
     if(!desktop)return;
@@ -121,7 +124,10 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
     </div>
 
     {viewer
-      ?<section className="sf-about-reader" aria-label="法律文档阅读">
+      ?<section className="sf-about-reader" aria-label="法律文档阅读"
+        onKeyDown={event=>{
+          if(event.key==="Escape"){event.preventDefault();event.stopPropagation();closeDocument();}
+        }}>
         <div className="sf-about-reader-heading">
           <button ref={backButton} type="button" className="sf-about-back"
             onClick={closeDocument}><ArrowLeft size={15}/>返回开源与许可</button>
@@ -177,9 +183,9 @@ export function AboutOpenSourcePanel({desktop,onOpenDeveloper}:{
         <section className="sf-about-section">
           <h3>许可与说明文档</h3>
           <div className="sf-about-legal-list">
-            {licenses.map(item=><button key={item.id} type="button"
+            {licenses.map(item=><button key={item.id} type="button" data-document-id={item.id}
               disabled={!desktop||Boolean(reading)}
-              onClick={event=>void openDocument(item.id,event)}>
+              onClick={()=>void openDocument(item.id)}>
               <item.icon size={18}/>
               <span><strong>{item.title}</strong><small>{item.detail}</small></span>
               {reading===item.id?<span className="sf-about-loading">读取中…</span>:<ChevronRight size={16}/>}
