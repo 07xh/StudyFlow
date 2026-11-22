@@ -500,7 +500,10 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
             if value >= config["target"]:
                 _step(course_key, item, done=True, reason="服务器已达标", mastery=value)
                 continue
-            passed, reason, final_score = _execute_point(course_key, item, bank, config, deadline, api_key)
+            # Preserve one authenticated SDK session through this point instead
+            # of performing a fresh CAS exchange for every saved question.
+            with service.mastery_session_scope(course_key):
+                passed, reason, final_score = _execute_point(course_key, item, bank, config, deadline, api_key)
             _step(course_key, item, done=passed, reason=reason, mastery=final_score)
             if _STATUS.get("submitting") is not None:
                 # A POST might have been accepted by the server. Do not clear
