@@ -652,3 +652,111 @@ def test_upgrade_migrates_old_course_before_new_course_overwrites_last_run():
     assert old["blocked"] == ["1001"]
     assert old["pending_submissions"]["1001"] == old_marker
     assert auto._loaded(course_b)["state"] == "completed"
+
+
+def test_shared_bank_is_used_before_trial_and_graded_by_official_server(monkeypatch):
+    point, rounds, sends = _wire_strategy_rounds(monkeypatch, grades=(70, 100))
+    bank = auto.AnswerBank()
+    external_calls = []
+    def external(question, provider, token_id):
+        external_calls.append((provider, token_id))
+        identity, pairs = auto._identity(question)
+        return 12, identity, ["beta"]
+    monkeypatch.setattr(auto, "external_suggest", external)
+    opts = {**auto.DEFAULTS, "first_round_mode": "bank_only",
+            "use_external_bank": True, "external_provider_id": "yanxi",
+            "external_token_id": "a" * 32, "max_rounds": 3}
+    done, reason, score = auto._execute_point(
+        COURSE, point, bank, opts, auto.time.monotonic() + 60)
+    assert done and score == 100, reason
+    assert sends == [12, 11], "official server grading must override external advice"
+    assert external_calls == [("yanxi", "a" * 32)]
+    assert auto._STATUS.get("external_calls") == 1
+    assert auto._STATUS.get("external_hits") == 1
+    assert auto._STATUS.get("bank_hits") == 1
+    bank.close()
+
+
+def test_official_verified_bank_skips_external_lookup(monkeypatch):
+    point, _, sends = _wire_strategy_rounds(monkeypatch, grades=(100,))
+    bank = auto.AnswerBank()
+    assert bank.confirm(question(), {"isCorrect": True, "correctOptionIds": [11]}, ["alpha"])
+    monkeypatch.setattr(auto, "external_suggest",
+                        lambda *a: pytest.fail("official verified answer must win"))
+    opts = {**auto.DEFAULTS, "first_round_mode": "bank_only",
+            "use_external_bank": True, "external_provider_id": "yanxi",
+            "external_token_id": "a" * 32}
+    done, reason, score = auto._execute_point(
+        COURSE, point, bank, opts, auto.time.monotonic() + 60)
+    assert done and score == 100, reason
+    assert sends == [11] and auto._STATUS.get("external_calls", 0) == 0
+    bank.close()
+
+
+def test_external_failure_falls_back_without_repeat_or_token_leak(monkeypatch):
+    point, _, sends = _wire_strategy_rounds(monkeypatch, grades=(100,))
+    calls = []
+    def unavailable(*args):
+        calls.append(args)
+        raise auto.question_bank.QuestionBankError("YANXI_NETWORK_FAILED")
+    monkeypatch.setattr(auto, "external_suggest", unavailable)
+    bank = auto.AnswerBank()
+    opts = {**auto.DEFAULTS, "first_round_mode": "bank_only",
+            "use_external_bank": True, "external_provider_id": "yanxi",
+            "external_token_id": "a" * 32}
+    done, reason, score = auto._execute_point(
+        COURSE, point, bank, opts, auto.time.monotonic() + 60)
+    assert done and score == 100, reason
+    assert len(calls) == 1 and sends == [11]
+    assert auto._STATUS.get("external_errors") == 1
+    bank.close()
+
+
+def test_external_query_limit_causes_fallback_to_existing_trial(monkeypatch):
+    point, _, sends = _wire_strategy_rounds(monkeypatch, grades=(100,))
+    monkeypatch.setattr(auto, "external_suggest",
+                        lambda *a: pytest.fail("external cap reached"))
+    auto._STATUS["external_calls"] = 1
+    bank = auto.AnswerBank()
+    opts = {**auto.DEFAULTS, "first_round_mode": "bank_only",
+            "use_external_bank": True, "external_provider_id": "yanxi",
+            "external_token_id": "a" * 32, "max_external_calls": 1}
+    done, reason, score = auto._execute_point(
+        COURSE, point, bank, opts, auto.time.monotonic() + 60)
+    assert done and score == 100, reason
+    assert sends == [11] and auto._STATUS["external_calls"] == 1
+    bank.close()
+
+
+def test_external_start_requires_existing_selected_provider_token(monkeypatch):
+    with pytest.raises(auto.service.MasteryError) as error:
+        auto.start(COURSE, {"use_external_bank": True,
+                            "external_provider_id": "yanxi",
+                            "external_token_id": "a" * 32})
+    assert error.value.code == "QUESTIONBANK_TOKEN_NOT_FOUND"
+    monkeypatch.setattr(auto.question_bank, "list_tokens",
+                        lambda: {"tokens": [{
+                            "id": "b" * 32, "provider_id": "yanxi", "active": True,
+                            "label": "安全测试",
+                        }]})
+    with pytest.raises(auto.service.MasteryError) as error:
+        auto.start(COURSE, {"use_external_bank": True,
+                            "external_provider_id": "yanxi",
+                            "external_token_id": "a" * 32})
+    assert error.value.code == "QUESTIONBANK_TOKEN_NOT_FOUND"
+
+
+def test_ai_first_keeps_its_explicit_first_round_priority_over_external(monkeypatch):
+    point, _, sends = _wire_strategy_rounds(monkeypatch, grades=(100,))
+    monkeypatch.setattr(auto, "ai_suggest", lambda *args: 12)
+    monkeypatch.setattr(auto, "external_suggest",
+                        lambda *args: pytest.fail("AI-first should not charge external if AI works"))
+    bank = auto.AnswerBank()
+    opts = {**auto.DEFAULTS, "first_round_mode": "ai_first",
+            "use_external_bank": True, "external_provider_id": "yanxi",
+            "external_token_id": "a" * 32}
+    done, reason, score = auto._execute_point(
+        COURSE, point, bank, opts, auto.time.monotonic() + 60, "fake-ai-key")
+    assert done and score == 100, reason
+    assert sends == [12] and auto._STATUS.get("external_calls", 0) == 0
+    bank.close()
