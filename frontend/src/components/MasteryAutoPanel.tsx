@@ -194,6 +194,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     {status.current&&<p className="sf-mastery-auto-current">
       当前：{status.current.theme} / {status.current.name}
     </p>}
+    {(status.blocked?.length??0)>0&&<p className="sf-mastery-auto-caption" role="status">
+      {status.blocked?.length} 个知识点存在待核验旧试卷。再次开始只会先核验旧试卷状态；未确认前不会新建或提交其他练习。
+    </p>}
     {status.submitting&&<p className="sf-mastery-auto-caption" role="status">
       有交卷操作需要核验：本程序不会对状态不确定的试卷自动重复提交。
     </p>}
