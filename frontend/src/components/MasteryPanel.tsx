@@ -6,6 +6,7 @@ import {
   type MasteryCatalog,type MasteryKnowledge,type MasteryQuestion,
   type MasteryRound,type MasterySubmitResult,
 } from "../bridge";
+import {YanxiQuestionBankPanel} from "./YanxiQuestionBankPanel";
 import "./MasteryPanel.css";
 
 type Draft = Record<string,string|number|Array<string|number>>;
@@ -240,6 +241,8 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
         </button>
       </div>
     </header>
+
+    <YanxiQuestionBankPanel desktop={desktop} questions={round?.questions??[]}/>
 
     {error&&<p className="sf-mastery-error" role="alert">{error}</p>}
     {notice&&<p className="sf-mastery-notice" role="status">{notice}</p>}

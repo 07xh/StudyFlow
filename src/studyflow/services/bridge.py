@@ -136,6 +136,25 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": uc_heartbeat}
         return {"id": request_id, "ok": False,
                 "error": str(uc_heartbeat.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
+    if operation in ("questionbank.yanxi.status", "questionbank.yanxi.save",
+                     "questionbank.yanxi.clear", "questionbank.yanxi.query"):
+        from studyflow.services import yanxi_question_bank as yanxi
+        try:
+            if operation == "questionbank.yanxi.status":
+                data = yanxi.configured()
+            elif operation == "questionbank.yanxi.save":
+                data = yanxi.save_token(request.get("token"))
+            elif operation == "questionbank.yanxi.clear":
+                data = yanxi.delete_token()
+            else:
+                data = yanxi.search(request.get("title"), request.get("options", ""),
+                                    request.get("question_type", ""))
+            return {"id": request_id, "ok": True, "data": data}
+        except yanxi.QuestionBankError as exc:
+            return {"id": request_id, "ok": False, "error": exc.code}
+        except Exception:
+            # Never echo the upstream request URL, which contains the token.
+            return {"id": request_id, "ok": False, "error": "YANXI_UNAVAILABLE"}
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
     if operation in ("zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"):

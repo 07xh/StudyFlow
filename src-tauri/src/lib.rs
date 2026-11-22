@@ -207,6 +207,20 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
     }
     let operation = request.get("operation").and_then(|v| v.as_str()).unwrap_or("");
     match operation {
+        "questionbank.yanxi.status" | "questionbank.yanxi.clear" => Ok(()),
+        "questionbank.yanxi.save"
+            if request.get("token").and_then(|v| v.as_str())
+                .is_some_and(|s| (8..=256).contains(&s.len())
+                    && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
+            => Ok(()),
+        "questionbank.yanxi.query"
+            if request.get("title").and_then(|v| v.as_str())
+                .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= 4000)
+            && request.get("options").map_or(true, |v| v.as_str()
+                .is_some_and(|s| s.chars().count() <= 4000))
+            && request.get("question_type").map_or(true, |v| v.as_str()
+                .is_some_and(|s| s.chars().count() <= 40))
+            => Ok(()),
         "ping" | "platform.status" | "yuketang.clear" | "updates.settings.get" | "updates.latest"
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
