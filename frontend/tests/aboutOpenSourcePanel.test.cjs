@@ -57,6 +57,7 @@ test("Open Source links are attributed, and legal documents replace content rath
  await act(async()=>{view=create(React.createElement(Panel,{desktop:true,onOpenDeveloper:()=>{}}));});
  await act(async()=>button(view,"开源与许可").props.onClick());
  assert.match(textOf(view.root),/ZHS/);
+ assert.match(textOf(view.root),/雨课堂原版项目/);
  assert.match(textOf(view.root),/Samueli924\/chaoxing/);
  assert.match(textOf(view.root),/GNU GPL v3 开源许可/);
  assert.equal(view.root.findAllByProps({role:"dialog"}).length,0);
@@ -64,6 +65,10 @@ test("Open Source links are attributed, and legal documents replace content rath
  assert.equal(link.props.href,"https://github.com/pjm314159/zhs");
  await act(async()=>link.props.onClick({preventDefault(){}}));
  assert.deepEqual(calls.at(-1),{name:"studyflow_open_source_site",args:{kind:"zhs"}});
+ const rain=view.root.findAllByType("a").find(a=>textOf(a).includes("雨课堂原版项目"));
+ assert.equal(rain.props.href,"https://github.com/07xh/yuketang-heartbeat");
+ await act(async()=>rain.props.onClick({preventDefault(){}}));
+ assert.deepEqual(calls.at(-1),{name:"studyflow_open_source_site",args:{kind:"yuketang"}});
  await act(async()=>button(view,"GNU GPL v3 开源许可").props.onClick({
   currentTarget:{focus(){}}
  }));
@@ -104,4 +109,20 @@ test("web preview does not access Windows native document commands",async()=>{
  for(const item of view.root.findAllByType("button").filter(b=>textOf(b).includes("开源许可")||textOf(b).includes("隐私政策")))
   assert.equal(item.props.disabled,true);
  assert.equal(calls.length,0);
+});
+
+test("offline About documents include current cross-platform source provenance",()=>{
+ const fs=require("node:fs"),path=require("node:path");
+ const root=path.resolve(__dirname,"../..");
+ const tauri=JSON.parse(fs.readFileSync(path.join(root,"src-tauri/tauri.conf.json"),"utf8"));
+ const resources=Object.values(tauri.bundle.resources);
+ for(const destination of [
+  "legal/SOURCE.md","legal/STUDYFLOW_SOURCE_PROVENANCE.md",
+  "legal/THIRD_PARTY_LICENSES.md","legal/THIRD_PARTY_LICENSES_ADDENDUM.md",
+ ]) assert.ok(resources.includes(destination),"missing bundled provenance: "+destination);
+ const rust=fs.readFileSync(path.join(root,"src-tauri/src/lib.rs"),"utf8");
+ assert.match(rust,/if document_id == "source"/);
+ assert.match(rust,/STUDYFLOW_SOURCE_PROVENANCE\.md/);
+ assert.match(rust,/THIRD_PARTY_LICENSES_ADDENDUM\.md/);
+ assert.match(rust,/"yuketang" => Ok\("https:\/\/github\.com\/07xh\/yuketang-heartbeat"\)/);
 });
