@@ -562,3 +562,51 @@ def test_current_mastery_does_not_inherit_an_old_historical_high(monkeypatch):
     assert passed is False
     assert score == 20
     assert "最大轮次" in reason
+
+
+
+def test_course_snapshots_survive_switching_and_retain_pending_submission():
+    """Starting another course cannot delete a different course's recovery data."""
+    course_b = "b" * 64
+    pending = {"knowledge_id": "1001", "exam_test_id": 31,
+               "exam_paper_id": 41, "question_ids": [100]}
+    auto._save({
+        "course_key": COURSE, "state": "needs_attention",
+        "submitting": pending, "blocked": ["1001"],
+        "pending_submissions": {"1001": pending},
+        "tasks": [], "total": 0, "processed": 0, "done": 0, "skipped": 0,
+    })
+    auto._save({
+        "course_key": course_b, "state": "completed",
+        "submitting": None, "blocked": [], "pending_submissions": {},
+        "tasks": [], "total": 0, "processed": 0, "done": 0, "skipped": 0,
+    })
+    state_a = auto.status(COURSE)
+    assert state_a["state"] == "needs_attention"
+    assert state_a["submitting"] == pending
+    assert state_a["pending_submissions"]["1001"] == pending
+    assert auto.status(course_b)["state"] == "completed"
+
+    # Restart the process: recover each original course, never the last course.
+    auto._STATUS.clear()
+    assert auto._loaded(COURSE)["blocked"] == ["1001"]
+    assert auto._loaded(course_b)["blocked"] == []
+
+
+def test_course_snapshot_migrates_legacy_last_run_file():
+    import json
+    marker = {"knowledge_id": "1001", "exam_test_id": 31}
+    auto.STATUS_PATH.write_text(json.dumps({
+        "course_key": COURSE, "state": "running",
+        "submitting": marker, "blocked": ["1001"],
+    }), encoding="utf-8")
+    recovered = auto._loaded(COURSE)
+    assert recovered["state"] == "interrupted"
+    assert recovered["submitting"] == marker
+    assert auto._loaded("b" * 64) == {}
+    assert not auto._course_status_path(COURSE).exists()
+
+
+def test_course_journal_rejects_unsafe_file_name():
+    with pytest.raises(ValueError):
+        auto._course_status_path("../" + "a" * 64)
