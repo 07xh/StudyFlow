@@ -67,9 +67,6 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "questionbank.tokens.check"; token_id:string; include_quota:boolean}
   | {id: string; version: 1; operation: "questionbank.tokens.select" | "questionbank.tokens.remove"; token_id:string}
   | {id: string; version: 1; operation: "questionbank.query"; provider_id:string; question:QuestionBankQuestion; token_id?:string}
-  | {id: string; version: 1; operation: "questionbank.yanxi.status" | "questionbank.yanxi.clear"}
-  | {id: string; version: 1; operation: "questionbank.yanxi.save"; token:string}
-  | {id: string; version: 1; operation: "questionbank.yanxi.query"; title:string; options:string; question_type:string}
   | {id: string; version: 1; operation: "ping"}
   | {id: string; version: 1; operation: "platform.status"}
   | {id: string; version: 1; operation: "courses.list"; platform: Platform}
@@ -739,24 +736,6 @@ export function masteryAutoControl(courseKey: string, action: "pause"|"resume"|"
   return request<MasteryAutoStatus>({operation:"zhidao.mastery.auto.control",course_key:courseKey,action});
 }
 
-/** Optional third-party lookup; external results must never be marked as ZHS-verified. */
-export type YanxiLookupResult={
-  found:boolean;answer:string;remaining:number|null;status:"matched"|"not_found";
-  source?: "yanxi_external_unverified";
-};
-export function yanxiStatus():Promise<{configured:boolean}>{
-  return request({operation:"questionbank.yanxi.status"});
-}
-export function yanxiSaveToken(token:string):Promise<{configured:boolean}>{
-  return request({operation:"questionbank.yanxi.save",token});
-}
-export function yanxiClearToken():Promise<{configured:boolean}>{
-  return request({operation:"questionbank.yanxi.clear"});
-}
-export function yanxiQuery(title:string,options="",question_type=""):Promise<YanxiLookupResult>{
-  return request<YanxiLookupResult>({operation:"questionbank.yanxi.query",title,options,question_type});
-}
-
 /** Shared question-bank contracts: usable from any learning/assignment component. */
 export type QuestionBankProvider={id:string;name:string;description:string};
 export type QuestionBankToken={id:string;provider_id:string;label:string;active:boolean;
@@ -776,9 +755,6 @@ export type QuestionBankAnswer={
 };
 export function questionBankList():Promise<QuestionBankState>{
   return request<QuestionBankState>({operation:"questionbank.tokens.list"});
-}
-export function questionBankAddToken(provider_id:string,label:string,token:string):Promise<QuestionBankState>{
-  return request<QuestionBankState>({operation:"questionbank.tokens.add",provider_id,label,token});
 }
 export function questionBankImportTokens(provider_id:string,lines:string):Promise<QuestionBankState>{
   return request<QuestionBankState>({operation:"questionbank.tokens.import",provider_id,lines});
