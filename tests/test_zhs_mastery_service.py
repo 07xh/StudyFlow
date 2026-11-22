@@ -350,3 +350,75 @@ def test_answer_with_null_correctness_is_not_a_confirmed_zero(monkeypatch):
     assert result["grading_pending"] is True
     assert result["round_score"] == {"correct": None, "total": 2, "percent": None}
     assert result["graded"] == []
+
+
+
+def test_catalog_without_mastery_returns_readable_unscored_points(monkeypatch):
+    session = _wire(monkeypatch, FakeSession(mastery=66))
+    catalog = service.read_catalog("k" * 64, with_mastery=False)
+    assert catalog["count"] == 1
+    assert catalog["knowledge"][0]["mastery"] is None
+    assert catalog["knowledge"][0]["band"] is None
+    assert catalog["pending_count"] == 0
+    assert catalog["average_mastery"] is None
+    assert catalog["unreadable_count"] == 0
+    assert session.calls == []
+
+
+def test_catalog_cache_isolated_by_account_and_manual_refresh_bypasses_ttl(monkeypatch):
+    session = _wire(monkeypatch, FakeSession(mastery=60))
+    monkeypatch.setattr(service, "_mastery_cache_key", lambda cid, kid: "account-A:" + kid)
+    first = service.read_catalog("k" * 64)
+    assert first["knowledge"][0]["mastery"] == 60
+    session.mastery = 85
+    cached = service.read_catalog("k" * 64)
+    assert cached["knowledge"][0]["mastery"] == 60
+    refreshed = service.read_catalog("k" * 64, force_refresh=True)
+    assert refreshed["knowledge"][0]["mastery"] == 85
+    session.mastery = 95
+    monkeypatch.setattr(service, "_mastery_cache_key", lambda cid, kid: "account-B:" + kid)
+    rotated = service.read_catalog("k" * 64)
+    assert rotated["knowledge"][0]["mastery"] == 95
+    assert len([url for url in session.called_urls() if url.endswith("get-knowledge-mastery-stat")]) == 3
+
+
+def test_previous_submission_recovery_requires_server_submission_grading_and_score(monkeypatch):
+    session = _wire(monkeypatch, FakeSession(mastery=93))
+    session.submitted = True
+    session.answers = {939136618: "671372794", 939136619: "671372795"}
+    original = session.ai_exam_query
+
+    def responder(url, payload, method="POST"):
+        if url.endswith("/exam/user/getExamTestUserInfo"):
+            return {"code": 0, "data": {"examState": 6, "submitTime": "2026-11-22T01:00:00"}}
+        return original(url, payload, method)
+
+    monkeypatch.setattr(session, "ai_exam_query", responder)
+    verified = service.verify_previous_submission(
+        "k" * 64, KNOWLEDGE, 4263949, 454449917, list(QUESTIONS),
+    )
+    assert verified == {"submitted": True, "grading_complete": True, "mastery": 93}
+    assert not any(call[0] == "submit" for call in session.calls)
+
+
+def test_previous_submission_not_confirmed_never_requests_grades_or_reposts(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    def undecided(url, data, method="POST"):
+        session.calls.append(("exam", url, dict(data), method))
+        assert url.endswith("/exam/user/getExamTestUserInfo")
+        return {"code": 0, "data": {"examState": 3}}
+
+    monkeypatch.setattr(session, "ai_exam_query", undecided)
+    state = service.verify_previous_submission(
+        "k" * 64, KNOWLEDGE, 4263949, 454449917, [939136618],
+    )
+    assert state == {"submitted": False, "grading_complete": False, "mastery": None}
+    assert len(session.calls) == 1
+
+
+def test_previous_submission_rejects_incomplete_metadata_before_network(monkeypatch):
+    session = _wire(monkeypatch, FakeSession())
+    with pytest.raises(service.MasteryError) as caught:
+        service.verify_previous_submission("k" * 64, KNOWLEDGE, 3, 0, [939136618])
+    assert caught.value.code == "INVALID_REQUEST"
+    assert session.calls == []
