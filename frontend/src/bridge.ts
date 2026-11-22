@@ -60,6 +60,10 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "updates.check"; current_version: string}
   | {id: string; version: 1; operation: "updates.download"; current_version: string; release_version: string}
   | {id: string; version: 1; operation: "updates.changelog"; current_version: string; previous_version?: string; history: boolean}
+  | {id: string; version: 1; operation: "questionbank.providers" | "questionbank.tokens.list"}
+  | {id: string; version: 1; operation: "questionbank.tokens.add"; provider_id:string; label:string; token:string}
+  | {id: string; version: 1; operation: "questionbank.tokens.select" | "questionbank.tokens.remove"; token_id:string}
+  | {id: string; version: 1; operation: "questionbank.query"; provider_id:string; question:QuestionBankQuestion; token_id?:string}
   | {id: string; version: 1; operation: "questionbank.yanxi.status" | "questionbank.yanxi.clear"}
   | {id: string; version: 1; operation: "questionbank.yanxi.save"; token:string}
   | {id: string; version: 1; operation: "questionbank.yanxi.query"; title:string; options:string; question_type:string}
@@ -378,6 +382,15 @@ export function friendlyUpdateError(value: unknown): string {
     case "BRIDGE_START_FAILED":
     case "BRIDGE_PROTOCOL_FAILED":
     case "BRIDGE_PROCESS_FAILED":
+    case "QUESTIONBANK_UNKNOWN_PROVIDER": return "该题库尚未接入学序，请在设置里选择已支持的题库。";
+    case "QUESTIONBANK_INVALID_LABEL": return "Token 备注须为 1 至 50 个字符。";
+    case "QUESTIONBANK_INVALID_TOKEN_ID": return "Token 标识无效，请重新加载题库列表。";
+    case "QUESTIONBANK_TOKEN_NOT_FOUND": return "没有找到选中的 Token，请在题库设置里重新选择。";
+    case "QUESTIONBANK_TOKEN_LIMIT": return "同一题库最多保存 20 条 Token。";
+    case "QUESTIONBANK_TOKEN_DUPLICATE": return "这条 Token 已存在于当前题库。";
+    case "QUESTIONBANK_INVALID_QUESTION": return "题目数据不符合要求，请检查题干、题型和选项。";
+    case "QUESTIONBANK_STORAGE_FAILED": return "本机题库 Token 保险库不可读，请检查 Windows 用户权限和旧 Token。";
+    case "QUESTIONBANK_UNAVAILABLE": return "共享题库服务不可用，请检查桌面版安装包。";
     case "YANXI_WINDOWS_ONLY": return "言溪本地 Token 存储仅支持 Windows EXE。";
     case "YANXI_INVALID_TOKEN": return "言溪 Token 格式不正确，请检查后重新输入。";
     case "YANXI_TOKEN_STORAGE_FAILED": return "无法读取或保存本机加密 Token，请重新配置。";
@@ -729,4 +742,37 @@ export function yanxiClearToken():Promise<{configured:boolean}>{
 }
 export function yanxiQuery(title:string,options="",question_type=""):Promise<YanxiLookupResult>{
   return request<YanxiLookupResult>({operation:"questionbank.yanxi.query",title,options,question_type});
+}
+
+/** Shared question-bank contracts: usable from any learning/assignment component. */
+export type QuestionBankProvider={id:string;name:string;description:string};
+export type QuestionBankToken={id:string;provider_id:string;label:string;active:boolean};
+export type QuestionBankState={providers:QuestionBankProvider[];tokens:QuestionBankToken[]};
+export type QuestionBankQuestion={
+  title:string;question_type?:string;
+  options?:string|Array<{key?:string;text:string}>;
+};
+export type QuestionBankAnswer={
+  found:boolean;answer:string;remaining:number|null;
+  status:"matched"|"not_found";source?:string;
+  provider_id:string;provider_name:string;
+  token_id:string;token_label:string;verified:false;
+};
+export function questionBankList():Promise<QuestionBankState>{
+  return request<QuestionBankState>({operation:"questionbank.tokens.list"});
+}
+export function questionBankAddToken(provider_id:string,label:string,token:string):Promise<QuestionBankState>{
+  return request<QuestionBankState>({operation:"questionbank.tokens.add",provider_id,label,token});
+}
+export function questionBankSelectToken(token_id:string):Promise<QuestionBankState>{
+  return request<QuestionBankState>({operation:"questionbank.tokens.select",token_id});
+}
+export function questionBankRemoveToken(token_id:string):Promise<QuestionBankState>{
+  return request<QuestionBankState>({operation:"questionbank.tokens.remove",token_id});
+}
+export function questionBankQuery(
+  provider_id:string,question:QuestionBankQuestion,token_id?:string
+):Promise<QuestionBankAnswer>{
+  return request<QuestionBankAnswer>({operation:"questionbank.query",provider_id,question,
+    ...(token_id?{token_id}:{})});
 }
