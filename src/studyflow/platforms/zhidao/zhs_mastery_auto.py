@@ -26,6 +26,8 @@ from typing import Any
 
 from studyflow.platforms.zhidao import zhs_mastery_service as service
 from studyflow.platforms.zhidao.zhs_mastery_ai import AiAnswerError, suggest as ai_suggest
+from studyflow.platforms.zhidao.zhs_mastery_external import suggest as external_suggest
+from studyflow.services import question_bank
 
 DATA = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".studyflow") / "StudyFlow" / "ZhidaoMasteryAuto"
 STATUS_PATH = DATA / "status.json"
@@ -37,7 +39,8 @@ _RESUME = threading.Event()
 _RESUME.set()
 _STATUS: dict[str, Any] = {}
 
-DEFAULTS = {"target": 100, "max_rounds": 12, "stagnation_rounds": 3, "max_minutes": 180, "max_ai_calls": 30}
+DEFAULTS = {"target": 100, "max_rounds": 12, "stagnation_rounds": 3, "max_minutes": 180,
+            "max_ai_calls": 30, "max_external_calls": 40}
 FIRST_ROUND_MODES = {"bank_only", "bank_ai", "ai_first", "arbitrary_first"}
 CHOICE_TYPES = (1, 2, 14)
 
@@ -340,6 +343,7 @@ def _execute_point(
     score: int | float | None = before
     stagnant = 0
     ai_attempted: set[str] = set()  # once per distinct question per point/run
+    external_attempted: set[str] = set()  # do not bill for the same stem twice
     for round_index in range(1, config["max_rounds"] + 1):
         _checkpoint(deadline)
         _progress(point, state="working", rounds=round_index,
@@ -372,7 +376,35 @@ def _execute_point(
                 choice = None
                 texts: list[str] = []
                 source = "trial"
-                if may_ai:
+
+                def consult_external() -> None:
+                    nonlocal choice, identity, texts, source
+                    if (not config.get("use_external_bank") or verified is not None
+                            or not identity or identity in external_attempted
+                            or _STATUS.get("external_calls", 0) >= config["max_external_calls"]
+                            or deadline - time.monotonic() <= 13):
+                        return
+                    _checkpoint(deadline)
+                    external_attempted.add(identity)
+                    _update(external_calls=_STATUS.get("external_calls", 0) + 1)
+                    try:
+                        candidate = external_suggest(
+                            question, config["external_provider_id"],
+                            config["external_token_id"])
+                        if candidate is not None:
+                            choice, identity, texts = candidate
+                            source = "external"
+                            _update(external_hits=_STATUS.get("external_hits", 0) + 1)
+                        else:
+                            _update(external_misses=_STATUS.get("external_misses", 0) + 1)
+                    except (question_bank.QuestionBankError, ValueError, TypeError):
+                        _update(external_errors=_STATUS.get("external_errors", 0) + 1)
+
+                # Local officially verified answers take precedence, except
+                # the explicitly requested AI-first first round.
+                if not ai_first:
+                    consult_external()
+                if choice is None and may_ai:
                     ai_attempted.add(identity)
                     _update(ai_calls=_STATUS.get("ai_calls", 0) + 1)
                     try:
@@ -389,6 +421,8 @@ def _execute_point(
                         _update(ai_errors=_STATUS.get("ai_errors", 0) + 1)
                         # A third-party AI failure never becomes a confirmed
                         # answer and never triggers repeated network calls.
+                if choice is None and ai_first:
+                    consult_external()
                 if choice is None:
                     if verified is not None:
                         choice, identity, texts = verified
@@ -400,7 +434,8 @@ def _execute_point(
                         _update(trials=_STATUS.get("trials", 0) + 1)
                 selections.append((question, identity, texts))
                 _progress(point, reason={"bank":"已验证题库作答", "ai":"AI 建议作答（待判分）",
-                                         "trial":"本地有界试答（待判分）"}[source])
+                                         "external":"外部题库参考作答（待官方判分）",
+                                          "trial":"本地有界试答（待判分）"}[source])
                 service.save_answer(course_key, kid, str(question["question_id"]), choice)
 
             _checkpoint(deadline)
@@ -579,13 +614,33 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
         raise service.MasteryError("INVALID_REQUEST")
     if mode in ("bank_ai", "ai_first") and not api_key.strip():
         raise service.MasteryError("AI_KEY_REQUIRED")
-    config = {"first_round_mode": mode}
+    enable_external = raw.get("use_external_bank", False)
+    if type(enable_external) is not bool:
+        raise service.MasteryError("INVALID_REQUEST")
+    provider = raw.get("external_provider_id", "")
+    token_id = raw.get("external_token_id", "")
+    if enable_external:
+        if (not isinstance(provider, str) or provider not in question_bank.PROVIDERS
+                or not isinstance(token_id, str)
+                or not re.fullmatch(r"[0-9a-f]{32}", token_id)):
+            raise service.MasteryError("QUESTIONBANK_TOKEN_NOT_FOUND")
+        try:
+            available = question_bank.list_tokens()["tokens"]
+        except question_bank.QuestionBankError as exc:
+            raise service.MasteryError(exc.code) from exc
+        if not any(entry["provider_id"] == provider and entry["id"] == token_id
+                   for entry in available):
+            raise service.MasteryError("QUESTIONBANK_TOKEN_NOT_FOUND")
+    config = {"first_round_mode": mode, "use_external_bank": enable_external}
+    if enable_external:
+        config.update(external_provider_id=provider, external_token_id=token_id)
     for field, low, high in (
         ("target", 1, 100),
         ("max_rounds", 1, 30),
         ("stagnation_rounds", 1, 10),
         ("max_minutes", 1, 720),
         ("max_ai_calls", 1, 100),
+        ("max_external_calls", 1, 200),
     ):
         value = raw.get(field, DEFAULTS[field])
         if type(value) is not int or not low <= value <= high:
@@ -616,6 +671,7 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
             "state": "starting", "message": "正在启动", "config": config,
             "total": 0, "processed": 0, "done": 0, "skipped": 0,
             "ai_calls": 0, "ai_used": 0, "ai_errors": 0, "bank_hits": 0, "trials": 0,
+            "external_calls": 0, "external_hits": 0, "external_misses": 0, "external_errors": 0,
             "current": None, "submitting": None, "blocked": blocked,
             "pending_submissions": pending, "tasks": [], "updated_at": _utc(),
         })
