@@ -215,8 +215,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             && request.get("label").and_then(|v| v.as_str())
                 .is_some_and(|v| !v.trim().is_empty() && v.chars().count() <= 50)
             && request.get("token").and_then(|v| v.as_str())
-                .is_some_and(|v| (8..=256).contains(&v.len())
-                    && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
+                .is_some_and(|v| (8..=512).contains(&v.len())
+                    && v.bytes().all(|c| c.is_ascii_graphic()))
             => Ok(()),
         "questionbank.tokens.select" | "questionbank.tokens.remove"
             if request.get("token_id").and_then(|v| v.as_str())
