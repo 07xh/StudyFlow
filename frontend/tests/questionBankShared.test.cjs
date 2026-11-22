@@ -35,6 +35,14 @@ function mockBridge(){
   questionBankSetRotation:async(provider_id,next)=>{
    calls.push(["rotation",provider_id,next]);mode=next;return snapshot();
   },
+  questionBankCheckToken:async(token_id,include_quota)=>{
+   calls.push(["check",token_id,include_quota]);
+   stored=stored.map(t=>t.id===token_id
+    ?{...t,validity:"valid",checked_at:"2026-11-22T09:00:00Z",
+       ...(include_quota?{remaining:12,balance_at:"2026-11-22T09:00:00Z"}:{})}
+    :t);
+   return snapshot();
+  },
   questionBankSelectToken:async id=>{
    calls.push(["select",id]);
    stored=stored.map(t=>({...t,active:t.id===id}));return snapshot();
@@ -113,4 +121,24 @@ test("web-only question bank action is hidden",()=>{
   desktop:false,question:{title:"题目"}
  }));});
  assert.equal(view.toJSON(),null);
+});
+
+test("status and remaining checks are explicit, independent, and redact secrets",async()=>{
+ const {calls,mock}=mockBridge();
+ const {QuestionBankSettingsPanel}=load("components/QuestionBankSettingsPanel.tsx",{"bridge.ts":mock});
+ let view;
+ await act(async()=>{view=create(React.createElement(QuestionBankSettingsPanel,{desktop:true}));});
+ const field=view.root.findAllByType("textarea").find(t=>t.props.placeholder?.includes("第 1 条 Token"));
+ await act(async()=>field.props.onChange({target:{value:"aaaaaaaaaaaaaaaa"}}));
+ const click=label=>view.root.findAllByType("button").find(b=>textOf(b).includes(label));
+ await act(async()=>click("批量导入并加密保存").props.onClick());
+ assert.equal(calls.filter(x=>x[0]==="check").length,0,"no network probe on import");
+ await act(async()=>click("检测是否可用").props.onClick());
+ assert.equal(calls.filter(x=>x[0]==="check").length,1);
+ assert.equal(calls.at(-1)[2],false);
+ assert.match(textOf(view.root),/服务已识别/);
+ await act(async()=>click("读取余量（可能扣 1 次）").props.onClick());
+ assert.equal(calls.at(-1)[2],true);
+ assert.match(textOf(view.root),/剩余次数：12/);
+ assert.doesNotMatch(textOf(view.root),/aaaaaaaaaaaaaaaa/);
 });
