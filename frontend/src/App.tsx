@@ -24,6 +24,7 @@ import {useZhidaoAutoVerify} from "./zhidaoAutoVerify";
 import ZhidaoQrDialog from "./ZhidaoQrDialog";
 import {LegacyPlaybackPanel} from "./components/LegacyPlaybackPanel";
 import {MasteryPanel} from "./components/MasteryPanel";
+import {YanxiQuestionBankPanel} from "./components/YanxiQuestionBankPanel";
 import {MasteryAutoPanel} from "./components/MasteryAutoPanel";
 import {YuketangTaskArea} from "./components/YuketangTaskArea";
 import {YuketangCourseDetailPanel,resetYuketangVerification,verifyYuketangPlayedVideo,verifyYuketangCourse,getYuketangVideoSummary,subscribeYuketangVerification,getYuketangVerificationRevision} from "./components/YuketangCourseDetailPanel";
@@ -1061,6 +1062,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     </AppShell>
     <GlobalSettingsModal open={globalSettingsOpen} dark={dark}
       activeTab={globalSettingsTab} onTabChange={setGlobalSettingsTab} onClose={()=>setGlobalSettingsOpen(false)}>
+      {globalSettingsTab==="questionbank"&&<YanxiQuestionBankPanel desktop={desktop&&consentAccepted}/>}
       {globalSettingsTab==="general"&&<section className="settings-card">
         <h3>外观</h3>
         <div className="sf-settings-line">
