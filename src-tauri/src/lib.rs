@@ -224,7 +224,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
             && request.get("lines").and_then(|v| v.as_str())
                 .is_some_and(|v| !v.trim().is_empty() && v.len() <= 65_000
-                    && v.split_terminator('\\n').count() <= 100)
+                    && v.split_terminator('\n').count() <= 100)
             => Ok(()),
         "questionbank.tokens.rotation"
             if request.get("provider_id").and_then(|v| v.as_str())
