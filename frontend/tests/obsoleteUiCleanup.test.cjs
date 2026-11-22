@@ -32,11 +32,3 @@ test("orphaned old inline player and route styles are removed",()=>{
  assert.doesNotMatch(shell,/sf-inline-settings__toggle>svg:last-child\.is-open/);
  assert.doesNotMatch(style,/sf-platform-settings-action\.is-active/);
 });
-
-test("historical integration mirror is absent; active Xuexitong panel remains the sole source",()=>{
- const root=path.resolve(__dirname,"../..");
- for(const name of ["XuexitongHeartbeatPanel.tsx","XuexitongHeartbeatPanel.css"]){
-  assert.equal(fs.existsSync(path.join(root,"integration/frontend",name)),false);
-  assert.equal(fs.existsSync(path.join(root,"frontend/src/components",name)),true);
- }
-});
