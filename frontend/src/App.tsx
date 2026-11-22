@@ -910,6 +910,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         </CollapsibleSection>
       </>}
       {course.platform==="zhidao"&&<SettingsDialog
+        wide
         open={masteryDialogCourseKey===course.course_id} dark={dark}
         kicker="知到 · 后台学习任务"
         title={course.title+" · 全自动掌握度"}
