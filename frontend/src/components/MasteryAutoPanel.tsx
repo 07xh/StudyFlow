@@ -3,6 +3,7 @@ import {sameStatusSnapshot} from "../statusSnapshot";
 import {Pause,Play,RotateCcw,Square,CheckCircle2} from "lucide-react";
 import {
   masteryAutoControl,masteryAutoStart,masteryAutoStatus,friendlyBridgeError,
+  questionBankList,type QuestionBankState,
   type MasteryAutoSettings,type MasteryAutoStatus,
 } from "../bridge";
 import "./MasteryAutoPanel.css";
@@ -10,6 +11,8 @@ import "./MasteryAutoPanel.css";
 const DEFAULT:MasteryAutoSettings={
   target:100,max_rounds:12,stagnation_rounds:3,max_minutes:180,
   first_round_mode:"bank_only",max_ai_calls:30,
+  use_external_bank:false,external_provider_id:"yanxi",
+  external_token_id:"",max_external_calls:40,
 };
 const IDLE:MasteryAutoStatus={
   state:"idle",total:0,processed:0,done:0,skipped:0,tasks:[],
@@ -38,6 +41,8 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const [settings,setSettings]=useState<MasteryAutoSettings>(DEFAULT);
   const [busy,setBusy]=useState(false);
   const [aiKey,setAiKey]=useState("");
+  const [bankState,setBankState]=useState<QuestionBankState>({providers:[],tokens:[]});
+  const [bankError,setBankError]=useState("");
   const [error,setError]=useState("");
   const statusInFlight=useRef(false);
   const refresh=useCallback(async()=>{
@@ -72,6 +77,28 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     return ()=>window.clearInterval(timer);
   },[desktop,refresh]);
 
+  const reloadBanks=useCallback(async()=>{
+    if(!desktop)return;
+    try{
+      const state=await questionBankList();
+      setBankState(state);
+      setBankError("");
+      setSettings(previous=>{
+        const provider=state.providers.some(p=>p.id===previous.external_provider_id)
+          ?previous.external_provider_id||"" :state.providers[0]?.id||"";
+        const valid=state.tokens.some(t=>t.provider_id===provider&&t.id===previous.external_token_id);
+        const token=valid?previous.external_token_id
+          :state.tokens.find(t=>t.provider_id===provider&&t.active)?.id
+          ||state.tokens.find(t=>t.provider_id===provider)?.id||"";
+        return {...previous,external_provider_id:provider,external_token_id:token};
+      });
+    }catch(cause){setBankError(friendlyBridgeError(cause));}
+  },[desktop]);
+  useEffect(()=>{void reloadBanks();},[reloadBanks]);
+
+  const configuredBankTokens=bankState.tokens.filter(t=>t.provider_id===settings.external_provider_id);
+  const missingExternalToken=Boolean(settings.use_external_bank)&&!configuredBankTokens
+    .some(t=>t.id===settings.external_token_id);
   const running=ACTIVE.has(status.state);
   const work=status.state==="running"||status.state==="starting";
   const remaining=Math.max(0,status.total-status.processed);
@@ -136,6 +163,54 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         </label>
       </>}
     </div>
+    <div className="sf-mastery-auto-preference">
+      <label>
+        <input type="checkbox" checked={Boolean(settings.use_external_bank)}
+          disabled={running||busy}
+          onChange={event=>setSettings(previous=>({...previous,
+            use_external_bank:event.target.checked}))}/>
+        使用共享题库自动查询未命中题目
+      </label>
+      {settings.use_external_bank&&<>
+        <label>题库来源
+          <select value={settings.external_provider_id||""} disabled={running||busy}
+            onChange={event=>{
+              const id=event.target.value;
+              const selected=bankState.tokens.find(t=>t.provider_id===id&&t.active)
+                ||bankState.tokens.find(t=>t.provider_id===id);
+              setSettings(previous=>({...previous,external_provider_id:id,
+                external_token_id:selected?.id||""}));
+            }}>
+            {bankState.providers.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label>用于自动查询的 Token
+          <select value={settings.external_token_id||""} disabled={running||busy||!configuredBankTokens.length}
+            onChange={event=>setSettings(previous=>({...previous,
+              external_token_id:event.target.value}))}>
+            {!configuredBankTokens.length&&<option value="">尚未配置 Token</option>}
+            {configuredBankTokens.map(item=><option key={item.id} value={item.id}>
+              {item.label}{item.active?"（默认）":""}
+            </option>)}
+          </select>
+        </label>
+        <label>本次最多外部题库请求
+          <input type="number" min={1} max={200} disabled={running||busy}
+            value={settings.max_external_calls??40}
+            onChange={event=>setSettings(previous=>({...previous,
+              max_external_calls:Number(event.target.value)}))}/>
+        </label>
+        <button className="secondary" type="button" disabled={busy||running}
+          onClick={()=>void reloadBanks()}>刷新题库列表</button>
+      </>}
+    </div>
+    {settings.use_external_bank&&<p className="sf-mastery-auto-caption">
+      已验证本地答案优先；外部查询未命中或不能明确匹配选项时回退到原策略。
+      每道题最多查询一次，按本次次数上限停止外部查询，不会自动切换 Token。
+      查询会向所选题库发送题干、选项和 Token，可能扣除额度，结果仍以平台判分为准。
+      {missingExternalToken?" 请先在全局设置 → 题库与搜题中配置 Token。":""}
+    </p>}
+    {bankError&&settings.use_external_bank&&<p className="sf-mastery-auto-error" role="alert">{bankError}</p>}
     {["bank_ai","ai_first"].includes(settings.first_round_mode)&&<p className="sf-mastery-auto-caption">
       启用后仅把题干与选项发送至 DeepSeek；不会上传知到 Cookie、账户信息或题目 ID。
       AI 答案未经验证，必须以服务器交卷结果确认。
@@ -159,7 +234,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       </label>
     </div>
     <div className="sf-mastery-auto-actions">
-      <button type="button" disabled={busy||running||(["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())} onClick={()=>void start()}>
+      <button type="button" disabled={busy||running||missingExternalToken||(["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())} onClick={()=>void start()}>
         <Play size={14}/>{status.total>0?"重新扫描全部章节":"开始全部章节"}
       </button>
       <button type="button" className="secondary" disabled={busy||!running||status.state==="stopping"}
@@ -180,7 +255,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       <span>已达标 <b>{status.done}</b></span>
       <span>需处理 <b>{status.skipped}</b></span>
       <span>剩余 <b>{remaining}</b></span>
-      <span>题库命中 <b>{status.bank_hits??0}</b></span>
+      <span>已验证本地题库命中 <b>{status.bank_hits??0}</b></span>
+      <span>外部题库参考 <b>{status.external_hits??0}</b> / {status.external_calls??0} 次</span>
+      {(status.external_errors??0)>0&&<span>外部查询错误 <b>{status.external_errors}</b> 次</span>
       <span>AI 使用 <b>{status.ai_used??0}</b> / {status.ai_calls??0} 次</span>
       <span>试答 <b>{status.trials??0}</b></span>
       {(status.ai_errors??0)>0&&<span>AI 失败已回退 <b>{status.ai_errors}</b> 次</span>}
@@ -215,7 +292,8 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       {failed.length} 个知识点未自动达标。未验证答案的填空题、未知交卷状态和无进步的练习，会保留供手动处理。
     </p>}
     <p className="sf-mastery-auto-footnote">
-      目标 100 分不代表保证达到 100 分。题库只把平台公布或明确判对的答案视为正确；
+      目标 100 分不代表保证达到 100 分。本地已验证题库只收录平台公布或明确判对的答案；
+      外部题库答案未经核验，只有官方判分确认后才能加入本地库。
       未知选择题有界试答，未知填空题仅一次占位尝试。最终掌握度以知到服务器结果为准。
     </p>
   </section>;
