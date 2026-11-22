@@ -1063,7 +1063,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     </AppShell>
     <GlobalSettingsModal open={globalSettingsOpen} dark={dark}
       activeTab={globalSettingsTab} onTabChange={setGlobalSettingsTab} onClose={()=>setGlobalSettingsOpen(false)}>
-      {globalSettingsTab==="questionbank"&&<QuestionBankSettingsPanel desktop={desktop&&consentAccepted}/>}
+      {globalSettingsTab==="questionbank"&&<QuestionBankSettingsPanel desktop={desktop&&consentAccepted} dark={dark}/>}
       {globalSettingsTab==="general"&&<section className="settings-card">
         <h3>外观</h3>
         <div className="sf-settings-line">

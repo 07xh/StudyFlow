@@ -8,10 +8,17 @@ const textOf=node=>typeof node==="string"?node:(node.children??[]).map(textOf).j
 function mockBridge(){
  const calls=[];
  let stored=[];
- const provider={id:"yanxi",name:"言溪题库",description:"Token 搜题"};
- const snapshot=()=>({providers:[provider],tokens:stored.map(({secret,...t})=>({...t})),rotation_modes:{yanxi:mode}});
  let count=0;
  let mode="fixed";
+ const providers=[
+  {id:"yanxi",name:"言溪题库",description:"Token 搜题",
+   homepage:"https://tk.enncy.cn/",quota_unit:"次",supports_check:true}
+ ];
+ const snapshot=()=>({
+   providers:providers.map(p=>({...p})),
+   tokens:stored.map(({secret,...t})=>({...t})),
+   rotation_modes:{yanxi:mode},
+ });
  const mock={
   friendlyBridgeError:e=>String(e?.message||e),
   questionBankList:async()=>snapshot(),
@@ -21,8 +28,9 @@ function mockBridge(){
    let added=0;
    for(const raw of rows){
     if(stored.some(t=>t.secret===raw))continue;
-    stored.push({id:String(++count).padStart(32,"0"),provider_id,label:"Token "+String(count).padStart(3,"0"),
-      secret:raw,active:stored.length===0});added++;
+    stored.push({id:String(++count).padStart(32,"0"),provider_id,
+      label:"Token "+String(count).padStart(3,"0"),secret:raw,active:stored.length===0});
+    added++;
    }
    if(stored.length>1)mode="round_robin";
    return {...snapshot(),added,skipped:rows.length-added};
@@ -58,32 +66,87 @@ function mockBridge(){
     verified:false};
   },
  };
- return {calls,mock};
+ return {calls,mock,providers};
+}
+const modalMocks={
+ "@tauri-apps/api/core":{invoke:async()=>{}},
+ "../ui/SettingsDialog":{SettingsDialog:({open,children})=>open?React.createElement("section",{"aria-label":"二级题库浮窗"},children):null},
+ "../ui/ConfirmDialog":{ConfirmDialog:({open,onConfirm})=>open?React.createElement("button",{onClick:onConfirm},"继续检测"):null},
+};
+function settings(mock){
+ return load("components/QuestionBankSettingsPanel.tsx",{
+  "bridge.ts":mock,...modalMocks
+ }).QuestionBankSettingsPanel;
+}
+function button(view,label){
+ const found=view.root.findAllByType("button").find(b=>textOf(b).includes(label));
+ assert.ok(found,"missing button: "+label);
+ return found;
+}
+async function renderSettings(mock){
+ let view;
+ const Panel=settings(mock);
+ await act(async()=>{view=create(React.createElement(Panel,{desktop:true}));});
+ return view;
 }
 
-test("one provider supports newline-separated bulk token import without exposing secrets",async()=>{
+test("overview and secondary dialog keep bulk import, rotation and existing token tools",async()=>{
  const {calls,mock}=mockBridge();
- const {QuestionBankSettingsPanel}=load("components/QuestionBankSettingsPanel.tsx",{"bridge.ts":mock});
- let view;
- await act(async()=>{view=create(React.createElement(QuestionBankSettingsPanel,{desktop:true}));});
- const click=label=>view.root.findAllByType("button").find(b=>textOf(b).includes(label));
+ const view=await renderSettings(mock);
+ assert.doesNotMatch(textOf(view.root),/手动查询参考资料|查询参考答案/);
+ const link=view.root.findAllByType("a").find(a=>a.props["aria-label"]==="言溪题库 官网");
+ assert.equal(link.props.href,"https://tk.enncy.cn/");
+ assert.equal(link.props.rel,"noopener noreferrer");
+ await act(async()=>button(view,"管理").props.onClick());
  const field=view.root.findAllByType("textarea").find(t=>t.props.placeholder?.includes("第 1 条 Token"));
  assert.ok(field);
  await act(async()=>field.props.onChange({target:{value:"aaaaaaaaaaaaaaaa\nbbbbbbbbbbbbbbbb\naaaaaaaaaaaaaaaa"}}));
- await act(async()=>click("批量导入并加密保存").props.onClick());
+ await act(async()=>button(view,"批量导入并加密保存").props.onClick());
  assert.equal(calls.filter(c=>c[0]==="import").length,1);
- assert.match(textOf(view.root),/Token（2）/);
+ assert.match(textOf(view.root),/Token 2/);
  assert.doesNotMatch(textOf(view.root),/bbbbbbbbbbbbbbbb/);
- const mode=view.root.findAllByType("select").find(s=>s.props.value==="round_robin");
- assert.ok(mode,"two new tokens should enable automatic rotation");
- await act(async()=>mode.props.onChange({target:{value:"fixed"}}));
+ const strategy=view.root.findAllByType("select").find(s=>s.props.value==="round_robin");
+ assert.ok(strategy);
+ await act(async()=>strategy.props.onChange({target:{value:"fixed"}}));
  assert.deepEqual(calls.at(-1),["rotation","yanxi","fixed"]);
- const choose=view.root.findAllByType("button").filter(b=>textOf(b)==="设为默认");
- await act(async()=>choose[0].props.onClick());
+ await act(async()=>button(view,"设默认").props.onClick());
  assert.equal(calls.at(-1)[0],"select");
  const deleteButton=view.root.findAllByType("button").find(b=>b.props["aria-label"]==="删除 Token Token 002");
  await act(async()=>deleteButton.props.onClick());
- assert.match(textOf(view.root),/Token（1）/);
+ assert.match(textOf(view.root),/Token 1/);
+});
+
+test("one click checks all tokens; quota check is an explicitly confirmed second operation",async()=>{
+ const {calls,mock}=mockBridge();
+ const view=await renderSettings(mock);
+ await act(async()=>button(view,"管理").props.onClick());
+ const field=view.root.findAllByType("textarea")[0];
+ await act(async()=>field.props.onChange({target:{value:"aaaaaaaaaaaaaaaa\nbbbbbbbbbbbbbbbb"}}));
+ await act(async()=>button(view,"批量导入并加密保存").props.onClick());
+ assert.equal(calls.filter(c=>c[0]==="check").length,0);
+ await act(async()=>button(view,"检测全部").props.onClick());
+ assert.equal(calls.filter(c=>c[0]==="check").length,2);
+ assert.ok(calls.filter(c=>c[0]==="check").every(c=>c[2]===false));
+ assert.match(textOf(view.root),/已识别可用2/);
+ assert.match(textOf(view.root),/未知/);
+ await act(async()=>button(view,"检测并更新余量").props.onClick());
+ assert.equal(calls.filter(c=>c[0]==="check").length,2);
+ await act(async()=>button(view,"继续检测").props.onClick());
+ assert.equal(calls.filter(c=>c[0]==="check").length,4);
+ assert.ok(calls.slice(-2).every(c=>c[2]===true));
+ assert.match(textOf(view.root),/24 次/);
+ assert.match(textOf(view.root),/2 \/ 2 条有余量记录/);
+});
+
+test("provider rows derive from registered providers, each with its own official site",async()=>{
+ const {mock,providers}=mockBridge();
+ providers.push({id:"next",name:"新题库",description:"可扩展适配器",
+   homepage:"https://example.org/",quota_unit:"点",supports_check:false});
+ const view=await renderSettings(mock);
+ assert.match(textOf(view.root),/新题库/);
+ const links=view.root.findAllByType("a").map(a=>a.props.href);
+ assert.deepEqual(links.sort(),["https://example.org/","https://tk.enncy.cn/"]);
+ assert.doesNotMatch(textOf(view.root),/手动查询参考资料/);
 });
 
 test("any question row sends normalized text and options only after explicit search",async()=>{
@@ -96,10 +159,9 @@ test("any question row sends normalized text and options only after explicit sea
  let view;
  await act(async()=>{view=create(React.createElement(QuestionBankQuestionAction,{desktop:true,question}));});
  assert.equal(calls.length,0);
- const click=label=>view.root.findAllByType("button").find(b=>textOf(b).includes(label));
- await act(async()=>click("题库查题").props.onClick());
+ await act(async()=>button(view,"题库查题").props.onClick());
  assert.equal(calls.filter(c=>c[0]==="query").length,0);
- await act(async()=>click("查询这道题").props.onClick());
+ await act(async()=>button(view,"查询这道题").props.onClick());
  assert.equal(calls.filter(c=>c[0]==="query").length,1);
  assert.deepEqual(calls[0].slice(0,3),["query","yanxi",question]);
  assert.match(textOf(view.root),/参考答案（未核验）/);
@@ -116,26 +178,6 @@ test("web-only question bank action is hidden",()=>{
   desktop:false,question:{title:"题目"}
  }));});
  assert.equal(view.toJSON(),null);
-});
-
-test("status and remaining checks are explicit, independent, and redact secrets",async()=>{
- const {calls,mock}=mockBridge();
- const {QuestionBankSettingsPanel}=load("components/QuestionBankSettingsPanel.tsx",{"bridge.ts":mock});
- let view;
- await act(async()=>{view=create(React.createElement(QuestionBankSettingsPanel,{desktop:true}));});
- const field=view.root.findAllByType("textarea").find(t=>t.props.placeholder?.includes("第 1 条 Token"));
- await act(async()=>field.props.onChange({target:{value:"aaaaaaaaaaaaaaaa"}}));
- const click=label=>view.root.findAllByType("button").find(b=>textOf(b).includes(label));
- await act(async()=>click("批量导入并加密保存").props.onClick());
- assert.equal(calls.filter(x=>x[0]==="check").length,0,"no network probe on import");
- await act(async()=>click("检测是否可用").props.onClick());
- assert.equal(calls.filter(x=>x[0]==="check").length,1);
- assert.equal(calls.at(-1)[2],false);
- assert.match(textOf(view.root),/服务已识别/);
- await act(async()=>click("读取余量（可能扣 1 次）").props.onClick());
- assert.equal(calls.at(-1)[2],true);
- assert.match(textOf(view.root),/剩余次数：12/);
- assert.doesNotMatch(textOf(view.root),/aaaaaaaaaaaaaaaa/);
 });
 
 test("retired Yanxi IPC cannot be reintroduced beside shared provider vault",()=>{

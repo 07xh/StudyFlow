@@ -1,196 +1,261 @@
-import {useEffect,useMemo,useState} from "react";
+import {useEffect,useMemo,useRef,useState,type MouseEvent} from "react";
+import {invoke} from "@tauri-apps/api/core";
+import {ChevronRight,ExternalLink,Plus,RefreshCw} from "lucide-react";
 import {
-  friendlyBridgeError,questionBankCheckToken,questionBankImportTokens,questionBankList,questionBankQuery,
+  friendlyBridgeError,questionBankCheckToken,questionBankImportTokens,questionBankList,
   questionBankRemoveToken,questionBankSelectToken,questionBankSetRotation,
-  type QuestionBankAnswer,type QuestionBankState,
+  type QuestionBankState,type QuestionBankToken,
 } from "../bridge";
+import {SettingsDialog} from "../ui/SettingsDialog";
+import {ConfirmDialog} from "../ui/ConfirmDialog";
 import "./QuestionBank.css";
 
-/** Global provider and token management, shared by all learning platforms. */
-export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
+type Job={done:number;total:number;failed:number;quota:boolean};
+type ProviderStats={tokens:number;valid:number;invalid:number;unknown:number;known:number;remaining:number};
+function summarize(tokens:QuestionBankToken[]):ProviderStats{
+  const usable=tokens.filter(t=>t.validity!=="invalid");
+  return {
+    tokens:tokens.length,
+    valid:tokens.filter(t=>t.validity==="valid").length,
+    invalid:tokens.filter(t=>t.validity==="invalid").length,
+    unknown:tokens.filter(t=>t.validity!=="valid"&&t.validity!=="invalid").length,
+    known:usable.filter(t=>typeof t.remaining==="number"&&t.remaining>=0).length,
+    remaining:usable.reduce((total,t)=>total+(typeof t.remaining==="number"&&t.remaining>=0?t.remaining:0),0),
+  };
+}
+function quotaLabel(stats:ProviderStats,unit="次"){
+  return stats.known===0?"未知":stats.remaining.toLocaleString()+" "+unit;
+}
+function statusLabel(token:QuestionBankToken){
+  if(token.validity==="valid")return "已识别可用";
+  if(token.validity==="invalid")return "服务拒绝";
+  if(token.validity==="unknown")return "无法确认";
+  return "未检测";
+}
+function dateLabel(value?:string|null){
+  if(!value)return "";
+  const parsed=new Date(value);
+  return Number.isNaN(parsed.getTime())?value:parsed.toLocaleString();
+}
+
+/** Compact cross-platform question-bank control center. Querying remains in course features. */
+export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;dark?:boolean}){
   const [state,setState]=useState<QuestionBankState>({providers:[],tokens:[]});
-  const [provider,setProvider]=useState("yanxi");
+  const [selectedId,setSelectedId]=useState<string|null>(null);
   const [tokenLines,setTokenLines]=useState("");
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
+  const [checkingId,setCheckingId]=useState("");
+  const [job,setJob]=useState<Job|null>(null);
+  const [quotaConfirm,setQuotaConfirm]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
-  const [title,setTitle]=useState("");
-  const [options,setOptions]=useState("");
-  const [questionType,setQuestionType]=useState("");
-  const [answer,setAnswer]=useState<QuestionBankAnswer|null>(null);
-  const [checkingId,setCheckingId]=useState("");
+  const mounted=useRef(true);
+
+  useEffect(()=>{
+    mounted.current=true;
+    return ()=>{mounted.current=false;};
+  },[]);
   useEffect(()=>{
     if(!desktop)return;
     let active=true;
     setLoading(true);
     void questionBankList().then(data=>{
-      if(!active)return;
-      setState(data);
-      if(data.providers.length&&!data.providers.some(p=>p.id===provider))
-        setProvider(data.providers[0].id);
+      if(active)setState(data);
     }).catch(cause=>{if(active)setError(friendlyBridgeError(cause));})
       .finally(()=>{if(active)setLoading(false);});
     return ()=>{active=false;};
   },[desktop]);
 
-  const available=useMemo(()=>state.tokens.filter(item=>item.provider_id===provider),[state,provider]);
-  const activeToken=available.find(item=>item.active);
-  const rotation=state.rotation_modes?.[provider]||"fixed";
+  const selected=state.providers.find(p=>p.id===selectedId);
+  const selectedTokens=state.tokens.filter(t=>t.provider_id===selectedId);
+  const selectedStats=summarize(selectedTokens);
+  const allStats=useMemo(()=>summarize(state.tokens),[state.tokens]);
+  const units=state.providers.filter(p=>state.tokens.some(t=>t.provider_id===p.id&&t.validity!=="invalid"
+    &&typeof t.remaining==="number"&&t.remaining>=0)).map(p=>p.quota_unit||"次");
+  const globalQuota=allStats.known===0?"未知":new Set(units).size>1
+    ?"按题库分别统计":quotaLabel(allStats,units[0]||"次");
+  const eligible=state.tokens.filter(t=>state.providers.some(p=>p.id===t.provider_id&&p.supports_check!==false));
+  const rotation=selected?state.rotation_modes?.[selected.id]||"fixed":"fixed";
 
-  const add=async()=>{
-    if(busy||!tokenLines.trim())return;
-    setBusy(true);setError("");setNotice("");
-    try{
-      const updated=await questionBankImportTokens(provider,tokenLines);
-      setState(updated);setTokenLines("");
-      setNotice(`已加密保存 ${updated.added??0} 条 Token，跳过重复 ${updated.skipped??0} 条；未返回任何密钥明文。`);
-    }catch(cause){setError(friendlyBridgeError(cause));}
-    finally{setBusy(false);}
-  };
-  const changeRotation=async(mode:"fixed"|"round_robin")=>{
-    if(busy)return;
-    setBusy(true);setError("");setNotice("");
-    try{
-      setState(await questionBankSetRotation(provider,mode));
-      setNotice(mode==="round_robin"
-        ?"已启用轮流使用：每次新查询选下一条，错误不会触发额外换号重试。"
-        :"已启用固定使用：始终使用当前默认 Token。");
-    }catch(cause){setError(friendlyBridgeError(cause));}
-    finally{setBusy(false);}
-  };
-  const check=async(id:string,includeQuota=false)=>{
+  async function runAll(quota:boolean){
+    if(busy||loading||eligible.length===0)return;
+    setQuotaConfirm(false);setBusy(true);setError("");setNotice("");
+    let done=0,failed=0;
+    setJob({done,total:eligible.length,failed,quota});
+    for(const token of eligible){
+      if(!mounted.current)break;
+      setCheckingId(token.id);
+      try{
+        const next=await questionBankCheckToken(token.id,quota);
+        if(!mounted.current)break;
+        setState(next);
+      }catch{
+        failed++;
+      }
+      done++;
+      if(mounted.current)setJob({done,total:eligible.length,failed,quota});
+    }
+    if(!mounted.current)return;
+    setCheckingId("");setJob(null);setBusy(false);
+    setNotice("检测完成："+done+" 条，失败 "+failed+" 条。余量以题库实际返回的数据为准。");
+  }
+  async function checkOne(id:string,quota=false){
     if(busy)return;
     setBusy(true);setCheckingId(id);setError("");setNotice("");
     try{
-      setState(await questionBankCheckToken(id,includeQuota));
-      setNotice(includeQuota
-        ?"检测完成。余量仅在题库返回可用数字时更新，检测本身可能消耗一次查询额度。"
-        :"检测完成。网络故障或接口变化会显示无法确认，不会删除 Token。");
+      setState(await questionBankCheckToken(id,quota));
+      setNotice(quota?"已更新该 Token 可取得的余量信息。":"已完成单条状态检测。");
     }catch(cause){setError(friendlyBridgeError(cause));}
-    finally{setCheckingId("");setBusy(false);}
-  };
-  const validityLabel=(status?:string)=>{
-    switch(status){
-      case "valid":return "服务已识别";
-      case "invalid":return "可能无效";
-      case "unknown":return "无法确认";
-      default:return "未检测";
-    }
-  };
-  const select=async(id:string)=>{
+    finally{setBusy(false);setCheckingId("");}
+  }
+  async function importBatch(){
+    if(busy||!selected||!tokenLines.trim())return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const next=await questionBankImportTokens(selected.id,tokenLines);
+      setState(next);setTokenLines("");
+      setNotice("已导入 "+(next.added??0)+" 条，跳过重复 "+(next.skipped??0)+" 条。");
+    }catch(cause){setError(friendlyBridgeError(cause));}
+    finally{setBusy(false);}
+  }
+  async function setRotation(mode:"fixed"|"round_robin"){
+    if(busy||!selected)return;
+    setBusy(true);setError("");setNotice("");
+    try{setState(await questionBankSetRotation(selected.id,mode));}
+    catch(cause){setError(friendlyBridgeError(cause));}
+    finally{setBusy(false);}
+  }
+  async function selectToken(id:string){
     if(busy)return;
-    setBusy(true);setError("");setNotice("");setAnswer(null);
+    setBusy(true);setError("");setNotice("");
     try{setState(await questionBankSelectToken(id));}
     catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
-  };
-  const remove=async(id:string)=>{
+  }
+  async function removeToken(id:string){
     if(busy)return;
-    setBusy(true);setError("");setNotice("");setAnswer(null);
+    setBusy(true);setError("");setNotice("");
     try{
       setState(await questionBankRemoveToken(id));
-      setNotice("所选 Token 已从本机保险库中删除。");
+      setNotice("Token 已从本机加密保险库中删除。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
-  };
-  const query=async()=>{
-    if(busy||!activeToken||!title.trim())return;
-    setBusy(true);setError("");setNotice("");setAnswer(null);
-    try{
-      const result=await questionBankQuery(provider,{title:title.trim(),
-        options:options.trim(),question_type:questionType});
-      setAnswer(result);
-      setNotice(result.found?"题库返回了参考内容，请与题目核对。":"当前题库未找到参考答案。");
-    }catch(cause){setError(friendlyBridgeError(cause));}
-    finally{setBusy(false);}
-  };
+  }
+  function openHomepage(event:MouseEvent<HTMLAnchorElement>,url:string){
+    event.preventDefault();setError("");
+    void invoke("studyflow_open_question_bank_site",{url}).catch(()=>{
+      if(mounted.current)setError("暂时无法打开题库官网，请检查系统默认浏览器。");
+    });
+  }
+  function openProvider(id:string){
+    setSelectedId(id);setTokenLines("");setError("");setNotice("");
+  }
 
-  if(!desktop)return <section className="sf-qb-settings"><p>题库仅支持学序 Windows EXE 本地服务。</p></section>;
-  return <section className="sf-qb-settings" aria-label="共享题库与 Token">
-    <header className="sf-qb-header">
-      <h3>题库与搜题</h3>
-      <p>已接入的题库向所有支持的练习和作业栏目提供统一的查题接口。Token 只保存在本机 Windows 加密保险库中。</p>
-    </header>
-    <div className="sf-qb-fields">
-      <label>题库来源
-        <select value={provider} disabled={busy||loading} onChange={e=>{setProvider(e.target.value);setAnswer(null);setTokenLines("");}}>
-          {state.providers.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-      </label>
-      <div className="sf-qb-manager">
-        <div className="sf-qb-token-toolbar">
-          <strong>此题库的 Token（{available.length}）</strong>
-          <label>使用策略
-            <select value={rotation} disabled={busy||loading}
-              onChange={e=>void changeRotation(e.target.value as "fixed"|"round_robin")}>
-              <option value="round_robin">自动轮流使用</option>
-              <option value="fixed">固定使用默认 Token</option>
+  if(!desktop)return <section className="sf-qb-hub"><p>题库中心仅在 Windows EXE 中可用。</p></section>;
+  return <section className="sf-qb-hub" aria-label="题库中心">
+    <div className="sf-qb-hub-top">
+      <div><strong>共享题库</strong><p>统一管理多个来源，供知到及后续接入的学习平台调用。</p></div>
+      <div className="sf-qb-hub-actions">
+        <button type="button" className="secondary" disabled={busy||loading||eligible.length===0}
+          onClick={()=>void runAll(false)}><RefreshCw size={14}/>检测全部</button>
+        <button type="button" className="secondary" disabled={busy||loading||eligible.length===0}
+          onClick={()=>setQuotaConfirm(true)}>检测并更新余量</button>
+      </div>
+    </div>
+    <div className="sf-qb-overview" aria-label="全部题库汇总">
+      <div><span>题库来源</span><strong>{state.providers.length}</strong></div>
+      <div><span>已保存 Token</span><strong>{allStats.tokens}</strong></div>
+      <div><span>已识别可用</span><strong>{allStats.valid}<small> / {allStats.tokens}</small></strong></div>
+      <div><span>已知剩余总量</span><strong>{globalQuota}</strong>
+        <small>{allStats.known} / {allStats.tokens} 条有余量记录</small></div>
+    </div>
+    <p className="sf-qb-hub-note">状态：{allStats.invalid} 条服务拒绝，{allStats.unknown} 条未检测或无法确认。总余量仅汇总有数值且未被判无效的 Token，并非实时保证值。</p>
+    {job&&<div role="status" className="sf-qb-job">
+      <span>{job.quota?"检测状态与余量":"检测可用性"}：{job.done} / {job.total}，请求失败 {job.failed}</span>
+      <progress max={job.total} value={job.done}/>
+    </div>}
+    {loading&&<p className="sf-qb-hub-note">正在读取本机题库配置…</p>}
+    <div className="sf-qb-provider-list" aria-label="已接入题库">
+      {state.providers.map(provider=>{
+        const stats=summarize(state.tokens.filter(t=>t.provider_id===provider.id));
+        return <article className="sf-qb-provider" key={provider.id}>
+          <div className="sf-qb-provider-main">
+            <div className="sf-qb-provider-name"><strong>{provider.name}</strong>
+              {provider.homepage&&<a href={provider.homepage} target="_blank"
+                rel="noopener noreferrer" aria-label={provider.name+" 官网"}
+                onClick={event=>openHomepage(event,provider.homepage||"")}><ExternalLink size={13}/>官网</a>}
+            </div>
+            <div className="sf-qb-provider-meta">
+              <span>Token {stats.tokens}</span><span>可用 {stats.valid}</span>
+              <span>剩余 {quotaLabel(stats,provider.quota_unit||"次")}</span>
+            </div>
+          </div>
+          <button className="secondary sf-qb-manage" type="button" disabled={busy||loading}
+            onClick={()=>openProvider(provider.id)}>管理 <ChevronRight size={15}/></button>
+        </article>;
+      })}
+    </div>
+    {state.providers.length===0&&!loading&&<p className="sf-qb-hub-note">还没有接入题库适配器。添加新的来源后会自动出现在这里。</p>}
+    {error&&<p className="sf-qb-error" role="alert">{error}</p>}
+    {notice&&<p className="sf-qb-hub-note" role="status">{notice}</p>}
+    <p className="sf-qb-hub-note">“检测全部”只验证状态；“检测并更新余量”可能因题库规则消耗查询额度，不会定时自动执行。</p>
+
+    <SettingsDialog open={Boolean(selected)} dark={dark} kicker="题库中心 · 来源管理"
+      title={selected?.name||"题库管理"} onClose={()=>{setSelectedId(null);setTokenLines("");}}>
+      {selected&&<div className="sf-qb-details">
+        <div className="sf-qb-detail-summary">
+          <span>Token {selectedStats.tokens}</span><span>已识别可用 {selectedStats.valid}</span>
+          <span>已知余额 {quotaLabel(selectedStats,selected.quota_unit||"次")}</span>
+          {selected.homepage&&<a href={selected.homepage} target="_blank" rel="noopener noreferrer"
+            onClick={event=>openHomepage(event,selected.homepage||"")}><ExternalLink size={13}/>访问题库官网</a>}
+        </div>
+        {error&&<p role="alert" className="sf-qb-error">{error}</p>}
+        <div className="sf-qb-detail-toolbar">
+          <label>Token 使用策略
+            <select value={rotation} disabled={busy}
+              onChange={event=>void setRotation(event.target.value as "fixed"|"round_robin")}>
+              <option value="round_robin">自动轮流</option>
+              <option value="fixed">固定默认</option>
             </select>
           </label>
         </div>
-        {loading&&<p className="sf-qb-hint">正在读取本机题库配置…</p>}
-        {!loading&&available.length===0&&<p className="sf-qb-hint">尚未配置。直接在下方粘贴全部 Token。</p>}
-        {available.length>0&&<details className="sf-qb-token-list">
-          <summary>查看已保存的 {available.length} 条 Token（仅显示备注）</summary>
-          {available.map(item=><div className="sf-qb-token" key={item.id}>
-            <div><strong>{item.label}</strong>
-              <small>{item.active?"默认 Token · ":""}{validityLabel(item.validity)} ·
-                {" "}剩余次数：{item.remaining??"未知"}</small>
-              {item.checked_at&&<small>最近检测：{item.checked_at.replace("T"," ").slice(0,19)} UTC</small>}
-              {item.balance_at&&<small>余量记录：{item.balance_at.replace("T"," ").slice(0,19)} UTC</small>}
+        <div className="sf-qb-token-rows">
+          {selectedTokens.length===0&&<p className="sf-qb-hub-note">尚无 Token。可在下方一次粘贴多条。</p>}
+          {selectedTokens.map(token=><div className="sf-qb-token-row" key={token.id}>
+            <div className="sf-qb-token-info">
+              <strong>{token.label}{token.active?" · 默认":""}</strong>
+              <span>{statusLabel(token)} · 剩余 {typeof token.remaining==="number"&&token.validity!=="invalid"
+                ?token.remaining+" "+(selected.quota_unit||"次"):"未知"}</span>
+              {token.checked_at&&<small>检测：{dateLabel(token.checked_at)}</small>}
+              {token.balance_at&&<small>余量更新：{dateLabel(token.balance_at)}</small>}
             </div>
-            <button className="secondary" type="button" disabled={busy}
-              onClick={()=>void check(item.id)}>{checkingId===item.id?"检测中…":"检测是否可用"}</button>
-            <button className="secondary" type="button" disabled={busy}
-              onClick={()=>void check(item.id,true)}>读取余量（可能扣 1 次）</button>
-            <button className="secondary" type="button" disabled={busy||item.active}
-              onClick={()=>void select(item.id)}>{item.active?"当前默认":"设为默认"}</button>
-            <button className="secondary" type="button" disabled={busy}
-              onClick={()=>void remove(item.id)} aria-label={"删除 Token "+item.label}>删除</button>
+            <div className="sf-qb-token-actions">
+              {selected.supports_check!==false&&<button className="secondary" type="button" disabled={busy}
+                onClick={()=>void checkOne(token.id)}>{checkingId===token.id?"检测中…":"检测"}</button>}
+              <button className="secondary" type="button" disabled={busy||token.active}
+                onClick={()=>void selectToken(token.id)}>{token.active?"默认":"设默认"}</button>
+              <button className="secondary" type="button" disabled={busy}
+                aria-label={"删除 Token "+token.label} onClick={()=>void removeToken(token.id)}>删除</button>
+            </div>
           </div>)}
-        </details>}
-      </div>
-      <div className="sf-qb-credentials">
-        <label>批量导入 Token（每行一条，同一题库共用此配置）
-          <textarea className="sf-qb-secret-lines" rows={5} maxLength={65000}
-            autoComplete="off" spellCheck={false} value={tokenLines}
-            disabled={busy||loading} placeholder={"第 1 条 Token\n第 2 条 Token\n第 3 条 Token"}
-            onChange={e=>setTokenLines(e.target.value)}/>
-        </label>
-        <button type="button" disabled={busy||loading||!tokenLines.trim()}
-          onClick={()=>void add()}>批量导入并加密保存</button>
-      </div>
-      <p className="sf-qb-hint">自动去除空行和重复值，不覆盖旧 Token；单个题库最多 100 条。保存不会主动检测。可在上方列表检测每条 Token；读取余量可能消耗 1 次额度，不自动轮询或因限流换号。</p>
-    </div>
-    <section className="sf-qb-manual" aria-label="手动搜题">
-      <h4>手动查询参考资料</h4>
-      <label>题干
-        <textarea rows={2} value={title} disabled={busy}
-          placeholder="输入题目，或在课程习题下点击“题库查题”"
-          onChange={e=>{setTitle(e.target.value);setAnswer(null);}}/>
-      </label>
-      <label>选项（每行一项，可选）
-        <textarea rows={2} value={options} disabled={busy}
-          onChange={e=>{setOptions(e.target.value);setAnswer(null);}}/>
-      </label>
-      <label>题型
-        <select value={questionType} disabled={busy} onChange={e=>setQuestionType(e.target.value)}>
-          <option value="">不限</option>
-          {["单选","多选","判断","填空"].map(type=><option key={type} value={type}>{type}</option>)}
-        </select>
-      </label>
-      <button type="button" disabled={!activeToken||busy||!title.trim()} onClick={()=>void query()}>
-        {busy?"查询中…":"查询参考答案"}
-      </button>
-      <p className="sf-qb-hint">查询会把题干、选项和选中 Token 发送给对应题库，可能消耗额度；不会自动填写或提交作业。</p>
-    </section>
-    {error&&<p role="alert" className="sf-qb-error">{error}</p>}
-    {notice&&<p role="status" className="sf-qb-hint">{notice}</p>}
-    {answer?.found&&<div className="sf-qb-answer">
-      <strong>{answer.provider_name} · 参考答案（未核验）</strong>
-      <pre>{answer.answer}</pre>
-      <small>使用 Token：{answer.token_label}{answer.remaining!==null?" · 剩余次数："+answer.remaining:""}</small>
-    </div>}
+        </div>
+        <div className="sf-qb-import">
+          <div><strong><Plus size={14}/>批量导入 Token</strong>
+            <p>一行一条，自动去重并加密保存；不会显示原文。</p></div>
+          <textarea rows={4} maxLength={65000} autoComplete="off" spellCheck={false}
+            className="sf-qb-secret-lines" value={tokenLines} disabled={busy}
+            placeholder={"第 1 条 Token\n第 2 条 Token\n第 3 条 Token"}
+            onChange={event=>setTokenLines(event.target.value)}/>
+          <button type="button" disabled={busy||!tokenLines.trim()} onClick={()=>void importBatch()}>
+            批量导入并加密保存
+          </button>
+        </div>
+      </div>}
+    </SettingsDialog>
+    <ConfirmDialog open={quotaConfirm} dark={dark} title="检测全部 Token 并更新余量"
+      description={"将检查 "+eligible.length+" 条 Token 的有效性，并尝试读取实际剩余额度。"}
+      warning="部分题库的余量检测可能消耗查询次数；无法获取的余量仍显示未知。"
+      confirmLabel="继续检测" onConfirm={()=>void runAll(true)} onCancel={()=>setQuotaConfirm(false)}/>
   </section>;
 }
