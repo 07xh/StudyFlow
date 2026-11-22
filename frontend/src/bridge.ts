@@ -683,7 +683,7 @@ export type MasteryAutoStatus = {
   message?: string; total: number; processed: number; done: number; skipped: number;
   current?: {knowledge_id:string;name:string;theme:string}|null;
   submitting?: {knowledge_id:string;exam_test_id:number}|null;
-  tasks: MasteryAutoTask[]; updated_at?: string;
+  blocked?: string[]; tasks: MasteryAutoTask[]; updated_at?: string;
   ai_calls?: number; ai_used?: number; ai_errors?: number;
   bank_hits?: number; trials?: number;
 };
