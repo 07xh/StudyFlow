@@ -69,8 +69,6 @@
 .sf-global-settings-content .settings-card{min-width:0;padding:18px}
 .sf-global-settings-content .section-head{margin-bottom:14px}
 .sf-global-settings-content .sf-settings-line{min-width:0}
-.sf-global-settings-content .sf-zhidao-account-tools{margin-bottom:0}
-.sf-global-settings-content .sf-zhidao-account-tools>.section-head{display:none}
 .sf-global-settings-content :is(button,input,select){max-width:100%}
 @media(max-width:800px){
   .sf-global-settings-modal{width:calc(100vw - 24px);height:min(83dvh,720px)}

@@ -16,7 +16,8 @@ test("global settings is one floating workspace, not a route",()=>{
  assert.match(app,/globalSettingsTab==="developer"/);
  assert.match(source("ui/GlobalSettingsModal.tsx"),/label:"开发者网站"/);
  assert.match(app,/<UpdatePanel desktop=\{desktop&&consentAccepted\}/);
- assert.match(app,/<ZhidaoAccountTools desktop=\{desktop\} dark=\{dark\} view="about"\/>/);
+ assert.match(app,/<AboutOpenSourcePanel desktop=\{desktop\} onOpenDeveloper=/);
+ assert.doesNotMatch(app,/view="about"/);
 });
 test("floating global settings portal retains focus, keyboard and resize semantics",()=>{
  const modal=source("ui/GlobalSettingsModal.tsx"),css=source("ui/globalSettings.css");
@@ -32,8 +33,21 @@ test("floating global settings portal retains focus, keyboard and resize semanti
  assert.match(css,/@media\(max-width:620px\)/);
  assert.match(css,/prefers-reduced-motion:reduce/);
 });
-test("legal documents close independently and focus returns to their opener",()=>{
- const legal=source("components/ZhidaoAccountTools.tsx");
- assert.match(legal,/event.stopPropagation\(\);setDocument\(null\)/);
- assert.match(legal,/documentCloseRef.current\?\.focus\(\)/);
+test("About and Open Source is product-scoped; legal documents read inline through native app",()=>{
+ const about=source("ui/AboutOpenSourcePanel.tsx");
+ const account=source("components/ZhidaoAccountTools.tsx");
+ const css=source("ui/aboutOpenSource.css");
+ assert.match(about,/getVersion\(/);
+ assert.match(about,/studyflow_read_document/);
+ assert.match(about,/aria-label="关于与开源"/);
+ assert.match(about,/产品概览/);
+ assert.match(about,/开源与许可/);
+ assert.match(about,/返回开源与许可/);
+ assert.match(about,/data-document-id=\{item.id\}/);
+ assert.match(about,/querySelector<HTMLButtonElement>/);
+ assert.match(about,/event.key==="Escape"/);
+ assert.doesNotMatch(about,/sf-document-overlay/);
+ assert.doesNotMatch(account,/view==="about"|sf-document-overlay|documentBusy/);
+ assert.match(css,/@media\(max-width:460px\)/);
+ assert.match(css,/focus-visible/);
 });

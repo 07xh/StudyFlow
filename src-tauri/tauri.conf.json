@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "学序 StudyFlow",
-  "version": "0.1.1-rc.63",
+  "version": "0.1.1-rc.64",
   "identifier": "app.studyflow.desktop",
   "build": {
     "beforeDevCommand": "npm --prefix frontend run dev -- --host 127.0.0.1",
@@ -44,7 +44,10 @@
       "../legacy/zhidao/隐私政策与数据说明.txt": "legal/隐私政策与数据说明.txt",
       "../legacy/zhidao/StudyFlow-隐私补充说明.txt": "legal/StudyFlow-隐私补充说明.txt",
       "../legacy/zhidao/LICENSE-GPL-3.0.txt": "legal/LICENSE-GPL-3.0.txt",
-      "../legacy/zhidao/SOURCE.md": "legal/SOURCE.md"
+      "../legacy/zhidao/SOURCE.md": "legal/SOURCE.md",
+      "../docs/SOURCE_PROVENANCE.md": "legal/STUDYFLOW_SOURCE_PROVENANCE.md",
+      "../docs/LICENSE_PROVENANCE.md": "legal/THIRD_PARTY_LICENSES.md",
+      "../docs/LICENSE_PROVENANCE.addendum.md": "legal/THIRD_PARTY_LICENSES_ADDENDUM.md"
     },
     "windows": {
       "nsis": {

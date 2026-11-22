@@ -1,11 +1,10 @@
-import {useEffect,useRef,useState,type KeyboardEvent} from "react";
+import {useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {BookOpen,Database,FileText,ShieldCheck} from "lucide-react";
-import {friendlyBridgeError,request,type ZhidaoDiagnostic,type ZhidaoDocument} from "../bridge";
+import {friendlyBridgeError,request,type ZhidaoDiagnostic} from "../bridge";
 import {ConfirmDialog} from "../ui/ConfirmDialog";
 
 type Action="session"|"cache"|"web"|"none";
-type Props={desktop:boolean;dark:boolean;onDataChanged?:()=>void;view?:"account"|"data"|"about"};
+type Props={desktop:boolean;dark:boolean;onDataChanged?:()=>void;view?:"account"|"data"};
 const details={
   session:{
     title:"退出知到登录？",
@@ -23,30 +22,12 @@ const details={
     warning:"不会删除 ZHS Python 登录态。请先关闭官方播放器窗口。"
   }
 } as const;
-const docs=[{id:"terms" as const,label:"使用条款与第三方声明",icon:FileText},
-  {id:"privacy" as const,label:"隐私政策与数据说明",icon:ShieldCheck},
-  {id:"license" as const,label:"GNU GPL v3 开源许可",icon:BookOpen},
-  {id:"source" as const,label:"原版源码与来源",icon:Database}];
 
 export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:Props){
   const [action,setAction]=useState<Action>("none");
   const [busy,setBusy]=useState(false);
   const [message,setMessage]=useState("");
   const [diagnostic,setDiagnostic]=useState<ZhidaoDiagnostic|null>(null);
-  const [document,setDocument]=useState<ZhidaoDocument|null>(null);
-  const [documentBusy,setDocumentBusy]=useState(false);
-  const documentCloseRef=useRef<HTMLButtonElement>(null);
-  const documentOpenerRef=useRef<HTMLElement|null>(null);
-  useEffect(()=>{
-    if(!document)return;
-    documentOpenerRef.current=window.document.activeElement instanceof HTMLElement
-      ?window.document.activeElement:null;
-    const frame=window.requestAnimationFrame(()=>documentCloseRef.current?.focus());
-    return ()=>{
-      window.cancelAnimationFrame(frame);
-      if(documentOpenerRef.current?.isConnected)documentOpenerRef.current.focus();
-    };
-  },[document]);
 
   async function runAction(){
     if(action==="none")return;
@@ -93,17 +74,10 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:P
     catch(error){setMessage(friendlyBridgeError(error));}
   }
 
-  async function openDocument(id:"terms"|"privacy"|"license"|"source"){
-    setDocumentBusy(true);setMessage("");
-    try{setDocument(await request<ZhidaoDocument>({operation:"zhidao.document.read",document_id:id}));}
-    catch(error){setMessage(friendlyBridgeError(error));}
-    finally{setDocumentBusy(false);}
-  }
-
   const selected=action==="none"?null:details[action];
   return <>
     <section className="settings-card sf-zhidao-account-tools">
-      {view!=="account"&&<div className="section-head"><h3>{view==="about"?"关于与开源说明":"知到本地数据"}</h3></div>}
+      {view==="data"&&<div className="section-head"><h3>知到本地数据</h3></div>}
       {view==="account"&&<div className="sf-zd-account-actions">
         <button className="secondary" disabled={!desktop||busy} onClick={()=>void diagnose()}>连接诊断</button>
         <button className="secondary" disabled={!desktop||busy} onClick={()=>void invoke("zhidao_open_official_site")}>打开知到官网</button>
@@ -113,9 +87,6 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:P
         <button className="secondary" disabled={!desktop||busy} onClick={()=>void openFolder()}>打开数据目录</button>
         <button className="secondary sf-destructive-action" disabled={!desktop||busy} onClick={()=>setAction("cache")}>清理课程缓存</button>
         <button className="secondary sf-destructive-action" disabled={!desktop||busy} onClick={()=>setAction("web")}>清除官方网页登录数据</button>
-      </div>}
-      {view==="about"&&<div className="sf-zd-legal-actions">
-        {docs.map(item=><button key={item.id} className="text-button" disabled={!desktop||documentBusy} onClick={()=>void openDocument(item.id)}><item.icon size={14}/>{item.label}</button>)}
       </div>}
       {view==="account"&&diagnostic&&<div className="sf-zd-diagnostic">
         <strong>最近一次连接诊断</strong>
@@ -130,19 +101,6 @@ export function ZhidaoAccountTools({desktop,dark,onDataChanged,view="account"}:P
       title={selected.title} description={selected.description} warning={selected.warning}
       confirmLabel="确认清理" cancelLabel="保留数据"
       onConfirm={()=>void runAction()} onCancel={()=>setAction("none")}/>}
-    {document&&<div className="sf-document-overlay" role="presentation" onMouseDown={event=>{
-      if(event.target===event.currentTarget)setDocument(null);
-    }}>
-      <section className="sf-document-dialog" role="dialog" aria-modal="true"
-        aria-label={document.title} onKeyDown={(event:KeyboardEvent<HTMLElement>)=>{
-          if(event.key==="Escape"){event.preventDefault();event.stopPropagation();setDocument(null);}
-          if(event.key==="Tab"){event.preventDefault();documentCloseRef.current?.focus();}
-        }}>
-        <header><h3>{document.title}</h3>
-          <button ref={documentCloseRef} className="secondary" type="button" onClick={()=>setDocument(null)}>关闭</button>
-        </header>
-        <div className="sf-document-body"><pre>{document.content}</pre></div>
-      </section>
-    </div>}
+
   </>;
 }
