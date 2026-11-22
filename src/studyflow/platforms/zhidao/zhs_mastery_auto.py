@@ -236,13 +236,17 @@ def _run(course_key: str, opts: dict[str, Any], api_key: str) -> None:
         _checkpoint(deadline)
         _emit(state="running", phase="读取知识点")
         catalog = mastery.read_catalog(course_key, with_mastery=True)
-        points = [p for p in catalog.get("knowledge", [])
-                  if not p.get("free_exam") and p.get("mastery") is not None
-                  and (not opts.get("knowledge_id") or str(p.get("knowledge_id")) == opts["knowledge_id"])
-                  and p["mastery"] < opts["target"]]
+        knowledge = catalog.get("knowledge", [])
         if opts.get("knowledge_id") and not any(
-                str(p.get("knowledge_id")) == opts["knowledge_id"] for p in catalog.get("knowledge", [])):
+                str(p.get("knowledge_id")) == opts["knowledge_id"] for p in knowledge):
             raise AutoNeedsInput("所选知识点不存在")
+        eligible = [p for p in knowledge
+                    if not p.get("free_exam")
+                    and (not opts.get("knowledge_id") or str(p.get("knowledge_id")) == opts["knowledge_id"])]
+        if any(p.get("mastery") is None for p in eligible):
+            # A failed/partial read is not evidence that these points have passed.
+            raise AutoNeedsInput("部分知识点掌握度尚未获得服务器确认，请重新同步后重试")
+        points = [p for p in eligible if p["mastery"] < opts["target"]]
         if not opts["auto_next"]:
             points = points[:1]
         _emit(points_total=len(points), phase="自动练习中", log="已读取知识点，仅处理未达到目标的习题")
