@@ -26,9 +26,21 @@ PROVIDERS: dict[str, dict[str, Any]] = {
     "yanxi": {
         "name": "言溪题库",
         "lookup": yanxi.search,
+        "validate_token": yanxi._valid_token,
         "description": "Token 搜题接口",
     },
 }
+
+
+def _validate_provider_token(provider: str, token: Any) -> str:
+    custom = PROVIDERS[provider].get("validate_token")
+    if custom is not None:
+        return custom(token)
+    # Default contract for future API providers; their adapter may override.
+    if (not isinstance(token, str) or not 8 <= len(token) <= 512
+            or not all(33 <= ord(ch) <= 126 for ch in token)):
+        raise QuestionBankError("QUESTIONBANK_INVALID_TOKEN")
+    return token
 
 
 def _state() -> dict[str, Any]:
@@ -76,7 +88,7 @@ def _read() -> dict[str, Any]:
                     or not isinstance(item.get("label"), str)
                     or item.get("provider_id") not in PROVIDERS):
                 raise ValueError("invalid token row")
-            yanxi._valid_token(item.get("token"))
+            _validate_provider_token(item["provider_id"], item.get("token"))
         return data
     except (OSError, ValueError, UnicodeError, QuestionBankError) as exc:
         raise QuestionBankError("QUESTIONBANK_STORAGE_FAILED") from exc
@@ -117,7 +129,7 @@ def add_token(provider_id: Any, label: Any, token: Any) -> dict[str, Any]:
     provider = _check_provider(provider_id)
     if not isinstance(label, str) or not 1 <= len(label.strip()) <= 50:
         raise QuestionBankError("QUESTIONBANK_INVALID_LABEL")
-    secret = yanxi._valid_token(token)
+    secret = _validate_provider_token(provider, token)
     with LOCK:
         data = _read()
         provider_tokens = [item for item in data["tokens"] if item["provider_id"] == provider]
