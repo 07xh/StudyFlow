@@ -24,11 +24,19 @@ function component(request){
 const course={platform:'zhidao',course_id:'a'.repeat(64),title:'course',course_type:'ai',verified_at:new Date().toISOString()};
 const detail=name=>({course_key:course.course_id,course_type:'ai',verified:true,stale:false,done:0,total:1,verified_at:new Date().toISOString(),items:[{name,progress_percent:50}]});
 
+/** Chapter rows intentionally start collapsed; reveal them before checking row content. */
+function expandFirstChapter(view){
+ const toggle=view.root.findAllByType('button').find(node=>node.props.className==='sf-ykt-chapter-toggle');
+ assert.ok(toggle,'a chapter toggle must exist');
+ act(()=>toggle.props.onClick());
+}
+
 test('chapter detail follows verification timestamp and clears failed refresh',async()=>{
  let calls=0;
  const Panel=component(async()=>{calls++; if(calls===3)throw Error('offline');return detail('snapshot-'+calls);});
  let view;
  await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
+ expandFirstChapter(view);
  assert.match(JSON.stringify(view.toJSON()),/snapshot-1/);
  await act(async()=>{view.update(React.createElement(Panel,{course:{...course,verified_at:new Date(Date.now()+1000).toISOString()},desktop:true}));});
  assert.equal(calls,2);
@@ -50,6 +58,7 @@ test('Zhidao full-knowledge flag is not mislabeled unverified when percent is ab
  }));
  let view;
  await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
+ expandFirstChapter(view);
  const status=view.root.findAllByType('span').find(node=>
   String(node.props.className||'').includes('sf-record-status'));
  assert.ok(status);
@@ -83,6 +92,7 @@ test('switching to a course with no cached chapters triggers real single-course 
   assert.deepEqual(calls,[
    'zhidao.course.detail:'+key,'zhidao.progress.verify:'+key,
    'zhidao.course.detail:'+key]);
+  expandFirstChapter(view);
   assert.match(JSON.stringify(view.toJSON()),/从服务器回读的知识点/);
   assert.equal(updates.length,1);
  }finally{if(view)act(()=>view.unmount());}
@@ -123,6 +133,7 @@ test('a delayed previous-course response never overwrites the newly selected cou
   await act(async()=>{view.update(React.createElement(Panel,{
    course:{...course,course_id:newKey,title:'new'},desktop:true
   }));});
+  expandFirstChapter(view);
   assert.match(JSON.stringify(view.toJSON()),/新课程知识点/);
   await act(async()=>{releaseOld(detail('旧课程知识点'));});
   const rendered=JSON.stringify(view.toJSON());
@@ -156,6 +167,7 @@ test('overnight verified chapter cache is refreshed with one real server read',a
   assert.deepEqual(calls,[
    'zhidao.course.detail','zhidao.progress.verify','zhidao.course.detail']);
   assert.equal(updates.length,1);
+  expandFirstChapter(view);
   assert.match(JSON.stringify(view.toJSON()),/服务器最新章节/);
  }finally{if(view)act(()=>view.unmount());}
 });
@@ -173,6 +185,7 @@ test('app-level automatic verifier owns the read when already enabled',async()=>
    course:{...course,verified_at:old},desktop:true,autoVerifyActive:true
   }));});
   assert.deepEqual(calls,['zhidao.course.detail']);
+  expandFirstChapter(view);
   assert.match(JSON.stringify(view.toJSON()),/昨日历史章节/);
  }finally{if(view)act(()=>view.unmount());}
 });
