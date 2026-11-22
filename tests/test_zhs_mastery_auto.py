@@ -35,12 +35,14 @@ def clean(tmp_path, monkeypatch):
         auto._STATUS.clear()
         auto._THREAD = None
         auto._STOP.clear()
+        auto._PAUSE_REQUEST.clear()
         auto._RESUME.set()
     yield
     with auto._LOCK:
         auto._STATUS.clear()
         auto._THREAD = None
         auto._STOP.clear()
+        auto._PAUSE_REQUEST.clear()
         auto._RESUME.set()
 
 
@@ -221,7 +223,8 @@ def test_pause_stop_signals_do_not_reissue_submission(monkeypatch):
     monkeypatch.setattr(auto,"_run",block_worker)
     auto.start(COURSE)
     assert entered.wait(1)
-    assert auto.control(COURSE,"pause")["state"]=="paused"
+    assert auto.control(COURSE,"pause")["state"]=="pausing"
+    assert auto._PAUSE_REQUEST.is_set()
     assert auto.control(COURSE,"resume")["state"]=="running"
     assert auto.control(COURSE,"stop")["state"]=="stopping"
     release.set()
@@ -760,3 +763,140 @@ def test_ai_first_keeps_its_explicit_first_round_priority_over_external(monkeypa
     assert done and score == 100, reason
     assert sends == [12] and auto._STATUS.get("external_calls", 0) == 0
     bank.close()
+
+
+def _chapter_fixture():
+    return [
+        {"knowledge_id": "1001", "name": "章一知识点", "theme": "第一章",
+         "chapter_index": 1, "mastery": 100, "free_exam": False},
+        {"knowledge_id": "1002", "name": "章一知识点二", "theme": "第一章",
+         "chapter_index": 1, "mastery": 100, "free_exam": False},
+        {"knowledge_id": "1003", "name": "章二知识点", "theme": "第二章",
+         "chapter_index": 2, "mastery": 100, "free_exam": False},
+        {"knowledge_id": "1004", "name": "章三知识点", "theme": "第三章",
+         "chapter_index": 3, "mastery": 100, "free_exam": False},
+    ]
+
+
+def test_chapter_scope_selects_real_catalog_chapters_without_counting_skipped_ones():
+    items = _chapter_fixture()
+    expected = [
+        ("all", 1, [], ["1001", "1002", "1003", "1004"]),
+        ("first_n", 2, [], ["1001", "1002", "1003"]),
+        ("single", 1, [2], ["1003"]),
+        ("selected", 1, [1, 3], ["1001", "1002", "1004"]),
+    ]
+    for mode, count, indices, ids in expected:
+        selected, chapters = auto._select_scope(items, {
+            "scope_mode": mode, "chapter_count": count, "chapter_indices": indices
+        })
+        assert [item["knowledge_id"] for item in selected] == ids
+        assert len(chapters) == len(set(item["chapter_index"] for item in selected))
+
+
+def test_scoped_run_only_records_selected_chapter_points(monkeypatch):
+    items = _chapter_fixture()
+    monkeypatch.setattr(auto.service, "read_catalog",
+                        lambda key, with_mastery: {"knowledge": items, "course_name": "课堂"})
+    monkeypatch.setattr(auto.service, "start_round",
+                        lambda *args: pytest.fail("all selected points already meet target"))
+    auto._STATUS.update({"course_key": COURSE, "state": "starting", "tasks": []})
+    config = {**auto.DEFAULTS, "scope_mode": "single",
+              "chapter_indices": [2], "chapter_count": 1}
+    auto._run(COURSE, config)
+    status = auto.status(COURSE)
+    assert status["state"] == "completed"
+    assert status["total"] == status["done"] == status["processed"] == 1
+    assert status["selected_chapters"] == [{
+        "index": 2, "name": "第二章", "knowledge_count": 1
+    }]
+    assert status["chapter_total"] == 3
+    assert [t["knowledge_id"] for t in status["tasks"]] == ["1003"]
+
+
+def test_pausing_does_not_interrupt_answer_save_and_waits_before_next_knowledge(monkeypatch):
+    # Block in an already-running answer save. Pause must leave it alone, let
+    # grading complete, and gate the next point until Resume.
+    first_saved = threading.Event()
+    finish_save = threading.Event()
+    started_second = threading.Event()
+    events = []
+    points = [
+        {"knowledge_id": "1001", "name": "A", "theme": "第一章",
+         "chapter_index": 1, "mastery": 0, "free_exam": False},
+        {"knowledge_id": "1002", "name": "B", "theme": "第二章",
+         "chapter_index": 2, "mastery": 0, "free_exam": False},
+    ]
+    monkeypatch.setattr(auto.service, "read_catalog",
+                        lambda key, with_mastery: {"knowledge": points, "course_name": "课堂"})
+    monkeypatch.setattr(auto.service, "active_round", lambda *a: None)
+    def start_round(_course, kid):
+        events.append(("start", kid))
+        if kid == "1002":
+            started_second.set()
+        return {"exam_test_id": int(kid), "questions": [question()]}
+    monkeypatch.setattr(auto.service, "start_round", start_round)
+    def save(_course, kid, _qid, _answer):
+        events.append(("save", kid))
+        if kid == "1001":
+            first_saved.set()
+            assert finish_save.wait(5)
+    monkeypatch.setattr(auto.service, "save_answer", save)
+    monkeypatch.setattr(auto.service, "check_saved_answers",
+                        lambda *a: {"complete": True, "answered": 1, "total": 1})
+    def submit(_course, kid):
+        events.append(("submit", kid))
+        return {"verification_pending": False, "graded": [{
+            "questionId": 100, "isCorrect": True, "correctOptionIds": [11],
+            "correctTexts": ["Alpha"]
+        }], "high_mastery_now": 100}
+    monkeypatch.setattr(auto.service, "submit_round", submit)
+    status = auto.start(COURSE, {"target": 100, "max_rounds": 2})
+    assert status["state"] in {"starting", "running"}
+    assert first_saved.wait(5)
+    assert auto.control(COURSE, "pause")["state"] == "pausing"
+    assert not started_second.is_set(), "next knowledge point must not begin"
+    finish_save.set()
+    for _ in range(200):
+        snapshot = auto.status(COURSE)
+        if snapshot["state"] == "paused":
+            break
+        threading.Event().wait(0.015)
+    else:
+        pytest.fail("worker did not pause after the first completed knowledge point")
+    assert auto.status(COURSE)["processed"] == 1
+    assert events[:3] == [("start", "1001"), ("save", "1001"), ("submit", "1001")]
+    assert not started_second.is_set()
+    assert auto.control(COURSE, "resume")["state"] == "running"
+    assert started_second.wait(5)
+    auto._THREAD.join(5)
+    assert auto.status(COURSE)["state"] == "completed"
+    assert len([e for e in events if e[0] == "submit"]) == 2
+    assert auto.status(COURSE)["processed"] == 2
+
+
+def test_selected_scope_does_not_bypass_unresolved_submission_in_other_chapter(monkeypatch):
+    monkeypatch.setattr(auto.service, "read_catalog",
+                        lambda key, with_mastery: {
+                            "course_name": "课堂", "knowledge": _chapter_fixture()
+                        })
+    auto._STATUS.update({"course_key": COURSE, "state": "starting", "tasks": [],
+                         "blocked": ["1001"]})
+    monkeypatch.setattr(auto.service, "start_round",
+                        lambda *a: pytest.fail("blocked submission must be handled first"))
+    auto._run(COURSE, {**auto.DEFAULTS, "scope_mode": "single",
+                      "chapter_indices": [2], "chapter_count": 1})
+    assert auto.status(COURSE)["state"] == "needs_attention"
+
+
+@pytest.mark.parametrize("scope", [
+    {"scope_mode": "banana"},
+    {"scope_mode": "single", "chapter_indices": []},
+    {"scope_mode": "selected", "chapter_indices": []},
+    {"scope_mode": "selected", "chapter_indices": [0]},
+    {"scope_mode": "selected", "chapter_indices": [1, 1]},
+    {"scope_mode": "first_n", "chapter_count": 0},
+])
+def test_invalid_scope_is_rejected_before_background_worker(scope):
+    with pytest.raises(auto.service.MasteryError, match="INVALID_REQUEST"):
+        auto.start(COURSE, scope)

@@ -59,3 +59,7 @@
   .sf-settings-menu button{font-size:11px;padding:8px}
 }
 @media(prefers-reduced-motion:reduce){.sf-settings-modal{animation:none!important}}
+
+/* Mastery workspace can opt into a wider, two-column desktop layout. */
+.sf-settings-modal.sf-settings-modal--wide{width:min(1060px,100%);max-height:min(92dvh,950px)}
+@media(max-width:650px){.sf-settings-modal.sf-settings-modal--wide{width:100%;max-height:calc(100dvh - 16px)}}

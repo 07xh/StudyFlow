@@ -35,6 +35,7 @@ BANK_PATH = DATA / "answer-bank.sqlite3"
 _LOCK = threading.RLock()
 _THREAD: threading.Thread | None = None
 _STOP = threading.Event()
+_PAUSE_REQUEST = threading.Event()
 _RESUME = threading.Event()
 _RESUME.set()
 _STATUS: dict[str, Any] = {}
@@ -144,11 +145,22 @@ def _checkpoint(deadline: float) -> None:
         raise StopRequested("已到达本次运行时长上限")
     if _STOP.is_set():
         raise StopRequested("已停止：不会继续提交或新建试卷")
-    while not _RESUME.wait(0.2):
-        if _STOP.is_set():
-            raise StopRequested("已停止：不会继续提交或新建试卷")
-        if time.monotonic() > deadline:
-            raise StopRequested("已到达本次运行时长上限")
+    # Pause is intentionally NOT observed inside an answer/save/submit round.
+    # A stop or hard deadline remains immediate at the next checkpoint.
+
+
+def _pause_at_point_boundary(deadline: float) -> None:
+    """Finish the current point, then pause before opening another paper."""
+    _checkpoint(deadline)
+    if not _PAUSE_REQUEST.is_set():
+        return
+    _update(state="paused", current=None,
+            message="当前知识点已处理完毕，已暂停；继续后再开始下一个知识点")
+    while _PAUSE_REQUEST.is_set():
+        _checkpoint(deadline)
+        _RESUME.wait(0.2)
+    _checkpoint(deadline)
+    _update(state="running", message="已继续，准备处理下一知识点")
 
 
 class StopRequested(RuntimeError):
@@ -507,22 +519,76 @@ def _execute_point(
     return False, "达到单知识点最大轮次，未保证满分", score
 
 
+def _numbered_chapters(items: list[dict[str, Any]]) -> list[tuple[int, dict[str, Any]]]:
+    """Retain the catalog's real chapter order; support old fixture catalogs."""
+    output: list[tuple[int, dict[str, Any]]] = []
+    previous_theme: str | None = None
+    index = 0
+    for item in items:
+        given = item.get("chapter_index")
+        if type(given) is int and given >= 1:
+            index = given
+        elif item.get("theme") != previous_theme:
+            index += 1
+        output.append((index, item))
+        previous_theme = item.get("theme")
+    return output
+
+
+def _select_scope(catalog: list[dict[str, Any]], config: dict[str, Any]
+                  ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Apply chapter scope before any paper is created or task counted."""
+    numbered = _numbered_chapters(catalog)
+    chapters: dict[int, dict[str, Any]] = {}
+    for index, item in numbered:
+        if index not in chapters:
+            chapters[index] = {"index": index, "name": item.get("theme") or f"第{index}章",
+                               "knowledge_count": 0}
+        chapters[index]["knowledge_count"] += 1
+    mode = config.get("scope_mode", "all")
+    if mode == "all":
+        allowed = set(chapters)
+    elif mode == "first_n":
+        allowed = set(sorted(chapters)[:config["chapter_count"]])
+    else:
+        allowed = set(config["chapter_indices"])
+    selected = [item for index, item in numbered if index in allowed]
+    selected_chapters = [entry for index, entry in chapters.items() if index in allowed]
+    return selected, selected_chapters
+
+
 def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
     bank: AnswerBank | None = None
     try:
         deadline = time.monotonic() + config["max_minutes"] * 60
-        _update(state="running", message="正在获取课程全部章节与掌握度")
+        _update(state="pausing" if _PAUSE_REQUEST.is_set() else "running",
+                message="正在获取课程章节和掌握度")
         catalog = service.read_catalog(course_key, with_mastery=True)
+        selected, selected_chapters = _select_scope(catalog["knowledge"], config)
+        if not selected:
+            _update(state="needs_attention", current=None, total=0, tasks=[],
+                    message="所选章节未匹配当前课程，请刷新章节列表后重新配置")
+            return
+        unselected_blocked = {x for x in _STATUS.get("blocked", [])
+                              if x not in {item["knowledge_id"] for item in selected}}
+        if unselected_blocked:
+            _update(state="needs_attention", current=None, total=0, tasks=[],
+                    message="其他章节存在待核验的旧交卷记录；需先确认旧提交状态")
+            return
         tasks = []
-        for item in catalog["knowledge"]:
+        for chapter_index, item in _numbered_chapters(selected):
             tasks.append({
                 "knowledge_id": item["knowledge_id"], "name": item["name"],
-                "theme": item["theme"], "mastery": item.get("mastery"),
+                "theme": item["theme"], "chapter_index": chapter_index,
+                "mastery": item.get("mastery"),
                 "state": "pending", "rounds": 0, "reason": "",
             })
-        _update(total=len(tasks), tasks=tasks, course_name=catalog["course_name"])
+        _update(total=len(tasks), tasks=tasks, course_name=catalog["course_name"],
+                chapter_total=len({idx for idx, _ in _numbered_chapters(catalog["knowledge"])}),
+                selected_chapters=selected_chapters, scope_mode=config.get("scope_mode", "all"))
         bank = AnswerBank()
-        for item in catalog["knowledge"]:
+        for item in selected:
+            _pause_at_point_boundary(deadline)
             _checkpoint(deadline)
             _update(current={"knowledge_id": item["knowledge_id"],
                              "name": item["name"], "theme": item["theme"]})
@@ -592,7 +658,7 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
                         message="交卷状态或判分尚未确认；保留待核验记录，已停止后续自动提交")
                 return
         _update(state="completed", current=None,
-                message="已扫描课程全部章节；未达标或需手动处理的知识点已单独标明")
+                message="所选章节已全部处理；未达标或需手动处理的知识点已单独标明")
     except StopRequested as error:
         _update(state="stopped", message=str(error), current=None)
     except Exception:
@@ -631,7 +697,22 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
         if not any(entry["provider_id"] == provider and entry["id"] == token_id
                    for entry in available):
             raise service.MasteryError("QUESTIONBANK_TOKEN_NOT_FOUND")
-    config = {"first_round_mode": mode, "use_external_bank": enable_external}
+    scope_mode = raw.get("scope_mode", "all")
+    if scope_mode not in ("all", "first_n", "single", "selected"):
+        raise service.MasteryError("INVALID_REQUEST")
+    chapter_count = raw.get("chapter_count", 1)
+    chapter_indices = raw.get("chapter_indices", [])
+    if (type(chapter_count) is not int or not 1 <= chapter_count <= 200
+            or not isinstance(chapter_indices, list) or len(chapter_indices) > 200
+            or any(type(value) is not int or not 1 <= value <= 200
+                   for value in chapter_indices)
+            or len(set(chapter_indices)) != len(chapter_indices)
+            or (scope_mode == "single" and len(chapter_indices) != 1)
+            or (scope_mode == "selected" and not chapter_indices)):
+        raise service.MasteryError("INVALID_REQUEST")
+    config = {"first_round_mode": mode, "use_external_bank": enable_external,
+              "scope_mode": scope_mode, "chapter_count": chapter_count,
+              "chapter_indices": chapter_indices if scope_mode in ("single", "selected") else []}
     if enable_external:
         config.update(external_provider_id=provider, external_token_id=token_id)
     for field, low, high in (
@@ -664,6 +745,7 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
                 if pending_id not in blocked:
                     blocked.append(pending_id)
         _STOP.clear()
+        _PAUSE_REQUEST.clear()
         _RESUME.set()
         _STATUS.clear()
         _STATUS.update({
@@ -674,6 +756,7 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
             "external_calls": 0, "external_hits": 0, "external_misses": 0, "external_errors": 0,
             "current": None, "submitting": None, "blocked": blocked,
             "pending_submissions": pending, "tasks": [], "updated_at": _utc(),
+            "chapter_total": 0, "selected_chapters": [],
         })
         _save(_STATUS.copy())
         _THREAD = threading.Thread(
@@ -700,13 +783,18 @@ def control(course_key: str, action: str) -> dict[str, Any]:
         if not _THREAD or not _THREAD.is_alive() or _STATUS.get("course_key") != course_key:
             raise service.MasteryError("MASTERY_AUTO_NOT_RUNNING")
         if action == "pause":
-            _RESUME.clear()
-            _update(state="paused", message="已暂停，将在当前 HTTP 调用结束后生效")
+            if _STATUS.get("state") not in {"pausing", "paused"}:
+                _PAUSE_REQUEST.set()
+                _RESUME.clear()
+                _update(state="pausing",
+                        message="已收到暂停请求；当前知识点完成后暂停，不会再新建下一知识点的试卷")
         elif action == "resume":
+            _PAUSE_REQUEST.clear()
             _RESUME.set()
-            _update(state="running", message="继续处理后续练习")
+            _update(state="running", message="已继续运行")
         else:
             _STOP.set()
+            _PAUSE_REQUEST.clear()
             _RESUME.set()
             _update(state="stopping", message="正在安全停止，不再开始下一次交卷")
     return status(course_key)

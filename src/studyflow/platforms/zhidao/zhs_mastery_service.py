@@ -221,12 +221,13 @@ def _knowledge_points(session, course_id: int, class_id: int) -> list[dict[str, 
     manager = AiCourseManager(session)
     catalog = manager.get_knowledge_points(course_id, class_id)
     points: list[dict[str, Any]] = []
-    for theme in catalog.cake_theme_list:
+    for chapter_index, theme in enumerate(catalog.cake_theme_list, start=1):
         for point in theme.knowledge_list:
             points.append({
                 "knowledge_id": str(point.knowledge_id),
                 "name": point.knowledge_name,
                 "theme": theme.theme_name,
+                "chapter_index": chapter_index,
                 "study_progress": max(0, min(100, int(point.study_progress))),
                 "free_exam": bool(getattr(point, "free_exam", 0)),
             })

@@ -18,6 +18,7 @@ test("mastery auto can explicitly use selected shared-bank token without exposin
     masteryAutoStatus:async()=>empty,
     masteryAutoStart:async(course,options)=>{calls.push([course,options]);return empty;},
     masteryAutoControl:async()=>empty,
+    masteryCatalog:async()=>({knowledge:[{chapter_index:1,theme:"第一章",knowledge_id:"1001"},{chapter_index:2,theme:"第二章",knowledge_id:"1002"}]}),
     questionBankList:async()=>({providers:[{id:"yanxi",name:"言溪题库",description:""}],
       tokens:[{id:ID,provider_id:"yanxi",label:"第一个 Token",active:true}]}),
     friendlyBridgeError:error=>String(error?.message||error),
@@ -30,9 +31,9 @@ test("mastery auto can explicitly use selected shared-bank token without exposin
     const checkbox=view.root.findAllByType("input").find(input=>input.props.type==="checkbox");
     assert.ok(checkbox);
     await act(async()=>checkbox.props.onChange({target:{checked:true}}));
-    assert.match(textOf(view.root),/用于自动查询的 Token/);
+    assert.match(textOf(view.root),/本次使用 Token/);
     assert.match(textOf(view.root),/第一个 Token/);
-    const start=view.root.findAllByType("button").find(b=>textOf(b).includes("开始全部章节"));
+    const start=view.root.findAllByType("button").find(b=>textOf(b).includes("开始执行"));
     assert.ok(start&&!start.props.disabled);
     await act(async()=>start.props.onClick());
     assert.equal(calls.length,1);
@@ -56,16 +57,94 @@ test("mastery auto refuses to start external queries when no Token is configured
   try{
     const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":{
       masteryAutoStatus:async()=>empty,masteryAutoStart:async()=>{throw Error("should not start");},
-      masteryAutoControl:async()=>empty,questionBankList:async()=>({
+      masteryAutoControl:async()=>empty,
+      masteryCatalog:async()=>({knowledge:[{chapter_index:1,theme:"第一章",knowledge_id:"1001"}]}),
+      questionBankList:async()=>({
         providers:[{id:"yanxi",name:"言溪题库",description:""}],tokens:[]}),
       friendlyBridgeError:()=> "失败",
     }});
     await act(async()=>{view=create(React.createElement(MasteryAutoPanel,{courseKey:COURSE,desktop:true}));});
     const checkbox=view.root.findAllByType("input").find(input=>input.props.type==="checkbox");
     await act(async()=>checkbox.props.onChange({target:{checked:true}}));
-    const button=view.root.findAllByType("button").find(b=>textOf(b).includes("开始全部章节"));
+    const button=view.root.findAllByType("button").find(b=>textOf(b).includes("开始执行"));
     assert.ok(button.props.disabled);
-    assert.match(textOf(view.root),/请先在全局设置/);
+    assert.match(textOf(view.root),/请先到/);
+  }finally{
+    if(view)act(()=>view.unmount());
+    global.window=original;
+  }
+});
+
+
+test("single-chapter selection sends selected real chapter index instead of whole course",async()=>{
+  const original=global.window;
+  global.window={setInterval:()=>12,clearInterval:()=>{},
+                 setTimeout:()=>13,clearTimeout:()=>{}};
+  const launches=[];
+  let view;
+  try{
+    const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":{
+      masteryAutoStatus:async()=>empty,
+      masteryAutoStart:async(course,settings)=>{
+        launches.push([course,settings]);return empty;},
+      masteryAutoControl:async()=>empty,
+      masteryCatalog:async()=>({knowledge:[
+        {chapter_index:1,theme:"绪论",knowledge_id:"1001"},
+        {chapter_index:1,theme:"绪论",knowledge_id:"1002"},
+        {chapter_index:2,theme:"第一章",knowledge_id:"1003"},
+      ]}),
+      questionBankList:async()=>({providers:[],tokens:[]}),
+      friendlyBridgeError:err=>String(err),
+    }});
+    await act(async()=>{view=create(React.createElement(MasteryAutoPanel,{courseKey:COURSE,desktop:true}));});
+    const one=view.root.findAllByType("button").find(b=>textOf(b)==="只做一章");
+    await act(async()=>one.props.onClick());
+    const choice=view.root.findAllByType("select").find(s=>s.props.value===1);
+    assert.ok(choice,"single chapter selector should list actual chapters");
+    await act(async()=>choice.props.onChange({target:{value:"2"}}));
+    assert.match(textOf(view.root),/本次选择 1\/2 章 · 1 个知识点/);
+    const go=view.root.findAllByType("button").find(b=>textOf(b).includes("开始执行"));
+    assert.ok(!go.props.disabled);
+    await act(async()=>go.props.onClick());
+    assert.equal(launches.length,1);
+    assert.equal(launches[0][1].scope_mode,"single");
+    assert.deepEqual(launches[0][1].chapter_indices,[2]);
+    assert.equal(launches[0][1].chapter_count,1);
+  }finally{
+    if(view)act(()=>view.unmount());
+    global.window=original;
+  }
+});
+
+test("pausing status exposes finish-current behavior and keeps live task visible",async()=>{
+  const original=global.window;
+  global.window={setInterval:()=>12,clearInterval:()=>{},
+                 setTimeout:()=>13,clearTimeout:()=>{}};
+  const pauses=[];
+  const current={knowledge_id:"1001",theme:"绪论",name:"知识点一"};
+  const status={state:"pausing",total:2,processed:0,done:0,skipped:0,
+    current,chapter_total:1,selected_chapters:[{index:1,name:"绪论",knowledge_count:2}],
+    tasks:[{...current,chapter_index:1,mastery:58,state:"working",rounds:2,reason:"提交核验中"},
+      {knowledge_id:"1002",theme:"绪论",name:"知识点二",chapter_index:1,
+       mastery:10,state:"pending",rounds:0,reason:""}]};
+  let view;
+  try{
+    const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":{
+      masteryAutoStatus:async()=>status,
+      masteryAutoStart:async()=>{throw Error("already running");},
+      masteryAutoControl:async(...args)=>{pauses.push(args);return {...status,state:"running"};},
+      masteryCatalog:async()=>({knowledge:[]}),
+      questionBankList:async()=>({providers:[],tokens:[]}),
+      friendlyBridgeError:err=>String(err),
+    }});
+    await act(async()=>{view=create(React.createElement(MasteryAutoPanel,{courseKey:COURSE,desktop:true}));});
+    assert.match(textOf(view.root),/完成当前知识点后暂停/);
+    assert.match(textOf(view.root),/知识点一/);
+    assert.match(textOf(view.root),/提交核验中/);
+    const cancel=view.root.findAllByType("button").find(b=>textOf(b).includes("取消待暂停"));
+    assert.ok(cancel&&!cancel.props.disabled);
+    await act(async()=>cancel.props.onClick());
+    assert.equal(pauses[0][1],"resume");
   }finally{
     if(view)act(()=>view.unmount());
     global.window=original;

@@ -562,6 +562,7 @@ export type MasteryKnowledge = {
   knowledge_id: string;
   name: string;
   theme: string;
+  chapter_index?: number;
   study_progress: number;
   free_exam: boolean;
   mastery: number | null;
@@ -702,19 +703,22 @@ export type MasteryAutoSettings = {
   max_ai_calls: number; api_key?: string;
   use_external_bank?: boolean; external_provider_id?: string;
   external_token_id?: string; max_external_calls?: number;
+  scope_mode?: "all" | "first_n" | "single" | "selected";
+  chapter_count?: number; chapter_indices?: number[];
 };
 export type MasteryAutoTask = {
   knowledge_id: string; name: string; theme: string;
   mastery: number | null; state: "pending"|"working"|"done"|"skipped";
-  rounds: number; reason: string;
+  rounds: number; reason: string; chapter_index?: number;
 };
 export type MasteryAutoStatus = {
   run_id?: string; course_key?: string; course_name?: string;
-  state: "idle"|"starting"|"running"|"paused"|"stopping"|"stopped"|"completed"|"error"|"interrupted"|"needs_attention";
+  state: "idle"|"starting"|"running"|"pausing"|"paused"|"stopping"|"stopped"|"completed"|"error"|"interrupted"|"needs_attention";
   message?: string; total: number; processed: number; done: number; skipped: number;
   current?: {knowledge_id:string;name:string;theme:string}|null;
   submitting?: {knowledge_id:string;exam_test_id:number}|null;
   blocked?: string[]; tasks: MasteryAutoTask[]; updated_at?: string;
+  chapter_total?: number; selected_chapters?: Array<{index:number;name:string;knowledge_count:number}>;
   ai_calls?: number; ai_used?: number; ai_errors?: number;
   bank_hits?: number; trials?: number;
   external_calls?: number; external_hits?: number; external_misses?: number; external_errors?: number;

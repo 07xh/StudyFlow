@@ -4,9 +4,9 @@ import {X} from "lucide-react";
 import "./settingsDialog.css";
 
 /** LightC-style second-level page; does not navigate away from the current workspace. */
-export function SettingsDialog({open,dark,title,onClose,children,kicker="设置",compact=false,navigation,contentKey,footer}:{
+export function SettingsDialog({open,dark,title,onClose,children,kicker="设置",compact=false,navigation,contentKey,footer,wide=false}:{
   open:boolean;dark:boolean;title:string;onClose:()=>void;children:ReactNode;
-  kicker?:string;compact?:boolean;navigation?:ReactNode;contentKey?:string;footer?:ReactNode;
+  kicker?:string;compact?:boolean;wide?:boolean;navigation?:ReactNode;contentKey?:string;footer?:ReactNode;
 }){
   const titleId=useId();
   const panel=useRef<HTMLElement>(null),closeButton=useRef<HTMLButtonElement>(null);
@@ -45,7 +45,7 @@ export function SettingsDialog({open,dark,title,onClose,children,kicker="设置"
   return createPortal(
     <div className={"app sf-shell sf-settings-overlay"+(dark?" dark":"")}
       data-theme={dark?"dark":"light"} onMouseDown={handleBackdrop}>
-      <section className={"sf-settings-modal"+(compact?" sf-settings-modal--compact":"")} ref={panel} role="dialog" aria-modal="true"
+      <section className={"sf-settings-modal"+(compact?" sf-settings-modal--compact":"")+(wide?" sf-settings-modal--wide":"")} ref={panel} role="dialog" aria-modal="true"
         aria-labelledby={titleId} onKeyDown={handleKeys}>
         <header className="sf-settings-modal-heading">
           <div><span className="sf-settings-modal-kicker">{kicker}</span><h2 id={titleId}>{title}</h2></div>
