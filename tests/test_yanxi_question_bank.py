@@ -63,6 +63,9 @@ def test_api_failure_never_returns_unverified_answer_as_success():
         yanxi._parse_result({"code": 0, "data": {"answer": "剩余次数不足"}})
     with pytest.raises(yanxi.QuestionBankError, match="YANXI_TOKEN_REJECTED"):
         yanxi._parse_result({"code": 1, "data": {"answer": "Token错误"}})
+    assert yanxi._parse_result({"code": 1, "data": {"answer": "未找到答案"}})["found"] is False
+    with pytest.raises(yanxi.QuestionBankError, match="YANXI_TOKEN_REJECTED"):
+        yanxi._parse_result({"code": 0, "msg": "token已失效", "data": {}})
 
 
 def test_token_cannot_leave_via_http_redirect():
