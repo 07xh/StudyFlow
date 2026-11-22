@@ -32,18 +32,25 @@ export function MasteryAutoPanel({courseKey,desktop}:{
 }){
   const [status,setStatus]=useState<MasteryAutoStatus>(IDLE);
   const latestStatus=useRef<MasteryAutoStatus>(IDLE);
-  // The modal can change courses without unmounting. Old requests must never
-  // replace the newly selected course's status or catalog.
-  const activeCourseRef=useRef(courseKey);
-  activeCourseRef.current=courseKey;
+  // Distinguish individual visits, not only course IDs: A -> B -> A must
+  // discard the first A visit's in-flight responses as well.
+  const sessionRef=useRef({courseKey,revision:0});
+  if(sessionRef.current.courseKey!==courseKey){
+    sessionRef.current={courseKey,revision:sessionRef.current.revision+1};
+  }
+  const revision=sessionRef.current.revision;
+  const isCurrent=useCallback(
+    ()=>sessionRef.current.courseKey===courseKey&&sessionRef.current.revision===revision,
+    [courseKey,revision],
+  );
   const applyStatus=useCallback((value:MasteryAutoStatus)=>{
-    if(activeCourseRef.current!==courseKey)return;
+    if(!isCurrent()||(value.course_key&&value.course_key!==courseKey))return;
     // Do not call React's state setter at all if the backend only changes
     // its bookkeeping timestamp. This also protects a long knowledge list.
     if(sameStatusSnapshot(latestStatus.current,value,NON_VISUAL_FIELDS))return;
     latestStatus.current=value;
     setStatus(value);
-  },[courseKey]);
+  },[courseKey,isCurrent]);
   const [settings,setSettings]=useState<MasteryAutoSettings>(DEFAULT);
   const [busy,setBusy]=useState(false);
   const [aiKey,setAiKey]=useState("");
@@ -54,12 +61,12 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const [chapterError,setChapterError]=useState("");
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [error,setError]=useState("");
-  const statusInFlight=useRef<Set<string>>(new Set());
+  const statusInFlight=useRef<Set<number>>(new Set());
   const refresh=useCallback(async()=>{
-    // Single flight PER course, not globally: a hanging response for course A
-    // must not delay the initial read for course B.
-    if(!desktop||statusInFlight.current.has(courseKey))return;
-    statusInFlight.current.add(courseKey);
+    // Single flight PER visit: even returning to course A cannot be held
+    // hostage by its previous visit's unresolved native request.
+    if(!desktop||!isCurrent()||statusInFlight.current.has(revision))return;
+    statusInFlight.current.add(revision);
     let timeoutId:number|undefined;
     try{
       // One native status read at a time. Without this guard, a slow sidecar
@@ -70,20 +77,20 @@ export function MasteryAutoPanel({courseKey,desktop}:{
           timeoutId=window.setTimeout(()=>reject(new Error("掌握度状态读取超时，可手动刷新。")),15000);
         })
       ]);
-      if(activeCourseRef.current===courseKey){
+      if(isCurrent()){
         applyStatus(value);
         setError(previous=>previous?"":previous);
       }
     }catch(cause){
-      if(activeCourseRef.current===courseKey){
+      if(isCurrent()){
         const message=friendlyBridgeError(cause);
         setError(previous=>previous===message?previous:message);
       }
     }finally{
       if(timeoutId!==undefined)window.clearTimeout(timeoutId);
-      statusInFlight.current.delete(courseKey);
+      statusInFlight.current.delete(revision);
     }
-  },[courseKey,desktop,applyStatus]);
+  },[desktop,applyStatus,isCurrent,revision]);
 
   useEffect(()=>{
     // Keep a prior course's task, errors and selected chapters out of the
@@ -95,6 +102,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     setChapterError("");
     setChapterLoading(false);
     setDetailsOpen(false);
+    setBusy(false);
     setSettings(previous=>({...previous,chapter_indices:[]}));
     if(!desktop)return;
     void refresh();
@@ -121,13 +129,16 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   },[desktop]);
   useEffect(()=>{void reloadBanks();},[reloadBanks]);
 
+  const chapterRequestId=useRef(0);
   const reloadChapters=useCallback(async()=>{
-    if(!desktop)return;
+    if(!desktop||!isCurrent())return;
+    const requestId=++chapterRequestId.current;
+    const ownsRequest=()=>isCurrent()&&chapterRequestId.current===requestId;
     setChapterLoading(true);setChapterError("");
     try{
       // Read only the chapter catalog, not 147 per-point mastery statistics or a paper.
       const catalog=await masteryCatalog(courseKey,false,false);
-      if(activeCourseRef.current!==courseKey)return;
+      if(!ownsRequest())return;
       const groups:Array<{index:number;name:string;count:number}>=[];
       let previousTheme:string|null=null;
       let index=0;
@@ -146,11 +157,11 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         return {...previous,chapter_indices:groups.length?[groups[0].index]:[]};
       });
     }catch(cause){
-      if(activeCourseRef.current===courseKey)setChapterError(friendlyBridgeError(cause));
+      if(ownsRequest())setChapterError(friendlyBridgeError(cause));
     }finally{
-      if(activeCourseRef.current===courseKey)setChapterLoading(false);
+      if(ownsRequest())setChapterLoading(false);
     }
-  },[courseKey,desktop]);
+  },[courseKey,desktop,isCurrent]);
   useEffect(()=>{void reloadChapters();},[reloadChapters]);
 
   const configuredBankTokens=bankState.tokens.filter(t=>t.provider_id===settings.external_provider_id);
@@ -189,10 +200,10 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     try{
       const options={...settings,...(["bank_ai","ai_first"].includes(settings.first_round_mode)?{api_key:aiKey.trim()}: {})};
       applyStatus(await masteryAutoStart(courseKey,options));
-      setAiKey("");
+      if(isCurrent())setAiKey("");
     }catch(cause){
-      if(activeCourseRef.current===courseKey)setError(friendlyBridgeError(cause));
-    }finally{setBusy(false);}
+      if(isCurrent())setError(friendlyBridgeError(cause));
+    }finally{if(isCurrent())setBusy(false);}
   };
   const control=async(action:"pause"|"resume"|"stop")=>{
     if(!desktop||busy||!running)return;
@@ -200,8 +211,8 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     try{
       applyStatus(await masteryAutoControl(courseKey,action));
     }catch(cause){
-      if(activeCourseRef.current===courseKey)setError(friendlyBridgeError(cause));
-    }finally{setBusy(false);}
+      if(isCurrent())setError(friendlyBridgeError(cause));
+    }finally{if(isCurrent())setBusy(false);}
   };
 
   if(!desktop)return null;
