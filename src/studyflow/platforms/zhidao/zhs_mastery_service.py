@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,47 @@ class MasteryError(RuntimeError):
 # 连接与鉴权
 # --------------------------------------------------------------------------
 
+# The background scheduler can save many questions in a single knowledge
+# point. Re-authenticating with CAS for every answer was both slow and prone
+# to transient errors. Scope one verified SDK session to a worker thread,
+# rotating it periodically; unrelated IPC requests retain their own sessions.
+_SESSION_LOCAL = threading.local()
+SESSION_SCOPE_TTL = 120.0
+
+
+class _BorrowedSession:
+    """Delegate requests but never close the scope-owned upstream session."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def close(self) -> None:
+        pass
+
+
+@contextmanager
+def mastery_session_scope(course_key: str):
+    """Reuse authentication only within one background knowledge-point run."""
+    prior = getattr(_SESSION_LOCAL, "scope", None)
+    if prior is not None:
+        if prior["course_key"] != course_key:
+            raise MasteryError("INVALID_REQUEST")
+        yield
+        return
+    scope = {"course_key": course_key, "session": None, "course": None,
+             "fingerprint": None, "opened_at": 0.0}
+    _SESSION_LOCAL.scope = scope
+    try:
+        yield
+    finally:
+        _SESSION_LOCAL.scope = None
+        session = scope.get("session")
+        if session is not None:
+            session.close()
+
 
 def _open_session(course_key: str):
     """解析课程并复用已授权登录态。返回 ``(session, course)``。"""
@@ -76,6 +118,16 @@ def _open_session(course_key: str):
 
     if not isinstance(course_key, str) or len(course_key) != 64:
         raise MasteryError("INVALID_REQUEST")
+    scope = getattr(_SESSION_LOCAL, "scope", None)
+    if scope is not None and scope["course_key"] == course_key and scope["session"] is not None:
+        # Detect local account switches even while the network session is reused.
+        fingerprint = _cookie_fingerprint()
+        if fingerprint is None or fingerprint != scope["fingerprint"]:
+            raise MasteryError("LOGIN_UNCONFIRMED")
+        if time.monotonic() - scope["opened_at"] < SESSION_SCOPE_TTL:
+            return _BorrowedSession(scope["session"]), scope["course"]
+        scope["session"].close()
+        scope["session"] = None
     try:
         course = resolve_course(course_key)
     except RuntimeError as error:
@@ -98,6 +150,14 @@ def _open_session(course_key: str):
     if loaded is None:
         raise MasteryError("LOGIN_UNCONFIRMED")
     _, session = loaded
+    if scope is not None and scope["course_key"] == course_key:
+        fingerprint = _cookie_fingerprint()
+        if fingerprint is None:
+            session.close()
+            raise MasteryError("LOGIN_UNCONFIRMED")
+        scope.update(session=session, course=course, fingerprint=fingerprint,
+                     opened_at=time.monotonic())
+        return _BorrowedSession(session), course
     return session, course
 
 
@@ -206,20 +266,21 @@ def read_mastery_stat(session, course_id: int, knowledge_id: int) -> dict[str, A
     }
 
 
-def _mastery_cache_key(course_id: int, knowledge_id: str) -> str | None:
-    """Account-scoped in-memory cache key, invalidated on Cookie rotation.
-
-    The SHA-256 digest is used only as an in-process cache namespace; neither
-    raw credentials nor the digest are persisted or returned to the UI.
-    """
+def _cookie_fingerprint() -> str | None:
+    """Only a process-local fingerprint; no raw Cookie or hash is persisted."""
     try:
         cookies = (Path.home() / ".zhs" / "cookies.json").read_bytes()
     except OSError:
         return None
     if not cookies or len(cookies) > 262_144:
         return None
-    scope = hashlib.sha256(cookies).hexdigest()
-    return f"{scope}:{course_id}:{knowledge_id}"
+    return hashlib.sha256(cookies).hexdigest()
+
+
+def _mastery_cache_key(course_id: int, knowledge_id: str) -> str | None:
+    """Account-scoped in-memory score cache; disabled without local proof."""
+    scope = _cookie_fingerprint()
+    return f"{scope}:{course_id}:{knowledge_id}" if scope else None
 
 
 def read_catalog(
