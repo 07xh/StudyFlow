@@ -26,9 +26,11 @@
 """
 from __future__ import annotations
 
+import hashlib
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from studyflow.platforms.zhidao.zhs_mastery import (
@@ -82,14 +84,19 @@ def _open_session(course_key: str):
     if course.get("course_type") != "ai":
         raise MasteryError("NOT_AI_COURSE")
 
+    # The packaged ZHS 0.1.5 runtime resolves .zhs relative to the home
+    # directory (anchored at the sidecar entry). An absent local session is
+    # different from a transient CAS / network verification failure.
+    if not (Path.home() / ".zhs" / "cookies.json").is_file():
+        raise MasteryError("LOGIN_REQUIRED")
     from zhs.cli.bootstrap import load_config_and_session
 
     try:
         loaded = load_config_and_session(debug=False, console_log=False, proxy=None)
-    except Exception as error:  # 登录态损坏/文件不可读
-        raise MasteryError("LOGIN_REQUIRED", str(error)[:200]) from error
+    except Exception as error:
+        raise MasteryError("LOGIN_CHECK_UNAVAILABLE") from error
     if loaded is None:
-        raise MasteryError("LOGIN_REQUIRED")
+        raise MasteryError("LOGIN_UNCONFIRMED")
     _, session = loaded
     return session, course
 
@@ -199,32 +206,59 @@ def read_mastery_stat(session, course_id: int, knowledge_id: int) -> dict[str, A
     }
 
 
-def read_catalog(course_key: str, *, with_mastery: bool = True) -> dict[str, Any]:
-    """课程知识点 + 每个点的掌握度（掌握度走只读接口，失败逐点降级）。"""
-    session, course = _open_session(course_key)
-    course_id, class_id = _course_ids(course)
+def _mastery_cache_key(course_id: int, knowledge_id: str) -> str | None:
+    """Account-scoped in-memory cache key, invalidated on Cookie rotation.
+
+    The SHA-256 digest is used only as an in-process cache namespace; neither
+    raw credentials nor the digest are persisted or returned to the UI.
+    """
     try:
+        cookies = (Path.home() / ".zhs" / "cookies.json").read_bytes()
+    except OSError:
+        return None
+    if not cookies or len(cookies) > 262_144:
+        return None
+    scope = hashlib.sha256(cookies).hexdigest()
+    return f"{scope}:{course_id}:{knowledge_id}"
+
+
+def read_catalog(
+    course_key: str, *, with_mastery: bool = True, force_refresh: bool = False,
+) -> dict[str, Any]:
+    """Read the catalog only; do not generate a new paper when refreshing.
+
+    Only cache scores within the same authenticated Cookie file. A refresh
+    bypasses the short TTL so a user-requested check cannot show old data.
+    """
+    session, course = _open_session(course_key)
+    try:
+        course_id, class_id = _course_ids(course)
         points = _knowledge_points(session, course_id, class_id)
-        if with_mastery:
-            for point in points:
-                key = f"{course_id}:{point['knowledge_id']}"
-                cached = _MASTERY_CACHE.get(key)
-                if cached is not None and time.time() - cached[0] < MASTERY_TTL_SECONDS:
-                    point["mastery"] = cached[1]["mastery"]
-                    point["band"] = cached[1]["band"]
-                    continue
-                try:
-                    stat = read_mastery_stat(session, course_id, int(point["knowledge_id"]))
-                except Exception as error:
-                    point["mastery"] = None
-                    point["band"] = None
-                    point["mastery_error"] = getattr(error, "code", None) or type(error).__name__
-                    continue
-                _MASTERY_CACHE[key] = (time.time(), stat)
-                point["mastery"] = stat["mastery"]
-                point["band"] = stat["band"]
-                time.sleep(0.12)
-        scored = [item["mastery"] for item in points if item.get("mastery") is not None]
+        for point in points:
+            point["mastery"] = None
+            point["band"] = None
+            if not with_mastery:
+                continue
+            key = _mastery_cache_key(course_id, point["knowledge_id"])
+            with _LOCK:
+                cached = _MASTERY_CACHE.get(key) if key is not None else None
+            if (not force_refresh and cached is not None
+                    and time.time() - cached[0] < MASTERY_TTL_SECONDS):
+                point["mastery"] = cached[1]["mastery"]
+                point["band"] = cached[1]["band"]
+                continue
+            try:
+                stat = read_mastery_stat(session, course_id, int(point["knowledge_id"]))
+            except Exception as error:
+                point["mastery_error"] = getattr(error, "code", None) or type(error).__name__
+                continue
+            if key is not None:
+                with _LOCK:
+                    _MASTERY_CACHE[key] = (time.time(), stat)
+            point["mastery"] = stat["mastery"]
+            point["band"] = stat["band"]
+            time.sleep(0.12)
+        scored = [item["mastery"] for item in points if item["mastery"] is not None]
         return {
             "course_key": course_key,
             "course_id": str(course_id),
@@ -235,14 +269,14 @@ def read_catalog(course_key: str, *, with_mastery: bool = True) -> dict[str, Any
             "count": len(points),
             "pending_count": sum(
                 1 for item in points
-                if item.get("mastery") is not None and item["mastery"] <= HOMEWORK_THRESHOLD_DEFAULT
+                if item["mastery"] is not None and item["mastery"] <= HOMEWORK_THRESHOLD_DEFAULT
             ),
+            "unreadable_count": sum(1 for item in points if item.get("mastery_error")),
             "average_mastery": round(sum(scored) / len(scored)) if scored else None,
             "verified_at": _iso_now(),
         }
     finally:
         session.close()
-
 
 # --------------------------------------------------------------------------
 # 一轮练习：开 → 答 → 交
@@ -594,7 +628,9 @@ def submit_round(course_key: str, knowledge_id: str) -> dict[str, Any]:
     with _LOCK:
         if not verification_pending:
             _ACTIVE_ROUNDS.pop(key, None)
-        _MASTERY_CACHE.pop(f"{state['course_id']}:{state['knowledge_id']}", None)
+        cache_key = _mastery_cache_key(state["course_id"], state["knowledge_id"])
+        if cache_key is not None:
+            _MASTERY_CACHE.pop(cache_key, None)
 
     return {
         "knowledge_id": str(knowledge_id),
