@@ -328,7 +328,7 @@ def _execute_point(
                 verified = bank.verified(question)
                 identity, pairs = _identity(question)
                 ai_first = mode == "ai_first" and round_index == 1
-                ai_fallback = mode in ("bank_ai", "ai_first") and verified is None
+                ai_fallback = (mode == "bank_ai" or ai_first) and verified is None
                 may_ai = (
                     (ai_first or ai_fallback) and identity not in ai_attempted
                     and bool(api_key) and _STATUS.get("ai_calls", 0) < config.get("max_ai_calls", 30)
