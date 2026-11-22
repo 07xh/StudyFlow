@@ -39,6 +39,8 @@ _PAUSE_REQUEST = threading.Event()
 _RESUME = threading.Event()
 _RESUME.set()
 _STATUS: dict[str, Any] = {}
+_PAUSED_AT: float | None = None
+_PAUSED_SECONDS = 0.0
 
 DEFAULTS = {"target": 100, "max_rounds": 12, "stagnation_rounds": 3, "max_minutes": 180,
             "max_ai_calls": 30, "max_external_calls": 40}
@@ -140,25 +142,50 @@ def _progress(point: dict[str, Any], **fields: Any) -> None:
         _save(_STATUS.copy())
 
 
+def _active_now() -> float:
+    """Monotonic work clock: exclude only time actually paused at a point boundary."""
+    with _LOCK:
+        now = time.monotonic()
+        paused = _PAUSED_SECONDS
+        if _PAUSED_AT is not None:
+            paused += max(0.0, now - _PAUSED_AT)
+        return now - paused
+
+
+def _finish_pause_clock() -> None:
+    """Finalize a pause before resuming, stopping or leaving the worker."""
+    global _PAUSED_AT, _PAUSED_SECONDS
+    with _LOCK:
+        if _PAUSED_AT is not None:
+            _PAUSED_SECONDS += max(0.0, time.monotonic() - _PAUSED_AT)
+            _PAUSED_AT = None
+
+
 def _checkpoint(deadline: float) -> None:
-    if time.monotonic() > deadline:
-        raise StopRequested("已到达本次运行时长上限")
     if _STOP.is_set():
         raise StopRequested("已停止：不会继续提交或新建试卷")
+    if _active_now() > deadline:
+        raise StopRequested("已到达本次运行时长上限")
     # Pause is intentionally NOT observed inside an answer/save/submit round.
-    # A stop or hard deadline remains immediate at the next checkpoint.
+    # Work time keeps counting until the current knowledge point is safely finished.
 
 
 def _pause_at_point_boundary(deadline: float) -> None:
-    """Finish the current point, then pause before opening another paper."""
+    """Finish the current point; suspend the work-time budget only while parked."""
+    global _PAUSED_AT
     _checkpoint(deadline)
-    if not _PAUSE_REQUEST.is_set():
-        return
-    _update(state="paused", current=None,
-            message="当前知识点已处理完毕，已暂停；继续后再开始下一个知识点")
-    while _PAUSE_REQUEST.is_set():
-        _checkpoint(deadline)
-        _RESUME.wait(0.2)
+    with _LOCK:
+        if not _PAUSE_REQUEST.is_set():
+            return
+        _PAUSED_AT = time.monotonic()
+        _update(state="paused", current=None,
+                message="当前知识点已处理完毕，已暂停；继续后再开始下一个知识点")
+    try:
+        while _PAUSE_REQUEST.is_set():
+            _checkpoint(deadline)
+            _RESUME.wait(0.2)
+    finally:
+        _finish_pause_clock()
     _checkpoint(deadline)
     _update(state="running", message="已继续，准备处理下一知识点")
 
@@ -394,7 +421,7 @@ def _execute_point(
                     if (not config.get("use_external_bank") or verified is not None
                             or not identity or identity in external_attempted
                             or _STATUS.get("external_calls", 0) >= config["max_external_calls"]
-                            or deadline - time.monotonic() <= 13):
+                            or deadline - _active_now() <= 13):
                         return
                     _checkpoint(deadline)
                     external_attempted.add(identity)
@@ -420,7 +447,7 @@ def _execute_point(
                     ai_attempted.add(identity)
                     _update(ai_calls=_STATUS.get("ai_calls", 0) + 1)
                     try:
-                        candidate = ai_suggest(question, api_key, deadline - time.monotonic())
+                        candidate = ai_suggest(question, api_key, deadline - _active_now())
                         if question.get("question_type") == 3:
                             texts = candidate if isinstance(candidate, list) else [candidate]
                         else:
@@ -560,7 +587,7 @@ def _select_scope(catalog: list[dict[str, Any]], config: dict[str, Any]
 def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
     bank: AnswerBank | None = None
     try:
-        deadline = time.monotonic() + config["max_minutes"] * 60
+        deadline = _active_now() + config["max_minutes"] * 60
         _update(state="pausing" if _PAUSE_REQUEST.is_set() else "running",
                 message="正在获取课程章节和掌握度")
         catalog = service.read_catalog(course_key, with_mastery=True)
@@ -729,7 +756,7 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
             raise service.MasteryError("INVALID_REQUEST")
         config[field] = value
     with _LOCK:
-        global _THREAD
+        global _THREAD, _PAUSED_AT, _PAUSED_SECONDS
         if _THREAD is not None and _THREAD.is_alive():
             raise service.MasteryError("MASTERY_AUTO_RUNNING")
         prior = _loaded(course_key)
@@ -748,6 +775,8 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
         _STOP.clear()
         _PAUSE_REQUEST.clear()
         _RESUME.set()
+        _PAUSED_AT = None
+        _PAUSED_SECONDS = 0.0
         _STATUS.clear()
         _STATUS.update({
             "run_id": uuid.uuid4().hex, "course_key": course_key,
