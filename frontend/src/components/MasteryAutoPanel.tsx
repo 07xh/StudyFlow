@@ -61,12 +61,15 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const [chapterError,setChapterError]=useState("");
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [error,setError]=useState("");
-  const statusInFlight=useRef<Set<number>>(new Set());
+  const statusVersion=useRef(0);
+  const statusInFlight=useRef<Set<string>>(new Set());
   const refresh=useCallback(async()=>{
-    // Single flight PER visit: even returning to course A cannot be held
-    // hostage by its previous visit's unresolved native request.
-    if(!desktop||!isCurrent()||statusInFlight.current.has(revision))return;
-    statusInFlight.current.add(revision);
+    // Status polls started before a Start/Pause/Resume/Stop result are stale.
+    // A new version can read immediately even if an old poll is still hung.
+    const version=statusVersion.current;
+    const flight=`${revision}:${version}`;
+    if(!desktop||!isCurrent()||statusInFlight.current.has(flight))return;
+    statusInFlight.current.add(flight);
     let timeoutId:number|undefined;
     try{
       // One native status read at a time. Without this guard, a slow sidecar
@@ -77,18 +80,18 @@ export function MasteryAutoPanel({courseKey,desktop}:{
           timeoutId=window.setTimeout(()=>reject(new Error("掌握度状态读取超时，可手动刷新。")),15000);
         })
       ]);
-      if(isCurrent()){
+      if(isCurrent()&&version===statusVersion.current){
         applyStatus(value);
         setError(previous=>previous?"":previous);
       }
     }catch(cause){
-      if(isCurrent()){
+      if(isCurrent()&&version===statusVersion.current){
         const message=friendlyBridgeError(cause);
         setError(previous=>previous===message?previous:message);
       }
     }finally{
       if(timeoutId!==undefined)window.clearTimeout(timeoutId);
-      statusInFlight.current.delete(revision);
+      statusInFlight.current.delete(flight);
     }
   },[desktop,applyStatus,isCurrent,revision]);
 
@@ -103,6 +106,8 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     setChapterLoading(false);
     setDetailsOpen(false);
     setBusy(false);
+    setAiKey("");
+    statusVersion.current+=1;
     setSettings(previous=>({...previous,chapter_indices:[]}));
     if(!desktop)return;
     void refresh();
@@ -196,22 +201,38 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   };
   const start=async()=>{
     if(!desktop||busy||running||missingScope||missingExternalToken)return;
+    statusVersion.current+=1;
     setBusy(true);setError("");
     try{
       const options={...settings,...(["bank_ai","ai_first"].includes(settings.first_round_mode)?{api_key:aiKey.trim()}: {})};
-      applyStatus(await masteryAutoStart(courseKey,options));
-      if(isCurrent())setAiKey("");
+      const value=await masteryAutoStart(courseKey,options);
+      if(isCurrent()){
+        statusVersion.current+=1;
+        applyStatus(value);
+        setAiKey("");
+      }
     }catch(cause){
-      if(isCurrent())setError(friendlyBridgeError(cause));
+      if(isCurrent()){
+        statusVersion.current+=1;
+        setError(friendlyBridgeError(cause));
+      }
     }finally{if(isCurrent())setBusy(false);}
   };
   const control=async(action:"pause"|"resume"|"stop")=>{
     if(!desktop||busy||!running)return;
+    statusVersion.current+=1;
     setBusy(true);setError("");
     try{
-      applyStatus(await masteryAutoControl(courseKey,action));
+      const value=await masteryAutoControl(courseKey,action);
+      if(isCurrent()){
+        statusVersion.current+=1;
+        applyStatus(value);
+      }
     }catch(cause){
-      if(isCurrent())setError(friendlyBridgeError(cause));
+      if(isCurrent()){
+        statusVersion.current+=1;
+        setError(friendlyBridgeError(cause));
+      }
     }finally{if(isCurrent())setBusy(false);}
   };
 
