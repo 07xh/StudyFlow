@@ -1,9 +1,9 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {sameStatusSnapshot} from "../statusSnapshot";
-import {Pause,Play,RotateCcw,Square,CheckCircle2} from "lucide-react";
+import {Pause,Play,RotateCcw,Square,CheckCircle2,RefreshCw,ChevronDown,BookOpen,Layers3} from "lucide-react";
 import {
-  masteryAutoControl,masteryAutoStart,masteryAutoStatus,friendlyBridgeError,
-  questionBankList,type QuestionBankState,
+  masteryAutoControl,masteryAutoStart,masteryAutoStatus,masteryCatalog,friendlyBridgeError,
+  questionBankList,type QuestionBankState,type MasteryKnowledge,
   type MasteryAutoSettings,type MasteryAutoStatus,
 } from "../bridge";
 import "./MasteryAutoPanel.css";
@@ -13,15 +13,16 @@ const DEFAULT:MasteryAutoSettings={
   first_round_mode:"bank_only",max_ai_calls:30,
   use_external_bank:false,external_provider_id:"yanxi",
   external_token_id:"",max_external_calls:40,
+  scope_mode:"all",chapter_count:1,chapter_indices:[],
 };
 const IDLE:MasteryAutoStatus={
   state:"idle",total:0,processed:0,done:0,skipped:0,tasks:[],
 };
-const ACTIVE=new Set(["starting","running","paused","stopping"]);
+const ACTIVE=new Set(["starting","running","pausing","paused","stopping"]);
 // Timestamps are diagnostic metadata, not a change to displayed task progress.
 const NON_VISUAL_FIELDS=new Set(["updated_at"]);
 const LABEL:Record<string,string>={
-  idle:"未开始",starting:"准备中",running:"后台运行中",paused:"已暂停",
+  idle:"未开始",starting:"准备中",running:"后台运行中",pausing:"完成当前知识点后暂停",paused:"已暂停",
   stopping:"正在停止",stopped:"已停止",completed:"本次扫描完成",
   error:"运行出错",interrupted:"上次任务中断",needs_attention:"需核验提交状态",
 };
@@ -43,6 +44,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const [aiKey,setAiKey]=useState("");
   const [bankState,setBankState]=useState<QuestionBankState>({providers:[],tokens:[]});
   const [bankError,setBankError]=useState("");
+  const [chapters,setChapters]=useState<Array<{index:number;name:string;count:number}>>([]);
+  const [chapterLoading,setChapterLoading]=useState(false);
+  const [chapterError,setChapterError]=useState("");
   const [error,setError]=useState("");
   const statusInFlight=useRef(false);
   const refresh=useCallback(async()=>{
@@ -96,20 +100,63 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   },[desktop]);
   useEffect(()=>{void reloadBanks();},[reloadBanks]);
 
+  const reloadChapters=useCallback(async()=>{
+    if(!desktop)return;
+    setChapterLoading(true);setChapterError("");
+    try{
+      // Read only the chapter catalog, not 147 per-point mastery statistics or a paper.
+      const catalog=await masteryCatalog(courseKey,false,false);
+      const groups:Array<{index:number;name:string;count:number}>=[];
+      let previousTheme:string|null=null;
+      let index=0;
+      for(const item of catalog.knowledge as MasteryKnowledge[]){
+        if(typeof item.chapter_index==="number"&&item.chapter_index>=1)
+          index=item.chapter_index;
+        else if(item.theme!==previousTheme)index+=1;
+        const last=groups[groups.length-1];
+        if(last?.index===index)last.count+=1;
+        else groups.push({index,name:item.theme||"第"+index+"章",count:1});
+        previousTheme=item.theme;
+      }
+      setChapters(groups);
+      setSettings(previous=>{
+        if(previous.chapter_indices?.length)return previous;
+        return {...previous,chapter_indices:groups.length?[groups[0].index]:[]};
+      });
+    }catch(cause){setChapterError(friendlyBridgeError(cause));}
+    finally{setChapterLoading(false);}
+  },[courseKey,desktop]);
+  useEffect(()=>{void reloadChapters();},[reloadChapters]);
+
   const configuredBankTokens=bankState.tokens.filter(t=>t.provider_id===settings.external_provider_id);
   const missingExternalToken=Boolean(settings.use_external_bank)&&!configuredBankTokens
     .some(t=>t.id===settings.external_token_id);
   const running=ACTIVE.has(status.state);
   const work=status.state==="running"||status.state==="starting";
+  const pausing=status.state==="pausing";
+  const canResume=pausing||status.state==="paused";
+  const scopeMode=settings.scope_mode||"all";
+  const selectedIndices=settings.chapter_indices||[];
+  const scopedChapters=scopeMode==="all"?chapters
+    :scopeMode==="first_n"?chapters.slice(0,settings.chapter_count??1)
+    :chapters.filter(item=>selectedIndices.includes(item.index));
+  const selectedCount=scopedChapters.reduce((sum,item)=>sum+item.count,0);
+  const missingScope=scopeMode!=="all"&&(chapters.length===0||scopedChapters.length===0);
+  const currentTask=status.current?status.tasks.find(t=>t.knowledge_id===status.current?.knowledge_id):undefined;
+  const chapterProgress=(status.selected_chapters||[]).map(chapter=>{
+    const items=status.tasks.filter(item=>item.chapter_index===chapter.index);
+    return {...chapter,processed:items.filter(t=>t.state==="done"||t.state==="skipped").length,
+      done:items.filter(t=>t.state==="done").length,active:items.some(t=>t.state==="working")};
+  });
   const remaining=Math.max(0,status.total-status.processed);
   const percent=status.total>0?Math.round(status.processed/status.total*100):0;
   const failed=useMemo(()=>status.tasks.filter(item=>item.state==="skipped"),[status.tasks]);
 
-  const update=(key:"target"|"max_rounds"|"stagnation_rounds"|"max_minutes"|"max_ai_calls",value:number)=>{
+  const update=(key:"target"|"max_rounds"|"stagnation_rounds"|"max_minutes"|"max_ai_calls"|"max_external_calls",value:number)=>{
     setSettings(previous=>({...previous,[key]:value}));
   };
   const start=async()=>{
-    if(!desktop||busy||running)return;
+    if(!desktop||busy||running||missingScope||missingExternalToken)return;
     setBusy(true);setError("");
     try{
       const options={...settings,...(["bank_ai","ai_first"].includes(settings.first_round_mode)?{api_key:aiKey.trim()}: {})};
