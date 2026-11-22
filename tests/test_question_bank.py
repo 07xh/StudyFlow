@@ -175,3 +175,63 @@ def test_bulk_import_bridge_preserves_plaintext_boundary():
         "operation": "questionbank.tokens.rotation", "provider_id": "yanxi",
         "mode": "fixed"})
     assert changed["ok"] and changed["data"]["rotation_modes"]["yanxi"] == "fixed"
+
+
+def test_token_status_check_stores_metadata_without_exposing_secret(monkeypatch):
+    from studyflow.services import yanxi_token_diagnostics as diagnostics
+    selected = bank.add_token("yanxi", "主 Token", ONE)["tokens"][0]["id"]
+    calls = []
+    def post(path, body):
+        calls.append((path, body["token"]))
+        assert body["token"] == ONE
+        if path == "/cloud/extract":
+            return {"message": "待识别内容为空"}
+        return {"data": {"times": 19}}
+    monkeypatch.setattr(diagnostics, "_post", post)
+    status = bank.check_token(selected)
+    row = status["tokens"][0]
+    assert row["validity"] == "valid"
+    assert row["remaining"] is None
+    assert row["checked_at"] and row["check_reason"] == "provider_recognized"
+    assert len(calls) == 1
+    assert ONE not in repr(status)
+    detailed = bank.check_token(selected, True)
+    row = detailed["tokens"][0]
+    assert row["remaining"] == 19 and row["balance_at"]
+    assert len(calls) == 3, "deep status should be an explicit second request"
+
+
+def test_invalid_and_unrecognized_status_are_distinct_and_never_pruned(monkeypatch):
+    from studyflow.services import yanxi_token_diagnostics as diagnostics
+    selected = bank.add_token("yanxi", "主 Token", ONE)["tokens"][0]["id"]
+    monkeypatch.setattr(diagnostics, "_post",
+                        lambda *_: {"message": "Token无效或用户不存在！"})
+    invalid = bank.check_token(selected, True)
+    assert invalid["tokens"][0]["validity"] == "invalid"
+    assert invalid["tokens"][0]["remaining"] is None
+    monkeypatch.setattr(diagnostics, "_post",
+                        lambda *_: {"message": "请求无法处理"})
+    unknown = bank.check_token(selected)
+    assert unknown["tokens"][0]["validity"] == "unknown"
+    assert len(unknown["tokens"]) == 1, "diagnostics must never delete credentials"
+
+
+def test_token_diagnostics_never_leave_encrypted_vault_on_ipc(monkeypatch):
+    from studyflow.services import yanxi_token_diagnostics as diagnostics
+    token_id = bank.add_token("yanxi", "本机凭据", ONE)["tokens"][0]["id"]
+    monkeypatch.setattr(diagnostics, "_post", lambda *_: {"message": "待识别内容为空"})
+    reply = bridge.dispatch({"id": "check1", "version": 1, "operation": "questionbank.tokens.check",
+                             "token_id": token_id, "include_quota": False})
+    assert reply["ok"]
+    assert reply["data"]["tokens"][0]["validity"] == "valid"
+    assert ONE not in repr(reply)
+
+
+def test_normal_lookup_updates_last_known_balance_without_extra_probe(monkeypatch):
+    selected = bank.add_token("yanxi", "本机凭据", ONE)["tokens"][0]["id"]
+    monkeypatch.setitem(bank.PROVIDERS["yanxi"], "lookup",
+                        lambda *args, **kwargs: {"found": True, "answer": "A",
+                                                 "status": "matched", "remaining": 4})
+    bank.query_question("yanxi", {"title": "示例"}, token_id=selected)
+    row = bank.list_tokens()["tokens"][0]
+    assert row["remaining"] == 4 and row["balance_at"]
