@@ -37,6 +37,8 @@ def clean(tmp_path, monkeypatch):
         auto._STOP.clear()
         auto._PAUSE_REQUEST.clear()
         auto._RESUME.set()
+        auto._PAUSED_AT = None
+        auto._PAUSED_SECONDS = 0.0
     yield
     with auto._LOCK:
         auto._STATUS.clear()
@@ -44,6 +46,8 @@ def clean(tmp_path, monkeypatch):
         auto._STOP.clear()
         auto._PAUSE_REQUEST.clear()
         auto._RESUME.set()
+        auto._PAUSED_AT = None
+        auto._PAUSED_SECONDS = 0.0
 
 
 def test_bank_unverified_guess_becomes_verified_after_official_result():
@@ -900,3 +904,62 @@ def test_selected_scope_does_not_bypass_unresolved_submission_in_other_chapter(m
 def test_invalid_scope_is_rejected_before_background_worker(scope):
     with pytest.raises(auto.service.MasteryError, match="INVALID_REQUEST"):
         auto.start(COURSE, scope)
+
+
+def test_pause_budget_excludes_only_time_parked_at_point_boundary(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(auto.time, "monotonic", lambda: clock[0])
+    deadline = auto._active_now() + 30.0
+    auto._PAUSE_REQUEST.set()
+    auto._RESUME.clear()
+
+    def resume_after_long_pause(_timeout):
+        clock[0] += 120.0
+        auto._PAUSE_REQUEST.clear()
+        auto._RESUME.set()
+        return True
+
+    monkeypatch.setattr(auto._RESUME, "wait", resume_after_long_pause)
+    auto._pause_at_point_boundary(deadline)
+    assert auto._PAUSED_AT is None
+    assert auto._PAUSED_SECONDS == pytest.approx(120.0)
+    assert auto._active_now() == pytest.approx(100.0)
+    clock[0] += 29.0
+    auto._checkpoint(deadline)
+    clock[0] += 2.0
+    with pytest.raises(auto.StopRequested, match="时长上限"):
+        auto._checkpoint(deadline)
+
+
+def test_requested_pause_during_active_round_does_not_freeze_budget(monkeypatch):
+    clock = [200.0]
+    monkeypatch.setattr(auto.time, "monotonic", lambda: clock[0])
+    deadline = auto._active_now() + 30.0
+    # The current paper has not reached the safe knowledge-point boundary.
+    auto._PAUSE_REQUEST.set()
+    clock[0] += 31.0
+    with pytest.raises(auto.StopRequested, match="时长上限"):
+        auto._checkpoint(deadline)
+    assert auto._PAUSED_AT is None
+    assert auto._PAUSED_SECONDS == 0.0
+
+
+def test_stop_while_paused_cleans_clock_and_preserves_stop_reason(monkeypatch):
+    clock = [50.0]
+    monkeypatch.setattr(auto.time, "monotonic", lambda: clock[0])
+    deadline = auto._active_now() + 30.0
+    auto._PAUSE_REQUEST.set()
+    auto._RESUME.clear()
+
+    def stop_during_pause(_timeout):
+        clock[0] += 300.0
+        auto._STOP.set()
+        auto._PAUSE_REQUEST.clear()
+        auto._RESUME.set()
+        return True
+
+    monkeypatch.setattr(auto._RESUME, "wait", stop_during_pause)
+    with pytest.raises(auto.StopRequested, match="已停止"):
+        auto._pause_at_point_boundary(deadline)
+    assert auto._PAUSED_AT is None
+    assert auto._PAUSED_SECONDS == pytest.approx(300.0)
