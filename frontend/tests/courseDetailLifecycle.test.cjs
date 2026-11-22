@@ -177,8 +177,7 @@ test('app-level automatic verifier owns the read when already enabled',async()=>
  }finally{if(view)act(()=>view.unmount());}
 });
 
-
-test('Zhidao expands 绪论 by default and respects manual collapse across filters',async()=>{
+test('Zhidao chapter groups start collapsed and preserve explicit toggles across filters',async()=>{
  const Panel=component(async()=>({
   ...detail('unused'),total:3,items:[
    {name:'第一章知识点',chapter_name:'第一章',progress_percent:50},
@@ -192,15 +191,23 @@ test('Zhidao expands 绪论 by default and respects manual collapse across filte
   const chapter=name=>view.root.findAllByType('button').find(button=>
    button.props.className==='sf-ykt-chapter-toggle'&&
    button.findAllByType('strong').some(node=>node.props.children===name));
-  assert.equal(chapter('绪论').props['aria-expanded'],true);
-  assert.equal(chapter('第一章').props['aria-expanded'],false);
-  assert.equal(chapter('第二章').props['aria-expanded'],false);
+  for(const name of ['绪论','第一章','第二章'])
+   assert.equal(chapter(name).props['aria-expanded'],false);
   act(()=>chapter('绪论').props.onClick());
-  assert.equal(chapter('绪论').props['aria-expanded'],false);
+  assert.equal(chapter('绪论').props['aria-expanded'],true);
   const filter=view.root.findAllByType('select').find(node=>node.props['aria-label']==='章节筛选');
   act(()=>filter.props.onChange({target:{value:'第一章'}}));
-  assert.equal(chapter('第一章').props['aria-expanded'],true);
+  assert.equal(chapter('第一章').props['aria-expanded'],false);
   act(()=>filter.props.onChange({target:{value:''}}));
+  assert.equal(chapter('绪论').props['aria-expanded'],true);
+  act(()=>chapter('绪论').props.onClick());
   assert.equal(chapter('绪论').props['aria-expanded'],false);
+  const buttons=view.root.findAllByType('button');
+  act(()=>buttons.find(button=>button.props.children==='展开全部').props.onClick());
+  for(const name of ['绪论','第一章','第二章'])
+   assert.equal(chapter(name).props['aria-expanded'],true);
+  act(()=>view.root.findAllByType('button').find(button=>button.props.children==='收起全部').props.onClick());
+  for(const name of ['绪论','第一章','第二章'])
+   assert.equal(chapter(name).props['aria-expanded'],false);
  }finally{if(view)act(()=>view.unmount());}
 });
