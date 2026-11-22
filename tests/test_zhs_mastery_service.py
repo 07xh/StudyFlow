@@ -434,6 +434,7 @@ def test_scoped_session_reuses_login_and_detects_account_change(monkeypatch, tmp
     cookie_path.parent.mkdir()
     cookie_path.write_text("first-login-cookie", encoding="utf-8")
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.setattr(legacy_runtime, "resolve_course", lambda key: COURSE)
 
     count = []
