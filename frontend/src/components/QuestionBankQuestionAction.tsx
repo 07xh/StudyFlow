@@ -32,17 +32,17 @@ export function QuestionBankQuestionAction({desktop,question}:{
       const available=saved.providers.filter(p=>saved.tokens.some(t=>t.provider_id===p.id));
       const target=available[0]?.id||saved.providers[0]?.id||"";
       setProvider(target);
-      setTokenId(saved.tokens.find(t=>t.provider_id===target&&t.active)?.id||"");
+      setTokenId("");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setLoading(false);}
   };
   const chooseProvider=(id:string)=>{
     setProvider(id);
-    setTokenId(state.tokens.find(t=>t.provider_id===id&&t.active)?.id||"");
+    setTokenId("");
     setResult(null);setError("");
   };
   const query=async()=>{
-    if(busy||!tokenId||!provider)return;
+    if(busy||!provider||!tokens.length)return;
     setBusy(true);setError("");setResult(null);
     try{
       const answer=await questionBankQuery(provider,question,tokenId);
@@ -68,17 +68,17 @@ export function QuestionBankQuestionAction({desktop,question}:{
               {state.providers.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
-          <label>Token
+          <label>Token 使用方式
             <select value={tokenId} disabled={busy||tokens.length===0}
               onChange={e=>{setTokenId(e.target.value);setResult(null);}}>
-              {tokens.length===0?<option value="">尚未配置</option>:
-                tokens.map(t=><option key={t.id} value={t.id}>{t.label}{t.active?"（默认）":""}</option>)}
+              <option value="">{tokens.length===0?"尚未配置":"按题库策略自动选择"}</option>
+              {tokens.map(t=><option key={t.id} value={t.id}>{t.label}{t.active?"（默认）":""}</option>)}
             </select>
           </label>
-          <button type="button" disabled={busy||!tokenId||!question.title.trim()}
+          <button type="button" disabled={busy||tokens.length===0||!question.title.trim()}
             onClick={()=>void query()}>{busy?"查询中…":"查询这道题"}</button>
         </div>
-        <p className="sf-qb-hint">将当前题目及选项发给所选题库。结果仅供核对，不会改写本题答案或自动提交。</p>
+        <p className="sf-qb-hint">每次仅使用本题库的一条 Token；可自动轮流或手动固定。结果仅供核对，不自动提交。</p>
       </>}
       {error&&<p role="alert" className="sf-qb-error">{error}</p>}
       {result&&<div className="sf-qb-answer" role="status">

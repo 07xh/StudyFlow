@@ -218,6 +218,25 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 .is_some_and(|v| (8..=512).contains(&v.len())
                     && v.bytes().all(|c| c.is_ascii_graphic()))
             => Ok(()),
+        "questionbank.tokens.import"
+            if request.get("provider_id").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.is_empty() && v.len() <= 40
+                    && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
+            && request.get("lines").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.trim().is_empty() && v.len() <= 65_000
+                    && v.lines().filter(|line| !line.trim().is_empty()).count() <= 100)
+            => Ok(()),
+        "questionbank.tokens.rotation"
+            if request.get("provider_id").and_then(|v| v.as_str())
+                .is_some_and(|v| !v.is_empty() && v.len() <= 40
+                    && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
+            && matches!(request.get("mode").and_then(|v| v.as_str()), Some("fixed" | "round_robin"))
+            => Ok(()),
+        "questionbank.tokens.check"
+            if request.get("token_id").and_then(|v| v.as_str())
+                .is_some_and(|v| v.len() == 32 && v.bytes().all(|c| c.is_ascii_hexdigit()))
+            && request.get("include_quota").map_or(true, |v| v.is_boolean())
+            => Ok(()),
         "questionbank.tokens.select" | "questionbank.tokens.remove"
             if request.get("token_id").and_then(|v| v.as_str())
                 .is_some_and(|v| v.len() == 32 && v.bytes().all(|c| c.is_ascii_hexdigit()))
@@ -340,8 +359,8 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                             .is_some_and(|s| !s.is_empty() && s.len() <= 40
                                 && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
                             && opts.get("external_token_id").and_then(|v| v.as_str())
-                                .is_some_and(|s| s.len() == 32
-                                    && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)))))
+                                 .is_some_and(|s| s.is_empty() || (s.len() == 32
+                                    && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))))))
                     && opts.get("api_key").map_or(matches!(mode, "bank_only" | "arbitrary_first"), |k| k.as_str()
                         .is_some_and(|s| s.len() <= 256 && !s.contains('\r') && !s.contains('\n')
                             && (matches!(mode, "bank_only" | "arbitrary_first") || !s.trim().is_empty())))

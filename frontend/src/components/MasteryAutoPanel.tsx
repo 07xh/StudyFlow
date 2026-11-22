@@ -92,9 +92,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         const provider=state.providers.some(p=>p.id===previous.external_provider_id)
           ?previous.external_provider_id||"" :state.providers[0]?.id||"";
         const valid=state.tokens.some(t=>t.provider_id===provider&&t.id===previous.external_token_id);
-        const token=valid?previous.external_token_id
-          :state.tokens.find(t=>t.provider_id===provider&&t.active)?.id
-          ||state.tokens.find(t=>t.provider_id===provider)?.id||"";
+        const token=valid?previous.external_token_id:"";
         return {...previous,external_provider_id:provider,external_token_id:token};
       });
     }catch(cause){setBankError(friendlyBridgeError(cause));}
@@ -130,8 +128,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   useEffect(()=>{void reloadChapters();},[reloadChapters]);
 
   const configuredBankTokens=bankState.tokens.filter(t=>t.provider_id===settings.external_provider_id);
-  const missingExternalToken=Boolean(settings.use_external_bank)&&!configuredBankTokens
-    .some(t=>t.id===settings.external_token_id);
+  const missingExternalToken=Boolean(settings.use_external_bank)&&
+    (configuredBankTokens.length===0||(Boolean(settings.external_token_id)&&
+      !configuredBankTokens.some(t=>t.id===settings.external_token_id)));
   const running=ACTIVE.has(status.state);
   const pausing=status.state==="pausing";
   const canResume=pausing||status.state==="paused";
@@ -285,7 +284,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
               checked={Boolean(settings.use_external_bank)}
               onChange={event=>setSettings(previous=>({...previous,
                 use_external_bank:event.target.checked}))}/>
-            <span><strong>自动调用共享题库</strong><small>本地已验证答案未命中时使用，不会自动轮换 Token</small></span>
+            <span><strong>自动调用共享题库</strong><small>本地已验证答案未命中时，按题库 Token 策略查询</small></span>
           </label>
           {settings.use_external_bank&&<>
             <div className="sf-mastery-auto-two-fields">
@@ -293,20 +292,18 @@ export function MasteryAutoPanel({courseKey,desktop}:{
                 <select disabled={running||busy} value={settings.external_provider_id||""}
                   onChange={event=>{
                     const provider=event.target.value;
-                    const chosen=bankState.tokens.find(t=>t.provider_id===provider&&t.active)
-                      ||bankState.tokens.find(t=>t.provider_id===provider);
                     setSettings(previous=>({...previous,external_provider_id:provider,
-                      external_token_id:chosen?.id||""}));
+                      external_token_id:""}));
                   }}>
                   {bankState.providers.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
               </label>
-              <label className="sf-mastery-auto-field">本次使用 Token
+              <label className="sf-mastery-auto-field">Token 使用方式
                 <select value={settings.external_token_id||""}
                   disabled={running||busy||!configuredBankTokens.length}
                   onChange={event=>setSettings(previous=>({...previous,
                     external_token_id:event.target.value}))}>
-                  {!configuredBankTokens.length&&<option value="">暂无 Token</option>}
+                  <option value="">{configuredBankTokens.length?"按题库策略自动选择":"暂无 Token"}</option>
                   {configuredBankTokens.map(item=><option key={item.id} value={item.id}>
                     {item.label}{item.active?"（默认）":""}
                   </option>)}

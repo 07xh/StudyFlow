@@ -10,14 +10,16 @@ import json
 import os
 import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from studyflow.services import yanxi_question_bank as yanxi
+from studyflow.services import yanxi_token_diagnostics as yanxi_diagnostics
 
 ROOT = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".studyflow") / "StudyFlow" / "question-bank"
 STORE_PATH = ROOT / "providers.dpapi"
-MAX_TOKENS = 20
+MAX_TOKENS = 100
 LOCK = threading.RLock()
 QuestionBankError = yanxi.QuestionBankError
 
@@ -26,6 +28,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
     "yanxi": {
         "name": "言溪题库",
         "lookup": yanxi.search,
+        "check": yanxi_diagnostics.check,
         "validate_token": yanxi._valid_token,
         "description": "Token 搜题接口",
     },
@@ -44,7 +47,7 @@ def _validate_provider_token(provider: str, token: Any) -> str:
 
 
 def _state() -> dict[str, Any]:
-    return {"version": 1, "tokens": [], "active": {}}
+    return {"version": 1, "tokens": [], "active": {}, "rotation_modes": {}, "cursors": {}}
 
 
 def _check_provider(provider: Any) -> str:
@@ -74,7 +77,7 @@ def _read() -> dict[str, Any]:
         return _state()
     try:
         raw = STORE_PATH.read_bytes()
-        if not raw or len(raw) > 50_000:
+        if not raw or len(raw) > 250_000:
             raise ValueError("invalid blob")
         data = json.loads(yanxi._dpapi(raw, protect=False).decode("utf-8"))
         if (not isinstance(data, dict) or data.get("version") != 1
@@ -89,6 +92,15 @@ def _read() -> dict[str, Any]:
                     or item.get("provider_id") not in PROVIDERS):
                 raise ValueError("invalid token row")
             _validate_provider_token(item["provider_id"], item.get("token"))
+        # Backward compatible with existing v1 DPAPI vaults.
+        modes = data.setdefault("rotation_modes", {})
+        cursors = data.setdefault("cursors", {})
+        if (not isinstance(modes, dict) or not isinstance(cursors, dict)
+                or any(key not in PROVIDERS or mode not in ("fixed", "round_robin")
+                       for key, mode in modes.items())
+                or any(key not in PROVIDERS or type(index) is not int or index < 0
+                       for key, index in cursors.items())):
+            raise ValueError("invalid rotation state")
         return data
     except (OSError, ValueError, UnicodeError, QuestionBankError) as exc:
         raise QuestionBankError("QUESTIONBANK_STORAGE_FAILED") from exc
@@ -113,9 +125,15 @@ def _public(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "providers": [{"id": key, "name": item["name"], "description": item["description"]}
                       for key, item in PROVIDERS.items()],
+        "rotation_modes": {key: data.get("rotation_modes", {}).get(key, "fixed") for key in PROVIDERS},
         "tokens": [{"id": item["id"], "provider_id": item["provider_id"],
                     "label": item["label"],
-                    "active": data["active"].get(item["provider_id"]) == item["id"]}
+                    "active": data["active"].get(item["provider_id"]) == item["id"],
+                    "validity": item.get("validity", "unchecked"),
+                    "checked_at": item.get("checked_at"),
+                    "remaining": item.get("remaining"),
+                    "balance_at": item.get("balance_at"),
+                    "check_reason": item.get("check_reason")}
                    for item in data["tokens"]],
     }
 
@@ -142,6 +160,110 @@ def add_token(provider_id: Any, label: Any, token: Any) -> dict[str, Any]:
                                "label": label.strip(), "token": secret})
         if not data["active"].get(provider):
             data["active"][provider] = item_id
+        _write(data)
+        return _public(data)
+
+
+def import_tokens(provider_id: Any, lines: Any) -> dict[str, Any]:
+    """Atomically import newline-separated tokens to one provider.
+
+    Existing secrets and duplicate pasted lines are skipped without exposure.
+    Validation is all-or-nothing; no partial import on a malformed line.
+    """
+    provider = _check_provider(provider_id)
+    if not isinstance(lines, str) or len(lines) > 65_000:
+        raise QuestionBankError("QUESTIONBANK_INVALID_BATCH")
+    requested = [line.strip() for line in lines.splitlines() if line.strip()]
+    if not requested or len(requested) > MAX_TOKENS:
+        raise QuestionBankError("QUESTIONBANK_INVALID_BATCH")
+    # Validate before opening or modifying the encrypted vault.
+    unique: list[str] = []
+    seen: set[str] = set()
+    for raw in requested:
+        secret = _validate_provider_token(provider, raw)
+        if secret not in seen:
+            seen.add(secret)
+            unique.append(secret)
+    with LOCK:
+        data = _read()
+        current = [item for item in data["tokens"] if item["provider_id"] == provider]
+        already = {item["token"] for item in current}
+        incoming = [secret for secret in unique if secret not in already]
+        if len(current) + len(incoming) > MAX_TOKENS:
+            raise QuestionBankError("QUESTIONBANK_TOKEN_LIMIT")
+        used_labels = {row["label"] for row in current}
+        position = 1
+        for secret in incoming:
+            while f"Token {position:03d}" in used_labels:
+                position += 1
+            label = f"Token {position:03d}"
+            used_labels.add(label)
+            position += 1
+            new_id = uuid.uuid4().hex
+            data["tokens"].append({"id": new_id, "provider_id": provider,
+                                   "label": label, "token": secret})
+            if not data["active"].get(provider):
+                data["active"][provider] = new_id
+        modes = data.setdefault("rotation_modes", {})
+        if incoming and len(current) + len(incoming) > 1 and provider not in modes:
+            modes[provider] = "round_robin"
+        if incoming:
+            _write(data)
+        result = _public(data)
+        result.update(added=len(incoming), skipped=len(requested) - len(incoming))
+        return result
+
+
+def set_rotation(provider_id: Any, mode: Any) -> dict[str, Any]:
+    provider = _check_provider(provider_id)
+    if mode not in ("fixed", "round_robin"):
+        raise QuestionBankError("QUESTIONBANK_INVALID_ROTATION")
+    with LOCK:
+        data = _read()
+        data.setdefault("rotation_modes", {})[provider] = mode
+        data.setdefault("cursors", {})[provider] = 0
+        _write(data)
+        return _public(data)
+
+
+def check_token(token_id: Any, include_quota: bool = False) -> dict[str, Any]:
+    """User-triggered single credential check, optionally reading paid balance.
+
+    Secrets stay within Python; network I/O occurs outside the encrypted-vault
+    lock. Store only status and quota metadata, never raw upstream responses.
+    """
+    if (not isinstance(token_id, str) or len(token_id) != 32
+            or type(include_quota) is not bool):
+        raise QuestionBankError("QUESTIONBANK_INVALID_TOKEN_ID")
+    with LOCK:
+        data = _read()
+        token = next((row for row in data["tokens"] if row["id"] == token_id), None)
+        if token is None:
+            raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
+        provider = PROVIDERS[token["provider_id"]]
+        checker = provider.get("check")
+        if checker is None:
+            raise QuestionBankError("QUESTIONBANK_CHECK_UNSUPPORTED")
+        secret = token["token"]
+    report = checker(secret, include_quota=include_quota)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    validity = report.get("validity")
+    if validity not in ("valid", "invalid", "unknown"):
+        validity = "unknown"
+    remaining = report.get("remaining")
+    if type(remaining) is not int or remaining < 0:
+        remaining = None
+    with LOCK:
+        data = _read()
+        token = next((row for row in data["tokens"] if row["id"] == token_id), None)
+        if token is None:
+            raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
+        token["validity"] = validity
+        token["check_reason"] = str(report.get("reason", ""))[:50]
+        token["checked_at"] = now
+        if report.get("quota_checked") is True and remaining is not None:
+            token["remaining"] = remaining
+            token["balance_at"] = now
         _write(data)
         return _public(data)
 
@@ -219,17 +341,36 @@ def query_question(provider_id: Any, question: Any, token_id: Any = None) -> dic
         raise QuestionBankError("QUESTIONBANK_INVALID_TOKEN_ID")
     with LOCK:
         data = _read()
-        selected = token_id or data["active"].get(provider)
-        item = next((row for row in data["tokens"]
-                     if row["id"] == selected and row["provider_id"] == provider), None)
-        if item is None:
-            raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
+        available = [row for row in data["tokens"] if row["provider_id"] == provider]
+        if token_id is None and data.get("rotation_modes", {}).get(provider) == "round_robin":
+            if not available:
+                raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
+            cursor = data.get("cursors", {}).get(provider, 0)
+            item = available[cursor % len(available)]
+            data.setdefault("cursors", {})[provider] = cursor + 1
+            # Reserve the slot before leaving the lock, including for concurrent callers.
+            _write(data)
+        else:
+            selected = token_id or data["active"].get(provider)
+            item = next((row for row in available if row["id"] == selected), None)
+            if item is None:
+                raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
         # Copy the token while locked, but never hold the lock over remote I/O.
         secret = item["token"]
         selected_id = item["id"]
         selected_label = item["label"]
     adapter: Callable[..., dict[str, Any]] = PROVIDERS[provider]["lookup"]
     result = adapter(title, options, qtype, token=secret)
+    # Reuse real balance data from normal lookups; no second paid probe needed.
+    balance = result.get("remaining")
+    if type(balance) is int and balance >= 0:
+        with LOCK:
+            data = _read()
+            record = next((row for row in data["tokens"] if row["id"] == selected_id), None)
+            if record is not None:
+                record["remaining"] = balance
+                record["balance_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                _write(data)
     return {
         **result,
         "provider_id": provider,

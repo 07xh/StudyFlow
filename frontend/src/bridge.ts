@@ -62,6 +62,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "updates.changelog"; current_version: string; previous_version?: string; history: boolean}
   | {id: string; version: 1; operation: "questionbank.providers" | "questionbank.tokens.list"}
   | {id: string; version: 1; operation: "questionbank.tokens.add"; provider_id:string; label:string; token:string}
+  | {id: string; version: 1; operation: "questionbank.tokens.import"; provider_id:string; lines:string}
+  | {id: string; version: 1; operation: "questionbank.tokens.rotation"; provider_id:string; mode:"fixed"|"round_robin"}
+  | {id: string; version: 1; operation: "questionbank.tokens.check"; token_id:string; include_quota:boolean}
   | {id: string; version: 1; operation: "questionbank.tokens.select" | "questionbank.tokens.remove"; token_id:string}
   | {id: string; version: 1; operation: "questionbank.query"; provider_id:string; question:QuestionBankQuestion; token_id?:string}
   | {id: string; version: 1; operation: "questionbank.yanxi.status" | "questionbank.yanxi.clear"}
@@ -386,7 +389,10 @@ export function friendlyUpdateError(value: unknown): string {
     case "QUESTIONBANK_INVALID_LABEL": return "Token 备注须为 1 至 50 个字符。";
     case "QUESTIONBANK_INVALID_TOKEN_ID": return "Token 标识无效，请重新加载题库列表。";
     case "QUESTIONBANK_TOKEN_NOT_FOUND": return "没有找到选中的 Token，请在题库设置里重新选择。";
-    case "QUESTIONBANK_TOKEN_LIMIT": return "同一题库最多保存 20 条 Token。";
+    case "QUESTIONBANK_TOKEN_LIMIT": return "同一题库最多保存 100 条 Token。";
+    case "QUESTIONBANK_INVALID_BATCH": return "请每行粘贴一条 Token，最多 100 行，且不能包含无效字符。";
+    case "QUESTIONBANK_INVALID_ROTATION": return "请选择固定使用或轮流使用模式。";
+    case "QUESTIONBANK_CHECK_UNSUPPORTED": return "当前题库没有可用的 Token 状态检测接口。";
     case "QUESTIONBANK_TOKEN_DUPLICATE": return "这条 Token 已存在于当前题库。";
     case "QUESTIONBANK_INVALID_QUESTION": return "题目数据不符合要求，请检查题干、题型和选项。";
     case "QUESTIONBANK_STORAGE_FAILED": return "本机题库 Token 保险库不可读，请检查 Windows 用户权限和旧 Token。";
@@ -753,8 +759,11 @@ export function yanxiQuery(title:string,options="",question_type=""):Promise<Yan
 
 /** Shared question-bank contracts: usable from any learning/assignment component. */
 export type QuestionBankProvider={id:string;name:string;description:string};
-export type QuestionBankToken={id:string;provider_id:string;label:string;active:boolean};
-export type QuestionBankState={providers:QuestionBankProvider[];tokens:QuestionBankToken[]};
+export type QuestionBankToken={id:string;provider_id:string;label:string;active:boolean;
+  validity?:"unchecked"|"valid"|"invalid"|"unknown";checked_at?:string|null;
+  remaining?:number|null;balance_at?:string|null;check_reason?:string|null;};
+export type QuestionBankState={providers:QuestionBankProvider[];tokens:QuestionBankToken[];
+  rotation_modes?:Record<string,"fixed"|"round_robin">;added?:number;skipped?:number;};
 export type QuestionBankQuestion={
   title:string;question_type?:string;
   options?:string|Array<{key?:string;text:string}>;
@@ -771,8 +780,17 @@ export function questionBankList():Promise<QuestionBankState>{
 export function questionBankAddToken(provider_id:string,label:string,token:string):Promise<QuestionBankState>{
   return request<QuestionBankState>({operation:"questionbank.tokens.add",provider_id,label,token});
 }
+export function questionBankImportTokens(provider_id:string,lines:string):Promise<QuestionBankState>{
+  return request<QuestionBankState>({operation:"questionbank.tokens.import",provider_id,lines});
+}
+export function questionBankSetRotation(provider_id:string,mode:"fixed"|"round_robin"):Promise<QuestionBankState>{
+  return request<QuestionBankState>({operation:"questionbank.tokens.rotation",provider_id,mode});
+}
 export function questionBankSelectToken(token_id:string):Promise<QuestionBankState>{
   return request<QuestionBankState>({operation:"questionbank.tokens.select",token_id});
+}
+export function questionBankCheckToken(token_id:string,include_quota=false):Promise<QuestionBankState>{
+  return request<QuestionBankState>({operation:"questionbank.tokens.check",token_id,include_quota});
 }
 export function questionBankRemoveToken(token_id:string):Promise<QuestionBankState>{
   return request<QuestionBankState>({operation:"questionbank.tokens.remove",token_id});

@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from "react";
 import {
-  friendlyBridgeError,questionBankAddToken,questionBankList,questionBankQuery,
-  questionBankRemoveToken,questionBankSelectToken,
+  friendlyBridgeError,questionBankCheckToken,questionBankImportTokens,questionBankList,questionBankQuery,
+  questionBankRemoveToken,questionBankSelectToken,questionBankSetRotation,
   type QuestionBankAnswer,type QuestionBankState,
 } from "../bridge";
 import "./QuestionBank.css";
@@ -10,8 +10,7 @@ import "./QuestionBank.css";
 export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
   const [state,setState]=useState<QuestionBankState>({providers:[],tokens:[]});
   const [provider,setProvider]=useState("yanxi");
-  const [label,setLabel]=useState("");
-  const [token,setToken]=useState("");
+  const [tokenLines,setTokenLines]=useState("");
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
@@ -20,6 +19,7 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
   const [options,setOptions]=useState("");
   const [questionType,setQuestionType]=useState("");
   const [answer,setAnswer]=useState<QuestionBankAnswer|null>(null);
+  const [checkingId,setCheckingId]=useState("");
   useEffect(()=>{
     if(!desktop)return;
     let active=true;
@@ -36,16 +36,47 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
 
   const available=useMemo(()=>state.tokens.filter(item=>item.provider_id===provider),[state,provider]);
   const activeToken=available.find(item=>item.active);
+  const rotation=state.rotation_modes?.[provider]||"fixed";
 
   const add=async()=>{
-    if(busy||!label.trim()||!token.trim())return;
+    if(busy||!tokenLines.trim())return;
     setBusy(true);setError("");setNotice("");
     try{
-      const updated=await questionBankAddToken(provider,label.trim(),token.trim());
-      setState(updated);setToken("");setLabel("");
-      setNotice("Token 已加密保存在本机；不会在界面回显完整内容。");
+      const updated=await questionBankImportTokens(provider,tokenLines);
+      setState(updated);setTokenLines("");
+      setNotice(`已加密保存 ${updated.added??0} 条 Token，跳过重复 ${updated.skipped??0} 条；未返回任何密钥明文。`);
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
+  };
+  const changeRotation=async(mode:"fixed"|"round_robin")=>{
+    if(busy)return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      setState(await questionBankSetRotation(provider,mode));
+      setNotice(mode==="round_robin"
+        ?"已启用轮流使用：每次新查询选下一条，错误不会触发额外换号重试。"
+        :"已启用固定使用：始终使用当前默认 Token。");
+    }catch(cause){setError(friendlyBridgeError(cause));}
+    finally{setBusy(false);}
+  };
+  const check=async(id:string,includeQuota=false)=>{
+    if(busy)return;
+    setBusy(true);setCheckingId(id);setError("");setNotice("");
+    try{
+      setState(await questionBankCheckToken(id,includeQuota));
+      setNotice(includeQuota
+        ?"检测完成。余量仅在题库返回可用数字时更新，检测本身可能消耗一次查询额度。"
+        :"检测完成。网络故障或接口变化会显示无法确认，不会删除 Token。");
+    }catch(cause){setError(friendlyBridgeError(cause));}
+    finally{setCheckingId("");setBusy(false);}
+  };
+  const validityLabel=(status?:string)=>{
+    switch(status){
+      case "valid":return "服务已识别";
+      case "invalid":return "可能无效";
+      case "unknown":return "无法确认";
+      default:return "未检测";
+    }
   };
   const select=async(id:string)=>{
     if(busy)return;
@@ -83,40 +114,54 @@ export function QuestionBankSettingsPanel({desktop}:{desktop:boolean}){
     </header>
     <div className="sf-qb-fields">
       <label>题库来源
-        <select value={provider} disabled={busy||loading} onChange={e=>{setProvider(e.target.value);setAnswer(null);}}>
+        <select value={provider} disabled={busy||loading} onChange={e=>{setProvider(e.target.value);setAnswer(null);setTokenLines("");}}>
           {state.providers.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </label>
       <div className="sf-qb-manager">
-        <strong>已保存 Token（{available.length}）</strong>
+        <div className="sf-qb-token-toolbar">
+          <strong>此题库的 Token（{available.length}）</strong>
+          <label>使用策略
+            <select value={rotation} disabled={busy||loading}
+              onChange={e=>void changeRotation(e.target.value as "fixed"|"round_robin")}>
+              <option value="round_robin">自动轮流使用</option>
+              <option value="fixed">固定使用默认 Token</option>
+            </select>
+          </label>
+        </div>
         {loading&&<p className="sf-qb-hint">正在读取本机题库配置…</p>}
-        {!loading&&available.length===0&&<p className="sf-qb-hint">还未配置此题库的 Token。</p>}
-        {available.map(item=><div className="sf-qb-token" key={item.id}>
-          <div>
-            <strong>{item.label}</strong>
-            <small>{item.active?"当前默认 Token":"已加密保存"}</small>
-          </div>
-          <button className="secondary" type="button" disabled={busy||item.active}
-            onClick={()=>void select(item.id)}>{item.active?"使用中":"设为默认"}</button>
-          <button className="secondary" type="button" disabled={busy}
-            onClick={()=>void remove(item.id)} aria-label={"删除 Token "+item.label}>删除</button>
-        </div>)}
+        {!loading&&available.length===0&&<p className="sf-qb-hint">尚未配置。直接在下方粘贴全部 Token。</p>}
+        {available.length>0&&<details className="sf-qb-token-list">
+          <summary>查看已保存的 {available.length} 条 Token（仅显示备注）</summary>
+          {available.map(item=><div className="sf-qb-token" key={item.id}>
+            <div><strong>{item.label}</strong>
+              <small>{item.active?"默认 Token · ":""}{validityLabel(item.validity)} ·
+                {" "}剩余次数：{item.remaining??"未知"}</small>
+              {item.checked_at&&<small>最近检测：{item.checked_at.replace("T"," ").slice(0,19)} UTC</small>}
+              {item.balance_at&&<small>余量记录：{item.balance_at.replace("T"," ").slice(0,19)} UTC</small>}
+            </div>
+            <button className="secondary" type="button" disabled={busy}
+              onClick={()=>void check(item.id)}>{checkingId===item.id?"检测中…":"检测是否可用"}</button>
+            <button className="secondary" type="button" disabled={busy}
+              onClick={()=>void check(item.id,true)}>读取余量（可能扣 1 次）</button>
+            <button className="secondary" type="button" disabled={busy||item.active}
+              onClick={()=>void select(item.id)}>{item.active?"当前默认":"设为默认"}</button>
+            <button className="secondary" type="button" disabled={busy}
+              onClick={()=>void remove(item.id)} aria-label={"删除 Token "+item.label}>删除</button>
+          </div>)}
+        </details>}
       </div>
       <div className="sf-qb-credentials">
-        <label>Token 备注
-          <input value={label} maxLength={50} disabled={busy||loading}
-            placeholder="例如：言溪账号一"
-            onChange={e=>setLabel(e.target.value)}/>
+        <label>批量导入 Token（每行一条，同一题库共用此配置）
+          <textarea className="sf-qb-secret-lines" rows={5} maxLength={65000}
+            autoComplete="off" spellCheck={false} value={tokenLines}
+            disabled={busy||loading} placeholder={"第 1 条 Token\n第 2 条 Token\n第 3 条 Token"}
+            onChange={e=>setTokenLines(e.target.value)}/>
         </label>
-        <label>添加 Token
-          <input value={token} type="password" autoComplete="off" disabled={busy||loading}
-            placeholder="输入本人的题库 Token"
-            onChange={e=>setToken(e.target.value)}/>
-        </label>
-        <button type="button" disabled={busy||loading||!label.trim()||!token.trim()}
-          onClick={()=>void add()}>加密保存 Token</button>
+        <button type="button" disabled={busy||loading||!tokenLines.trim()}
+          onClick={()=>void add()}>批量导入并加密保存</button>
       </div>
-      <p className="sf-qb-hint">可保存多条 Token，按需切换，不会自动轮换或绕过题库额度。旧版言溪 Token 会在首次打开时迁移。</p>
+      <p className="sf-qb-hint">自动去除空行和重复值，不覆盖旧 Token；单个题库最多 100 条。保存不会主动检测。可在上方列表检测每条 Token；读取余量可能消耗 1 次额度，不自动轮询或因限流换号。</p>
     </div>
     <section className="sf-qb-manual" aria-label="手动搜题">
       <h4>手动查询参考资料</h4>

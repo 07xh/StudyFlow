@@ -688,13 +688,14 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
     if enable_external:
         if (not isinstance(provider, str) or provider not in question_bank.PROVIDERS
                 or not isinstance(token_id, str)
-                or not re.fullmatch(r"[0-9a-f]{32}", token_id)):
+                or (token_id and not re.fullmatch(r"[0-9a-f]{32}", token_id))):
             raise service.MasteryError("QUESTIONBANK_TOKEN_NOT_FOUND")
         try:
             available = question_bank.list_tokens()["tokens"]
         except question_bank.QuestionBankError as exc:
             raise service.MasteryError(exc.code) from exc
-        if not any(entry["provider_id"] == provider and entry["id"] == token_id
+        if not any(entry["provider_id"] == provider
+                   and (not token_id or entry["id"] == token_id)
                    for entry in available):
             raise service.MasteryError("QUESTIONBANK_TOKEN_NOT_FOUND")
     scope_mode = raw.get("scope_mode", "all")
@@ -714,7 +715,7 @@ def start(course_key: str, options: Any = None) -> dict[str, Any]:
               "scope_mode": scope_mode, "chapter_count": chapter_count,
               "chapter_indices": chapter_indices if scope_mode in ("single", "selected") else []}
     if enable_external:
-        config.update(external_provider_id=provider, external_token_id=token_id)
+        config.update(external_provider_id=provider, external_token_id=token_id or None)
     for field, low, high in (
         ("target", 1, 100),
         ("max_rounds", 1, 30),
