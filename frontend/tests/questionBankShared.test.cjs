@@ -147,17 +147,17 @@ test("retired Yanxi IPC cannot be reintroduced beside shared provider vault",()=
  const python=read("src/studyflow/services/bridge.py");
  const rust=read("src-tauri/src/lib.rs");
  for(const source of [desktop,python,rust]){
-  assert.doesNotMatch(source,/questionbank\\.yanxi\\.(status|save|clear|query)/);
-  assert.match(source,/questionbank\\.query/);
+  assert.doesNotMatch(source,/questionbank\.yanxi\.(status|save|clear|query)/);
+  assert.match(source,/questionbank\.query/);
  }
- assert.match(python,/questionbank\\.tokens\\.import/);
+ assert.match(python,/questionbank\.tokens\.import/);
  assert.match(desktop,/export function questionBankImportTokens/);
- assert.doesNotMatch(desktop,/export function yanxi(?:Status|SaveToken|ClearToken|Query)\\(/);
+ assert.doesNotMatch(desktop,/export function yanxi(?:Status|SaveToken|ClearToken|Query)\(/);
  const adapter=read("src/studyflow/services/yanxi_question_bank.py");
- assert.doesNotMatch(adapter,/def (?:save_token|delete_token|configured)\\(/);
- assert.match(adapter,/def _load_legacy_token\\(/);
+ assert.doesNotMatch(adapter,/def (?:save_token|delete_token|configured)\(/);
+ assert.match(adapter,/def _load_legacy_token\(/);
  const service=read("src/studyflow/services/question_bank.py");
- assert.match(service,/yanxi\\._load_legacy_token\\(\\)/);
+ assert.match(service,/yanxi\._load_legacy_token\(\)/);
  const bridgeError=desktop.slice(desktop.indexOf("export function friendlyBridgeError"));
  assert.match(bridgeError,/case "QUESTIONBANK_TOKEN_NOT_FOUND":/);
  assert.match(bridgeError,/case "YANXI_QUOTA_EXHAUSTED":/);
