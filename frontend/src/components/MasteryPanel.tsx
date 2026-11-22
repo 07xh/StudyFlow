@@ -53,12 +53,12 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
   const [submissionCheck,setSubmissionCheck]=useState(false);
   const loadToken=useRef(0);
 
-  const loadCatalog=useCallback(async()=>{
+  const loadCatalog=useCallback(async(forceRefresh=false)=>{
     if(!desktop){setError("掌握度需要在桌面版中运行。");return;}
     const token=++loadToken.current;
     setLoading(true);setError("");setNotice("");
     try{
-      const data=await masteryCatalog(courseKey,true);
+      const data=await masteryCatalog(courseKey,true,forceRefresh);
       if(token!==loadToken.current)return;
       setCatalog(data);
     }catch(cause){
@@ -230,7 +230,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
         </p>
       </div>
       <div className="sf-mastery-head-actions">
-        <button className="secondary" type="button" disabled={loading||Boolean(busy)} onClick={()=>void loadCatalog()}>
+        <button className="secondary" type="button" disabled={loading||Boolean(busy)} onClick={()=>void loadCatalog(true)}>
           <RefreshCw size={14}/>{loading?"读取中…":"刷新掌握度"}
         </button>
       </div>
