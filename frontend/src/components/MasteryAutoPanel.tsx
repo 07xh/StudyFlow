@@ -164,7 +164,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       </>}
     </div>
     <div className="sf-mastery-auto-preference">
-      <label>
+      <label className="sf-mastery-auto-external-switch">
         <input type="checkbox" checked={Boolean(settings.use_external_bank)}
           disabled={running||busy}
           onChange={event=>setSettings(previous=>({...previous,
