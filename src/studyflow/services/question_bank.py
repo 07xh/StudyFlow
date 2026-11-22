@@ -10,10 +10,12 @@ import json
 import os
 import threading
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from studyflow.services import yanxi_question_bank as yanxi
+from studyflow.services import yanxi_token_diagnostics as yanxi_diagnostics
 
 ROOT = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".studyflow") / "StudyFlow" / "question-bank"
 STORE_PATH = ROOT / "providers.dpapi"
@@ -26,6 +28,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
     "yanxi": {
         "name": "言溪题库",
         "lookup": yanxi.search,
+        "check": yanxi_diagnostics.check,
         "validate_token": yanxi._valid_token,
         "description": "Token 搜题接口",
     },
@@ -125,7 +128,12 @@ def _public(data: dict[str, Any]) -> dict[str, Any]:
         "rotation_modes": {key: data.get("rotation_modes", {}).get(key, "fixed") for key in PROVIDERS},
         "tokens": [{"id": item["id"], "provider_id": item["provider_id"],
                     "label": item["label"],
-                    "active": data["active"].get(item["provider_id"]) == item["id"]}
+                    "active": data["active"].get(item["provider_id"]) == item["id"],
+                    "validity": item.get("validity", "unchecked"),
+                    "checked_at": item.get("checked_at"),
+                    "remaining": item.get("remaining"),
+                    "balance_at": item.get("balance_at"),
+                    "check_reason": item.get("check_reason")}
                    for item in data["tokens"]],
     }
 
@@ -214,6 +222,48 @@ def set_rotation(provider_id: Any, mode: Any) -> dict[str, Any]:
         data = _read()
         data.setdefault("rotation_modes", {})[provider] = mode
         data.setdefault("cursors", {})[provider] = 0
+        _write(data)
+        return _public(data)
+
+
+def check_token(token_id: Any, include_quota: bool = False) -> dict[str, Any]:
+    """User-triggered single credential check, optionally reading paid balance.
+
+    Secrets stay within Python; network I/O occurs outside the encrypted-vault
+    lock. Store only status and quota metadata, never raw upstream responses.
+    """
+    if (not isinstance(token_id, str) or len(token_id) != 32
+            or type(include_quota) is not bool):
+        raise QuestionBankError("QUESTIONBANK_INVALID_TOKEN_ID")
+    with LOCK:
+        data = _read()
+        token = next((row for row in data["tokens"] if row["id"] == token_id), None)
+        if token is None:
+            raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
+        provider = PROVIDERS[token["provider_id"]]
+        checker = provider.get("check")
+        if checker is None:
+            raise QuestionBankError("QUESTIONBANK_CHECK_UNSUPPORTED")
+        secret = token["token"]
+    report = checker(secret, include_quota=include_quota)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    validity = report.get("validity")
+    if validity not in ("valid", "invalid", "unknown"):
+        validity = "unknown"
+    remaining = report.get("remaining")
+    if type(remaining) is not int or remaining < 0:
+        remaining = None
+    with LOCK:
+        data = _read()
+        token = next((row for row in data["tokens"] if row["id"] == token_id), None)
+        if token is None:
+            raise QuestionBankError("QUESTIONBANK_TOKEN_NOT_FOUND")
+        token["validity"] = validity
+        token["check_reason"] = str(report.get("reason", ""))[:50]
+        token["checked_at"] = now
+        if report.get("quota_checked") is True and remaining is not None:
+            token["remaining"] = remaining
+            token["balance_at"] = now
         _write(data)
         return _public(data)
 
