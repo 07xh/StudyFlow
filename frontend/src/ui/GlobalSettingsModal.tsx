@@ -1,11 +1,12 @@
 import {useEffect,useId,useRef,useState,type KeyboardEvent,type MouseEvent,type PointerEvent as ReactPointerEvent,type ReactNode} from "react";
 import {createPortal} from "react-dom";
-import {Globe2,Info,Palette,RefreshCw,X} from "lucide-react";
+import {BookOpen,Globe2,Info,Palette,RefreshCw,X} from "lucide-react";
 import "./globalSettings.css";
 
-export type GlobalSettingsTab="general"|"updates"|"about"|"developer";
+export type GlobalSettingsTab="general"|"questionbank"|"updates"|"about"|"developer";
 const groups=[
   {id:"general" as const,label:"通用设置",icon:Palette},
+  {id:"questionbank" as const,label:"题库与搜题",icon:BookOpen},
   {id:"updates" as const,label:"版本与更新",icon:RefreshCw},
   {id:"about" as const,label:"关于与开源",icon:Info},
   {id:"developer" as const,label:"开发者网站",icon:Globe2}
