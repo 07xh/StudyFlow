@@ -400,6 +400,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "BRIDGE_COMMAND_UNAVAILABLE": return "桌面端与前端版本不匹配，请重新安装同一版本。";
     case "BRIDGE_COMMAND_REJECTED": return "桌面端拒绝了此操作（IPC 白名单或参数不匹配），并非 Python sidecar 缺失；请更新学序。";
     case "QUESTIONBANK_UNKNOWN_PROVIDER": return "该题库尚未接入学序，请在设置里选择已支持的题库。";
+    case "QUESTIONBANK_INVALID_TOKEN": return "Token 内容不符合所选题库的格式要求。";
     case "QUESTIONBANK_INVALID_LABEL": return "Token 备注须为 1 至 50 个字符。";
     case "QUESTIONBANK_INVALID_TOKEN_ID": return "Token 标识无效，请重新加载题库列表。";
     case "QUESTIONBANK_TOKEN_NOT_FOUND": return "没有找到选中的 Token，请在题库设置里重新选择。";
