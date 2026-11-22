@@ -20,7 +20,7 @@ const NON_VISUAL_FIELDS=new Set(["updated_at"]);
 const LABEL:Record<string,string>={
   idle:"未开始",starting:"准备中",running:"后台运行中",paused:"已暂停",
   stopping:"正在停止",stopped:"已停止",completed:"本次扫描完成",
-  error:"运行出错",interrupted:"上次任务中断",
+  error:"运行出错",interrupted:"上次任务中断",needs_attention:"需核验提交状态",
 };
 
 export function MasteryAutoPanel({courseKey,desktop}:{
