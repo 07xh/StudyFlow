@@ -1,0 +1,40 @@
+/* Shared question-bank controls for Windows settings and any exercise row. */
+.sf-qb-settings,.sf-qb-inline-body { color:var(--text);font-size:12px; }
+.sf-qb-settings { display:flex; flex-direction:column; gap:14px; }
+.sf-qb-header h3,.sf-qb-manual h4 { margin:0 0 5px;font-size:15px; }
+.sf-qb-header p { margin:0;line-height:1.6;color:var(--muted); }
+.sf-qb-fields,.sf-qb-manual {
+  display:grid;gap:10px; padding:13px;border:1px solid var(--line);
+  border-radius:11px;background:var(--panel);
+}
+.sf-qb-settings label,.sf-qb-inline label { display:grid;gap:5px;min-width:0;color:var(--muted); }
+.sf-qb-settings :is(input,select,textarea),.sf-qb-inline select {
+  box-sizing:border-box;width:100%;min-width:0;padding:8px 10px;
+  border:1px solid var(--line);border-radius:8px;background:var(--panel-raised);
+  color:var(--text);font:inherit;
+}
+.sf-qb-credentials { display:grid;grid-template-columns:1fr 1fr auto;align-items:end;gap:8px; }
+.sf-qb-settings button,.sf-qb-inline button {white-space:nowrap}
+.sf-qb-manager {display:grid;gap:8px}
+.sf-qb-token {display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  border:1px solid var(--line);border-radius:8px;padding:9px;background:var(--panel-raised)}
+.sf-qb-token>div { flex:1;min-width:130px;display:flex;flex-direction:column;gap:2px}
+.sf-qb-token strong {font-size:12px}
+.sf-qb-token small {color:var(--muted);font-size:11px}
+.sf-qb-hint {font-size:11px;line-height:1.6;color:var(--muted);margin:0}
+.sf-qb-error {font-size:12px;color:#d56a6a;margin:0}
+.sf-qb-answer {border:1px solid var(--line);border-radius:8px;
+  background:var(--panel-raised);padding:10px;display:grid;gap:6px}
+.sf-qb-answer strong {font-size:12px}
+.sf-qb-answer pre {font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;line-height:1.6}
+.sf-qb-answer small {color:var(--muted)}
+.sf-qb-inline {margin-top:8px}
+.sf-qb-inline-trigger {padding:5px 10px;font-size:11px}
+.sf-qb-inline-body {margin-top:7px;padding:11px;display:grid;gap:8px;
+  border:1px solid var(--line);border-radius:9px;background:var(--panel)}
+.sf-qb-inline-selects {display:flex;flex-wrap:wrap;align-items:end;gap:8px}
+.sf-qb-inline-selects label {flex:1;min-width:135px}
+@media(max-width:720px) {
+  .sf-qb-credentials {grid-template-columns:1fr}
+  .sf-qb-inline-selects {display:grid;grid-template-columns:1fr}
+}
