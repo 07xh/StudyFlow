@@ -8,7 +8,17 @@ export type RuntimeTask={runner:Runner;platform:LegacyPlatform;state:LegacyTaskS
 export const runnerNames:Record<Runner,string>={official:'知到官方播放器',zhs:'知到 ZHS 原版',yuketang:'雨课堂批量任务'};
 // One slow platform must not block live status from the others.
 const runtimeRunners:Runner[]=['official','zhs','yuketang'];
+// Stable status snapshots should not rerender the entire App workspace every
+// two seconds. A change in availability or task identity still propagates.
+function sameRuntimeTask(left:RuntimeTask,right:RuntimeTask):boolean{
+ return left.runner===right.runner && left.platform===right.platform &&
+   left.state===right.state && left.courseId===right.courseId &&
+   left.runId===right.runId && left.exitCode===right.exitCode &&
+   Boolean(left.unavailable)===Boolean(right.unavailable);
+}
 function upsertRuntimeTask(previous:RuntimeTask[], next:RuntimeTask):RuntimeTask[]{
+ const current=previous.find(task=>task.runner===next.runner);
+ if(current && sameRuntimeTask(current,next))return previous;
  const byRunner=new Map(previous.map(task=>[task.runner,task]));
  byRunner.set(next.runner,next);
  return runtimeRunners.flatMap(runner=>{const task=byRunner.get(runner);return task?[task]:[];});
