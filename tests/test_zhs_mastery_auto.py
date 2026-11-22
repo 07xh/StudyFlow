@@ -289,7 +289,7 @@ def test_bank_ai_prefer_verified_answer_without_using_ai(monkeypatch):
     done,_,score=auto._execute_point(COURSE,point,bank,opts,auto.time.monotonic()+10,"sk-temporary")
     assert done and score==100
     assert sends==[11]
-    assert auto._STATUS["ai_calls"] if False else True
+    assert auto._STATUS.get("ai_calls", 0) == 0
     bank.close()
 
 
@@ -395,4 +395,45 @@ def test_arbitrary_first_unknown_fill_uses_official_answer_next_round(monkeypatc
     assert done and score == 100, reason
     assert sent == ["待复习", "正确填空"]
     assert len(submissions) == 2
+    bank.close()
+
+
+
+def test_ai_first_never_calls_ai_for_new_questions_after_first_round(monkeypatch):
+    point={"knowledge_id":"1001","name":"A","theme":"第一章","mastery":25,"free_exam":False}
+    rounds=[]
+    answers=[]
+    ai_calls=[]
+    monkeypatch.setattr(auto.service,"active_round",lambda *args:None)
+    def start_round(*args):
+        number=len(rounds)+1
+        q={**question(qid=100+number),"content":f"本轮新问题 {number}"}
+        rounds.append(q)
+        return {"exam_test_id":number,"questions":[q]}
+    monkeypatch.setattr(auto.service,"start_round",start_round)
+    monkeypatch.setattr(auto.service,"save_answer",lambda *args: answers.append(args[-1]))
+    monkeypatch.setattr(auto.service,"check_saved_answers",lambda *args:{
+        "complete":True,"answered":1,"total":1,
+    })
+    def submit(*args):
+        number=len(answers)
+        return {"verification_pending":False,"graded":[{
+            "questionId":rounds[-1]["question_id"],"graded":True,
+            "isCorrect":number==2,"correctOptionIds":[11],"correctTexts":["Alpha"],
+        }],"high_mastery_now":65 if number==1 else 100}
+    monkeypatch.setattr(auto.service,"submit_round",submit)
+    def suggest(*args):
+        ai_calls.append("called")
+        return 12
+    monkeypatch.setattr(auto,"ai_suggest",suggest)
+    auto._STATUS.update({"course_key":COURSE,"tasks":[{
+        **point,"state":"pending","rounds":0,"reason":"",
+    }]})
+    bank=auto.AnswerBank()
+    opts={**auto.DEFAULTS,"first_round_mode":"ai_first","max_rounds":3}
+    done,reason,score=auto._execute_point(COURSE,point,bank,opts,
+        auto.time.monotonic()+10,"sk-temporary")
+    assert done and score==100,reason
+    assert answers==[12,11],"AI only the first paper; second is an unverified new question"
+    assert ai_calls==["called"]
     bank.close()
