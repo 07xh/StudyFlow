@@ -576,10 +576,11 @@ def _run(course_key: str, config: dict[str, Any], api_key: str = "") -> None:
                     message="其他章节存在待核验的旧交卷记录；需先确认旧提交状态")
             return
         tasks = []
-        for item in selected:
+        for chapter_index, item in _numbered_chapters(selected):
             tasks.append({
                 "knowledge_id": item["knowledge_id"], "name": item["name"],
-                "theme": item["theme"], "mastery": item.get("mastery"),
+                "theme": item["theme"], "chapter_index": chapter_index,
+                "mastery": item.get("mastery"),
                 "state": "pending", "rounds": 0, "reason": "",
             })
         _update(total=len(tasks), tasks=tasks, course_name=catalog["course_name"],
