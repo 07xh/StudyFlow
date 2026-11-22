@@ -5,12 +5,12 @@
 
 ## 使用方式
 
-- 「设置 → 题库与搜题」：选择题库，保存多条带备注的 Token，显式选择默认 Token，删除不需要的 Token，手动查询。
-- 「知到 → AI 掌握度 → 单道练习题」：每道题下方有「题库查题」，展开后选择题库/Token，再点击「查询这道题」。
+- 「设置 → 题库与搜题」：选择题库，多行批量导入 Token；可选自动轮流使用或固定默认 Token，按需查看、检测、删除和查询。
+- 「知到 → AI 掌握度 → 单道练习题」：每道题下方有「题库查题」，默认继承当前题库 Token 策略，必要时可手动指定单条。
 - 将来普通知到作业、雨课堂习题、学习通作业有真实题目 UI 时，可以复用组件，不再单独编写言溪前端：
   `<QuestionBankQuestionAction desktop={desktop} question={normalizedQuestion}/>`。
 - 后端 IPC：`questionbank.providers` / `questionbank.tokens.list` /
-  `questionbank.tokens.add` / `questionbank.tokens.select` /
+  `questionbank.tokens.add` / `questionbank.tokens.import` / `questionbank.tokens.rotation` /\n  `questionbank.tokens.check` / `questionbank.tokens.select` /
   `questionbank.tokens.remove` / `questionbank.query`。
 - 标准题目格式为 `{title, question_type?, options?}`，
   `options` 支持普通字符串或 `[{key,text}]`。平台 Cookie、账户 ID 和作业提交字段一律不进入此查询对象。
@@ -44,6 +44,14 @@ const reference = await questionBankQuery("yanxi", {
 - 诊断时间、已知剩余次数等状态随 DPAPI 保险库保存；完整 Token、原始错误正文和响应 URL 不回传前端或写日志。误报不会自动删除凭据。
 - 当前仅言溪来源实现此实验性诊断，其他提供方需有各自的已验收状态/余额适配器。
 
+## 旧版独立言溪 IPC 下线与数据迁移
+
+- 自 rc.61 后的代码整理起，删除不再使用的 `questionbank.yanxi.status/save/clear/query` 独立 IPC 及前端专属包装；新调用统一经过 `questionbank.tokens.*`、`questionbank.query`。
+- 言溪适配器不再自行保存或删除 Token，也不能在查询中绕过统一保险库读取单独的 Token；所有查询都必须由统一服务显式传入选中凭据。
+- **不会删除旧版用户凭据**：保留只读 `yanxi.dpapi` 解密入口，只有迁移到 `providers.dpapi` 并成功写入后才尝试移除旧文件；新保险库出现异常时不得清空或重建旧文件。
+- 原始 `legacy/zhidao`、`legacy/yuketang` 和历史发布记录继续保留：其中部分代码仍用于打包、播放和原功能兼容，不按文件名或历史日期直接删掉。
+- 已发布的 rc.61 Release 是既有构建，这轮主分支外的清理尚未包含在该安装包里；需以后续正式发布版本为准。
+
 ## 多 Token 与存储
 
 - 采用 Windows 用户级 DPAPI 加密整个保险库：
@@ -53,7 +61,7 @@ const reference = await questionBankQuery("yanxi", {
 - 首次读取自动迁移 rc.57 的 `yanxi.dpapi`。
   先加密写入新保险库，确认成功后再删除旧文件。
 - 可按来源选择固定或轮流 Token，但不会因配额或限流自动重复请求。
-- 列表 API 只返回提供方、Token ID、备注和默认状态，永不回显明文 Token。
+- 列表 API 只返回提供方、Token ID、备注、默认状态、最近有效性检查与余量元数据，永不回显明文 Token。
 - 题目/答案不写入保险库；没有云端同步，也不需要 Cloudflare。
 - 此 Windows 用户身份下运行的其他本地进程仍可能访问用户级 DPAPI 数据；不是防恶意程序隔离技术。
 
