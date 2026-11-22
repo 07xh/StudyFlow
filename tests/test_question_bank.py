@@ -123,3 +123,55 @@ def test_future_provider_uses_shared_vault_without_yanxi_token_pattern(monkeypat
     assert calls == [("示例", "api.key:custom_123")]
     assert result["provider_name"] == "测试扩展题库" and result["verified"] is False
     assert "api.key:custom_123" not in repr(state) + repr(result)
+
+
+def test_multiline_import_is_atomic_deduplicated_and_provider_scoped(monkeypatch):
+    imported = bank.import_tokens("yanxi", "\\n".join([ONE, TWO, ONE, "", TWO]))
+    assert imported["added"] == 2 and imported["skipped"] == 2
+    assert imported["rotation_modes"]["yanxi"] == "round_robin"
+    assert len(imported["tokens"]) == 2
+    assert ONE not in repr(imported) and TWO not in repr(imported)
+    again = bank.import_tokens("yanxi", "\\n".join([ONE, TWO]))
+    assert again["added"] == 0 and again["skipped"] == 2
+    assert len(again["tokens"]) == 2
+    encrypted_before = bank.STORE_PATH.read_bytes()
+    with pytest.raises(bank.QuestionBankError):
+        bank.import_tokens("yanxi", TWO + "\\n" + "invalid token with spaces")
+    assert bank.STORE_PATH.read_bytes() == encrypted_before
+
+
+def test_round_robin_advances_once_per_request_and_explicit_token_stays_pinned(monkeypatch):
+    state = bank.import_tokens("yanxi", ONE + "\\n" + TWO)
+    ids = [token["id"] for token in state["tokens"]]
+    used = []
+    def lookup(title, opts, typ, *, token):
+        used.append(token)
+        if len(used) == 3:
+            raise bank.QuestionBankError("YANXI_RATE_LIMITED")
+        return {"found": True, "answer": "A", "remaining": None,
+                "status": "matched", "source": "test"}
+    monkeypatch.setitem(bank.PROVIDERS["yanxi"], "lookup", lookup)
+    question = {"title": "示例题"}
+    assert bank.query_question("yanxi", question)["token_id"] == ids[0]
+    assert bank.query_question("yanxi", question)["token_id"] == ids[1]
+    with pytest.raises(bank.QuestionBankError, match="YANXI_RATE_LIMITED"):
+        bank.query_question("yanxi", question)
+    assert used == [ONE, TWO, ONE], "rate limit must not retry on alternate tokens"
+    assert bank.query_question("yanxi", question)["token_id"] == ids[1]
+    assert bank.query_question("yanxi", question, token_id=ids[0])["token_id"] == ids[0]
+    assert used[-1] == ONE
+    fixed = bank.set_rotation("yanxi", "fixed")
+    assert fixed["rotation_modes"]["yanxi"] == "fixed"
+    assert bank.query_question("yanxi", question)["token_id"] == ids[0]
+
+
+def test_bulk_import_bridge_preserves_plaintext_boundary():
+    result = bridge.dispatch({"id": "bulk1", "version": 1,
+        "operation": "questionbank.tokens.import", "provider_id": "yanxi",
+        "lines": ONE + "\\n" + TWO})
+    assert result["ok"] and result["data"]["added"] == 2
+    assert ONE not in repr(result) and TWO not in repr(result)
+    changed = bridge.dispatch({"id": "bulk2", "version": 1,
+        "operation": "questionbank.tokens.rotation", "provider_id": "yanxi",
+        "mode": "fixed"})
+    assert changed["ok"] and changed["data"]["rotation_modes"]["yanxi"] == "fixed"
