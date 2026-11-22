@@ -361,6 +361,16 @@ def query_question(provider_id: Any, question: Any, token_id: Any = None) -> dic
         selected_label = item["label"]
     adapter: Callable[..., dict[str, Any]] = PROVIDERS[provider]["lookup"]
     result = adapter(title, options, qtype, token=secret)
+    # Reuse real balance data from normal lookups; no second paid probe needed.
+    balance = result.get("remaining")
+    if type(balance) is int and balance >= 0:
+        with LOCK:
+            data = _read()
+            record = next((row for row in data["tokens"] if row["id"] == selected_id), None)
+            if record is not None:
+                record["remaining"] = balance
+                record["balance_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                _write(data)
     return {
         **result,
         "provider_id": provider,
