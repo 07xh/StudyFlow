@@ -59,6 +59,7 @@ import {ConfirmDialog} from "./ui/ConfirmDialog";
 import {SettingsDialog} from "./ui/SettingsDialog";
 import {GlobalSettingsModal,type GlobalSettingsTab} from "./ui/GlobalSettingsModal";
 import {DeveloperSitePanel} from "./ui/DeveloperSitePanel";
+import {AboutOpenSourcePanel} from "./ui/AboutOpenSourcePanel";
 
 const emptyConfiguration:Config={session_id:"",csrf_token:"",classroom_id:"",university_id:"",sign:""};
 const ACTIVITY_KEY="studyflow.activity.v1";
@@ -1078,7 +1079,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       <UpdatePanel desktop={desktop&&consentAccepted}
         visible={globalSettingsOpen&&globalSettingsTab==="updates"} embedded
         onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
-      {globalSettingsTab==="about"&&<ZhidaoAccountTools desktop={desktop} dark={dark} view="about"/>}
+      {globalSettingsTab==="about"&&<AboutOpenSourcePanel desktop={desktop} onOpenDeveloper={()=>setGlobalSettingsTab("developer")}/>}
       {globalSettingsTab==="developer"&&<DeveloperSitePanel desktop={desktop}/>} 
     </GlobalSettingsModal>
     <StudyFlowConsentGate desktop={desktop} dark={dark} onAccepted={()=>setConsentAccepted(true)} onResolved={onStartupReady}/>
