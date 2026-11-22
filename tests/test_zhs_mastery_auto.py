@@ -31,6 +31,9 @@ def reset_worker(tmp_path, monkeypatch):
     auto._STOP.clear()
     auto._PAUSE.clear()
     with auto._LOCK:
+        auto._PAUSED_AT = None
+        auto._PAUSED_SECONDS = 0.0
+
         auto._THREAD = None
         auto._STATE.clear()
         auto._STATE.update({
@@ -174,3 +177,42 @@ def test_rejects_invalid_options_and_missing_ai_key():
     with pytest.raises(ValueError):
         auto.start("../", {})
     assert auto.status()["state"] == "idle"
+
+
+def test_pause_excludes_wait_time_from_runtime_limit(monkeypatch):
+    # The worker's maximum duration is active work time, not wall time.
+    clock = [100.0]
+    monkeypatch.setattr(auto.time, "monotonic", lambda: clock[0])
+    with auto._LOCK:
+        auto._STATE["state"] = "running"
+    deadline = auto._active_now() + 30
+
+    assert auto.pause()["state"] == "paused"
+    clock[0] += 120  # A long pause must not consume the remaining 30 seconds.
+    assert auto._active_now() == pytest.approx(100.0)
+    assert auto.resume()["state"] == "running"
+    clock[0] += 29
+    auto._checkpoint(deadline)
+    clock[0] += 2
+    with pytest.raises(auto.AutoNeedsInput, match="时长上限"):
+        auto._checkpoint(deadline)
+
+
+def test_multiple_pauses_are_counted_once(monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(auto.time, "monotonic", lambda: clock[0])
+    with auto._LOCK:
+        auto._STATE["state"] = "running"
+
+    auto.pause()
+    clock[0] += 100
+    auto.resume()
+    clock[0] += 10
+    auto.pause()
+    clock[0] += 200
+    # Repeated pause must not replace the original pause start time.
+    auto.pause()
+    clock[0] += 100
+    auto.resume()
+    assert auto._active_now() == pytest.approx(110.0)
+    assert auto._PAUSED_SECONDS == pytest.approx(400.0)
