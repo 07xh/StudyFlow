@@ -52,6 +52,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
   const [notice,setNotice]=useState("");
   const [submissionCheck,setSubmissionCheck]=useState(false);
   const loadToken=useRef(0);
+  const knowledgeToken=useRef(0);
 
   const loadCatalog=useCallback(async(forceRefresh=false)=>{
     if(!desktop){setError("掌握度需要在桌面版中运行。");return;}
@@ -72,10 +73,12 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
   useEffect(()=>{void loadCatalog();},[loadCatalog]);
 
   const openKnowledge=useCallback(async(item:MasteryKnowledge)=>{
+    const token=++knowledgeToken.current;
     setSelected(item);setRound(null);setResult(null);setDraft({});setSaved({});setNotice("");setSubmissionCheck(false);
     setBusy("open");
     try{
       const active=await masteryActiveRound(courseKey,item.knowledge_id);
+      if(token!==knowledgeToken.current)return;
       if(active&&active.questions.length){
         setRound({
           course_key:courseKey,knowledge_id:item.knowledge_id,
@@ -98,22 +101,23 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
         setNotice("已选择知识点。查看分数不会新建试卷；点击「开始练习」才会创建新卷。");
       }
     }catch(cause){
-      setNotice(friendlyBridgeError(cause));
+      if(token===knowledgeToken.current)setNotice(friendlyBridgeError(cause));
     }finally{
-      setBusy("");
+      if(token===knowledgeToken.current)setBusy("");
     }
   },[courseKey,catalog]);
 
   const restart=useCallback(async()=>{
     if(!selected)return;
+    const token=++knowledgeToken.current;
     setBusy("open");setNotice("");setResult(null);setDraft({});setSaved({});setSubmissionCheck(false);
     try{
       const started=await masteryStartRound(courseKey,selected.knowledge_id);
-      setRound(started);
+      if(token===knowledgeToken.current)setRound(started);
     }catch(cause){
-      setNotice(friendlyBridgeError(cause));
+      if(token===knowledgeToken.current)setNotice(friendlyBridgeError(cause));
     }finally{
-      setBusy("");
+      if(token===knowledgeToken.current)setBusy("");
     }
   },[courseKey,selected]);
 
@@ -252,7 +256,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
           const value=item.mastery??null;
           const active=selected?.knowledge_id===item.knowledge_id;
           return <li key={item.knowledge_id} className={active?"is-active":undefined}>
-            <button type="button" className="sf-mastery-row" onClick={()=>void openKnowledge(item)}>
+            <button type="button" className="sf-mastery-row" disabled={Boolean(busy)} onClick={()=>void openKnowledge(item)}>
               <span className={`sf-mastery-dot ${bandClass(value)}`} aria-hidden="true"/>
               <span className="sf-mastery-row-main">
                 <strong>{item.name}</strong>
