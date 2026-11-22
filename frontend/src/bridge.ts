@@ -251,7 +251,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
                              "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
-                             "LOGIN_REQUIRED", "NOT_AI_COURSE", "MASTERY_UNAVAILABLE", "PAPER_UNAVAILABLE", "PAPER_EMPTY",
+                             "LOGIN_REQUIRED", "LOGIN_UNCONFIRMED", "LOGIN_CHECK_UNAVAILABLE", "NOT_AI_COURSE", "MASTERY_UNAVAILABLE", "PAPER_UNAVAILABLE", "PAPER_EMPTY",
                              "NO_ACTIVE_ROUND", "ROUND_EXPIRED", "QUESTION_NOT_IN_ROUND", "EMPTY_ANSWER",
                              "ANSWER_SAVE_FAILED", "SUBMIT_FAILED", "SUBMIT_IN_PROGRESS", "SUBMIT_STATUS_UNKNOWN", "ROUND_ALREADY_SUBMITTED", "ZHS_MASTERY_UNAVAILABLE", "MASTERY_AUTO_RUNNING", "MASTERY_AUTO_NOT_RUNNING", "AI_KEY_REQUIRED",
                              "ZHIDAO_DATA_CLEAR_FAILED", "INVALID_DOCUMENT", "DOCUMENT_UNAVAILABLE", "CONSENT_STORAGE_FAILED",
@@ -461,7 +461,9 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_PLAYER_SETTINGS": return "知到播放器参数无效，未保存。";
     case "ZHS_SETTINGS_UNAVAILABLE": return "ZHS 参数读取或保存失败，原版设置未修改。";
     case "INVALID_ZHS_SETTINGS": return "ZHS 参数超出原版支持范围，未保存。";
-    case "LOGIN_REQUIRED": return "知到登录态已失效，请先重新登录再打开掌握度。";
+    case "LOGIN_REQUIRED": return "本机没有知到登录凭证，请在知到账户页扫码登录。";
+    case "LOGIN_UNCONFIRMED": return "知到登录状态尚未确认：可能是网络、CAS 服务或会话过期，请先检查连接状态。";
+    case "LOGIN_CHECK_UNAVAILABLE": return "知到会话检测运行失败，无法确认是否已登录；无需立即重复扫码。";
     case "NOT_AI_COURSE": return "只有 AI 课程的知识点有掌握度习题。";
     case "MASTERY_UNAVAILABLE": return "该知识点的掌握度暂时读不到。";
     case "PAPER_UNAVAILABLE": return "服务器没有返回可作答的练习卷。";
@@ -548,6 +550,7 @@ export type MasteryCatalog = {
   count: number;
   pending_count: number;
   average_mastery: number | null;
+  unreadable_count?: number;
   verified_at: string;
 };
 
@@ -626,8 +629,8 @@ export type MasterySubmitResult = {
   verified_at: string;
 };
 
-export function masteryCatalog(courseKey: string, withMastery = true): Promise<MasteryCatalog> {
-  return request<MasteryCatalog>({operation: "zhidao.mastery.catalog", course_key: courseKey, with_mastery: withMastery});
+export function masteryCatalog(courseKey: string, withMastery = true, forceRefresh = false): Promise<MasteryCatalog> {
+  return request<MasteryCatalog>({operation: "zhidao.mastery.catalog", course_key: courseKey, with_mastery: withMastery, force_refresh: forceRefresh});
 }
 
 export function masteryStartRound(courseKey: string, knowledgeId: string): Promise<MasteryRound> {
@@ -676,7 +679,7 @@ export type MasteryAutoTask = {
 };
 export type MasteryAutoStatus = {
   run_id?: string; course_key?: string; course_name?: string;
-  state: "idle"|"starting"|"running"|"paused"|"stopping"|"stopped"|"completed"|"error"|"interrupted";
+  state: "idle"|"starting"|"running"|"paused"|"stopping"|"stopped"|"completed"|"error"|"interrupted"|"needs_attention";
   message?: string; total: number; processed: number; done: number; skipped: number;
   current?: {knowledge_id:string;name:string;theme:string}|null;
   submitting?: {knowledge_id:string;exam_test_id:number}|null;
