@@ -183,14 +183,22 @@ def import_tokens(provider_id: Any, lines: Any) -> dict[str, Any]:
         incoming = [secret for secret in unique if secret not in already]
         if len(current) + len(incoming) > MAX_TOKENS:
             raise QuestionBankError("QUESTIONBANK_TOKEN_LIMIT")
-        for position, secret in enumerate(incoming, start=len(current) + 1):
+        used_labels = {row["label"] for row in current}
+        position = 1
+        for secret in incoming:
+            while f"Token {position:03d}" in used_labels:
+                position += 1
+            label = f"Token {position:03d}"
+            used_labels.add(label)
+            position += 1
             new_id = uuid.uuid4().hex
             data["tokens"].append({"id": new_id, "provider_id": provider,
-                                   "label": f"Token {position:03d}", "token": secret})
+                                   "label": label, "token": secret})
             if not data["active"].get(provider):
                 data["active"][provider] = new_id
-        if incoming and len(current) + len(incoming) > 1:
-            data.setdefault("rotation_modes", {})[provider] = "round_robin"
+        modes = data.setdefault("rotation_modes", {})
+        if incoming and len(current) + len(incoming) > 1 and provider not in modes:
+            modes[provider] = "round_robin"
         if incoming:
             _write(data)
         result = _public(data)
