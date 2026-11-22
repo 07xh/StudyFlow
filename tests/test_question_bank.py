@@ -247,3 +247,41 @@ def test_normal_lookup_updates_last_known_balance_without_extra_probe(monkeypatc
     bank.query_question("yanxi", {"title": "示例"}, token_id=selected)
     row = bank.list_tokens()["tokens"][0]
     assert row["remaining"] == 4 and row["balance_at"]
+
+
+def test_shared_question_schema_does_not_depend_on_yanxi_adapter_fields(monkeypatch):
+    monkeypatch.setattr(yanxi, "_field",
+                        lambda *args, **kwargs: pytest.fail("generic validation reached Yanxi"))
+    assert bank._normalize_question({
+        "title": "  示例题目  ", "question_type": " 单选 ",
+        "options": [{"key": " A ", "text": " 第一项 "}, {"key": "B", "text": "第二项"}],
+    }) == ("示例题目", "A. 第一项\nB. 第二项", "单选")
+    for question in (
+        {"title": "  "},
+        {"title": 123},
+        {"title": "正确", "question_type": 12},
+        {"title": "正确", "options": [{"text": ""}]},
+    ):
+        with pytest.raises(bank.QuestionBankError, match="QUESTIONBANK_INVALID_QUESTION"):
+            bank._normalize_question(question)
+
+
+def test_diagnostic_reason_is_allowlisted_before_storage_and_ipc(monkeypatch):
+    selected = bank.add_token("yanxi", "安全性检查", ONE)["tokens"][0]["id"]
+    monkeypatch.setitem(bank.PROVIDERS["yanxi"], "check",
+                        lambda token, include_quota=False: {
+                            "validity": "unknown",
+                            "reason": "upstream url: https://example.test/?token=" + token,
+                            "remaining": None, "quota_checked": False,
+                        })
+    state = bank.check_token(selected)
+    assert state["tokens"][0]["check_reason"] == "unrecognized_response"
+    assert ONE not in repr(state)
+    # Previously persisted reason strings are also sanitized when listed.
+    with bank.LOCK:
+        raw = bank._read()
+        raw["tokens"][0]["check_reason"] = "Bearer " + ONE
+        bank._write(raw)
+    listed = bank.list_tokens()
+    assert listed["tokens"][0]["check_reason"] is None
+    assert ONE not in repr(listed)
