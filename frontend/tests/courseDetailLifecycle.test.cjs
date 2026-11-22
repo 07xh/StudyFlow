@@ -176,3 +176,31 @@ test('app-level automatic verifier owns the read when already enabled',async()=>
   assert.match(JSON.stringify(view.toJSON()),/昨日历史章节/);
  }finally{if(view)act(()=>view.unmount());}
 });
+
+
+test('Zhidao expands 绪论 by default and respects manual collapse across filters',async()=>{
+ const Panel=component(async()=>({
+  ...detail('unused'),total:3,items:[
+   {name:'第一章知识点',chapter_name:'第一章',progress_percent:50},
+   {name:'绪论知识点',chapter_name:'绪论',progress_percent:50},
+   {name:'第二章知识点',chapter_name:'第二章',progress_percent:50}
+  ]
+ }));
+ let view;
+ try{
+  await act(async()=>{view=create(React.createElement(Panel,{course,desktop:true}));});
+  const chapter=name=>view.root.findAllByType('button').find(button=>
+   button.props.className==='sf-ykt-chapter-toggle'&&
+   button.findAllByType('strong').some(node=>node.props.children===name));
+  assert.equal(chapter('绪论').props['aria-expanded'],true);
+  assert.equal(chapter('第一章').props['aria-expanded'],false);
+  assert.equal(chapter('第二章').props['aria-expanded'],false);
+  act(()=>chapter('绪论').props.onClick());
+  assert.equal(chapter('绪论').props['aria-expanded'],false);
+  const filter=view.root.findAllByType('select').find(node=>node.props['aria-label']==='章节筛选');
+  act(()=>filter.props.onChange({target:{value:'第一章'}}));
+  assert.equal(chapter('第一章').props['aria-expanded'],true);
+  act(()=>filter.props.onChange({target:{value:''}}));
+  assert.equal(chapter('绪论').props['aria-expanded'],false);
+ }finally{if(view)act(()=>view.unmount());}
+});

@@ -22,6 +22,10 @@ function lessonStatus(item:Lesson,kind:ZhidaoCourseDetail["course_type"]):Exclud
 }
 function chapterOf(item:Lesson){return (item.chapter_name||item.theme||"").trim();}
 function groupName(item:Lesson){return chapterOf(item)||"其他内容";}
+// Default to the introductory chapter even if the server returns it out of order.
+function isIntroductionChapter(name:string):boolean{
+  return /^(?:第[零〇一二三四五六七八九十百0-9]+章[\s:：、]*)?绪论(?:$|[\s:：、（(])/.test(name.trim());
+}
 /** A cached server record remains historical evidence after an overnight break. */
 const SERVER_EVIDENCE_FRESH_MS=5*60*1000;
 function needsFreshServerEvidence(value:string|null|undefined,now=Date.now()):boolean{
@@ -129,6 +133,7 @@ export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated,autoVer
     }
     return [...result.entries()];
   },[filteredItems]);
+  const defaultOpenChapter=groups.find(([chapter])=>isIntroductionChapter(chapter))?.[0]??groups[0]?.[0];
   const counts=useMemo(()=>{
     const result={all:items.length,incomplete:0,completed:0,unverified:0};
     for(const item of items)result[lessonStatus(item,kind)]++;
@@ -181,11 +186,11 @@ export function ZhidaoCourseDetailPanel({course,desktop,onCoursesUpdated,autoVer
       {items.length===0&&currentDetail&&<p>当前没有可展示的{label}明细。</p>}
       {!currentDetail&&!busy&&!desktop&&<p>请在 Windows 桌面版中读取当前课程的真实章节记录。</p>}
       {items.length>0&&filteredItems.length===0&&<p>没有符合当前筛选条件的学习记录。</p>}
-      {groups.map(([chapter,records],groupIndex)=>{
+      {groups.map(([chapter,records])=>{
         const all=allGroups.get(chapter)??records.map(({item})=>item);
         const completed=all.filter(item=>lessonStatus(item,kind)==="completed").length;
         const verified=all.filter(item=>lessonStatus(item,kind)!=="unverified").length;
-        const open=expanded[chapter]??groupIndex===0;
+        const open=expanded[chapter]??chapter===defaultOpenChapter;
         return <CourseChapterGroup key={chapter} title={chapter}
           meta={`${all.length} 项 · ${verified} 核验 · ${completed} 完成`}
           expanded={open}
