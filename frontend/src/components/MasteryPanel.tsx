@@ -93,8 +93,9 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
           ?"这一轮的提交状态尚待核验；再次点击只会读取服务器状态，不会重复提交。"
           :`恢复了一轮未提交的练习（${active.answered}/${active.total} 已保存）。`);
       }else{
-        const started=await masteryStartRound(courseKey,item.knowledge_id);
-        setRound(started);
+        // Selecting a knowledge point only reads an existing local draft.
+        // Creating a fresh server paper requires the explicit Start action.
+        setNotice("已选择知识点。查看分数不会新建试卷；点击「开始练习」才会创建新卷。");
       }
     }catch(cause){
       setNotice(friendlyBridgeError(cause));
@@ -239,6 +240,12 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
     {error&&<p className="sf-mastery-error" role="alert">{error}</p>}
     {notice&&<p className="sf-mastery-notice" role="status">{notice}</p>}
 
+    {!round&&!result&&selected&&<div className="sf-mastery-selected-actions" role="group" aria-label="所选知识点">
+      <span>已选择：{selected.theme} / {selected.name}</span>
+      <button type="button" disabled={Boolean(busy)} onClick={()=>void restart()}>
+        <Play size={13}/>{busy==="open"?"正在打开…":"开始练习"}
+      </button>
+    </div>}
     {!round&&!result&&<div className="sf-mastery-body">
       <ul className="sf-mastery-list">
         {(catalog?.knowledge??[]).map(item=>{
@@ -410,9 +417,6 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
       <BookOpen size={14}/>
       <span>数据来源：{catalog?.verified_at?catalog.verified_at.slice(0,19).replace("T"," "):"—"} ·
         掌握度读取走只读接口，不会因为查看而新建试卷。</span>
-      {selected&&!round&&!result&&<button className="text-button" type="button" disabled={Boolean(busy)} onClick={()=>void restart()}>
-        <Play size={13}/>开始练习
-      </button>}
     </footer>
   </section>;
 }
