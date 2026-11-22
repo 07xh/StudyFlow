@@ -908,6 +908,34 @@ fn studyflow_open_author_site() -> Result<(), String> {
     }
 }
 
+/// Fixed open-source destinations: React may choose a known entry, never an arbitrary URL.
+fn studyflow_source_url(kind: &str) -> Result<&'static str, String> {
+    match kind {
+        "repository" => Ok("https://github.com/07xh/StudyFlow"),
+        "zhs" => Ok("https://github.com/pjm314159/zhs"),
+        "chaoxing" => Ok("https://github.com/Samueli924/chaoxing"),
+        _ => Err("SOURCE_LINK_INVALID".into()),
+    }
+}
+
+#[tauri::command]
+fn studyflow_open_source_site(kind: String) -> Result<(), String> {
+    let url = studyflow_source_url(&kind)?;
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg(url)
+            .spawn()
+            .map_err(|_| "SOURCE_LINK_OPEN_FAILED".to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
 /// Open an HTTPS homepage registered by a question-bank provider in the OS browser.
 #[tauri::command]
 fn studyflow_open_question_bank_site(url: String) -> Result<(), String> {
@@ -1032,7 +1060,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site, studyflow_open_question_bank_site,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site, studyflow_open_source_site, studyflow_open_question_bank_site,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
@@ -1072,7 +1100,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod ipc_validation_tests {
-    use super::{parse_jsonl_reply, validate, studyflow_release_url, ucampus_official_url};
+    use super::{parse_jsonl_reply, validate, studyflow_release_url, studyflow_source_url, ucampus_official_url};
     use serde_json::json;
 
     #[test]
@@ -1083,6 +1111,19 @@ mod ipc_validation_tests {
             "https://github.com/07xh/StudyFlow/releases/tag/v0.1.1-rc.25");
         for unsafe_tag in ["https://evil.example", "../other", "rc.25", "v../../bad", "v1.2.3/evil", "v1.2@evil"] {
             assert!(studyflow_release_url(Some(unsafe_tag)).is_err());
+        }
+    }
+
+    #[test]
+    fn opens_only_allowlisted_open_source_destinations() {
+        assert_eq!(studyflow_source_url("repository").unwrap(),
+            "https://github.com/07xh/StudyFlow");
+        assert_eq!(studyflow_source_url("zhs").unwrap(),
+            "https://github.com/pjm314159/zhs");
+        assert_eq!(studyflow_source_url("chaoxing").unwrap(),
+            "https://github.com/Samueli924/chaoxing");
+        for value in ["", "../", "https://example.test/", "releases", "token", "repo/../../"] {
+            assert!(studyflow_source_url(value).is_err());
         }
     }
 
