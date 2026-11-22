@@ -3,7 +3,7 @@ import {ChevronRight,ExternalLink,Plus,RefreshCw} from "lucide-react";
 import {
   friendlyBridgeError,questionBankCheckToken,questionBankImportTokens,questionBankList,
   questionBankRemoveToken,questionBankSelectToken,questionBankSetRotation,
-  type QuestionBankProvider,type QuestionBankState,type QuestionBankToken,
+  type QuestionBankState,type QuestionBankToken,
 } from "../bridge";
 import {SettingsDialog} from "../ui/SettingsDialog";
 import {ConfirmDialog} from "../ui/ConfirmDialog";
