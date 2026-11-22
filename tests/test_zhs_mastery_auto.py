@@ -630,3 +630,25 @@ def test_new_run_restores_own_course_marker_not_last_opened_course(monkeypatch):
     assert resumed["pending_submissions"]["1001"] == marker
     assert resumed["submitting"] is None
     assert auto._course_status_path(course_b).exists()
+
+
+
+def test_upgrade_migrates_old_course_before_new_course_overwrites_last_run():
+    import json
+    course_b = "b" * 64
+    old_marker = {"knowledge_id": "1001", "exam_test_id": 31,
+                  "exam_paper_id": 41, "question_ids": [100]}
+    # Simulate rc.55: only the legacy global status exists.
+    auto.STATUS_PATH.write_text(json.dumps({
+        "course_key": COURSE, "state": "needs_attention",
+        "submitting": old_marker, "blocked": ["1001"],
+        "pending_submissions": {"1001": old_marker},
+    }), encoding="utf-8")
+    assert not auto._course_status_path(COURSE).exists()
+    # First rc.56 write belongs to unrelated course B.
+    auto._save({"course_key": course_b, "state": "completed",
+                "blocked": [], "pending_submissions": {}, "submitting": None})
+    old = auto._loaded(COURSE)
+    assert old["blocked"] == ["1001"]
+    assert old["pending_submissions"]["1001"] == old_marker
+    assert auto._loaded(course_b)["state"] == "completed"
