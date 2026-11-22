@@ -112,3 +112,57 @@ test("late rejected status and chapter requests from A do not show errors for B"
     global.window=original;
   }
 });
+
+
+test("A to B to A creates a new visit; the first A response cannot replace the second",async()=>{
+  const original=global.window;
+  global.window={setInterval:()=>11,clearInterval:()=>{},
+    setTimeout:()=>12,clearTimeout:()=>{}};
+  const firstStatus=deferred(),firstCatalog=deferred();
+  const secondStatus=deferred(),secondCatalog=deferred();
+  let aStatusCalls=0,aCatalogCalls=0;
+  let view;
+  try{
+    const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":{
+      masteryAutoStatus:async(course)=>course===B?snapshot(B,"B 状态"):
+        (++aStatusCalls===1?firstStatus.promise:secondStatus.promise),
+      masteryAutoStart:async()=>snapshot(A,"已启动"),
+      masteryAutoControl:async()=>snapshot(A,"已停止"),
+      masteryCatalog:async(course)=>course===B?
+        {knowledge:[{chapter_index:1,theme:"B 目录",knowledge_id:"2001"}]}:
+        (++aCatalogCalls===1?firstCatalog.promise:secondCatalog.promise),
+      questionBankList:async()=>({providers:[],tokens:[]}),
+      friendlyBridgeError:error=>String(error?.message||error),
+    }});
+    await act(async()=>view=create(React.createElement(MasteryAutoPanel,{courseKey:A,desktop:true})));
+    await act(async()=>view.update(React.createElement(MasteryAutoPanel,{courseKey:B,desktop:true})));
+    await act(async()=>view.update(React.createElement(MasteryAutoPanel,{courseKey:A,desktop:true})));
+    assert.equal(aStatusCalls,2,"second visit must issue its own status read");
+    assert.equal(aCatalogCalls,2,"second visit must issue its own catalog read");
+
+    await act(async()=>{
+      firstStatus.resolve(snapshot(A,"第一次 A 的迟到状态"));
+      firstCatalog.resolve({knowledge:[{chapter_index:1,theme:"旧 A 章节",knowledge_id:"1001"}]});
+    });
+    let visible=textOf(view.root);
+    assert.doesNotMatch(visible,/第一次 A 的迟到状态|旧 A 章节/);
+    const start=()=>view.root.findAllByType("button")
+      .find(button=>textOf(button).includes("开始执行"));
+    assert.equal(start()?.props.disabled,true,
+      "first visit's stale catalog must not enable second visit");
+
+    await act(async()=>{
+      secondStatus.resolve(snapshot(A,"第二次 A 的当前状态"));
+      secondCatalog.resolve({knowledge:[{chapter_index:1,theme:"新 A 章节",knowledge_id:"1002"}]});
+    });
+    await act(async()=>view.root.findAllByType("button")
+      .find(button=>textOf(button)==="只做一章").props.onClick());
+    visible=textOf(view.root);
+    assert.match(visible,/第二次 A 的当前状态|新 A 章节/);
+    assert.doesNotMatch(visible,/旧 A 章节|第一次 A 的迟到状态/);
+    assert.equal(start()?.props.disabled,false);
+  }finally{
+    if(view)await act(async()=>view.unmount());
+    global.window=original;
+  }
+});
