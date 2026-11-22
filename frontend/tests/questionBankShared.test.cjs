@@ -76,8 +76,8 @@ function mockBridge(){
 }
 const modalMocks={
  "@tauri-apps/api/core":{invoke:async()=>{}},
- "../ui/SettingsDialog":({open,children})=>open?React.createElement("section",{"aria-label":"二级题库浮窗"},children):null,
- "../ui/ConfirmDialog":({open,onConfirm})=>open?React.createElement("button",{onClick:onConfirm},"继续检测"):null,
+ "../ui/SettingsDialog":{SettingsDialog:({open,children})=>open?React.createElement("section",{"aria-label":"二级题库浮窗"},children):null},
+ "../ui/ConfirmDialog":{ConfirmDialog:({open,onConfirm})=>open?React.createElement("button",{onClick:onConfirm},"继续检测"):null},
 };
 function settings(mock){
  return load("components/QuestionBankSettingsPanel.tsx",{
