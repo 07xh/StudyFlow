@@ -410,6 +410,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "QUESTIONBANK_CHECK_UNSUPPORTED": return "当前题库没有可用的 Token 状态检测接口。";
     case "QUESTIONBANK_TOKEN_DUPLICATE": return "这条 Token 已存在于当前题库。";
     case "QUESTIONBANK_INVALID_QUESTION": return "题目数据不符合要求，请检查题干、题型和选项。";
+    case "QUESTIONBANK_BAD_RESPONSE": return "题库提供方返回的数据格式不符合要求，本次结果未被采用。";
     case "QUESTIONBANK_STORAGE_FAILED": return "本机题库 Token 保险库不可读，请检查 Windows 用户权限和旧 Token。";
     case "QUESTIONBANK_UNAVAILABLE": return "共享题库服务不可用，请检查桌面版安装包。";
     case "YANXI_WINDOWS_ONLY": return "言溪本地 Token 存储仅支持 Windows EXE。";
