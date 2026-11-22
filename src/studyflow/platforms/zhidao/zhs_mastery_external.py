@@ -11,7 +11,7 @@ from html import unescape
 from typing import Any
 
 from studyflow.services import question_bank
-from studyflow.platforms.zhidao.zhs_mastery_auto import _identity, _normalize
+
 
 LABELS = {1: "单选", 2: "多选", 3: "填空", 14: "判断"}
 
@@ -51,6 +51,7 @@ def convert(question: dict[str, Any], answer: Any) -> tuple[Any, str, list[str]]
     Reject prose/explanations rather than guessing option IDs, which could
     silently save an unrelated response.
     """
+    from studyflow.platforms.zhidao.zhs_mastery_auto import _identity, _normalize
     if not isinstance(answer, str) or not answer.strip() or len(answer) > 8000:
         return None
     identity, pairs = _identity(question)
