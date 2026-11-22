@@ -43,7 +43,9 @@ test("About and Open Source is product-scoped; legal documents read inline throu
  assert.match(about,/产品概览/);
  assert.match(about,/开源与许可/);
  assert.match(about,/返回开源与许可/);
- assert.match(about,/opener.current\?\.focus\(/);
+ assert.match(about,/data-document-id=\{item.id\}/);
+ assert.match(about,/querySelector<HTMLButtonElement>/);
+ assert.match(about,/event.key==="Escape"/);
  assert.doesNotMatch(about,/sf-document-overlay/);
  assert.doesNotMatch(account,/view==="about"|sf-document-overlay|documentBusy/);
  assert.match(css,/@media\(max-width:460px\)/);
