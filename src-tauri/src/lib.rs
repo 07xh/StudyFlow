@@ -224,7 +224,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && v.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
             && request.get("lines").and_then(|v| v.as_str())
                 .is_some_and(|v| !v.trim().is_empty() && v.len() <= 65_000
-                    && v.split_terminator('\n').count() <= 100)
+                    && v.lines().filter(|line| !line.trim().is_empty()).count() <= 100)
             => Ok(()),
         "questionbank.tokens.rotation"
             if request.get("provider_id").and_then(|v| v.as_str())
@@ -355,7 +355,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                                 && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
                             && opts.get("external_token_id").and_then(|v| v.as_str())
                                  .is_some_and(|s| s.is_empty() || (s.len() == 32
-                                    && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)))))))
+                                    && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))))))
                     && opts.get("api_key").map_or(matches!(mode, "bank_only" | "arbitrary_first"), |k| k.as_str()
                         .is_some_and(|s| s.len() <= 256 && !s.contains('\r') && !s.contains('\n')
                             && (matches!(mode, "bank_only" | "arbitrary_first") || !s.trim().is_empty())))
