@@ -437,3 +437,46 @@ def test_ai_first_never_calls_ai_for_new_questions_after_first_round(monkeypatch
     assert answers==[12,11],"AI only the first paper; second is an unverified new question"
     assert ai_calls==["called"]
     bank.close()
+
+
+
+def test_sidecar_jsonl_start_then_status_uses_same_background_task(monkeypatch):
+    """The long-lived native sidecar must keep the scheduler alive between IPC calls."""
+    import io
+    import json
+    from studyflow.services import bridge
+
+    active = threading.Event()
+    release = threading.Event()
+
+    def background(*args):
+        active.set()
+        release.wait(timeout=4)
+
+    monkeypatch.setattr(auto, "_run", background)
+    commands = [
+        {"id": "start", "version": 1, "operation": "zhidao.mastery.auto.start",
+         "course_key": COURSE, "settings": {**auto.DEFAULTS,
+                         "first_round_mode": "arbitrary_first"}},
+        {"id": "status", "version": 1, "operation": "zhidao.mastery.auto.status",
+         "course_key": COURSE},
+    ]
+    payload = b"".join(json.dumps(item).encode("utf-8") + b"\n" for item in commands)
+    fake_input = SimpleNamespace(buffer=io.BytesIO(payload))
+    monkeypatch.setattr(bridge.sys, "stdin", fake_input)
+    output = io.StringIO()
+    try:
+        assert bridge.main(output) == 0
+        assert active.wait(2)
+        responses = [json.loads(x) for x in output.getvalue().splitlines()]
+        assert len(responses) == 2
+        assert responses[0]["ok"] is True and responses[1]["ok"] is True
+        first = responses[0]["data"]
+        second = responses[1]["data"]
+        assert first["run_id"] == second["run_id"]
+        assert second["state"] in {"starting", "running"}
+        assert auto._THREAD is not None and auto._THREAD.is_alive()
+    finally:
+        release.set()
+        if auto._THREAD:
+            auto._THREAD.join(3)
