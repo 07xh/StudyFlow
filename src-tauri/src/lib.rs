@@ -193,6 +193,21 @@ fn studyflow_read_document(
             &app, "StudyFlow-隐私补充说明.txt", 128 * 1024
         )?);
     }
+    if document_id == "source" {
+        // Keep the original Zhidao provenance, then include the cross-platform
+        // registers that are shipped alongside the application. Do not rely on
+        // a GitHub connection to show GPL attribution offline.
+        for (filename, heading) in [
+            ("STUDYFLOW_SOURCE_PROVENANCE.md", "StudyFlow 源码迁移记录"),
+            ("THIRD_PARTY_LICENSES.md", "第三方许可证来源登记"),
+            ("THIRD_PARTY_LICENSES_ADDENDUM.md", "第三方许可证增量登记"),
+        ] {
+            content.push_str("\n\n---\n\n");
+            content.push_str(heading);
+            content.push_str("\n\n");
+            content.push_str(&read_legal_resource(&app, filename, 256 * 1024)?);
+        }
+    }
     Ok(serde_json::json!({
         "id": document_id,
         "title": title,
@@ -913,6 +928,7 @@ fn studyflow_source_url(kind: &str) -> Result<&'static str, String> {
     match kind {
         "repository" => Ok("https://github.com/07xh/StudyFlow"),
         "zhs" => Ok("https://github.com/pjm314159/zhs"),
+        "yuketang" => Ok("https://github.com/07xh/yuketang-heartbeat"),
         "chaoxing" => Ok("https://github.com/Samueli924/chaoxing"),
         _ => Err("SOURCE_LINK_INVALID".into()),
     }
@@ -1120,6 +1136,8 @@ mod ipc_validation_tests {
             "https://github.com/07xh/StudyFlow");
         assert_eq!(studyflow_source_url("zhs").unwrap(),
             "https://github.com/pjm314159/zhs");
+        assert_eq!(studyflow_source_url("yuketang").unwrap(),
+            "https://github.com/07xh/yuketang-heartbeat");
         assert_eq!(studyflow_source_url("chaoxing").unwrap(),
             "https://github.com/Samueli924/chaoxing");
         for value in ["", "../", "https://example.test/", "releases", "token", "repo/../../"] {
