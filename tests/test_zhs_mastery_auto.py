@@ -216,3 +216,34 @@ def test_multiple_pauses_are_counted_once(monkeypatch):
     auto.resume()
     assert auto._active_now() == pytest.approx(110.0)
     assert auto._PAUSED_SECONDS == pytest.approx(400.0)
+
+
+def test_missing_server_mastery_never_claims_all_done(monkeypatch):
+    calls, _ = _wire(monkeypatch)
+    monkeypatch.setattr(auto.mastery, "read_catalog", lambda *args, **kwargs: {
+        "knowledge": [
+            {"knowledge_id": KNOWLEDGE_ID, "name": "读取失败",
+             "free_exam": False, "mastery": None, "mastery_error": "NETWORK_ERROR"},
+        ],
+    })
+    auto.start(COURSE_KEY, {"max_rounds": 1, "max_minutes": 1})
+    snap = _wait()
+    assert snap["state"] == "needs_attention"
+    assert "服务器确认" in snap["message"]
+    assert snap["points_done"] == 0
+    assert calls == []
+
+
+def test_all_confirmed_scores_at_target_require_no_new_round(monkeypatch):
+    calls, _ = _wire(monkeypatch)
+    monkeypatch.setattr(auto.mastery, "read_catalog", lambda *args, **kwargs: {
+        "knowledge": [
+            {"knowledge_id": KNOWLEDGE_ID, "name": "已达标",
+             "free_exam": False, "mastery": 100},
+        ],
+    })
+    auto.start(COURSE_KEY, {"target": 90, "max_rounds": 1, "max_minutes": 1})
+    snap = _wait()
+    assert snap["state"] == "completed"
+    assert snap["points_done"] == 0
+    assert calls == []
