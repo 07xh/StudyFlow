@@ -20,8 +20,11 @@ def clean_vault(tmp_path, monkeypatch):
 def test_multiple_tokens_are_encrypted_and_list_does_not_expose_secrets():
     first = bank.add_token("yanxi", "个人账号", ONE)
     first_id = first["tokens"][0]["id"]
-    assert first["tokens"] == [{"id": first_id, "provider_id": "yanxi",
-                                 "label": "个人账号", "active": True}]
+    assert len(first["tokens"]) == 1
+    row = first["tokens"][0]
+    assert {key: row[key] for key in ("id", "provider_id", "label", "active")} == {
+        "id": first_id, "provider_id": "yanxi", "label": "个人账号", "active": True}
+    assert row["validity"] == "unchecked" and row["remaining"] is None
     second = bank.add_token("yanxi", "备用账号", TWO)
     second_id = second["tokens"][1]["id"]
     assert first_id != second_id
