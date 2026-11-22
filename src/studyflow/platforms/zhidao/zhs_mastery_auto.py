@@ -61,9 +61,21 @@ def _write_snapshot(path: Path, snapshot: dict[str, Any]) -> None:
 
 
 def _save(snapshot: dict[str, Any]) -> None:
-    # Preserve the legacy last-run file for older installations while keeping
-    # each course's unresolved submissions independent. A later course start
-    # must never erase another course's pending-paper evidence.
+    # Migrate the legacy rc.55 last-run snapshot BEFORE another course's
+    # first write replaces it. Otherwise opening B immediately after upgrading
+    # could erase A's unconfirmed submit without ever visiting course A.
+    try:
+        previous = json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+        if isinstance(previous, dict):
+            old_key = previous.get("course_key")
+            if isinstance(old_key, str) and re.fullmatch(r"[0-9a-f]{64}", old_key):
+                old_path = _course_status_path(old_key)
+                if not old_path.exists():
+                    _write_snapshot(old_path, previous)
+    except (OSError, ValueError):
+        pass
+    # Keep one backwards-compatible last-run file as well as the authoritative
+    # per-course snapshot. Never merge unrelated course submission markers.
     _write_snapshot(STATUS_PATH, snapshot)
     course_key = snapshot.get("course_key")
     if isinstance(course_key, str) and re.fullmatch(r"[0-9a-f]{64}", course_key):
