@@ -155,11 +155,12 @@ def _parse_result(payload: Any) -> dict[str, Any]:
             "status": "matched", "source": "yanxi_external_unverified"}
 
 
-def search(title: Any, options: Any = "", question_type: Any = "") -> dict[str, Any]:
+def search(title: Any, options: Any = "", question_type: Any = "",
+           *, token: str | None = None) -> dict[str, Any]:
     stem = _field(title, maximum=4000, required=True)
     answers = _field(options, maximum=4000)
     kind = _field(question_type, maximum=40)
-    token = _load_token()
+    token = _load_token() if token is None else _valid_token(token)
     query = urllib.parse.urlencode({
         "token": token, "title": stem, "options": answers, "type": kind,
     })

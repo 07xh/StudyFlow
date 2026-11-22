@@ -6,7 +6,7 @@ import {
   type MasteryCatalog,type MasteryKnowledge,type MasteryQuestion,
   type MasteryRound,type MasterySubmitResult,
 } from "../bridge";
-import {YanxiQuestionBankPanel} from "./YanxiQuestionBankPanel";
+import {QuestionBankQuestionAction} from "./QuestionBankQuestionAction";
 import "./MasteryPanel.css";
 
 type Draft = Record<string,string|number|Array<string|number>>;
@@ -242,8 +242,6 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
       </div>
     </header>
 
-    <YanxiQuestionBankPanel desktop={desktop} questions={round?.questions??[]}/>
-
     {error&&<p className="sf-mastery-error" role="alert">{error}</p>}
     {notice&&<p className="sf-mastery-notice" role="status">{notice}</p>}
 
@@ -317,6 +315,12 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
               {saved[key]&&<span className="sf-mastery-saved"><CheckCircle2 size={13}/>已保存</span>}
             </div>
             <p className="sf-mastery-stem">{question.content}</p>
+            <QuestionBankQuestionAction key={key+"-bank"} desktop={desktop}
+              question={{
+                title:question.content,question_type:typeLabel(question.question_type),
+                options:question.options.map((option,i)=>({key:String.fromCharCode(65+i),text:option.content||"选项 "+(i+1)}))
+              }}/>
+
             {fill?<input className="sf-mastery-fill" type="text"
               placeholder="多个空用 | 分隔，例如：生产力|生产关系"
               disabled={submissionCheck}
@@ -406,6 +410,11 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
                 :<span className="sf-mastery-bad"><XCircle size={14}/>错误</span>}
             </div>
             <p className="sf-mastery-stem">{question.content}</p>
+            <QuestionBankQuestionAction key={String(item.questionId)+"-bank"} desktop={desktop}
+              question={{
+                title:question.content,question_type:typeLabel(item.questionType),
+                options:question.options.map((option,i)=>({key:String.fromCharCode(65+i),text:option.content||"选项 "+(i+1)}))
+              }}/>
             <p className="sf-mastery-answer">
               你的答案：{item.answers.map(entry=>entry.answer).join(" / ")||"（空）"}
             </p>

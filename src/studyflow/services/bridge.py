@@ -155,6 +155,30 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             # Never echo the upstream request URL, which contains the token.
             return {"id": request_id, "ok": False, "error": "YANXI_UNAVAILABLE"}
+    if operation in ("questionbank.providers", "questionbank.tokens.list",
+                     "questionbank.tokens.add", "questionbank.tokens.select",
+                     "questionbank.tokens.remove", "questionbank.query"):
+        from studyflow.services import question_bank as bank
+        try:
+            if operation in ("questionbank.providers", "questionbank.tokens.list"):
+                data = bank.list_tokens()
+            elif operation == "questionbank.tokens.add":
+                data = bank.add_token(request.get("provider_id"),
+                                      request.get("label"), request.get("token"))
+            elif operation == "questionbank.tokens.select":
+                data = bank.select_token(request.get("token_id"))
+            elif operation == "questionbank.tokens.remove":
+                data = bank.remove_token(request.get("token_id"))
+            else:
+                data = bank.query_question(request.get("provider_id"),
+                                           request.get("question"),
+                                           request.get("token_id"))
+            return {"id": request_id, "ok": True, "data": data}
+        except bank.QuestionBankError as exc:
+            return {"id": request_id, "ok": False, "error": exc.code}
+        except Exception:
+            # No question content, upstream request URL or token in errors.
+            return {"id": request_id, "ok": False, "error": "QUESTIONBANK_UNAVAILABLE"}
     if operation == "ping":
         return {"id": request_id, "ok": True, "data": {"version": 1, "service": "studyflow"}}
     if operation in ("zhidao.qr.start", "zhidao.qr.status", "zhidao.qr.cancel"):
