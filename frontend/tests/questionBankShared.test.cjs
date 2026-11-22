@@ -75,6 +75,7 @@ function mockBridge(){
  return {calls,mock,providers};
 }
 const modalMocks={
+ "@tauri-apps/api/core":{invoke:async()=>{}},
  "../ui/SettingsDialog":({open,children})=>open?React.createElement("section",{"aria-label":"二级题库浮窗"},children):null,
  "../ui/ConfirmDialog":({open,onConfirm})=>open?React.createElement("button",{onClick:onConfirm},"继续检测"):null,
 };
@@ -132,7 +133,7 @@ test("one click checks all tokens; quota check is an explicitly confirmed second
  await act(async()=>button(view,"检测全部").props.onClick());
  assert.equal(calls.filter(c=>c[0]==="check").length,2);
  assert.ok(calls.filter(c=>c[0]==="check").every(c=>c[2]===false));
- assert.match(textOf(view.root),/已识别可用 2/);
+ assert.match(textOf(view.root),/已识别可用2/);
  assert.match(textOf(view.root),/未知/);
  await act(async()=>button(view,"检测并更新余量").props.onClick());
  assert.equal(calls.filter(c=>c[0]==="check").length,2);
