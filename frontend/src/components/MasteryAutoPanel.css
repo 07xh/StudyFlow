@@ -46,3 +46,10 @@
 .sf-mastery-course-notice{padding:12px;font-size:13px;line-height:1.6}
 .sf-mastery-course-notice p{color:var(--muted);margin:8px 0 0}
 @media(max-width:760px){.sf-mastery-start-shortcut button{white-space:normal}}
+
+.sf-mastery-auto-preference .sf-mastery-auto-external-switch {
+  flex-direction:row; align-items:center;gap:8px;min-height:36px;
+}
+.sf-mastery-auto-preference .sf-mastery-auto-external-switch input[type="checkbox"] {
+  width:16px; min-width:16px;height:16px;flex:none;
+}

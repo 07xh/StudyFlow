@@ -312,6 +312,16 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                     && opts.get("max_minutes").and_then(|v| v.as_u64()).is_some_and(|n| (1..=720).contains(&n))
                     && opts.get("stagnation_rounds").and_then(|v| v.as_u64()).is_some_and(|n| (1..=10).contains(&n))
                     && opts.get("max_ai_calls").and_then(|v| v.as_u64()).is_some_and(|n| (1..=100).contains(&n))
+                    && opts.get("use_external_bank").map_or(true, |v| v.is_boolean())
+                    && opts.get("max_external_calls").map_or(true, |v| v.as_u64()
+                        .is_some_and(|n| (1..=200).contains(&n)))
+                    && (opts.get("use_external_bank").and_then(|v| v.as_bool()) != Some(true)
+                        || (opts.get("external_provider_id").and_then(|v| v.as_str())
+                            .is_some_and(|s| !s.is_empty() && s.len() <= 40
+                                && s.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-'))
+                            && opts.get("external_token_id").and_then(|v| v.as_str())
+                                .is_some_and(|s| s.len() == 32
+                                    && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c)))))
                     && opts.get("api_key").map_or(matches!(mode, "bank_only" | "arbitrary_first"), |k| k.as_str()
                         .is_some_and(|s| s.len() <= 256 && !s.contains('\r') && !s.contains('\n')
                             && (matches!(mode, "bank_only" | "arbitrary_first") || !s.trim().is_empty())))
