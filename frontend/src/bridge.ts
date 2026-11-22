@@ -109,7 +109,7 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
   | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
-  | {id: string; version: 1; operation: "zhidao.mastery.catalog"; course_key: string; with_mastery?: boolean}
+  | {id: string; version: 1; operation: "zhidao.mastery.catalog"; course_key: string; with_mastery?: boolean; force_refresh?: boolean}
   | {id: string; version: 1; operation: "zhidao.mastery.auto.start"; course_key: string; settings: MasteryAutoSettings}
   | {id: string; version: 1; operation: "zhidao.mastery.auto.status"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.mastery.auto.control"; course_key: string; action: "pause"|"resume"|"stop"}
