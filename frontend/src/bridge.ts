@@ -758,7 +758,7 @@ export function yanxiQuery(title:string,options="",question_type=""):Promise<Yan
 }
 
 /** Shared question-bank contracts: usable from any learning/assignment component. */
-export type QuestionBankProvider={id:string;name:string;description:string};
+export type QuestionBankProvider={id:string;name:string;description:string;homepage?:string|null;quota_unit?:string;supports_check?:boolean};
 export type QuestionBankToken={id:string;provider_id:string;label:string;active:boolean;
   validity?:"unchecked"|"valid"|"invalid"|"unknown";checked_at?:string|null;
   remaining?:number|null;balance_at?:string|null;check_reason?:string|null;};
