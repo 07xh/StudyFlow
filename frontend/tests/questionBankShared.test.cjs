@@ -15,11 +15,6 @@ function mockBridge(){
  const mock={
   friendlyBridgeError:e=>String(e?.message||e),
   questionBankList:async()=>snapshot(),
-  questionBankAddToken:async(provider_id,label,token)=>{
-   calls.push(["add",provider_id,label,token]);
-   stored.push({id:String(++count).padStart(32,"0"),provider_id,label,active:stored.length===0});
-   return snapshot();
-  },
   questionBankImportTokens:async(provider_id,lines)=>{
    calls.push(["import",provider_id,lines]);
    const rows=lines.split(/\r?\n/).map(t=>t.trim()).filter(Boolean);
@@ -141,4 +136,29 @@ test("status and remaining checks are explicit, independent, and redact secrets"
  assert.equal(calls.at(-1)[2],true);
  assert.match(textOf(view.root),/剩余次数：12/);
  assert.doesNotMatch(textOf(view.root),/aaaaaaaaaaaaaaaa/);
+});
+
+test("retired Yanxi IPC cannot be reintroduced beside shared provider vault",()=>{
+ const fs=require("node:fs");
+ const path=require("node:path");
+ const root=path.resolve(__dirname,"../..");
+ const read=p=>fs.readFileSync(path.join(root,p),"utf8");
+ const desktop=read("frontend/src/bridge.ts");
+ const python=read("src/studyflow/services/bridge.py");
+ const rust=read("src-tauri/src/lib.rs");
+ for(const source of [desktop,python,rust]){
+  assert.doesNotMatch(source,/questionbank\\.yanxi\\.(status|save|clear|query)/);
+  assert.match(source,/questionbank\\.query/);
+ }
+ assert.match(python,/questionbank\\.tokens\\.import/);
+ assert.match(desktop,/export function questionBankImportTokens/);
+ assert.doesNotMatch(desktop,/export function yanxi(?:Status|SaveToken|ClearToken|Query)\\(/);
+ const adapter=read("src/studyflow/services/yanxi_question_bank.py");
+ assert.doesNotMatch(adapter,/def (?:save_token|delete_token|configured)\\(/);
+ assert.match(adapter,/def _load_legacy_token\\(/);
+ const service=read("src/studyflow/services/question_bank.py");
+ assert.match(service,/yanxi\\._load_legacy_token\\(\\)/);
+ const bridgeError=desktop.slice(desktop.indexOf("export function friendlyBridgeError"));
+ assert.match(bridgeError,/case "QUESTIONBANK_TOKEN_NOT_FOUND":/);
+ assert.match(bridgeError,/case "YANXI_QUOTA_EXHAUSTED":/);
 });
