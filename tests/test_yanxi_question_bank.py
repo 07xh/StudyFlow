@@ -12,7 +12,7 @@ TOKEN = "a" * 32
 def test_local_token_is_encrypted_and_not_returned(tmp_path, monkeypatch):
     monkeypatch.setattr(yanxi, "STORE_PATH", tmp_path / "nested" / "token.dpapi")
     monkeypatch.setattr(yanxi, "_dpapi", lambda value, protect:
-                        b"opaque:" + value if protect else value.removeprefix(b"opaque:"))
+                        bytes(part ^ 0x5A for part in value))
     assert yanxi.configured() == {"configured": False}
     assert yanxi.save_token(TOKEN) == {"configured": True}
     raw = yanxi.STORE_PATH.read_bytes()
