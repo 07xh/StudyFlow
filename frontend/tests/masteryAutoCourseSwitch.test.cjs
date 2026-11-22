@@ -166,3 +166,77 @@ test("A to B to A creates a new visit; the first A response cannot replace the s
     global.window=original;
   }
 });
+
+
+test("a delayed idle poll cannot replace a completed Start result",async()=>{
+  const original=global.window;
+  global.window={setInterval:()=>11,clearInterval:()=>{},
+    setTimeout:()=>12,clearTimeout:()=>{}};
+  const pending=deferred();
+  const running={...snapshot(A,"新任务运行中"),state:"running",total:1,processed:0,
+    tasks:[{knowledge_id:"1001",name:"第一知识点",theme:"第一章",
+      mastery:20,state:"working",rounds:1,reason:"读取中"}]};
+  let view;
+  try{
+    const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":{
+      masteryAutoStatus:async()=>pending.promise,
+      masteryAutoStart:async()=>running,
+      masteryAutoControl:async()=>running,
+      masteryCatalog:async()=>({knowledge:[{chapter_index:1,theme:"第一章",knowledge_id:"1001"}]}),
+      questionBankList:async()=>({providers:[],tokens:[]}),
+      friendlyBridgeError:error=>String(error?.message||error),
+    }});
+    await act(async()=>view=create(React.createElement(MasteryAutoPanel,{courseKey:A,desktop:true})));
+    const start=()=>view.root.findAllByType("button").find(x=>x.props.className==="sf-mastery-auto-start");
+    assert.equal(start()?.props.disabled,false);
+    await act(async()=>start().props.onClick());
+    assert.match(textOf(view.root),/新任务运行中/);
+    assert.equal(start()?.props.disabled,true);
+
+    await act(async()=>pending.resolve(snapshot(A,"过期的未开始状态")));
+    const visible=textOf(view.root);
+    assert.match(visible,/新任务运行中/);
+    assert.doesNotMatch(visible,/过期的未开始状态/);
+    assert.equal(start()?.props.disabled,true);
+  }finally{
+    if(view)await act(async()=>view.unmount());
+    global.window=original;
+  }
+});
+
+test("a poll started before Pause cannot overwrite the paused control response",async()=>{
+  const original=global.window;
+  const callbacks=[];
+  global.window={setInterval:fn=>{callbacks.push(fn);return 11;},clearInterval:()=>{},
+    setTimeout:()=>12,clearTimeout:()=>{}};
+  const pending=deferred();
+  let calls=0;
+  const running={...snapshot(A,"旧运行中"),state:"running",total:1,processed:0};
+  const paused={...running,state:"paused",message:"已安全暂停"};
+  let view;
+  try{
+    const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":{
+      masteryAutoStatus:async()=>++calls===1?running:pending.promise,
+      masteryAutoStart:async()=>running,
+      masteryAutoControl:async()=>paused,
+      masteryCatalog:async()=>({knowledge:[{chapter_index:1,theme:"第一章",knowledge_id:"1001"}]}),
+      questionBankList:async()=>({providers:[],tokens:[]}),
+      friendlyBridgeError:error=>String(error?.message||error),
+    }});
+    await act(async()=>view=create(React.createElement(MasteryAutoPanel,{courseKey:A,desktop:true})));
+    assert.match(textOf(view.root),/旧运行中/);
+    await act(async()=>callbacks[0]());
+    const pause=view.root.findAllByType("button")
+      .find(x=>textOf(x).includes("完成当前项后暂停"));
+    assert.ok(pause&&!pause.props.disabled);
+    await act(async()=>pause.props.onClick());
+    assert.match(textOf(view.root),/已安全暂停/);
+    await act(async()=>pending.resolve(running));
+    const visible=textOf(view.root);
+    assert.match(visible,/已安全暂停/);
+    assert.doesNotMatch(visible,/旧运行中/);
+  }finally{
+    if(view)await act(async()=>view.unmount());
+    global.window=original;
+  }
+});
