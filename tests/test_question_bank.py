@@ -17,6 +17,15 @@ def clean_vault(tmp_path, monkeypatch):
                         bytes(value ^ 0x5A for value in data))
 
 
+def test_provider_metadata_exposes_homepage_and_health_capabilities():
+    state = bank.list_tokens()
+    provider = next(row for row in state["providers"] if row["id"] == "yanxi")
+    assert provider["homepage"] == "https://tk.enncy.cn/"
+    assert provider["quota_unit"] == "次"
+    assert provider["supports_check"] is True
+    assert "token" not in provider
+
+
 def test_multiple_tokens_are_encrypted_and_list_does_not_expose_secrets():
     first = bank.add_token("yanxi", "个人账号", ONE)
     first_id = first["tokens"][0]["id"]

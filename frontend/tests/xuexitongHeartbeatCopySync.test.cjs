@@ -7,10 +7,10 @@ const root=path.resolve(__dirname,"../..");
 const official=path.join(root,"frontend/src/components/XuexitongHeartbeatPanel.tsx");
 const copy=path.join(root,"integration/frontend/XuexitongHeartbeatPanel.tsx");
 
-test("integration heartbeat panel copy is byte-identical to the shipped component",()=>{
+test("Xuexitong has one shipped implementation, not a stale integration mirror",()=>{
   assert.ok(fs.existsSync(official),"shipped component must exist");
-  assert.ok(fs.existsSync(copy),"integration copy must exist");
-  assert.deepEqual(fs.readFileSync(copy),fs.readFileSync(official));
+  assert.ok(fs.readFileSync(official,"utf8").includes("XuexitongHeartbeatPanel"));
+  assert.equal(fs.existsSync(copy),false,"retired integration duplicate must not reappear");
 });
 
 test("Xuexitong task controls keep run identity and shared parameter defaults",()=>{

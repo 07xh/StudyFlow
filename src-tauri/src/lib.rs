@@ -264,20 +264,6 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 })
             })
             => Ok(()),
-        "questionbank.yanxi.status" | "questionbank.yanxi.clear" => Ok(()),
-        "questionbank.yanxi.save"
-            if request.get("token").and_then(|v| v.as_str())
-                .is_some_and(|s| (8..=256).contains(&s.len())
-                    && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
-            => Ok(()),
-        "questionbank.yanxi.query"
-            if request.get("title").and_then(|v| v.as_str())
-                .is_some_and(|s| !s.trim().is_empty() && s.chars().count() <= 4000)
-            && request.get("options").map_or(true, |v| v.as_str()
-                .is_some_and(|s| s.chars().count() <= 4000))
-            && request.get("question_type").map_or(true, |v| v.as_str()
-                .is_some_and(|s| s.chars().count() <= 40))
-            => Ok(()),
         "ping" | "platform.status" | "yuketang.clear" | "updates.settings.get" | "updates.latest"
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
         | "zhidao.progress.sync" | "zhidao.player.settings.get"
@@ -922,6 +908,32 @@ fn studyflow_open_author_site() -> Result<(), String> {
     }
 }
 
+/// Open an HTTPS homepage registered by a question-bank provider in the OS browser.
+#[tauri::command]
+fn studyflow_open_question_bank_site(url: String) -> Result<(), String> {
+    let parsed = tauri::Url::parse(&url).map_err(|_| "QUESTION_BANK_HOMEPAGE_INVALID")?;
+    if parsed.scheme() != "https"
+        || !parsed.has_host()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return Err("QUESTION_BANK_HOMEPAGE_INVALID".into());
+    }
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg(parsed.as_str())
+            .spawn()
+            .map_err(|_| "QUESTION_BANK_HOMEPAGE_OPEN_FAILED".to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = parsed;
+        Err("WINDOWS_ONLY".into())
+    }
+}
+
 #[tauri::command]
 fn updates_open_folder() -> Result<(), String> {
     let local = std::env::var_os("LOCALAPPDATA").ok_or("WINDOWS_APPDATA_UNAVAILABLE")?;
@@ -1020,7 +1032,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site,
+            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site, studyflow_open_question_bank_site,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
