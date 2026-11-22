@@ -315,7 +315,7 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
               {saved[key]&&<span className="sf-mastery-saved"><CheckCircle2 size={13}/>已保存</span>}
             </div>
             <p className="sf-mastery-stem">{question.content}</p>
-            <QuestionBankQuestionAction key={String(item.questionId)+"-bank"} desktop={desktop}
+            <QuestionBankQuestionAction key={key+"-bank"} desktop={desktop}
               question={{
                 title:question.content,question_type:typeLabel(question.question_type),
                 options:question.options.map((option,i)=>({key:String.fromCharCode(65+i),text:option.content||"选项 "+(i+1)}))
@@ -410,6 +410,11 @@ export function MasteryPanel({courseKey,courseTitle,desktop}:{
                 :<span className="sf-mastery-bad"><XCircle size={14}/>错误</span>}
             </div>
             <p className="sf-mastery-stem">{question.content}</p>
+            <QuestionBankQuestionAction key={String(item.questionId)+"-bank"} desktop={desktop}
+              question={{
+                title:question.content,question_type:typeLabel(item.questionType),
+                options:question.options.map((option,i)=>({key:String.fromCharCode(65+i),text:option.content||"选项 "+(i+1)}))
+              }}/>
             <p className="sf-mastery-answer">
               你的答案：{item.answers.map(entry=>entry.answer).join(" / ")||"（空）"}
             </p>
