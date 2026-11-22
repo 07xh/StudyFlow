@@ -352,6 +352,33 @@ def _normalize_question(question: Any) -> tuple[str, str, str]:
     return title, options, qtype
 
 
+def _public_provider_result(result: Any, provider: str) -> dict[str, Any]:
+    """Reduce provider-specific replies to the stable public IPC contract.
+
+    Never forward arbitrary remote/adapter diagnostic fields into the UI.
+    A provider-supplied source string is not authoritative; attribution comes
+    from the internal provider registry key instead.
+    """
+    if not isinstance(result, dict):
+        raise QuestionBankError("QUESTIONBANK_BAD_RESPONSE")
+    found = result.get("found")
+    answer = result.get("answer")
+    status = result.get("status")
+    if (type(found) is not bool or not isinstance(answer, str)
+            or len(answer) > 8000
+            or status != ("matched" if found else "not_found")
+            or (found and not answer.strip()) or (not found and bool(answer))):
+        raise QuestionBankError("QUESTIONBANK_BAD_RESPONSE")
+    balance = result.get("remaining")
+    if type(balance) is not int or balance < 0:
+        balance = None
+    public = {"found": found, "answer": answer,
+              "status": status, "remaining": balance}
+    if found:
+        public["source"] = f"{provider}_external_unverified"
+    return public
+
+
 def query_question(provider_id: Any, question: Any, token_id: Any = None) -> dict[str, Any]:
     provider = _check_provider(provider_id)
     # Validate before accessing any token or sending a paid request.
@@ -379,9 +406,11 @@ def query_question(provider_id: Any, question: Any, token_id: Any = None) -> dic
         selected_id = item["id"]
         selected_label = item["label"]
     adapter: Callable[..., dict[str, Any]] = PROVIDERS[provider]["lookup"]
-    result = adapter(title, options, qtype, token=secret)
+    result = _public_provider_result(
+        adapter(title, options, qtype, token=secret), provider,
+    )
     # Reuse real balance data from normal lookups; no second paid probe needed.
-    balance = result.get("remaining")
+    balance = result["remaining"]
     if type(balance) is int and balance >= 0:
         with LOCK:
             data = _read()

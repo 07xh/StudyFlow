@@ -285,3 +285,41 @@ def test_diagnostic_reason_is_allowlisted_before_storage_and_ipc(monkeypatch):
     listed = bank.list_tokens()
     assert listed["tokens"][0]["check_reason"] is None
     assert ONE not in repr(listed)
+
+
+def test_provider_reply_strips_debug_fields_and_ignores_untrusted_source(monkeypatch):
+    bank.add_token("yanxi", "测试", ONE)
+    monkeypatch.setitem(bank.PROVIDERS["yanxi"], "lookup",
+                        lambda *args, **kwargs: {
+                            "found": True, "answer": "A", "status": "matched",
+                            "remaining": "10", "source": "secret=" + ONE,
+                            "debug": {"authorization": ONE},
+                            "upstream_response": {"token": ONE},
+                        })
+    result = bank.query_question("yanxi", {"title": "例题"})
+    assert result["found"] and result["answer"] == "A"
+    assert result["source"] == "yanxi_external_unverified"
+    assert result["remaining"] is None
+    assert "debug" not in result and "upstream_response" not in result
+    assert ONE not in repr(result)
+    assert bank.list_tokens()["tokens"][0]["remaining"] is None
+
+
+def test_invalid_adapter_result_does_not_reach_ipc(monkeypatch):
+    bank.add_token("yanxi", "测试", ONE)
+    bad_replies = (
+        None,
+        {"found": "true", "status": "matched", "answer": "A"},
+        {"found": True, "status": "not_found", "answer": "A"},
+        {"found": True, "status": "matched", "answer": ""},
+        {"found": False, "status": "not_found", "answer": "A"},
+        {"found": True, "status": "matched", "answer": "X" * 8001},
+    )
+    for reply in bad_replies:
+        monkeypatch.setitem(bank.PROVIDERS["yanxi"], "lookup",
+                            lambda *args, **kwargs: reply)
+        response = bridge.dispatch({"id": "q1", "version": 1,
+                                    "operation": "questionbank.query",
+                                    "provider_id": "yanxi", "question": {"title": "练习"}})
+        assert response == {"id": "q1", "ok": False, "error": "QUESTIONBANK_BAD_RESPONSE"}
+        assert ONE not in repr(response)

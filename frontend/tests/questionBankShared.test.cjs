@@ -217,3 +217,15 @@ test("provider-neutral validation and error wording stay in the shared bank",()=
  assert.match(frontend,/case "QUESTIONBANK_INVALID_TOKEN":/);
  assert.match(python,/_safe_check_reason\(item.get\("check_reason"\)\)/);
 });
+
+test("malformed provider replies are rejected without displaying upstream debug fields",()=>{
+ const fs=require("node:fs"),path=require("node:path");
+ const root=path.resolve(__dirname,"../..");
+ const python=fs.readFileSync(path.join(root,"src/studyflow/services/question_bank.py"),"utf8");
+ const frontend=fs.readFileSync(path.join(root,"frontend/src/bridge.ts"),"utf8");
+ assert.match(python,/def _public_provider_result\(/);
+ assert.match(python,/QUESTIONBANK_BAD_RESPONSE/);
+ assert.match(python,/_public_provider_result\(/);
+ assert.doesNotMatch(python,/return \{\n\s*\*\*adapter\(/);
+ assert.match(frontend,/case "QUESTIONBANK_BAD_RESPONSE":/);
+});
