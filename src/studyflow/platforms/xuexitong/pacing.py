@@ -76,6 +76,8 @@ def _as_seconds(value: Any, duration: int) -> int:
     旧的 duration*100 阈值会把 30 秒（30000ms）误判成 30000 秒再 clamp 到
     duration；只要数值大于总时长就按毫秒降级，直到落回秒区间。
     """
+    if isinstance(value, bool):
+        return 0
     try:
         number = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -89,6 +91,8 @@ def _as_seconds(value: Any, duration: int) -> int:
 
 def parse_video_status(payload: Any, object_id: str) -> VideoStatus | None:
     if not isinstance(payload, dict) or payload.get("status") != "success":
+        return None
+    if isinstance(payload.get("duration"), bool):
         return None
     try:
         duration = int(payload.get("duration") or 0)
