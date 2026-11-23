@@ -94,3 +94,10 @@
 - `package-lock.json` 记录了 Tauri CLI 的 Windows x64 可选二进制及校验数据；`src-tauri/Cargo.lock` 记录 444 个解析的 crate 依赖包。两份文件生成后，立即移除临时 CI 解析 Job 与日志输出，以免日常校验产生额外工作和内容输出。
 - `scripts/build-windows.ps1` 的根级 `npm install` 正式切换为 `npm ci`；Rust 测试命令改为 `cargo test --locked`，前端继续使用 `npm ci --prefix frontend`。三处输入现在都有真实锁文件，而非只锁定 React 前端。
 - `tests/test_build_dependency_contract.py` 增加根 npm manifest/lock、Windows x64 CLI、Cargo.lock、Rust `--locked`、临时任务移除等断言。是否真正可在 Windows 构建、升级并保留用户数据，以最新 HEAD 完整 CI 为准，不能以锁文件存在代替打包验收。
+
+## 第九批清理（2026-11-24：Windows 前端重复构建）
+
+- 查阅此前成功的 Windows NSIS CI 日志发现：`scripts/build-windows.ps1` 先独立执行一次 `npm --prefix frontend run build`，之后 `npm run tauri -- build` 又因 `src-tauri/tauri.conf.json` 的 `beforeBuildCommand` 自动执行第二次，重复运行 `tsc -b` 和 Vite 生产打包。
+- Windows 打包脚本已删除第一处重复构建；保留根目录和前端 `npm ci`、PyInstaller 原版运行时检查、图标生成、Rust `cargo test --locked`、Tauri 打包及完整 NSIS 安装回归。`beforeBuildCommand` 仍负责唯一一次 React 生产编译，构建失败仍阻断整个打包流程。
+- `tests/test_build_dependency_contract.py` 增加防回退断言；同步修正 `docs/BUILD_WINDOWS.md` 旧执行顺序说明。
+- 该清理只减少构建阶段重复编译，不改变用户运行时 UI、视频心跳、课程任务与用户数据；真实构建耗时收益需对比 Windows CI，不事先宣称具体秒数。
