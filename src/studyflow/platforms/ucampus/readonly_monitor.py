@@ -168,7 +168,11 @@ def tick(*, clock=None, reader_factory=UCampusProgressReader) -> dict[str, Any]:
         if (type(previous_attempt) not in (int, float)
                 or previous_attempt < 0 or not float(previous_attempt) < float("inf")):
             previous_attempt = 0
-        if now - float(previous_attempt) < _MIN_INTERVAL_SECONDS:
+        elapsed = now - float(previous_attempt)
+        # The persisted timestamp uses wall time across restarts. If Windows
+        # corrects the clock backwards, do not suppress progress checks until
+        # the old wall-clock value eventually comes around again.
+        if 0 <= elapsed < _MIN_INTERVAL_SECONDS:
             return public
         saved["last_attempt"] = now
         _write(saved)  # claim before GET: concurrent ticks do not duplicate it
