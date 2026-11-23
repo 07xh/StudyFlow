@@ -4,7 +4,7 @@ Tests do not contact U校园 servers; no production protocol is inferred.
 """
 import json
 
-from studyflow.platforms.ucampus.local_runtime import LocalPulse
+from studyflow.platforms.ucampus.pulse_types import LocalPulse
 from studyflow.platforms.ucampus.send_transport import (
     PlaybackEvidence, VerifiedSendContract, UCampusHTTPTransport,
 )
