@@ -1006,3 +1006,17 @@ def test_zero_resource_ai_point_uses_existing_worker_and_server_readback(tmp_pat
     assert len(reading_only) == 1
     assert reading_only[0].kind == "detail"
     assert reading_only[0].detail_evidence == "catalog_empty"
+
+
+@pytest.mark.parametrize("payload", ["[]", "null", "0", '"unrelated"', "[1, 2, 3]"])
+def test_zhs_progress_and_diagnostic_readers_ignore_non_object_json(tmp_path, payload):
+    """A well-formed but incorrectly shaped worker snapshot is unavailable,
+    not an exception that tears down the entire chapter scheduler.
+    """
+    from studyflow.services.zhs_queue import local_observation, fatal_diagnostic
+
+    token = "c" * 32
+    (tmp_path / f"monitor-zhs-{token}.json").write_text(payload, encoding="utf-8")
+    (tmp_path / f"zhs-diagnostic-{token}.json").write_text(payload, encoding="utf-8")
+    assert local_observation(tmp_path, token) == (None, None)
+    assert fatal_diagnostic(tmp_path, token) is None
