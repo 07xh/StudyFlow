@@ -37,8 +37,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Install frontend dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install lockfile-pinned frontend dependencies
+        run: npm ci --no-audit --no-fund
       - name: Build Tauri React frontend
         run: npm run build
       - name: Check course evidence and IPC boundary
