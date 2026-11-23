@@ -5,7 +5,7 @@ transport. This is an original implementation of connection management, not a
 copy of that unlicensed source file. The actual AI 5.0 learning-event protocol
 and server credit rules have not been verified.
 
-Local heartbeat generation in local_runtime.py is independent of this module.
+The retired local heartbeat runner is no longer packaged; this module only retains legacy connection management.
 No production learning event is automatically registered or sent by this code.
 """
 from __future__ import annotations
