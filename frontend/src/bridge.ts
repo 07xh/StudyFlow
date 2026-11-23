@@ -6,14 +6,6 @@ export type Video = {id: string; name: string; chapter: string};
 export type Config = {session_id: string; csrf_token: string; classroom_id: string; university_id: string; sign: string};
 export type UCampusConfig = {variant:"ai"|"classic";catalog_url:string;cookie:string;authorization:string;annotator_token?:string;school_id?:string};
 export type UCampusSessionInfo = {configured:boolean;variant:"ai"|"classic"|null;jwt_lifetime?:"expired"|"expiring"|"not_expired"|"unknown"};
-export type UCampusLocalStatus={
-  run_id:string;course_id:string;phase:string;active:boolean;paused:boolean;
-  generated:number;sent:number;transport_accepted:number;server_confirmed:number|null;
-  pulses_per_resource:number;
-  sender_connected:boolean;
-  tasks:Array<{resource_id:string;chapter_id:string;title:string;state:string;
-    generated:number;attempted:number;accepted:number;local_elapsed_seconds:number;server_completed:boolean|null}>;
-};
 export type UCampusSocketDiagnostic={
   transport:"legacy_socketio_v3";handshake:"namespace_joined";
   learning_events_sent:0;progress_verified:false;ai5_compatible:null;
