@@ -76,15 +76,11 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "ucampus.monitor.status" | "ucampus.monitor.tick"}
   | {id: string; version: 1; operation: "ucampus.monitor.configure"; enabled: boolean; course_id?: string; unit_id?: string}
   | {id: string; version: 1; operation: "ucampus.socket.diagnose"}
-  | {id: string; version: 1; operation: "ucampus.heartbeat.capabilities"}
   | {id: string; version: 1; operation: "ucampus.fabricated.capabilities"}
   | {id: string; version: 1; operation: "ucampus.fabricated.start"; course_id: string; unit_id: string; pulses?: number; speed?: number; duration_seconds?: number; heartbeat_interval?: number; instant_complete?: boolean}
   | {id: string; version: 1; operation: "ucampus.fabricated.status"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.fabricated.history"; course_id: string}
   | {id: string; version: 1; operation: "ucampus.fabricated.pause" | "ucampus.fabricated.resume" | "ucampus.fabricated.stop"; course_id: string; run_id: string}
-  | {id: string; version: 1; operation: "ucampus.heartbeat.start"; course_id: string; unit_id: string; pulses?: number}
-  | {id: string; version: 1; operation: "ucampus.heartbeat.status"; course_id: string}
-  | {id: string; version: 1; operation: "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"; course_id: string; run_id: string}
   | {id: string; version: 1; operation: "ucampus.session.info"}
   | {id: string; version: 1; operation: "ucampus.session.configure"; configuration: UCampusConfig}
   | {id: string; version: 1; operation: "ucampus.session.login"; username: string; password: string}
