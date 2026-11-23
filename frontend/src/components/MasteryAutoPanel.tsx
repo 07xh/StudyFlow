@@ -196,17 +196,16 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   // courses can start a task before the new course's scope is known.
   const missingScope=chapterLoading||Boolean(chapterError)||chapters.length===0||
     scopedChapters.length===0;
-  const invalidParameters=(Object.keys(NUMBER_LIMITS) as NumberLimitKey[]).filter(key=>{
-    const value=settings[key]??(key==="max_external_calls"?40:undefined);
-    const {min,max}=NUMBER_LIMITS[key];
-    return typeof value!=="number"||!Number.isInteger(value)||value<min||value>max;
-  });
+  const invalidParameterLabels=(Object.keys(NUMBER_LIMITS) as NumberLimitKey[])
+    .filter(key=>{
+      const value=settings[key]??(key==="max_external_calls"?40:undefined);
+      const {min,max}=NUMBER_LIMITS[key];
+      return typeof value!=="number"||!Number.isInteger(value)||value<min||value>max;
+    }).map(key=>NUMBER_LIMITS[key].label as string);
   const chapterCount=settings.chapter_count??1;
   if(!Number.isInteger(chapterCount)||chapterCount<1||chapterCount>200||
      (scopeMode==="first_n"&&chapters.length>0&&chapterCount>chapters.length))
-    invalidParameters.push("chapter_count" as NumberLimitKey);
-  const invalidParameterLabels=invalidParameters.map(key=>key==="chapter_count"
-    ?"前 N 章数量":NUMBER_LIMITS[key].label);
+    invalidParameterLabels.push("前 N 章数量");
   const invalidConfig=invalidParameterLabels.length>0;
   const currentTask=status.current?status.tasks.find(t=>t.knowledge_id===status.current?.knowledge_id):undefined;
   const chapterProgress=(status.selected_chapters||[]).map(chapter=>{
