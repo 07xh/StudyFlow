@@ -239,3 +239,28 @@ def test_readonly_metadata_never_follows_redirect_or_trusts_non_200():
     session.get = lambda url, **kwargs: UnexpectedResponse(401)
     with pytest.raises(ValueError, match="Unverified Rain Classroom metadata"):
         reader.classroom_info("123")
+
+
+def test_malformed_explicit_completion_flag_does_not_borrow_full_server_rate():
+    # rate=1 is a watch metric, not a replacement for an invalid explicit
+    # completion flag. Only providers that omit the flag may use that fallback.
+    for malformed in (2, -1, "maybe", "true", 1.0, 0.0, None, [], {}):
+        session = ServerProgressSession(rate=1.0, completed=malformed)
+        if malformed is None:
+            class ExplicitNullSession(ServerProgressSession):
+                def get(self, url, **kwargs):
+                    response = super().get(url, **kwargs)
+                    if url.endswith("/video-log/get_video_watch_progress/"):
+                        response.payload["data"]["12"]["completed"] = None
+                    return response
+            session = ExplicitNullSession(rate=1.0)
+        result = YuketangReadOnly({"sessionid": "own"}, session=session).read_video_progress("123", "12")
+        assert result["progress_percent"] == 100.0
+        assert result["server_completed"] is False, f"malformed flag {malformed!r} accepted"
+
+
+def test_legacy_missing_completion_flag_can_still_use_exact_full_rate():
+    session = ServerProgressSession(rate=1.0)
+    result = YuketangReadOnly({"sessionid": "own"}, session=session).read_video_progress("123", "12")
+    assert result["server_completed"] is True
+    assert result["progress_percent"] == 100.0
