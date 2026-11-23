@@ -57,3 +57,11 @@
 - 重写 `frontend/README.md`：旧文档仍声称 Windows EXE 未构建、知到 Cookie 导入未接线、仅 UI 基线，已改为实际 React/Tauri/sidecar 架构、四平台模块说明与浏览器预览/真实客户端的区分。
 - 保留 `src/studyflow/core/platform_api.py` 通用只读适配器契约，以及 `frontend/src/ui` 活跃组件、原版运行器、历史兼容入口；不对仍受保护的运行路径做名称驱动删除。
 - 代码变更继续以 GitHub Actions 的 Python / React / Windows 全流程回归为合并门禁，未执行真实账号联网验收。
+
+## 第四批清理（2026-11-24：前端 WPF 旧样式和 Windows Sidecar 测试依赖）
+
+- 已核对 `frontend/src/style.css` 的 WPF v5.2.9 配色与 `.nav` 覆盖由 `ui/foundation.css` 当前 LightC 桌面主题的更高特异性选择器接管；移除这一段已被覆盖的颜色、导航规则，保留焦点、课程详情、QR 对话框、原版任务和平台专有样式。
+- 将仍被 `.legacy-run-state` 和当前 `foundation.css` 引用的 `--subtle` 变量迁至当前主题浅色/深色声明；扫描全部 13 个当前 `frontend/src/**/*.css` 后，确定 `--subtle-text` 无任何 `var(...)` 引用，删去该旧变量。增加 UI 样式回归测试防止重复覆盖复活。
+- Windows PyInstaller 日志显示 `--collect-all keyring` 会解析 `keyring.testing` 和 `hook-pytest`；仅加入 `--exclude-module keyring.testing`、`--exclude-module pytest`，保留全部正式 `keyring` 后端、`zhs` 原版组件和原有 ZHS/YKT/U校园只读依赖探针，增加脚本契约测试。
+- 修正文档中 U校园「凭据切换时重置两套运行器」的旧说法：现为实验运行器与只读监控，已退役的本地心跳运行器没有可重置实例。
+- 本批更改在独立 PR #247，尚须针对最新提交分别核对 Python、React 和 Windows CI；未声称 Windows 安装包发布或平台真实账号验收。
