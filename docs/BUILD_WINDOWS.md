@@ -49,5 +49,12 @@ Windows 的冻结运行时与 NSIS 产物由 CI 检查，官方账号扫码及�
 
 - Python 安装与 PyInstaller 构建统一以 `pyproject.toml` 为依赖来源：`scripts/build-windows.ps1` 执行 `python -m pip install -e '.[desktop,dev]'`。已删除未被当前构建使用且依赖集合不完整的 `packaging/requirements.txt`。原版 `legacy/yuketang/requirements.txt` 受源码清单保护，必须保留。
 - 前端已提交 `frontend/package-lock.json`，在 Windows 构建、PR CI 与主分支发布门禁中统一使用 `npm ci`，防止 `npm install` 意外重解版本。手动开发同样优先运行 `cd frontend; npm ci`。
-- 仓库根目录的 `@tauri-apps/cli` 目前**尚无**根级 `package-lock.json`，因此根目录暂时保留 `npm install` 而非未经锁文件验证的 `npm ci`。需要根目录可重复构建时，应先生成并审核根锁文件，再切换该命令，不能声称目前所有 npm 依赖都已锁定。
+- 根目录 `package-lock.json` 已由 CI 的 Node.js 22 环境生成并提交（包含 Windows x64 平台的 Tauri CLI 可选二进制），原本无锁文件的根级 `npm install` 已统一替换为 `npm ci`；前端同样使用自己的 `frontend/package-lock.json`。
 - `tests/test_build_dependency_contract.py` 核对 Python 清单、前端锁文件与三处构建入口；这只能保证清单一致，是否能安装、打包和保留原数据仍由 Windows CI 与实机验收决定。
+
+## 根目录与 Rust 锁文件验证（2026-11-24）
+
+- 由 GitHub Actions 在真实 Node.js 22 / Rust stable 环境解析生成根目录 `package-lock.json` 和 `src-tauri/Cargo.lock`；均作为代码提交纳入 PR，**未手工臆造依赖记录**。
+- Windows 构建脚本通过两次 `npm ci` 分别固定根 Tauri CLI 和 `frontend` React 依赖，并通过 `cargo test --locked --manifest-path src-tauri/Cargo.toml` 验证 Rust 清单与锁文件一致。
+- 单元契约测试额外检查根 npm 包与依赖表、Windows x64 CLI 二进制记录、Cargo 依赖树及禁止重新引入一次性 CI 解析任务。依赖锁定能降低构建漂移，但无法冻结系统 SDK、第三方 API 或学校服务端行为。
+- 对应 PR 的最新 Windows NSIS、安装/升级/卸载、React UI/IPC、Python 测试必须再次全部通过，才能视作构建依赖锁定完成验收。
