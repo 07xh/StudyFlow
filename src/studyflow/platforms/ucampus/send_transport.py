@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from .local_runtime import LocalPulse
+from .pulse_types import LocalPulse
 
 _ALLOWED_HOSTS = frozenset(("ucontent.unipus.cn",))
 _PATH_RE = re.compile(r"^/course/api/v2/[A-Za-z0-9_:/.-]{1,256}$")
