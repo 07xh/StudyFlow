@@ -349,14 +349,28 @@ class HeartbeatTaskRunner:
 
         return self.snapshot
 
-    def _calibrate_from_server(self) -> None:
-        """启动前只读刷新：用服务端 dtoken/duration/playTime 校准本地目标。"""
+    def _read_server_status(self, unavailable_event: str) -> VideoStatus | None:
+        """Keep optional, read-only verification errors out of task scheduling.
+
+        A failed/invalid GET is not confirmation of success or failure. The
+        exception might contain a credential-bearing URL, so never log it.
+        """
         provider = self.config.status_provider
         if provider is None:
-            return
-        status = provider(self.target)
+            return None
+        try:
+            status = provider(self.target)
+        except Exception:
+            status = None
+        if not isinstance(status, VideoStatus):
+            self._emit(unavailable_event, {"task_id": self.target.task_id})
+            return None
+        return status
+
+    def _calibrate_from_server(self) -> None:
+        """启动前只读刷新：用服务端 dtoken/duration/playTime 校准本地目标。"""
+        status = self._read_server_status("heartbeat.calibration_unavailable")
         if status is None:
-            self._emit("heartbeat.calibration_unavailable", {"task_id": self.target.task_id})
             return
         self._snapshot.server_play_time = status.play_time
         self._emit("heartbeat.calibrated", {"task_id": self.target.task_id, **status.public_dict()})
@@ -385,9 +399,8 @@ class HeartbeatTaskRunner:
             return False
         if not self.config.verify_after_run or self.config.status_provider is None:
             return False
-        status = self.config.status_provider(self.target)
+        status = self._read_server_status("heartbeat.verification_unavailable")
         if status is None:
-            self._emit("heartbeat.verification_unavailable", {"task_id": self.target.task_id})
             return False
         self._snapshot.server_play_time = status.play_time
         if status.passed:
