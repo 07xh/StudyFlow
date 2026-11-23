@@ -64,3 +64,11 @@ Windows 的冻结运行时与 NSIS 产物由 CI 检查，官方账号扫码及�
 - Windows 成功构建日志证明，旧脚本先运行一次 `npm --prefix frontend run build`，随后 `npm run tauri -- build` 又根据 `src-tauri/tauri.conf.json` 中的 `beforeBuildCommand` 重复执行一次。
 - 已删除 PowerShell 脚本中的首次冗余调用；Tauri 正式打包命令仍触发完整的 `tsc -b && vite build`，并在前端构建失败时直接使 Windows 打包失败。
 - Python 构建契约测试检查脚本不再直接启动 React build、Tauri 配置仍包含正式 `beforeBuildCommand` 且 `npm ci` 保留；真实结果须以最新 Windows NSIS CI 为准，不能凭静态配置宣称运行时性能提升。
+
+## 真正的旧版本升级与用户数据保留验收（2026-11-24）
+
+- 旧版安装与同版本重装不是一回事。此前 CI 在同一临时目录中两次安装同一个 NSIS，只能验证覆盖重装，不能证明 `rc.65 → rc.66` 的真实升级。
+- 新的 `scripts/fetch-previous-installer.ps1` 根据当前 `src-tauri/tauri.conf.json` 的 RC 版本自动解析紧邻的前一 RC，从 **07xh/StudyFlow 官方 GitHub Release** 下载唯一的 x64 安装包，校验官方 Release 的完整下载 URL 和 `sha256:` 摘要；哈希不匹配则立即失败。PR 和正式发布两个 Windows 工作流均先执行此检查。
+- `scripts/test-windows-install.ps1` 收到 `STUDYFLOW_PREVIOUS_INSTALLER` 后先安装上一版到独立临时目录，然后使用当前构建安装包执行真正的跨版本升级，再做同版本覆盖重装、运行时 IPC 探针、后台锁定升级阻断、正常 UI 退出和卸载；本地无旧版安装包时明确标注只检查全新安装与同版本重装。
+- 测试前创建随机非敏感保留标记，覆盖 `%LOCALAPPDATA%/StudyFlow` 根目录、`zhidao/`、`question-bank/`、`legacy-logs/`、`updates/`，以及原版 `ZHSDesktop` 安装数据目录和用户 `~/.zhs`。跨版本升级、同版本重装、被占用文件阻断、重试与卸载后均检查这些标记文件内容不变，最后只清理 CI 自己建立的文件。
+- **验收边界**：这证明安装脚本在受控 Windows CI 用户下不会清空上述目录的测试文件，仍不能代替真实用户的 Windows Credential Manager、旧账户登录信息、真实课程缓存格式和第三方平台服务器数据升级验证。不得用合成文件标记声称真实用户数据已经全部迁移成功。
