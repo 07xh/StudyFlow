@@ -125,3 +125,21 @@ def test_socket_diagnostic_error_does_not_leak_sensitive_values(monkeypatch):
     result = service.dispatch("ucampus.socket.diagnose", {})
     assert result["error"] == "UCAMPUS_SOCKET_TRANSPORT_UNKNOWN"
     assert "SUPER_SECRET" not in str(result)
+
+
+def test_graceful_stop_does_not_claim_exit_before_worker_exits(monkeypatch):
+    class DelayedRunner:
+        def shutdown(self):
+            return False
+
+    monkeypatch.setattr(service, "get_runner", lambda: DelayedRunner())
+    pending = service.dispatch("ucampus.heartbeat.stop", {"graceful": True})
+    assert pending == {"ok": True, "stopped": False, "phase": "stopping"}
+
+    class ExitedRunner:
+        def shutdown(self):
+            return True
+
+    monkeypatch.setattr(service, "get_runner", lambda: ExitedRunner())
+    completed = service.dispatch("ucampus.heartbeat.stop", {"graceful": True})
+    assert completed == {"ok": True, "stopped": True, "phase": "stopped"}
