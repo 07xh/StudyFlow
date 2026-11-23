@@ -664,6 +664,38 @@ class TestPacingAndParsing(unittest.TestCase):
         self.assertTrue(seconds.passed)
         self.assertIsNone(parse_video_status({"status": "failed"}, "o1"))
 
+    def test_readonly_status_nonfinite_playtime_does_not_hang_or_false_confirm(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import parse_video_status
+        for invalid in (float("inf"), float("-inf"), float("nan"),
+                        "Infinity", "NaN", 10 ** 400, True):
+            with self.subTest(invalid=repr(invalid)[:24]):
+                status = parse_video_status({
+                    "status": "success", "dtoken": "d", "duration": 600,
+                    "playTime": invalid, "isPassed": False,
+                }, "o1")
+                self.assertIsNotNone(status)
+                self.assertEqual(status.play_time, 0)
+                self.assertFalse(status.passed)
+
+    def test_readonly_status_rejects_invalid_duration(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import parse_video_status
+        for invalid in (float("inf"), float("-inf"), float("nan"), True):
+            with self.subTest(invalid=invalid):
+                self.assertIsNone(parse_video_status({
+                    "status": "success", "dtoken": "d", "duration": invalid,
+                    "playTime": 20, "isPassed": True,
+                }, "o1"))
+
+    def test_readonly_http_status_nonfinite_is_unavailable(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import fetch_video_status
+        for invalid in (float("inf"), float("nan"), "unverified"):
+            with self.subTest(invalid=invalid):
+                session = FakeSession([FakeResponse(
+                    status=invalid, payload={"status": "success", "duration": 600}
+                )])
+                self.assertIsNone(fetch_video_status(session, "o1"))
+                self.assertEqual(len(session.calls), 1)
+
     def test_calibrate_target_only_moves_forward(self) -> None:
         from studyflow.platforms.xuexitong.pacing import VideoStatus, calibrate_target
         target = make_target(initial_seconds=10)
