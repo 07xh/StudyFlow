@@ -65,3 +65,10 @@
 - Windows PyInstaller 日志显示 `--collect-all keyring` 会解析 `keyring.testing` 和 `hook-pytest`；仅加入 `--exclude-module keyring.testing`、`--exclude-module pytest`，保留全部正式 `keyring` 后端、`zhs` 原版组件和原有 ZHS/YKT/U校园只读依赖探针，增加脚本契约测试。
 - 修正文档中 U校园「凭据切换时重置两套运行器」的旧说法：现为实验运行器与只读监控，已退役的本地心跳运行器没有可重置实例。
 - 本批更改在独立 PR #247，尚须针对最新提交分别核对 Python、React 和 Windows CI；未声称 Windows 安装包发布或平台真实账号验收。
+
+## 第五批清理（2026-11-24：重复 CSS 规则）
+
+- 精确核对 `ui/foundation.css` 的首次授权弹窗样式：删除重复的 `.sf-consent-header>div` 原样声明；`@media(max-width:600px)` 和 `@media(max-width:540px)` 同时设置相同 `padding:14px`，删除后者这一重复属性，保留全部断点和其余授权弹窗规则。
+- `style.css` 全局 `.nav`、`.nav:hover`、`.nav.active` 旧配色及按钮默认值已被当前 `AppShell` 中 `.app.sf-shell` 下的 `foundation.css` 同名样式接管；删除单纯覆盖层，保留原 media 区域中的布局回退，避免误改低宽度导航行为。
+- `obsoleteStylesFinal.test.cjs` 增加旧 WPF/旧导航规则不能回流、首次授权弹窗不能重复声明的回归检查。这个小范围清理不改变账号会话、进度读取、播放器或课程任务逻辑。
+- 若 Windows 冻结测试依赖清理引发打包回归，则优先修复打包，不合并失败构建；GitHub Actions 的全平台结果须以本批 HEAD 为准。
