@@ -71,15 +71,19 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const [chapterError,setChapterError]=useState("");
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [error,setError]=useState("");
+  const [statusReadError,setStatusReadError]=useState("");
   const statusVersion=useRef(0);
   const statusInFlight=useRef<Set<string>>(new Set());
-  const refresh=useCallback(async()=>{
-    // Status polls started before a Start/Pause/Resume/Stop result are stale.
-    // A new version can read immediately even if an old poll is still hung.
-    const version=statusVersion.current;
+  const manualReadInFlight=useRef<Set<number>>(new Set());
+  const refresh=useCallback(async(force=false)=>{
+    // Manual refresh bypasses a hung poll, but only once per course visit.
+    // A superseded response cannot overwrite the newer verified snapshot.
+    if(!desktop||!isCurrent()||(force&&manualReadInFlight.current.has(revision)))return;
+    const version=force?++statusVersion.current:statusVersion.current;
     const flight=`${revision}:${version}`;
-    if(!desktop||!isCurrent()||statusInFlight.current.has(flight))return;
+    if(statusInFlight.current.has(flight))return;
     statusInFlight.current.add(flight);
+    if(force)manualReadInFlight.current.add(revision);
     let timeoutId:number|undefined;
     try{
       // One native status read at a time. Without this guard, a slow sidecar
@@ -91,17 +95,20 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         })
       ]);
       if(isCurrent()&&version===statusVersion.current){
+        if(value.course_key&&value.course_key!==courseKey)
+          throw new Error("状态结果所属课程不匹配，请重新刷新核验。");
         applyStatus(value);
-        setError(previous=>previous?"":previous);
+        setStatusReadError(previous=>previous?"":previous);
       }
     }catch(cause){
       if(isCurrent()&&version===statusVersion.current){
         const message=friendlyBridgeError(cause);
-        setError(previous=>previous===message?previous:message);
+        setStatusReadError(previous=>previous===message?previous:message);
       }
     }finally{
       if(timeoutId!==undefined)window.clearTimeout(timeoutId);
       statusInFlight.current.delete(flight);
+      if(force)manualReadInFlight.current.delete(revision);
     }
   },[desktop,applyStatus,isCurrent,revision]);
 
@@ -111,6 +118,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     latestStatus.current=IDLE;
     setStatus(IDLE);
     setError("");
+    setStatusReadError("");
     setChapters([]);
     setChapterError("");
     setChapterLoading(false);
@@ -184,6 +192,8 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     (configuredBankTokens.length===0||(Boolean(settings.external_token_id)&&
       !configuredBankTokens.some(t=>t.id===settings.external_token_id)));
   const running=ACTIVE.has(status.state);
+  // Keep old evidence visible without treating it as a verified live worker.
+  const statusUnavailable=Boolean(statusReadError);
   const pausing=status.state==="pausing";
   const canResume=pausing||status.state==="paused";
   const scopeMode=settings.scope_mode||"all";
@@ -223,7 +233,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     setSettings(previous=>({...previous,[key]:value}));
   };
   const start=async()=>{
-    if(!desktop||busy||running||missingScope||missingExternalToken||invalidConfig)return;
+    if(!desktop||busy||running||statusUnavailable||missingScope||missingExternalToken||invalidConfig)return;
     statusVersion.current+=1;
     setBusy(true);setError("");
     try{
@@ -242,7 +252,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     }finally{if(isCurrent())setBusy(false);}
   };
   const control=async(action:"pause"|"resume"|"stop")=>{
-    if(!desktop||busy||!running)return;
+    if(!desktop||busy||!running||statusUnavailable)return;
     statusVersion.current+=1;
     setBusy(true);setError("");
     try{
@@ -267,8 +277,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         <h4>自动掌握度工作台</h4>
         <p>选择执行章节与答题策略，右侧实时查看知识点、轮次和后台状态。</p>
       </div>
-      <strong className={"sf-mastery-auto-state is-"+status.state} aria-live="polite">
-        {LABEL[status.state]??status.state}
+      <strong className={"sf-mastery-auto-state is-"+(statusUnavailable?"unavailable":status.state)}
+        aria-live="polite">
+        {statusUnavailable?"状态待确认":LABEL[status.state]??status.state}
       </strong>
     </header>
 
@@ -441,26 +452,33 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       <aside className="sf-mastery-auto-monitor" aria-label="执行进度与状态">
         <div className="sf-mastery-auto-actions">
           <button type="button" className="sf-mastery-auto-start"
-            disabled={busy||running||missingExternalToken||missingScope||invalidConfig||
+            disabled={busy||running||statusUnavailable||missingExternalToken||missingScope||invalidConfig||
               (["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())}
             onClick={()=>void start()}>
             <Play size={14}/>{status.total>0?"重新执行选定范围":"开始执行"}
           </button>
           <button type="button" className="secondary"
-            disabled={busy||!running||status.state==="stopping"}
+            disabled={busy||!running||statusUnavailable||status.state==="stopping"}
             onClick={()=>void control(canResume?"resume":"pause")}>
             {canResume?<><RotateCcw size={14}/>{pausing?"取消待暂停":"继续"}</>
               :<><Pause size={14}/>完成当前项后暂停</>}
           </button>
           <button type="button" className="secondary"
-            disabled={busy||!running||status.state==="stopping"}
+            disabled={busy||!running||statusUnavailable||status.state==="stopping"}
             onClick={()=>void control("stop")}><Square size={14}/>停止</button>
           <button type="button" className="secondary sf-mastery-auto-mini"
-            disabled={busy} onClick={()=>void refresh()}><RefreshCw size={13}/>刷新</button>
+            disabled={busy||manualReadInFlight.current.has(revision)}
+            onClick={()=>void refresh(true)}><RefreshCw size={13}/>刷新</button>
         </div>
         {error&&<p className="sf-mastery-auto-error" role="alert">{error}</p>}
+        {statusUnavailable&&<p className="sf-mastery-auto-error" role="alert">
+          状态读取失败：{statusReadError}。目前是上次读取的记录，无法确认后台任务是否仍在运行。
+          启动和控制按钮已暂时停用；请点击「刷新」重新核验。
+        </p>}
         <div className="sf-mastery-auto-live" aria-live="polite">
-          <span className="sf-mastery-auto-eyebrow">当前执行</span>
+          <span className="sf-mastery-auto-eyebrow">
+            {statusUnavailable?"上次确认的执行信息":"当前执行"}
+          </span>
           <strong>{status.current?.name||(
             status.state==="paused"?"已暂停，下一知识点尚未开始":
             status.state==="pausing"?"正在等待当前知识点结束":
