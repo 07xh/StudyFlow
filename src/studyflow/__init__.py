@@ -1,2 +1,2 @@
 """学序 StudyFlow：统一学习助手。"""
-__version__ = "0.1.1rc65"
+__version__ = "0.1.1rc66"
