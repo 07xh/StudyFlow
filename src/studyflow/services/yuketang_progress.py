@@ -145,8 +145,6 @@ def parse_original_log(text: str) -> dict:
                     {"slot": index, "video_index": None, "state": "waiting"}
                     for index in range(1, count + 1)
                 ]
-            active_workers.clear()
-            tasks.clear()
         match = WORKER_START.search(line)
         if match:
             named = WORKER_NAME.search(line) or WORKER_NAME_FALLBACK.search(line)
