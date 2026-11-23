@@ -198,12 +198,21 @@ class UCampusLocalRunner:
                 raise ValueError("UCAMPUS_INVALID_ACTION")
             return self.status(self._course_id)
 
-    def shutdown(self):
-        self._stop.set()
-        self._wake.set()
-        thread = self._thread
+    def shutdown(self, *, timeout: float = 8.0) -> bool:
+        """Request termination and report whether the worker actually exited.
+
+        A blocked transport may outlive the bounded join. The caller must not
+        claim the run is fully stopped while its thread is still alive.
+        """
+        with self._lock:
+            self._stop.set()
+            self._wake.set()
+            thread = self._thread
+            if thread is not None and thread.is_alive():
+                self._phase = "stopping"
         if thread is not None:
-            thread.join(timeout=8)
+            thread.join(timeout=timeout)
+        return thread is None or not thread.is_alive()
 
     def status(self, course_id: str) -> dict:
         with self._lock:

@@ -85,8 +85,9 @@ def dispatch(operation: str, request: dict[str, Any]) -> dict[str, Any] | None:
                 "message": "本地心跳生成及旧版 Socket.IO 传输可独立加载；U校园5.0 上报尚未验收"}
     runner = get_runner()
     if operation == "ucampus.heartbeat.stop" and request.get("graceful") is True:
-        runner.shutdown()
-        return {"ok": True, "stopped": True}
+        stopped = runner.shutdown()
+        return {"ok": True, "stopped": stopped,
+                "phase": "stopped" if stopped else "stopping"}
     course_id = request.get("course_id")
     if not isinstance(course_id, str) or not 1 <= len(course_id) <= 128:
         return {"ok": False, "error": "UCAMPUS_COURSE_REQUIRED"}

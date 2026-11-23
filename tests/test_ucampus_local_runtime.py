@@ -131,3 +131,33 @@ def test_local_status_exposes_event_target_without_any_server_credit():
         assert other["generated"] == 0
     finally:
         runner.shutdown()
+
+
+def test_shutdown_reports_stopping_until_blocked_transport_exits():
+    """A bounded join is not proof the local thread has exited."""
+    import threading
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockedTransport:
+        def send(self, pulse):
+            entered.set()
+            release.wait(timeout=3)
+            return True
+
+    runner = UCampusLocalRunner(interval=0.01)
+    try:
+        runner.start("course1", [task()], transport=BlockedTransport(), pulses_per_resource=1)
+        assert entered.wait(timeout=1)
+        assert runner.shutdown(timeout=0.01) is False
+        pending = runner.status("course1")
+        assert pending["active"] is True
+        assert pending["phase"] == "stopping"
+        assert pending["server_confirmed"] is None
+    finally:
+        release.set()
+        assert runner.shutdown(timeout=2) is True
+    finished = runner.status("course1")
+    assert finished["active"] is False
+    assert finished["phase"] == "stopped"
