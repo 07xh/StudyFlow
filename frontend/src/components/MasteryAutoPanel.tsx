@@ -150,9 +150,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       setSettings(previous=>{
         const provider=state.providers.some(p=>p.id===previous.external_provider_id)
           ?previous.external_provider_id||"" :state.providers[0]?.id||"";
-        const valid=state.tokens.some(t=>t.provider_id===provider&&t.id===previous.external_token_id);
-        const token=valid?previous.external_token_id:"";
-        return {...previous,external_provider_id:provider,external_token_id:token};
+        // A user-selected token may have been removed by another settings panel.
+        // Never silently switch explicit selection to rotation/automatic mode.
+        return {...previous,external_provider_id:provider};
       });
     }catch(cause){
       if(requestId===bankRequestId.current)setBankError(friendlyBridgeError(cause));
@@ -213,9 +213,10 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     typeof t.remaining==="number"&&t.remaining>=0);
   const quotaUnit=bankState.providers.find(p=>p.id===settings.external_provider_id)?.quota_unit||"次";
   const knownRemaining=knownBalances.reduce((sum,t)=>sum+(t.remaining??0),0);
+  const missingSelectedToken=Boolean(settings.external_token_id)&&
+    !configuredBankTokens.some(t=>t.id===settings.external_token_id);
   const missingExternalToken=Boolean(settings.use_external_bank)&&
-    (configuredBankTokens.length===0||(Boolean(settings.external_token_id)&&
-      !configuredBankTokens.some(t=>t.id===settings.external_token_id)));
+    (configuredBankTokens.length===0||missingSelectedToken||Boolean(bankError));
   const running=ACTIVE.has(status.state);
   // Keep old evidence visible without treating it as a verified live worker.
   const statusUnavailable=Boolean(statusReadError);
@@ -424,6 +425,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
                   onChange={event=>setSettings(previous=>({...previous,
                     external_token_id:event.target.value}))}>
                   <option value="">{configuredBankTokens.length?"按题库策略自动选择":"暂无 Token"}</option>
+                  {missingSelectedToken&&<option value={settings.external_token_id} disabled>
+                    原指定 Token 已移除或不属于当前题库，请重新选择
+                  </option>}
                   {configuredBankTokens.map(item=><option key={item.id} value={item.id}>
                     {item.label}{item.active?"（默认）":""}
                   </option>)}
@@ -448,7 +452,12 @@ export function MasteryAutoPanel({courseKey,desktop}:{
                 （{knownBalances.length}/{configuredBankTokens.length} 条有有效数值记录）。</>}
               状态及余量并非实时保证。
             </p>}
-            {missingExternalToken&&<p className="sf-mastery-auto-error">请先到「设置 → 题库与搜题」保存并选择 Token。</p>}
+            {missingSelectedToken&&<p className="sf-mastery-auto-error" role="alert">
+              原指定 Token 不再可用。请手动选择另一条 Token，或明确切换为「按题库策略自动选择」。
+            </p>}
+            {missingExternalToken&&!missingSelectedToken&&!bankError&&<p className="sf-mastery-auto-error">
+              请先到「设置 → 题库与搜题」保存并选择 Token。
+            </p>}
             {bankError&&<p className="sf-mastery-auto-error" role="alert">{bankError}</p>}
             <p className="sf-mastery-auto-note">外部查询会发送题干、选项和所选 Token，可能消耗额度；结果以知到官方判分为准。</p>
           </>}
