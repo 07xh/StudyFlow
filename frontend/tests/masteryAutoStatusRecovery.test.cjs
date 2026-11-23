@@ -80,6 +80,11 @@ test("manual refresh bypasses a hung poll and rejects old idle response",async()
   });
   try{
     assert.equal(calls,1);
+    assert.match(textOf(view.root),/正在核验后台状态/);
+    const beforeRefreshStart=view.root.findAllByType("button")
+      .find(b=>b.props.className==="sf-mastery-auto-start");
+    assert.equal(beforeRefreshStart.props.disabled,true,
+      "hanging initial read must not be mistaken for an idle worker");
     await act(async()=>button("刷新").props.onClick());
     assert.equal(calls,2,"manual refresh must not silently no-op while old poll hangs");
     let visible=textOf(view.root);
@@ -128,5 +133,24 @@ test("status belonging to a different course cannot make stale controls look liv
     assert.match(textOf(view.root),/当前课程已核验/);
     assert.doesNotMatch(textOf(view.root),/状态待确认/);
     assert.equal(start.props.disabled,false);
+  }finally{await cleanup();}
+});
+
+test("unchanged idle snapshot still completes first status verification",async()=>{
+  const initial=deferred();
+  const exactIdle={state:"idle",total:0,processed:0,done:0,skipped:0,tasks:[]};
+  const {view,button,cleanup}=await setup(()=>initial.promise);
+  try{
+    const start=()=>view.root.findAllByType("button")
+      .find(b=>b.props.className==="sf-mastery-auto-start");
+    assert.match(textOf(view.root),/正在核验后台状态/);
+    assert.equal(start().props.disabled,true);
+    assert.match(textOf(view.root),/完成读取后才能启动/);
+    assert.equal(button("刷新").props.disabled,false,
+      "users can retry an initial status read that is hung");
+    await act(async()=>initial.resolve(exactIdle));
+    assert.doesNotMatch(textOf(view.root),/正在核验后台状态/);
+    assert.equal(start().props.disabled,false,
+      "verification must succeed even when backend idle equals the placeholder snapshot");
   }finally{await cleanup();}
 });
