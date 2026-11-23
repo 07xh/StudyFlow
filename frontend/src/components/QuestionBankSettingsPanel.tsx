@@ -84,6 +84,8 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
       const next=await questionBankList();
       if(!mounted.current||readId!==listReadId.current)return;
       setState(next);
+      // A manual read may discover changes made in another feature.
+      announceQuestionBankConfigChanged();
       setNotice("已重新载入本机题库和 Token 配置。");
     }catch(cause){
       if(mounted.current&&readId===listReadId.current)
@@ -109,7 +111,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   async function runAll(quota:boolean){
     if(busy||loading||refreshing||eligible.length===0)return;
     setQuotaConfirm(false);setBusy(true);setError("");setNotice("");
-    let done=0,failed=0;
+    let done=0,failed=0,updated=false;
     setJob({done,total:eligible.length,failed,quota});
     for(const token of eligible){
       if(!mounted.current)break;
@@ -118,6 +120,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
         const next=await questionBankCheckToken(token.id,quota);
         if(!mounted.current)break;
         setState(next);
+        updated=true;
       }catch{
         failed++;
       }
@@ -126,6 +129,8 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     }
     if(!mounted.current)return;
     setCheckingId("");setJob(null);setBusy(false);
+    // Bulk checks may touch many tokens; issue exactly one refresh at the end.
+    if(updated)announceQuestionBankConfigChanged();
     setNotice("检测完成："+done+" 条，失败 "+failed+" 条。余量以题库实际返回的数据为准。");
   }
   async function checkOne(id:string,quota=false){
@@ -133,6 +138,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     setBusy(true);setCheckingId(id);setError("");setNotice("");
     try{
       setState(await questionBankCheckToken(id,quota));
+      announceQuestionBankConfigChanged();
       setNotice(quota?"已更新该 Token 可取得的余量信息。":"已完成单条状态检测。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);setCheckingId("");}
