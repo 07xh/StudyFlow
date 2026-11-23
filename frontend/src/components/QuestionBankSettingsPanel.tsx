@@ -7,7 +7,7 @@ import {
   type QuestionBankState,type QuestionBankToken,
 } from "../bridge";
 import {SettingsDialog} from "../ui/SettingsDialog";
-import {announceQuestionBankConfigChanged} from "../questionBankChangeSignal";
+import {announceQuestionBankConfigChanged,QUESTION_BANK_CONFIG_CHANGED} from "../questionBankChangeSignal";
 import {ConfirmDialog} from "../ui/ConfirmDialog";
 import "./QuestionBank.css";
 
@@ -52,8 +52,19 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   const [quotaConfirm,setQuotaConfirm]=useState(false);
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
+  const [externalReadRevision,setExternalReadRevision]=useState(0);
   const mounted=useRef(true);
   const listReadId=useRef(0);
+  const pendingExternalRead=useRef(false);
+  const locallyAnnouncing=useRef(false);
+
+  function announceLocalChange(){
+    // Settings has already applied the mutation result; do not read the same
+    // state again in response to this panel's own synchronous notification.
+    locallyAnnouncing.current=true;
+    try{announceQuestionBankConfigChanged();}
+    finally{locallyAnnouncing.current=false;}
+  }
 
   useEffect(()=>{
     mounted.current=true;
@@ -74,6 +85,33 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     return ()=>{listReadId.current++;};
   },[desktop]);
 
+  useEffect(()=>{
+    if(!desktop||typeof window.addEventListener!=="function")return;
+    const onVaultChange=()=>{
+      if(locallyAnnouncing.current)return;
+      pendingExternalRead.current=true;
+      setExternalReadRevision(value=>value+1);
+    };
+    window.addEventListener(QUESTION_BANK_CONFIG_CHANGED,onVaultChange);
+    return ()=>window.removeEventListener(QUESTION_BANK_CONFIG_CHANGED,onVaultChange);
+  },[desktop]);
+
+  useEffect(()=>{
+    // A lookup or another UI can change the vault while settings is open.
+    // Coalesce external invalidations; wait until local mutations are finished.
+    if(!desktop||loading||refreshing||busy||!pendingExternalRead.current)return;
+    pendingExternalRead.current=false;
+    const readId=++listReadId.current;
+    void questionBankList().then(data=>{
+      if(mounted.current&&readId===listReadId.current){
+        setState(data);setError("");
+      }
+    }).catch(cause=>{
+      if(mounted.current&&readId===listReadId.current)
+        setError(friendlyBridgeError(cause));
+    });
+  },[desktop,loading,refreshing,busy,externalReadRevision]);
+
   async function refreshList(){
     if(!desktop||busy||refreshing)return;
     // A newer manual read supersedes a hanging initial request. Its late
@@ -85,7 +123,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
       if(!mounted.current||readId!==listReadId.current)return;
       setState(next);
       // A manual read may discover changes made in another feature.
-      announceQuestionBankConfigChanged();
+      announceLocalChange();
       setNotice("已重新载入本机题库和 Token 配置。");
     }catch(cause){
       if(mounted.current&&readId===listReadId.current)
@@ -130,7 +168,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     if(!mounted.current)return;
     setCheckingId("");setJob(null);setBusy(false);
     // Bulk checks may touch many tokens; issue exactly one refresh at the end.
-    if(updated)announceQuestionBankConfigChanged();
+    if(updated)announceLocalChange();
     setNotice("检测完成："+done+" 条，失败 "+failed+" 条。余量以题库实际返回的数据为准。");
   }
   async function checkOne(id:string,quota=false){
@@ -138,7 +176,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     setBusy(true);setCheckingId(id);setError("");setNotice("");
     try{
       setState(await questionBankCheckToken(id,quota));
-      announceQuestionBankConfigChanged();
+      announceLocalChange();
       setNotice(quota?"已更新该 Token 可取得的余量信息。":"已完成单条状态检测。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);setCheckingId("");}
@@ -149,7 +187,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     try{
       const next=await questionBankImportTokens(selected.id,tokenLines);
       setState(next);setTokenLines("");
-      if((next.added??0)>0)announceQuestionBankConfigChanged();
+      if((next.added??0)>0)announceLocalChange();
       setNotice("已导入 "+(next.added??0)+" 条，跳过重复 "+(next.skipped??0)+" 条。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
@@ -159,7 +197,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     setBusy(true);setError("");setNotice("");
     try{
       setState(await questionBankSetRotation(selected.id,mode));
-      announceQuestionBankConfigChanged();
+      announceLocalChange();
     }
     catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
@@ -169,7 +207,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     setBusy(true);setError("");setNotice("");
     try{
       setState(await questionBankSelectToken(id));
-      announceQuestionBankConfigChanged();
+      announceLocalChange();
     }
     catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
@@ -179,7 +217,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     setBusy(true);setError("");setNotice("");
     try{
       setState(await questionBankRemoveToken(id));
-      announceQuestionBankConfigChanged();
+      announceLocalChange();
       setNotice("Token 已从本机加密保险库中删除。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
