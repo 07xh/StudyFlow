@@ -204,6 +204,15 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   useEffect(()=>{void reloadChapters();},[reloadChapters]);
 
   const configuredBankTokens=bankState.tokens.filter(t=>t.provider_id===settings.external_provider_id);
+  const tokenStatus={
+    valid:configuredBankTokens.filter(t=>t.validity==="valid").length,
+    invalid:configuredBankTokens.filter(t=>t.validity==="invalid").length,
+    unknown:configuredBankTokens.filter(t=>t.validity!=="valid"&&t.validity!=="invalid").length,
+  };
+  const knownBalances=configuredBankTokens.filter(t=>t.validity!=="invalid"&&
+    typeof t.remaining==="number"&&t.remaining>=0);
+  const quotaUnit=bankState.providers.find(p=>p.id===settings.external_provider_id)?.quota_unit||"次";
+  const knownRemaining=knownBalances.reduce((sum,t)=>sum+(t.remaining??0),0);
   const missingExternalToken=Boolean(settings.use_external_bank)&&
     (configuredBankTokens.length===0||(Boolean(settings.external_token_id)&&
       !configuredBankTokens.some(t=>t.id===settings.external_token_id)));
@@ -432,6 +441,13 @@ export function MasteryAutoPanel({courseKey,desktop}:{
                 <RefreshCw size={12}/>刷新 Token
               </button>
             </div>
+            {configuredBankTokens.length>0&&<p className="sf-mastery-auto-note" role="status">
+              最近检测：{tokenStatus.valid} 条已识别可用、{tokenStatus.invalid} 条服务拒绝、
+              {tokenStatus.unknown} 条未确认。
+              {knownBalances.length>0&&<> 已知余量 {knownRemaining} {quotaUnit}
+                （{knownBalances.length}/{configuredBankTokens.length} 条有有效数值记录）。</>}
+              状态及余量并非实时保证。
+            </p>}
             {missingExternalToken&&<p className="sf-mastery-auto-error">请先到「设置 → 题库与搜题」保存并选择 Token。</p>}
             {bankError&&<p className="sf-mastery-auto-error" role="alert">{bankError}</p>}
             <p className="sf-mastery-auto-note">外部查询会发送题干、选项和所选 Token，可能消耗额度；结果以知到官方判分为准。</p>
