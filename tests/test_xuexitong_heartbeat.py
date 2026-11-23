@@ -822,6 +822,58 @@ class TestRunnerAuditFixes(unittest.TestCase):
         self.assertEqual(snapshot.state, TaskState.SUCCEEDED.value)
         self.assertTrue(snapshot.server_confirmed)
 
+    def test_readonly_provider_error_is_unverified_and_does_not_abort_runner(self) -> None:
+        clock = FakeClock()
+        events = []
+        calls = []
+
+        def unavailable(target):
+            calls.append(target.object_id)
+            raise OSError("credential-bearing upstream URL must not reach UI")
+
+        config = RunConfig(
+            instant_complete=False, max_ticks=1, tick_seconds=1,
+            heartbeat_interval_video_seconds=30, status_provider=unavailable,
+            verify_after_run=True,
+        )
+        session = FakeSession()
+        runner = HeartbeatTaskRunner(
+            make_target(), make_sender(session, clock=clock),
+            config, clock=clock, sleeper=clock.sleep,
+            on_event=lambda name, value: events.append((name, value)),
+        )
+        snapshot = runner.start()
+        self.assertEqual(snapshot.state, TaskState.INTERRUPTED.value)
+        self.assertFalse(snapshot.server_confirmed)
+        self.assertFalse(snapshot.confirmed)
+        self.assertEqual(calls, ["object-001", "object-001"])
+        event_names = [name for name, _ in events]
+        self.assertIn("heartbeat.calibration_unavailable", event_names)
+        self.assertIn("heartbeat.verification_unavailable", event_names)
+        self.assertIn("task.finished", event_names)
+        self.assertNotIn("credential-bearing", repr(events))
+        self.assertEqual(session.calls, [])
+
+    def test_malformed_readonly_status_cannot_claim_completion(self) -> None:
+        clock = FakeClock()
+        responses = [{"passed": True, "play_time": 600}, "passed", None]
+        for returned in responses:
+            with self.subTest(returned=returned):
+                config = RunConfig(
+                    instant_complete=False, max_ticks=1, tick_seconds=1,
+                    heartbeat_interval_video_seconds=30,
+                    status_provider=lambda _target: returned,
+                    verify_after_run=True,
+                )
+                runner = HeartbeatTaskRunner(
+                    make_target(), make_sender(FakeSession(), clock=clock),
+                    config, clock=clock, sleeper=clock.sleep,
+                )
+                snapshot = runner.start()
+                self.assertEqual(snapshot.state, TaskState.INTERRUPTED.value)
+                self.assertFalse(snapshot.confirmed)
+                self.assertFalse(snapshot.server_confirmed)
+
     def test_run_id_is_attached_to_snapshot(self) -> None:
         session = FakeSession([FakeResponse(payload={"isPassed": True})])
         clock = FakeClock()
