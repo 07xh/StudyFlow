@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from studyflow.services import yanxi_question_bank as yanxi
+from studyflow.services import dpapi_storage
 from studyflow.services import yanxi_token_diagnostics as yanxi_diagnostics
 
 ROOT = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".studyflow") / "StudyFlow" / "question-bank"
@@ -93,7 +94,7 @@ def _read() -> dict[str, Any]:
         raw = STORE_PATH.read_bytes()
         if not raw or len(raw) > 250_000:
             raise ValueError("invalid blob")
-        data = json.loads(yanxi._dpapi(raw, protect=False).decode("utf-8"))
+        data = json.loads(dpapi_storage.crypt(raw, protect=False).decode("utf-8"))
         if (not isinstance(data, dict) or data.get("version") != 1
                 or not isinstance(data.get("tokens"), list)
                 or not isinstance(data.get("active"), dict)
@@ -116,14 +117,14 @@ def _read() -> dict[str, Any]:
                        for key, index in cursors.items())):
             raise ValueError("invalid rotation state")
         return data
-    except (OSError, ValueError, UnicodeError, QuestionBankError) as exc:
+    except (OSError, ValueError, UnicodeError, QuestionBankError, dpapi_storage.DpapiStorageError) as exc:
         raise QuestionBankError("QUESTIONBANK_STORAGE_FAILED") from exc
 
 
 def _write(data: dict[str, Any]) -> None:
     try:
         payload = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        encrypted = yanxi._dpapi(payload, protect=True)
+        encrypted = dpapi_storage.crypt(payload, protect=True)
         STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
         temporary = STORE_PATH.with_suffix(".tmp")
         with temporary.open("wb") as handle:
@@ -131,7 +132,7 @@ def _write(data: dict[str, Any]) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         temporary.replace(STORE_PATH)
-    except (OSError, QuestionBankError) as exc:
+    except (OSError, QuestionBankError, dpapi_storage.DpapiStorageError) as exc:
         raise QuestionBankError("QUESTIONBANK_STORAGE_FAILED") from exc
 
 
