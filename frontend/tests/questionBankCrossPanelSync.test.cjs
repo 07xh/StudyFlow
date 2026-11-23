@@ -30,16 +30,24 @@ async function withPanels(check,{delayInitialMastery=false}={}){
     },
     questionBankImportTokens:async(provider,lines)=>{
       assert.equal(provider,"yanxi");
-      assert.equal(lines,"private-example-token");
-      tokens=[token];
-      return {...snap(tokens),added:1,skipped:0};
+      const rows=lines.split(/\r?\n/).filter(Boolean);
+      assert.ok(rows.length>0&&rows.every(raw=>raw.startsWith("private-example-token")));
+      tokens=rows.map((_,i)=>({...token,
+        id:String(i+1).repeat(32),label:"Token "+String(i+1).padStart(3,"0"),
+        active:i===0,validity:"unknown",
+      }));
+      return {...snap(tokens),added:rows.length,skipped:0};
     },
     questionBankRemoveToken:async()=>{
       tokens=[];return snap(tokens);
     },
     questionBankSelectToken:async()=>snap(tokens),
     questionBankSetRotation:async()=>snap(tokens),
-    questionBankCheckToken:async()=>snap(tokens),
+    questionBankCheckToken:async(tokenId,quota)=>{
+      tokens=tokens.map(t=>t.id===tokenId?
+        {...t,validity:"valid",...(quota?{remaining:12}: {})}:t);
+      return snap(tokens);
+    },
     masteryAutoStatus:async()=>EMPTY,
     masteryAutoStart:async()=>EMPTY,
     masteryAutoControl:async()=>EMPTY,
@@ -52,7 +60,8 @@ async function withPanels(check,{delayInitialMastery=false}={}){
     "@tauri-apps/api/core":{invoke:async()=>{}},
     "../ui/SettingsDialog":{SettingsDialog:({open,children})=>open?
       React.createElement("section",{"aria-label":"二级题库管理"},children):null},
-    "../ui/ConfirmDialog":{ConfirmDialog:()=>null},
+    "../ui/ConfirmDialog":{ConfirmDialog:({open,onConfirm})=>open?
+      React.createElement("button",{onClick:onConfirm},"继续检测"):null},
   };
   try{
     const {MasteryAutoPanel}=load("components/MasteryAutoPanel.tsx",{"bridge.ts":mocks});
@@ -117,4 +126,42 @@ test("change notification reload supersedes pending initial mastery bank request
     assert.match(textOf(context.mastery.root),/Token 001/);
     assert.equal(context.seen.length,1);
   },{delayInitialMastery:true});
+});
+
+
+test("single check updates the open mastery panel with last-checked validity",async()=>{
+  await withPanels(async context=>{
+    await importOne(context);
+    assert.match(textOf(context.mastery.root),/最近检测：0 条已识别可用/);
+    const before=context.seen.length;
+    const check=context.settings.root.findAllByType("button")
+      .find(b=>textOf(b)==="检测");
+    assert.ok(check);
+    await act(async()=>check.props.onClick());
+    assert.equal(context.seen.length,before+1);
+    assert.match(textOf(context.mastery.root),/最近检测：1 条已识别可用/);
+    assert.match(textOf(context.mastery.root),/状态及余量并非实时保证/);
+  });
+});
+
+test("bulk checks notify only once after all tokens, and verified quota uses recorded values",async()=>{
+  await withPanels(async context=>{
+    const {settings,button,mastery,seen}=context;
+    await act(async()=>button(settings,"管理").props.onClick());
+    const field=settings.root.findByType("textarea");
+    await act(async()=>field.props.onChange({target:{
+      value:"private-example-token\\nprivate-example-token-two",
+    }}));
+    await act(async()=>button(settings,"批量导入并加密保存").props.onClick());
+    assert.match(textOf(mastery.root),/最近检测：0 条已识别可用/);
+    const before=seen.length;
+    await act(async()=>button(settings,"检测全部").props.onClick());
+    assert.equal(seen.length,before+1,"bulk must emit once, not once per token");
+    assert.match(textOf(mastery.root),/最近检测：2 条已识别可用/);
+    await act(async()=>button(settings,"检测并更新余量").props.onClick());
+    await act(async()=>button(settings,"继续检测").props.onClick());
+    assert.equal(seen.length,before+2,"quota run must emit once after processing both");
+    assert.match(textOf(mastery.root),/已知余量 24 次/);
+    assert.match(textOf(mastery.root),/2\\/2 条有有效数值记录/);
+  });
 });
