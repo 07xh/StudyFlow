@@ -36,3 +36,10 @@
 ## 验收边界
 
 本轮只清理耦合、过时说明和 IPC 状态信息。Python 单元测试、React UI/IPC 测试及 Windows 构建检查通过，不等于第三方 Token/学业进度的真实在线验收。
+
+## 后续清理（2026-11-23：U校园无前端入口的纯本地运行器）
+
+- 旧 `UCampusHeartbeatPanel` 已从 UI 移除，但 Rust/Python 曾残留 `ucampus.heartbeat.*` 本地调度入口。本次将其从 Rust 白名单、JSONL IPC、前端请求类型和退出清理中一并删除。
+- 将仍在使用的旧版 Socket.IO **只读诊断**迁入 `ucampus_socket_diagnostics.py`；将研究代码依赖的 `LocalPulse` 数据结构迁入 `pulse_types.py`，避免删运行器时破坏传输契约测试。
+- 删除纯本地模拟运行器、原 bridge 与专属运行器测试，新增只读连接诊断和旧入口拒绝的回归检查。
+- 保留四平台在线读取与官方进度回读、U校园只读监控、独立实验性网络模块、凭据与数据迁移、原版知到/雨课堂发送器。此 PR 经 Python/React/Windows 构建门禁后方可合并；本次清理不等同于任何第三方服务器的在线验收。
