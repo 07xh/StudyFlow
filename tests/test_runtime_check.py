@@ -28,7 +28,7 @@ def test_ucampus_socket_packaging_check_never_loads_credentials_or_connects(monk
     def forbidden(*_args, **_kwargs):
         raise AssertionError("No network connection or credential lookup is permitted")
 
-    monkeypatch.setattr(websocket, "create_connection", forbidden)
+    monkeypatch.setattr(websocket, "create_connection", forbidden, raising=False)
     monkeypatch.setattr(credentials, "load", forbidden)
     assert runtime_check.check_ucampus_socket() == 0
 
