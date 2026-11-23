@@ -142,6 +142,13 @@
   display:block;height:100%;border-radius:inherit;background:var(--accent);
   transition:width .16s ease-out;
 }
+/* A second, softer track means server-confirmed target, not just visited tasks. */
+.sf-mastery-auto-progress.is-verified>span{opacity:.6}
+.sf-mastery-auto-confirmed-top{margin-top:3px}
+.sf-mastery-auto-evidence-note{
+  margin:0;padding:8px 9px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel-raised);font-size:11px;line-height:1.55;color:var(--text);
+}
 .sf-mastery-auto-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .sf-mastery-auto-metrics>div{
   display:flex;flex-direction:column;gap:5px;min-width:0;
@@ -163,6 +170,10 @@
 .sf-mastery-auto-chapter-list span{font-size:11px;min-width:0;overflow-wrap:anywhere}
 .sf-mastery-auto-chapter-list small{font-size:11px;white-space:nowrap;color:var(--muted)}
 .sf-mastery-auto-chapter-list .sf-mastery-auto-progress{height:5px}
+.sf-mastery-auto-chapter-confirmed{
+  display:flex;justify-content:flex-end;color:var(--muted);
+  font-size:10px;margin:7px 0 4px;line-height:1.4;
+}
 
 .sf-mastery-auto-task-list>button{
   width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
