@@ -77,7 +77,7 @@
 
 - 确认 `packaging/requirements.txt` 不属于受保护的原版来源清单，且不被当前 Python/Windows 打包脚本和当前非历史性功能文档使用；该文件缺少新 `pyproject.toml` 已声明的依赖，容易产生漂移，已删除。受保护的 `legacy/yuketang/requirements.txt` 完全保留。
 - `frontend/package-lock.json` 的根版本、`dependencies` 与 `devDependencies` 已与 `frontend/package.json` 对齐；统一 PR `test.yml` 与 `scripts/build-windows.ps1` 前端依赖安装为 `npm ci`，主分支 `build-windows.yml` 已使用 `npm ci`，保持一致。
-- 仓库**根目录**无 `package-lock.json`，故根级 Tauri CLI 安装继续使用原 `npm install`；不以无锁文件的 `npm ci` 破坏 Windows 构建。后续如需进一步提高可重复性，先专门创建和审核根锁文件。
+- 第六批时仓库根目录尚无 `package-lock.json`，因此当时保留 `npm install`；此缺口已在下方第八批通过实际 CI 生成两份锁文件解决，不再是当前限制。
 - 新增 `tests/test_build_dependency_contract.py`，测试依赖单一来源、前端锁文件和各构建入口；不修改第三方 ZHS/YKT 原版发送逻辑、用户凭据与业务协议。
 - 最新提交的完整 Python / React / Windows + NSIS 安装烟测需要独立重新通过，不以此前成功运行的 CI 代替新提交验收。
 
@@ -87,3 +87,10 @@
 - 在 `.github/workflows/test.yml` 为 `~/.cache/ms-playwright` 增加 `actions/cache@v4`；缓存 key 绑定 Playwright 版本和 runner OS，升级 Playwright 时不复用过期浏览器。浏览器安装及 `browserHierarchy.cjs`、`browserSettings.cjs` 验收仍保留。
 - `tests/test_build_dependency_contract.py` 增加 Playwright 版本与缓存 key 一致性校验。缓存首次命中前仍需下载，收益仅在后续执行并成功保存缓存后出现；此改动不是跳过浏览器测试。
 - 保留前端 React 样式、TaskRecovery 状态与原版 ZHS/YKT 模块，避免为了减少文件个数破坏有效业务路径。
+
+## 第八批清理（2026-11-24：根 npm 与 Rust 锁文件闭环）
+
+- 在仅针对当前 PR 的临时 GitHub Actions Job 中，用 Node.js 22 的 `npm install --package-lock-only --ignore-scripts` 解析根目录 Tauri CLI 依赖，并用 Rust stable `cargo generate-lockfile --manifest-path src-tauri/Cargo.toml` 生成真实 `Cargo.lock`；完整性校验后将两份文件提交到 PR。没有伪造、简化或手写依赖数据。
+- `package-lock.json` 记录了 Tauri CLI 的 Windows x64 可选二进制及校验数据；`src-tauri/Cargo.lock` 记录 444 个解析的 crate 依赖包。两份文件生成后，立即移除临时 CI 解析 Job 与日志输出，以免日常校验产生额外工作和内容输出。
+- `scripts/build-windows.ps1` 的根级 `npm install` 正式切换为 `npm ci`；Rust 测试命令改为 `cargo test --locked`，前端继续使用 `npm ci --prefix frontend`。三处输入现在都有真实锁文件，而非只锁定 React 前端。
+- `tests/test_build_dependency_contract.py` 增加根 npm manifest/lock、Windows x64 CLI、Cargo.lock、Rust `--locked`、临时任务移除等断言。是否真正可在 Windows 构建、升级并保留用户数据，以最新 HEAD 完整 CI 为准，不能以锁文件存在代替打包验收。
