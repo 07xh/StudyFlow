@@ -224,6 +224,8 @@ def local_observation(directory: Path, token: str) -> tuple[float | None, str | 
         if path.is_symlink() or path.stat().st_size > 2048:
             return None, None
         data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return None, None
         at, value = data.get("at"), data.get("videoSegmentPercent")
         phase = data.get("playbackPhase")
         if (data.get("v") != 1 or data.get("token") != token
@@ -281,6 +283,8 @@ def fatal_diagnostic(directory: Path, token: str) -> str | None:
         if path.is_symlink() or path.stat().st_size > 512:
             return None
         data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return None
         at = data.get("at")
         code = data.get("code")
         if (data.get("v") == 1 and data.get("token") == token
