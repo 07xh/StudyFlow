@@ -101,3 +101,13 @@
 - Windows 打包脚本已删除第一处重复构建；保留根目录和前端 `npm ci`、PyInstaller 原版运行时检查、图标生成、Rust `cargo test --locked`、Tauri 打包及完整 NSIS 安装回归。`beforeBuildCommand` 仍负责唯一一次 React 生产编译，构建失败仍阻断整个打包流程。
 - `tests/test_build_dependency_contract.py` 增加防回退断言；同步修正 `docs/BUILD_WINDOWS.md` 旧执行顺序说明。
 - 该清理只减少构建阶段重复编译，不改变用户运行时 UI、视频心跳、课程任务与用户数据；真实构建耗时收益需对比 Windows CI，不事先宣称具体秒数。
+
+
+## 第十批清理（2026-11-24：依赖缓存与发布版本校验）
+
+- 由于第八批已补齐根目录 `package-lock.json` 和 Rust `Cargo.lock`，PR 和主分支发布工作流现在都可按照根目录和前端两个 npm 锁文件启用 `actions/setup-node@v4` 的官方 npm 缓存；不缓存整个 `node_modules`，继续使用每次干净的 `npm ci`，避免跨构建污染。通配符匹配项以 YAML 字符串形式引用。
+- PR 的 Python 回归在 `actions/setup-python@v5` 中按 `pyproject.toml` 启用 pip 下载缓存；保留原始 `pip install -e '.[dev]'` 和完整 `pytest`。
+- 主分支发布 CI 增加根目录 `package-lock.json` 触发路径；正式创建 RC Release 前，明确检查根 npm 锁版本与依赖、前端 npm 锁版本、`Cargo.toml` 和 `Cargo.lock` 的 studyflow 包版本。任何不一致都应阻断发布。
+- `tests/test_build_dependency_contract.py` 添加上述 npm/pip 缓存与发布锁文件校验的静态契约测试。缓存首次运行可能未命中，因此不能把新增缓存宣称为已经实测节省某个固定耗时。
+- 不更改四平台适配器、原版知到和雨课堂播放/心跳实现、用户数据与凭据。最新 HEAD 仍需完整 Python、React 浏览器和 Windows NSIS/安装升级卸载回归。
+
