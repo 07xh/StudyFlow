@@ -42,10 +42,10 @@ test("shared controls and server-evidence styles stay available", () => {
 test("retired WPF palette does not override the active desktop shell", () => {
   const style = readCss("style.css");
   const foundation = readCss("ui/foundation.css");
-  assert.doesNotMatch(style, /Zhidao v5\\.2\\.9 WPF interaction migration/);
-  assert.doesNotMatch(style, /\\.app\\.dark\\s*\\{/);
-  assert.match(foundation, /\\.app\\.sf-shell\\s*\\{[^}]*--subtle:#2c405d/);
-  assert.match(foundation, /\\.app\\.sf-shell:not\\(\\.dark\\)\\s*\\{[^}]*--subtle:#edf3fc/);
-  assert.match(style, /\\.legacy-run-state\\s*\\{/);
+  assert.doesNotMatch(style, /Zhidao v5\.2\.9 WPF interaction migration/);
+  assert.doesNotMatch(style, /\.app\.dark\s*\{/);
+  assert.match(foundation, /\.app\.sf-shell\s*\{[^}]*--subtle:#2c405d/);
+  assert.match(foundation, /\.app\.sf-shell:not\(\.dark\)\s*\{[^}]*--subtle:#edf3fc/);
+  assert.match(style, /\.legacy-run-state\s*\{/);
   assert.doesNotMatch(foundation, /--subtle-text:/);
 });
