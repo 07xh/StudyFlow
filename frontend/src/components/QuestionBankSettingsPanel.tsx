@@ -7,6 +7,7 @@ import {
   type QuestionBankState,type QuestionBankToken,
 } from "../bridge";
 import {SettingsDialog} from "../ui/SettingsDialog";
+import {announceQuestionBankConfigChanged} from "../questionBankChangeSignal";
 import {ConfirmDialog} from "../ui/ConfirmDialog";
 import "./QuestionBank.css";
 
@@ -142,6 +143,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     try{
       const next=await questionBankImportTokens(selected.id,tokenLines);
       setState(next);setTokenLines("");
+      if((next.added??0)>0)announceQuestionBankConfigChanged();
       setNotice("已导入 "+(next.added??0)+" 条，跳过重复 "+(next.skipped??0)+" 条。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
@@ -149,14 +151,20 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   async function setRotation(mode:"fixed"|"round_robin"){
     if(busy||loading||refreshing||!selected)return;
     setBusy(true);setError("");setNotice("");
-    try{setState(await questionBankSetRotation(selected.id,mode));}
+    try{
+      setState(await questionBankSetRotation(selected.id,mode));
+      announceQuestionBankConfigChanged();
+    }
     catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
   }
   async function selectToken(id:string){
     if(busy||loading||refreshing)return;
     setBusy(true);setError("");setNotice("");
-    try{setState(await questionBankSelectToken(id));}
+    try{
+      setState(await questionBankSelectToken(id));
+      announceQuestionBankConfigChanged();
+    }
     catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
   }
@@ -165,6 +173,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     setBusy(true);setError("");setNotice("");
     try{
       setState(await questionBankRemoveToken(id));
+      announceQuestionBankConfigChanged();
       setNotice("Token 已从本机加密保险库中删除。");
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}

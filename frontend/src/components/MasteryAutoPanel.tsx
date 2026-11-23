@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {sameStatusSnapshot} from "../statusSnapshot";
+import {QUESTION_BANK_CONFIG_CHANGED} from "../questionBankChangeSignal";
 import {Pause,Play,RotateCcw,Square,CheckCircle2,RefreshCw,ChevronDown,BookOpen,Layers3} from "lucide-react";
 import {
   masteryAutoControl,masteryAutoStart,masteryAutoStatus,masteryCatalog,friendlyBridgeError,
@@ -158,6 +159,14 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     }
   },[desktop]);
   useEffect(()=>{void reloadBanks();},[reloadBanks]);
+  useEffect(()=>{
+    if(!desktop||typeof window.addEventListener!=="function")return;
+    // A successful settings mutation invalidates only the shared bank list.
+    // No sensitive token data travels through the UI event.
+    const onBankConfigChanged=()=>{void reloadBanks();};
+    window.addEventListener(QUESTION_BANK_CONFIG_CHANGED,onBankConfigChanged);
+    return ()=>window.removeEventListener(QUESTION_BANK_CONFIG_CHANGED,onBankConfigChanged);
+  },[desktop,reloadBanks]);
 
   const chapterRequestId=useRef(0);
   const reloadChapters=useCallback(async()=>{
