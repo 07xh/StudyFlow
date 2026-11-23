@@ -102,3 +102,103 @@ def test_failed_refresh_hides_previously_verified_counts(store):
     result = monitor.tick(clock=lambda: 2_000_070, reader_factory=Fails)
     assert result["state"] == "UCAMPUS_SESSION_EXPIRED"
     assert (result["total"], result["passed"], result["checked_at"]) == (0, 0, "")
+
+
+def test_inflight_read_does_not_block_disable_or_resurrect_old_monitor(store):
+    import threading
+    import time
+
+    monitor.configure("course-v2:eng+course+1", "U1", True)
+    entered, release = threading.Event(), threading.Event()
+    results = []
+
+    class SlowReader:
+        def list_tasks(self, course_id, unit_id):
+            entered.set()
+            assert release.wait(timeout=3)
+            return [{"id": "v", "completed": True}]
+
+    worker = threading.Thread(
+        target=lambda: results.append(monitor.tick(clock=lambda: 2_000_000, reader_factory=SlowReader)),
+        daemon=True,
+    )
+    worker.start()
+    try:
+        assert entered.wait(timeout=1)
+        start = time.monotonic()
+        disabled = monitor.configure("", "", False)
+        assert time.monotonic() - start < 0.5, "slow GET blocked monitor controls"
+        assert disabled["enabled"] is False
+    finally:
+        release.set()
+        worker.join(timeout=2)
+    assert not worker.is_alive()
+    assert results[0]["enabled"] is False
+    assert monitor.status()["enabled"] is False
+    assert not store.exists()
+
+
+def test_inflight_old_course_read_cannot_overwrite_reconfigured_course(store):
+    import threading
+
+    monitor.configure("course-v2:eng+course+1", "U1", True)
+    entered, release = threading.Event(), threading.Event()
+
+    class SlowReader:
+        def list_tasks(self, course_id, unit_id):
+            assert course_id == "course-v2:eng+course+1"
+            entered.set()
+            assert release.wait(timeout=3)
+            return [{"id": "old", "completed": True}]
+
+    worker = threading.Thread(
+        target=lambda: monitor.tick(clock=lambda: 2_000_000, reader_factory=SlowReader),
+        daemon=True,
+    )
+    worker.start()
+    try:
+        assert entered.wait(timeout=1)
+        second = monitor.configure("course-v2:eng+course+2", "U2", True)
+        assert second["state"] == "pending"
+    finally:
+        release.set()
+        worker.join(timeout=2)
+    assert not worker.is_alive()
+    latest = monitor.status()
+    assert latest["enabled"] is True
+    assert latest["course_id"] == "course-v2:eng+course+2"
+    assert latest["unit_id"] == "U2"
+    assert latest["state"] == "pending"
+    assert (latest["passed"], latest["total"]) == (0, 0)
+
+
+def test_simultaneous_ticks_claim_only_one_readonly_get(store):
+    import threading
+
+    monitor.configure("course-v2:eng+course+1", "U1", True)
+    entered, release = threading.Event(), threading.Event()
+    calls = []
+
+    class SlowReader:
+        def list_tasks(self, course_id, unit_id):
+            calls.append((course_id, unit_id))
+            entered.set()
+            assert release.wait(timeout=3)
+            return [{"id": "v", "completed": False}]
+
+    worker = threading.Thread(
+        target=lambda: monitor.tick(clock=lambda: 2_000_000, reader_factory=SlowReader),
+        daemon=True,
+    )
+    worker.start()
+    try:
+        assert entered.wait(timeout=1)
+        pending = monitor.tick(clock=lambda: 2_000_001, reader_factory=SlowReader)
+        assert pending["state"] == "pending"
+        assert len(calls) == 1
+    finally:
+        release.set()
+        worker.join(timeout=2)
+    assert not worker.is_alive()
+    assert monitor.status()["state"] == "verified"
+    assert len(calls) == 1
