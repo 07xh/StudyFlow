@@ -80,3 +80,10 @@
 - 仓库**根目录**无 `package-lock.json`，故根级 Tauri CLI 安装继续使用原 `npm install`；不以无锁文件的 `npm ci` 破坏 Windows 构建。后续如需进一步提高可重复性，先专门创建和审核根锁文件。
 - 新增 `tests/test_build_dependency_contract.py`，测试依赖单一来源、前端锁文件和各构建入口；不修改第三方 ZHS/YKT 原版发送逻辑、用户凭据与业务协议。
 - 最新提交的完整 Python / React / Windows + NSIS 安装烟测需要独立重新通过，不以此前成功运行的 CI 代替新提交验收。
+
+## 第七批清理（2026-11-24：CI 浏览器资源复用）
+
+- PR 的 React 浏览器布局测试仍使用隔离安装的 `playwright@1.62.1`，每个新提交都会运行 Chromium 布局与键盘交互检查；此前每次新的 Linux runner 都需要重新下载完整浏览器，造成重复网络开销。
+- 在 `.github/workflows/test.yml` 为 `~/.cache/ms-playwright` 增加 `actions/cache@v4`；缓存 key 绑定 Playwright 版本和 runner OS，升级 Playwright 时不复用过期浏览器。浏览器安装及 `browserHierarchy.cjs`、`browserSettings.cjs` 验收仍保留。
+- `tests/test_build_dependency_contract.py` 增加 Playwright 版本与缓存 key 一致性校验。缓存首次命中前仍需下载，收益仅在后续执行并成功保存缓存后出现；此改动不是跳过浏览器测试。
+- 保留前端 React 样式、TaskRecovery 状态与原版 ZHS/YKT 模块，避免为了减少文件个数破坏有效业务路径。
