@@ -5,6 +5,24 @@ $installers = @(Get-ChildItem (Join-Path $repo 'src-tauri/target/release/bundle/
 if ($installers.Count -ne 1) { throw 'Expected exactly one NSIS installer' }
 $root = Join-Path ([IO.Path]::GetTempPath()) ('StudyFlowSmoke-' + [guid]::NewGuid().ToString('N'))
 $markerDirectory = Join-Path $env:LOCALAPPDATA 'StudyFlow'
+# Nonempty synthetic fixtures in real per-user settings folders catch accidental
+# recursive deletion without storing or inspecting real account data.
+$additionalDataMarkers = @()
+foreach ($subdirectory in @('zhidao','question-bank','legacy-logs','updates')) {
+    $dir = Join-Path $markerDirectory $subdirectory
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    $file = Join-Path $dir ('smoke-preserve-' + [guid]::NewGuid().ToString('N') + '.txt')
+    [IO.File]::WriteAllText($file, 'preserve-user-subdirectory')
+    $additionalDataMarkers += $file
+}
+function Assert-AdditionalDataPreserved {
+    foreach ($file in $additionalDataMarkers) {
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or
+            [IO.File]::ReadAllText($file) -cne 'preserve-user-subdirectory') {
+            throw "Install/upgrade/uninstall changed existing user data in $([IO.Path]::GetDirectoryName($file))"
+        }
+    }
+}
 $marker = Join-Path $markerDirectory ('install-smoke-' + [guid]::NewGuid().ToString('N') + '.txt')
 $legacyInstallDirectory = Join-Path $env:LOCALAPPDATA 'ZHSDesktop'
 $legacyInstallMarker = Join-Path $legacyInstallDirectory ('studyflow-preserve-' + [guid]::NewGuid().ToString('N') + '.txt')
@@ -31,7 +49,26 @@ try {
         try { return ($lines[0] | ConvertFrom-Json -ErrorAction Stop) }
         catch { throw 'Installed JSONL bridge returned invalid JSON.' }
     }
-    foreach ($phase in @('install','upgrade')) {
+    $previousInstaller = $env:STUDYFLOW_PREVIOUS_INSTALLER
+    if ($previousInstaller) {
+        if (-not (Test-Path -LiteralPath $previousInstaller -PathType Leaf)) {
+            throw 'Verified previous release installer is missing'
+        }
+        Write-Host '[UPGRADE] Installing previously published RC before current candidate.'
+        $priorSetup = Start-Process -FilePath $previousInstaller -ArgumentList @('/S', "/D=$root") -Wait -PassThru
+        if ($priorSetup.ExitCode -ne 0) { throw "Previous RC install failed: $($priorSetup.ExitCode)" }
+        if (-not (Test-Path -LiteralPath (Join-Path $root 'bin/studyflow-bridge.exe'))) {
+            throw 'Previous release installer did not install its bundled runtime'
+        }
+        Assert-AdditionalDataPreserved
+        $phases = @('upgrade-from-prior-release','same-version-reinstall')
+    } else {
+        # Local builds without an official prior installer still test clean
+        # install and same-version reinstall, but not real cross-version upgrade.
+        Write-Warning 'No prior installer provided: cross-version upgrade is not verified.'
+        $phases = @('fresh-install','same-version-reinstall')
+    }
+    foreach ($phase in $phases) {
         $setup = Start-Process -FilePath $installers[0].FullName -ArgumentList @('/S', "/D=$root") -Wait -PassThru
         if ($setup.ExitCode -ne 0) { throw "NSIS $phase failed: $($setup.ExitCode)" }
         $bridge = Join-Path $root 'bin/studyflow-bridge.exe'
@@ -87,6 +124,7 @@ try {
             }
         }
         if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Install/upgrade changed StudyFlow user data' }
+        Assert-AdditionalDataPreserved
         if ([IO.File]::ReadAllText($legacyInstallMarker) -cne 'preserve-original-zhs-install' -or
             [IO.File]::ReadAllText($legacyDataMarker) -cne 'preserve-original-zhs-data') {
             throw 'Install/upgrade changed the original ZHSDesktop installation or ~/.zhs user data'
@@ -114,6 +152,7 @@ try {
     if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') {
         throw 'Blocked upgrade changed StudyFlow user data'
     }
+    Assert-AdditionalDataPreserved
     $bridgeLockHolder.StandardInput.Close()
     if (-not $bridgeLockHolder.WaitForExit(10000)) {
         $bridgeLockHolder.Kill()
@@ -127,6 +166,7 @@ try {
     if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') {
         throw 'Upgrade retry changed StudyFlow user data'
     }
+    Assert-AdditionalDataPreserved
 
     # Restore the normal process environment before launching the desktop app.
     $env:PATH = $oldPath
@@ -196,9 +236,13 @@ try {
     $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/S', "_?=$root") -Wait -PassThru
     if ($remove.ExitCode -ne 0) { throw "NSIS uninstall failed: exit code $($remove.ExitCode)" }
     if ([IO.File]::ReadAllText($marker) -cne 'preserve-user-data') { throw 'Uninstall changed StudyFlow user data' }
+    Assert-AdditionalDataPreserved
     if ([IO.File]::ReadAllText($legacyInstallMarker) -cne 'preserve-original-zhs-install' -or
         [IO.File]::ReadAllText($legacyDataMarker) -cne 'preserve-original-zhs-data') {
         throw 'Uninstall changed the original ZHSDesktop installation or ~/.zhs user data'
+    }
+    if ($previousInstaller) {
+        Write-Host '[UPGRADE-PROVEN] Verified official preceding RC -> current candidate, then same-version reinstall.'
     }
     Write-Host '[READY] NSIS install, upgrade, installed runtimes, app launch, uninstall and data marker preserved.'
 } finally {
@@ -214,6 +258,7 @@ try {
         $bridgeLockHolder.Dispose()
     }
     Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+    foreach ($file in $additionalDataMarkers) { Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $legacyInstallMarker,$legacyDataMarker -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $probeYktHome -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
