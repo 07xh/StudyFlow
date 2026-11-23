@@ -201,3 +201,27 @@ def test_content_401_403_do_not_misreport_expired_sso(monkeypatch, http_status, 
                         lambda *a, **kw: Response())
     with pytest.raises(UCampusProgressError, match=expected):
         UCampusProgressReader(credentials_loader=lambda: cfg).list_units("course-v2:real")
+
+
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_server_pass_is_unknown_not_completed(invalid):
+    tasks = parse_tasks({"leafs": {
+        "video1": {"tab_type": "video", "state": {"pass": invalid}},
+    }}, "unit1")
+    assert len(tasks) == 1
+    assert tasks[0]["completed"] is None
+
+
+def test_numeric_server_pass_keeps_previous_valid_behavior():
+    for value, expected in ((True, True), (1, True), (2, True), (1.0, True),
+                            (0, False), (False, False), (-1, None)):
+        tasks = parse_tasks({"leafs": {
+            "video1": {"tab_type": "video", "state": {"pass": value}},
+        }}, "unit1")
+        assert tasks[0]["completed"] is expected
+    # Large integer counters should not pass through float(), which may raise
+    # OverflowError for a JSON integer with more digits than a float can hold.
+    huge = parse_tasks({"leafs": {
+        "video1": {"tab_type": "video", "state": {"pass": 10 ** 400}},
+    }}, "unit1")
+    assert huge[0]["completed"] is True
