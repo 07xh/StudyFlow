@@ -210,3 +210,54 @@ def test_long_video_batch_retains_last_rows_without_eviction_of_active_worker():
     assert 1 in indexes   # Still-running worker retains its identity
     assert MAX_VIDEO_ROWS + 11 in indexes  # Most recent worker retained
     assert 2 not in indexes  # Old completed worker evicted
+
+def test_second_batch_does_not_inherit_previous_server_or_local_percent():
+    log = (
+        "开始批量观看视频...\n准备观看 1 个视频\n"
+        "正在处理第 1/1 个视频\n开始模拟观看视频\n"
+        "发送心跳成功 - 位置: 100.0s/100.0s (100.0%), 事件: playing\n"
+        "最终进度: 完成率=100.00%, 最后位置=100.0s\n"
+        "✅ 视频观看完成\n批量观看完成！\n总视频数: 1\n成功观看: 1\n"
+        "开始批量观看视频...\n准备观看 2 个视频\n"
+        "正在处理第 1/2 个视频\n"
+    )
+    result = parse_original_log(log)
+    assert result["total"] == 2 and result["current_index"] == 1
+    assert result["simulation_percent"] is None
+    assert result["server_percent"] is None
+    assert result["server_source"] is None
+    assert result["success"] == 0 and result["processed"] == 0
+
+
+def test_switching_from_concurrent_to_sequential_clears_old_workers():
+    log = (
+        "开始并发观看视频... (最大并发数: 2)\n"
+        "[Worker-1] 开始处理视频: 旧任务 (ID: 101)\n"
+        "[StudyFlow-Worker-1] SERVER source=final percent=95 position=95\n"
+        "并发观看完成！\n"
+        "开始批量观看视频...\n准备观看 1 个视频\n"
+        "正在处理第 1/1 个视频\n"
+    )
+    result = parse_original_log(log)
+    assert result["concurrent"] is False
+    assert result["video_tasks"] == []
+    assert result["worker_slots"] == []
+    assert result["server_percent"] is None
+    assert result["processed"] == 0
+
+
+def test_previous_batch_summary_does_not_complete_active_worker():
+    log = (
+        "开始并发观看视频... (最大并发数: 1)\n"
+        "[Worker-1] 开始处理视频: 旧任务 (ID: 101)\n"
+        "[Worker-1] ✅ 视频观看完成: 旧任务\n"
+        "[主线程] ✅ (1/1) 成功完成: 旧任务\n"
+        "并发观看完成！\n"
+        "开始并发观看视频... (最大并发数: 1)\n"
+        "[Worker-1] 开始处理视频: 新任务 (ID: 202)\n"
+    )
+    result = parse_original_log(log)
+    assert result["success"] == 0 and result["processed"] == 0
+    assert result["video_tasks"][0]["name"] == "新任务"
+    assert result["video_tasks"][0]["state"] == "preparing"
+    assert result["worker_slots"][0]["state"] == "preparing"
