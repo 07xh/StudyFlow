@@ -14,21 +14,7 @@
 .course-card small{font-size:12px;color:var(--muted)}
 .course-provider{width:max-content;background:#846ae721;color:#aa91ff;font-size:11px;font-weight:700;border-radius:20px;padding:5px 9px}
 
-/* Zhidao v5.2.9 WPF interaction migration: own responsive React implementation. */
-.app{
-  --bg:#f3f6fb;--panel:#ffffff;--text:#203047;--muted:#72849c;
-  --line:#dfe7f2;--side:#13243d;--subtle:#edf3fc;--subtle-text:#315ca4;
-  --success:#297b67;--success-bg:#edf8f4;--warning:#9b713f;--warning-bg:#fff7eb;
-}
-.app.dark{
-  --bg:#101a29;--panel:#1b2a40;--text:#e8f0ff;--muted:#abbdd7;
-  --line:#344761;--side:#0b1628;--subtle:#2c405d;--subtle-text:#b7d2ff;
-  --success:#8fe0bc;--success-bg:#1f4238;--warning:#f0c58f;--warning-bg:#463727;
-}
-.nav{color:#cbd9ed}
-.nav.active{background:#426ac5;color:#fff}
-.nav:hover{background:#ffffff19;color:#fff}
-.main{min-width:0}
+/* The desktop shell and light/dark palette now live in ui/foundation.css. */
 button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 .course-v2-detail{
   border:1px solid var(--line);background:var(--panel);border-radius:18px
