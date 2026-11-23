@@ -5,6 +5,7 @@ import urllib.parse
 import pytest
 from studyflow.services import bridge, question_bank as bank
 from studyflow.services import yanxi_question_bank as yanxi
+from studyflow.services import dpapi_storage
 
 TOKEN = "a" * 32
 
@@ -14,7 +15,7 @@ def test_rc57_legacy_token_only_reads_and_migrates_into_shared_vault(tmp_path, m
     old.parent.mkdir(parents=True)
     monkeypatch.setattr(yanxi, "STORE_PATH", old)
     monkeypatch.setattr(bank, "STORE_PATH", tmp_path / "new" / "providers.dpapi")
-    monkeypatch.setattr(yanxi, "_dpapi", lambda value, protect:
+    monkeypatch.setattr(dpapi_storage, "crypt", lambda value, protect:
                         bytes(part ^ 0x5A for part in value))
     old.write_bytes(yanxi._dpapi(TOKEN.encode("ascii"), protect=True))
     assert TOKEN.encode() not in old.read_bytes()
@@ -77,7 +78,7 @@ def test_token_cannot_leave_via_http_redirect():
 def test_shared_bridge_rejects_legacy_apis_and_never_echoes_tokens(tmp_path, monkeypatch):
     monkeypatch.setattr(yanxi, "STORE_PATH", tmp_path / "legacy.dpapi")
     monkeypatch.setattr(bank, "STORE_PATH", tmp_path / "providers.dpapi")
-    monkeypatch.setattr(yanxi, "_dpapi", lambda value, protect:
+    monkeypatch.setattr(dpapi_storage, "crypt", lambda value, protect:
                         bytes(part ^ 0x5A for part in value))
     bank.add_token("yanxi", "当前 Token", TOKEN)
     def reject(*_args, **_kwargs):
@@ -101,3 +102,11 @@ def test_missing_or_bad_question_does_not_use_token(monkeypatch):
                         lambda *_: pytest.fail("invalid query must not contact provider"))
     with pytest.raises(yanxi.QuestionBankError, match="YANXI_INVALID_QUERY"):
         yanxi.search("", token=TOKEN)
+
+
+def test_legacy_dpapi_error_contract_is_stable(monkeypatch):
+    def no_windows_storage(_data, *, protect):
+        raise dpapi_storage.DpapiStorageError("WINDOWS_ONLY")
+    monkeypatch.setattr(dpapi_storage, "crypt", no_windows_storage)
+    with pytest.raises(yanxi.QuestionBankError, match="YANXI_WINDOWS_ONLY"):
+        yanxi._dpapi(b"encrypted-test-data", protect=False)
