@@ -44,6 +44,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [tokenLines,setTokenLines]=useState("");
   const [loading,setLoading]=useState(true);
+  const [refreshing,setRefreshing]=useState(false);
   const [busy,setBusy]=useState(false);
   const [checkingId,setCheckingId]=useState("");
   const [job,setJob]=useState<Job|null>(null);
@@ -51,6 +52,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   const [error,setError]=useState("");
   const [notice,setNotice]=useState("");
   const mounted=useRef(true);
+  const listReadId=useRef(0);
 
   useEffect(()=>{
     mounted.current=true;
@@ -58,14 +60,39 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   },[]);
   useEffect(()=>{
     if(!desktop)return;
-    let active=true;
+    const readId=++listReadId.current;
     setLoading(true);
     void questionBankList().then(data=>{
-      if(active)setState(data);
-    }).catch(cause=>{if(active)setError(friendlyBridgeError(cause));})
-      .finally(()=>{if(active)setLoading(false);});
-    return ()=>{active=false;};
+      if(mounted.current&&readId===listReadId.current)setState(data);
+    }).catch(cause=>{
+      if(mounted.current&&readId===listReadId.current)
+        setError(friendlyBridgeError(cause));
+    }).finally(()=>{
+      if(mounted.current&&readId===listReadId.current)setLoading(false);
+    });
+    return ()=>{listReadId.current++;};
   },[desktop]);
+
+  async function refreshList(){
+    if(!desktop||busy||refreshing)return;
+    // A newer manual read supersedes a hanging initial request. Its late
+    // response cannot overwrite the displayed providers or token counts.
+    const readId=++listReadId.current;
+    setRefreshing(true);setError("");setNotice("");
+    try{
+      const next=await questionBankList();
+      if(!mounted.current||readId!==listReadId.current)return;
+      setState(next);
+      setNotice("已重新载入本机题库和 Token 配置。");
+    }catch(cause){
+      if(mounted.current&&readId===listReadId.current)
+        setError(friendlyBridgeError(cause));
+    }finally{
+      if(mounted.current&&readId===listReadId.current){
+        setLoading(false);setRefreshing(false);
+      }
+    }
+  }
 
   const selected=state.providers.find(p=>p.id===selectedId);
   const selectedTokens=state.tokens.filter(t=>t.provider_id===selectedId);
@@ -79,7 +106,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   const rotation=selected?state.rotation_modes?.[selected.id]||"fixed":"fixed";
 
   async function runAll(quota:boolean){
-    if(busy||loading||eligible.length===0)return;
+    if(busy||loading||refreshing||eligible.length===0)return;
     setQuotaConfirm(false);setBusy(true);setError("");setNotice("");
     let done=0,failed=0;
     setJob({done,total:eligible.length,failed,quota});
@@ -101,7 +128,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     setNotice("检测完成："+done+" 条，失败 "+failed+" 条。余量以题库实际返回的数据为准。");
   }
   async function checkOne(id:string,quota=false){
-    if(busy)return;
+    if(busy||loading||refreshing)return;
     setBusy(true);setCheckingId(id);setError("");setNotice("");
     try{
       setState(await questionBankCheckToken(id,quota));
@@ -110,7 +137,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     finally{setBusy(false);setCheckingId("");}
   }
   async function importBatch(){
-    if(busy||!selected||!tokenLines.trim())return;
+    if(busy||loading||refreshing||!selected||!tokenLines.trim())return;
     setBusy(true);setError("");setNotice("");
     try{
       const next=await questionBankImportTokens(selected.id,tokenLines);
@@ -120,21 +147,21 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     finally{setBusy(false);}
   }
   async function setRotation(mode:"fixed"|"round_robin"){
-    if(busy||!selected)return;
+    if(busy||loading||refreshing||!selected)return;
     setBusy(true);setError("");setNotice("");
     try{setState(await questionBankSetRotation(selected.id,mode));}
     catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
   }
   async function selectToken(id:string){
-    if(busy)return;
+    if(busy||loading||refreshing)return;
     setBusy(true);setError("");setNotice("");
     try{setState(await questionBankSelectToken(id));}
     catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
   }
   async function removeToken(id:string){
-    if(busy)return;
+    if(busy||loading||refreshing)return;
     setBusy(true);setError("");setNotice("");
     try{
       setState(await questionBankRemoveToken(id));
@@ -157,9 +184,11 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
     <div className="sf-qb-hub-top">
       <div><strong>共享题库</strong><p>统一管理多个来源，供知到及后续接入的学习平台调用。</p></div>
       <div className="sf-qb-hub-actions">
-        <button type="button" className="secondary" disabled={busy||loading||eligible.length===0}
+        <button type="button" className="secondary" disabled={busy||refreshing}
+          onClick={()=>void refreshList()}><RefreshCw size={14}/>{refreshing?"刷新中…":"刷新列表"}</button>
+        <button type="button" className="secondary" disabled={busy||loading||refreshing||eligible.length===0}
           onClick={()=>void runAll(false)}><RefreshCw size={14}/>检测全部</button>
-        <button type="button" className="secondary" disabled={busy||loading||eligible.length===0}
+        <button type="button" className="secondary" disabled={busy||loading||refreshing||eligible.length===0}
           onClick={()=>setQuotaConfirm(true)}>检测并更新余量</button>
       </div>
     </div>
@@ -191,7 +220,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
               <span>剩余 {quotaLabel(stats,provider.quota_unit||"次")}</span>
             </div>
           </div>
-          <button className="secondary sf-qb-manage" type="button" disabled={busy||loading}
+          <button className="secondary sf-qb-manage" type="button" disabled={busy||loading||refreshing}
             onClick={()=>openProvider(provider.id)}>管理 <ChevronRight size={15}/></button>
         </article>;
       })}
@@ -213,7 +242,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
         {error&&<p role="alert" className="sf-qb-error">{error}</p>}
         <div className="sf-qb-detail-toolbar">
           <label>Token 使用策略
-            <select value={rotation} disabled={busy}
+            <select value={rotation} disabled={busy||loading||refreshing}
               onChange={event=>void setRotation(event.target.value as "fixed"|"round_robin")}>
               <option value="round_robin">自动轮流</option>
               <option value="fixed">固定默认</option>
@@ -231,11 +260,11 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
               {token.balance_at&&<small>余量更新：{dateLabel(token.balance_at)}</small>}
             </div>
             <div className="sf-qb-token-actions">
-              {selected.supports_check!==false&&<button className="secondary" type="button" disabled={busy}
+              {selected.supports_check!==false&&<button className="secondary" type="button" disabled={busy||loading||refreshing}
                 onClick={()=>void checkOne(token.id)}>{checkingId===token.id?"检测中…":"检测"}</button>}
-              <button className="secondary" type="button" disabled={busy||token.active}
+              <button className="secondary" type="button" disabled={busy||loading||refreshing||token.active}
                 onClick={()=>void selectToken(token.id)}>{token.active?"默认":"设默认"}</button>
-              <button className="secondary" type="button" disabled={busy}
+              <button className="secondary" type="button" disabled={busy||loading||refreshing}
                 aria-label={"删除 Token "+token.label} onClick={()=>void removeToken(token.id)}>删除</button>
             </div>
           </div>)}
@@ -244,10 +273,10 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
           <div><strong><Plus size={14}/>批量导入 Token</strong>
             <p>一行一条，自动去重并加密保存；不会显示原文。</p></div>
           <textarea rows={4} maxLength={65000} autoComplete="off" spellCheck={false}
-            className="sf-qb-secret-lines" value={tokenLines} disabled={busy}
+            className="sf-qb-secret-lines" value={tokenLines} disabled={busy||loading||refreshing}
             placeholder={"第 1 条 Token\n第 2 条 Token\n第 3 条 Token"}
             onChange={event=>setTokenLines(event.target.value)}/>
-          <button type="button" disabled={busy||!tokenLines.trim()} onClick={()=>void importBatch()}>
+          <button type="button" disabled={busy||loading||refreshing||!tokenLines.trim()} onClick={()=>void importBatch()}>
             批量导入并加密保存
           </button>
         </div>
