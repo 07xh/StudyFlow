@@ -49,3 +49,11 @@
 - `question_bank.py` 不再通过 `yanxi._dpapi()` 加解密共享 `providers.dpapi`，改为通用 `dpapi_storage.crypt()`。
 - 旧 `yanxi.dpapi` 迁移仍经 `yanxi._load_legacy_token()`，保留 `yanxi._dpapi()` 兼容入口和原安全错误码。两个入口使用相同的 Windows 当前用户 DPAPI、原 `0x1` UI 禁止标志、既有文件格式与先写新保险库再删除旧文件的顺序。
 - 离线测试覆盖共享保险库与提供方旧加密入口解耦、旧 Token 迁移、失败边界；生产 Windows 旧数据回读与升级仍需要安装包或真机验收。
+
+## 第三批清理（2026-11-24：空包、过时元数据与文档）
+
+- 删除仅有 `__init__.py` 占位说明、没有实际实现或入口的 Python `studyflow.ui`、`studyflow.storage` 包。当前运行 UI 为 `frontend/src/ui` React 实现，实际配置与凭据存储位于平台和服务模块；两者并非 Python 旧占位目录的实现。
+- 更新 `pyproject.toml` 的项目描述为真实四平台；将知到/雨课堂 `__init__` 的「待迁移源码」旧说明更新为当前原版运行时适配事实；U校园模块说明明确为只读核验、Socket.IO 诊断、独立实验模块。
+- 重写 `frontend/README.md`：旧文档仍声称 Windows EXE 未构建、知到 Cookie 导入未接线、仅 UI 基线，已改为实际 React/Tauri/sidecar 架构、四平台模块说明与浏览器预览/真实客户端的区分。
+- 保留 `src/studyflow/core/platform_api.py` 通用只读适配器契约，以及 `frontend/src/ui` 活跃组件、原版运行器、历史兼容入口；不对仍受保护的运行路径做名称驱动删除。
+- 代码变更继续以 GitHub Actions 的 Python / React / Windows 全流程回归为合并门禁，未执行真实账号联网验收。
