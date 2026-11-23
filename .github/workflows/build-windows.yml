@@ -16,6 +16,7 @@ on:
       - 'scripts/build-sidecar.ps1'
       - '.github/workflows/build-windows.yml'
       - 'scripts/test-windows-install.ps1'
+      - 'scripts/fetch-previous-installer.ps1'
 
 concurrency:
   group: studyflow-windows-${{ github.ref }}
@@ -43,6 +44,11 @@ jobs:
       - name: Build full Windows package
         shell: pwsh
         run: ./scripts/build-windows.ps1
+      - name: Verify official previous RC installer and its SHA-256
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/fetch-previous-installer.ps1
       - name: Verify clean install upgrade launch and uninstall
         shell: pwsh
         run: ./scripts/test-windows-install.ps1
