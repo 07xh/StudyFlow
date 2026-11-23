@@ -1,7 +1,7 @@
 """Offline integration contracts for actual submission plus server readback."""
 import pytest
 
-from studyflow.platforms.ucampus.local_runtime import LocalPulse
+from studyflow.platforms.ucampus.pulse_types import LocalPulse
 from studyflow.platforms.ucampus.send_transport import SendResult
 from studyflow.platforms.ucampus.submission_coordinator import (
     UCampusSubmissionCoordinator, UCampusSubmissionError,
