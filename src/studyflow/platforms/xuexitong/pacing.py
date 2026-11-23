@@ -140,7 +140,7 @@ def calibrate_target(target: VideoTarget, status: VideoStatus) -> VideoTarget:
         target,
         dtoken=status.dtoken or target.dtoken,
         duration=status.duration,
-        initial_seconds=max(target.initial_seconds, status.play_time),
+        initial_seconds=min(status.duration, max(target.initial_seconds, status.play_time)),
     )
 
 
@@ -148,7 +148,7 @@ def reconcile_playing_time(local: int, status: VideoStatus | None) -> int:
     """本地累计与服务端记录的并集：取较大值，且不超过服务端时长。"""
     if status is None:
         return max(0, int(local))
-    return max(int(local), status.play_time)
+    return min(status.duration, max(0, int(local), status.play_time))
 
 
 @dataclass
