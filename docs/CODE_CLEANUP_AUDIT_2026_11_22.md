@@ -72,3 +72,11 @@
 - `style.css` 全局 `.nav`、`.nav:hover`、`.nav.active` 旧配色及按钮默认值已被当前 `AppShell` 中 `.app.sf-shell` 下的 `foundation.css` 同名样式接管；删除单纯覆盖层，保留原 media 区域中的布局回退，避免误改低宽度导航行为。
 - `obsoleteStylesFinal.test.cjs` 增加旧 WPF/旧导航规则不能回流、首次授权弹窗不能重复声明的回归检查。这个小范围清理不改变账号会话、进度读取、播放器或课程任务逻辑。
 - 若 Windows 冻结测试依赖清理引发打包回归，则优先修复打包，不合并失败构建；GitHub Actions 的全平台结果须以本批 HEAD 为准。
+
+## 第六批清理（2026-11-24：重复依赖清单与不可重复前端安装）
+
+- 确认 `packaging/requirements.txt` 不属于受保护的原版来源清单，且不被当前 Python/Windows 打包脚本和当前非历史性功能文档使用；该文件缺少新 `pyproject.toml` 已声明的依赖，容易产生漂移，已删除。受保护的 `legacy/yuketang/requirements.txt` 完全保留。
+- `frontend/package-lock.json` 的根版本、`dependencies` 与 `devDependencies` 已与 `frontend/package.json` 对齐；统一 PR `test.yml` 与 `scripts/build-windows.ps1` 前端依赖安装为 `npm ci`，主分支 `build-windows.yml` 已使用 `npm ci`，保持一致。
+- 仓库**根目录**无 `package-lock.json`，故根级 Tauri CLI 安装继续使用原 `npm install`；不以无锁文件的 `npm ci` 破坏 Windows 构建。后续如需进一步提高可重复性，先专门创建和审核根锁文件。
+- 新增 `tests/test_build_dependency_contract.py`，测试依赖单一来源、前端锁文件和各构建入口；不修改第三方 ZHS/YKT 原版发送逻辑、用户凭据与业务协议。
+- 最新提交的完整 Python / React / Windows + NSIS 安装烟测需要独立重新通过，不以此前成功运行的 CI 代替新提交验收。
