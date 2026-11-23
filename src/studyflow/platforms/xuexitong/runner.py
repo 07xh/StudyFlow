@@ -368,7 +368,12 @@ class HeartbeatTaskRunner:
         if calibrated != self.target:
             self.target = calibrated
             self._snapshot.duration = calibrated.duration
-            self._snapshot.playing_time = max(self._snapshot.playing_time, calibrated.initial_seconds)
+            # A refreshed server duration may be shorter than a persisted resume offset.
+            # Keep the checkpoint valid before build_packet() validates this target.
+            self._snapshot.playing_time = min(
+                calibrated.duration,
+                max(self._snapshot.playing_time, calibrated.initial_seconds),
+            )
 
     def _verify_at_end(self, reason: str) -> bool:
         """结束时用只读 status 接口核对服务端记录；返回是否已被服务端判定通过。
