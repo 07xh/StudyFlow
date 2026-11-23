@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import re
 from typing import Any, TYPE_CHECKING
 from urllib.parse import quote
@@ -137,7 +138,8 @@ def parse_tasks(rt: dict[str, Any], unit_id: str) -> list[dict[str, Any]]:
         state = leaf.get("state")
         required = strategies.get("required") if isinstance(strategies, dict) else None
         passed = state.get("pass") if isinstance(state, dict) else None
-        if passed is True or passed == 1 or isinstance(passed, (int, float)) and passed > 1:
+        if (passed is True or
+                type(passed) in (int, float) and math.isfinite(passed) and passed >= 1):
             completed = True
         elif passed in (0, "0") and passed is not None:
             completed = False
