@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {announceQuestionBankConfigChanged} from "../questionBankChangeSignal";
 import {
   friendlyBridgeError,questionBankList,questionBankQuery,
@@ -14,28 +14,70 @@ import "./QuestionBank.css";
 export function QuestionBankQuestionAction({desktop,question}:{
   desktop:boolean;question:QuestionBankQuestion;
 }){
-  const [open,setOpen]=useState(false);
+  // The same question row can be reused for another round. An old async
+  // answer must never be displayed for a different stem, options or type.
+  const questionKey=JSON.stringify([question.title,question.question_type??"",question.options??[]]);
+  const visit=useRef({key:questionKey,revision:0});
+  const listReadId=useRef(0);
+  const answerReadId=useRef(0);
+  if(visit.current.key!==questionKey){
+    visit.current={key:questionKey,revision:visit.current.revision+1};
+    listReadId.current++;
+    answerReadId.current++;
+  }
+  const revision=visit.current.revision;
+  const mounted=useRef(false);
+  const [openRevision,setOpenRevision]=useState<number|null>(null);
+  const open=openRevision===revision;
   const [loading,setLoading]=useState(false);
   const [busy,setBusy]=useState(false);
   const [state,setState]=useState<QuestionBankState>({providers:[],tokens:[]});
   const [provider,setProvider]=useState("");
   const [tokenId,setTokenId]=useState("");
   const [error,setError]=useState("");
-  const [result,setResult]=useState<QuestionBankAnswer|null>(null);
+  const [result,setResult]=useState<{revision:number;answer:QuestionBankAnswer}|null>(null);
+  const visibleResult=result?.revision===revision?result.answer:null;
+
+  useEffect(()=>{
+    mounted.current=true;
+    return ()=>{
+      mounted.current=false;
+      listReadId.current++;
+      answerReadId.current++;
+    };
+  },[]);
+  useEffect(()=>{
+    // A different question starts closed, with no previous answer or pending
+    // indicator. The revision guard also invalidates late callbacks instantly.
+    setOpenRevision(null);setLoading(false);setBusy(false);
+    setState({providers:[],tokens:[]});setProvider("");setTokenId("");
+    setError("");setResult(null);
+  },[revision]);
 
   const reveal=async()=>{
     if(!desktop||busy)return;
-    if(open){setOpen(false);return;}
-    setOpen(true);setLoading(true);setError("");setResult(null);
+    if(open){
+      listReadId.current++;
+      setOpenRevision(null);setLoading(false);
+      return;
+    }
+    const requestId=++listReadId.current;
+    const isCurrent=()=>mounted.current&&visit.current.revision===revision
+      &&listReadId.current===requestId;
+    setOpenRevision(revision);setLoading(true);setError("");setResult(null);
     try{
       const saved=await questionBankList();
+      if(!isCurrent())return;
       setState(saved);
       const available=saved.providers.filter(p=>saved.tokens.some(t=>t.provider_id===p.id));
       const target=available[0]?.id||saved.providers[0]?.id||"";
       setProvider(target);
       setTokenId("");
-    }catch(cause){setError(friendlyBridgeError(cause));}
-    finally{setLoading(false);}
+    }catch(cause){
+      if(isCurrent())setError(friendlyBridgeError(cause));
+    }finally{
+      if(isCurrent())setLoading(false);
+    }
   };
   const chooseProvider=(id:string)=>{
     setProvider(id);
@@ -43,17 +85,23 @@ export function QuestionBankQuestionAction({desktop,question}:{
     setResult(null);setError("");
   };
   const query=async()=>{
-    if(busy||!provider||!tokens.length)return;
+    if(busy||loading||!open||!provider||!tokens.length||!question.title.trim())return;
+    const requestId=++answerReadId.current;
+    const isCurrent=()=>mounted.current&&visit.current.revision===revision
+      &&answerReadId.current===requestId;
     setBusy(true);setError("");setResult(null);
     try{
       const answer=await questionBankQuery(provider,question,tokenId);
-      setResult(answer);
-      // The shared vault persists numeric balances returned by normal lookups.
-      // Invalidate open summaries; the event contains no question or token data.
+      if(isCurrent())setResult({revision,answer});
+      // The lookup can update the vault even if the user moved to another
+      // question. Refresh shared balances, but never show its stale answer.
       if(typeof answer.remaining==="number"&&answer.remaining>=0)
         announceQuestionBankConfigChanged();
-    }catch(cause){setError(friendlyBridgeError(cause));}
-    finally{setBusy(false);}
+    }catch(cause){
+      if(isCurrent())setError(friendlyBridgeError(cause));
+    }finally{
+      if(isCurrent())setBusy(false);
+    }
   };
   const tokens=state.tokens.filter(t=>t.provider_id===provider);
 
@@ -80,18 +128,18 @@ export function QuestionBankQuestionAction({desktop,question}:{
               {tokens.map(t=><option key={t.id} value={t.id}>{t.label}{t.active?"（默认）":""}</option>)}
             </select>
           </label>
-          <button type="button" disabled={busy||tokens.length===0||!question.title.trim()}
+          <button type="button" disabled={busy||loading||tokens.length===0||!question.title.trim()}
             onClick={()=>void query()}>{busy?"查询中…":"查询这道题"}</button>
         </div>
         <p className="sf-qb-hint">每次仅使用本题库的一条 Token；可自动轮流或手动固定。结果仅供核对，不自动提交。</p>
       </>}
       {error&&<p role="alert" className="sf-qb-error">{error}</p>}
-      {result&&<div className="sf-qb-answer" role="status">
-        {result.found
-          ?<><strong>{result.provider_name} · 参考答案（未核验）</strong>
-            <pre>{result.answer}</pre></>
+      {visibleResult&&<div className="sf-qb-answer" role="status">
+        {visibleResult.found
+          ?<><strong>{visibleResult.provider_name} · 参考答案（未核验）</strong>
+            <pre>{visibleResult.answer}</pre></>
           :<strong>当前题库未找到该题的参考答案</strong>}
-        <small>查询 Token：{result.token_label}{result.remaining!==null?" · 剩余次数："+result.remaining:""}</small>
+        <small>查询 Token：{visibleResult.token_label}{visibleResult.remaining!==null?" · 剩余次数："+visibleResult.remaining:""}</small>
       </div>}
     </div>}
   </div>;
