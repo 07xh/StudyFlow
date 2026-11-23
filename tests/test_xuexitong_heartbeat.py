@@ -672,6 +672,18 @@ class TestPacingAndParsing(unittest.TestCase):
         self.assertEqual(calibrated.initial_seconds, 45)
         self.assertEqual(calibrate_target(target, VideoStatus("object-001", "", 600, 5, False)), target)
 
+    def test_calibrate_clamps_offset_when_server_duration_shrinks(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import (
+            VideoStatus, calibrate_target, reconcile_playing_time,
+        )
+        target = make_target(initial_seconds=590)
+        status = VideoStatus(target.object_id, "new-token", 300, 20, False)
+        calibrated = calibrate_target(target, status)
+        self.assertEqual(calibrated.duration, 300)
+        self.assertEqual(calibrated.initial_seconds, 300)
+        calibrated.validate()
+        self.assertEqual(reconcile_playing_time(590, status), 300)
+
     def test_status_public_dict_leaks_no_token(self) -> None:
         from studyflow.platforms.xuexitong.pacing import VideoStatus
         public = VideoStatus("o1", "secret-token", 600, 30, True).public_dict()
@@ -702,6 +714,25 @@ class TestRunnerAuditFixes(unittest.TestCase):
         self.assertEqual(session.calls[0]["params"]["playingTime"], 600)
         self.assertLess(session.calls[1]["params"]["playingTime"], 600)
         self.assertGreater(session.calls[1]["params"]["playingTime"], 0)
+
+    def test_resume_checkpoint_is_clamped_after_duration_refresh(self) -> None:
+        from studyflow.platforms.xuexitong.pacing import VideoStatus
+        clock = FakeClock()
+        session = FakeSession([FakeResponse(payload={"isPassed": False})])
+        status = VideoStatus("object-001", "updated-token", 300, 20, False)
+        config = RunConfig(
+            instant_complete=False, heartbeat_interval_video_seconds=30,
+            tick_seconds=1, max_ticks=1, status_provider=lambda _target: status,
+        )
+        runner = HeartbeatTaskRunner(
+            make_target(initial_seconds=590), make_sender(session, clock=clock),
+            config, clock=clock, sleeper=clock.sleep, resume_playing_time=590,
+        )
+        snapshot = runner.start()
+        self.assertEqual(snapshot.duration, 300)
+        self.assertLessEqual(snapshot.playing_time, snapshot.duration)
+        self.assertEqual(len(session.calls), 1)
+        self.assertEqual(session.calls[0]["params"]["playingTime"], 300)
 
     def test_forbidden_refreshes_token_before_retry(self) -> None:
         from studyflow.platforms.xuexitong.pacing import VideoStatus
