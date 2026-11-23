@@ -150,7 +150,7 @@ test("bulk checks notify only once after all tokens, and verified quota uses rec
     await act(async()=>button(settings,"管理").props.onClick());
     const field=settings.root.findByType("textarea");
     await act(async()=>field.props.onChange({target:{
-      value:"private-example-token\\nprivate-example-token-two",
+      value:"private-example-token\nprivate-example-token-two",
     }}));
     await act(async()=>button(settings,"批量导入并加密保存").props.onClick());
     assert.match(textOf(mastery.root),/最近检测：0 条已识别可用/);
@@ -162,6 +162,6 @@ test("bulk checks notify only once after all tokens, and verified quota uses rec
     await act(async()=>button(settings,"继续检测").props.onClick());
     assert.equal(seen.length,before+2,"quota run must emit once after processing both");
     assert.match(textOf(mastery.root),/已知余量 24 次/);
-    assert.match(textOf(mastery.root),/2\\/2 条有有效数值记录/);
+    assert.match(textOf(mastery.root),/2\/2 条有有效数值记录/);
   });
 });
