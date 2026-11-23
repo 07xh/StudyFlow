@@ -204,14 +204,16 @@ class YuketangReadOnly:
         # Honor only documented 0/1-shaped values; do not guess from a timestamp
         # or the local worker's configurable completion threshold.
         flag = record.get("completed")
-        if flag is True or flag == 1 or flag == "1":
+        if flag is True or type(flag) is int and flag == 1 or flag == "1":
             completed = True
-        elif flag is False or flag == 0 or flag == "0":
+        elif flag is False or type(flag) is int and flag == 0 or flag == "0":
             completed = False
-        else:
-            # Older deployments may omit the flag; retain the original strict
-            # fallback to an exact 100% server rate in that case.
+        elif flag is None and "completed" not in record:
+            # Only genuinely absent flags may use the legacy rate fallback.
+            # An explicitly malformed completion flag is not server evidence.
             completed = rate == 1.0
+        else:
+            completed = False
         return {"progress_percent": percent, "server_completed": completed,
                 "last_point_seconds": last_position,
                 "duration_seconds": duration}
