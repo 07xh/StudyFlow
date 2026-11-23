@@ -114,7 +114,9 @@ jobs:
           root_lock=json.loads(Path("package-lock.json").read_text(encoding="utf-8"))
           assert root_lock["version"] == version and root_lock["packages"][""]["version"] == version
           assert root_lock["packages"][""]["devDependencies"] == root_package["devDependencies"]
-          assert re.search(r'^version = "'+re.escape(version)+r'"
+          assert re.search(r'^version = "'+re.escape(version)+r'"$',Path("src-tauri/Cargo.toml").read_text(encoding="utf-8"),re.M)
+          cargo_lock=Path("src-tauri/Cargo.lock").read_text(encoding="utf-8")
+          assert re.search(r'^\[\[package\]\]\nname = "studyflow"\nversion = "'+re.escape(version)+r'"$',cargo_lock,re.M)
           print("Version manifests aligned:",version)
           PY
           # Avoid stale release artifacts from a superseded main build.
