@@ -32,8 +32,11 @@ class YuketangReadOnly:
                 "platform-id": "3", "terminal-type": "web", "university-id": self.university_id,
                 "x-client": "web", "xtbz": "ykt",
             },
+            allow_redirects=False,
         )
-        response.raise_for_status()
+        if response.status_code != 200:
+            # Redirects and authentication failures are not verified API data.
+            raise ValueError("Unverified Rain Classroom metadata response")
         data = response.json()
         if not isinstance(data, dict):
             raise ValueError("Invalid Rain Classroom response")
