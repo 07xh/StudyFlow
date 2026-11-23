@@ -17,12 +17,16 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
   const [detailMessage,setDetailMessage]=useState("");
   const [serverComparison,setServerComparison]=useState("");
   const currentRun=useRef(status.run_id);
+  const detailRequestId=useRef(0);
+  const currentDetailScope=useRef(status.run_id+":"+status.course_id);
   currentRun.current=status.run_id;
+  currentDetailScope.current=status.run_id+":"+status.course_id;
   useEffect(()=>{
+    detailRequestId.current++;
     setRequested(new Set());setMessage("");
     setDetail(null);setDetailMessage("");setDetailBusy(false);
     setServerComparison("");
-  },[status.run_id]);
+  },[status.run_id,status.course_id]);
   const queue=status.zhs_queue;
   if(!queue)return null;
   const withinChapter=queue.parallel_mode==="resources";
@@ -54,13 +58,16 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     const courseKey=status.course_id;
     const run=status.run_id;
     if(!courseKey||!/^[1-9][0-9]{0,18}$/.test(knowledgeId))return;
+    const requestId=++detailRequestId.current;
+    const scope=run+":"+courseKey;
     setDetailBusy(true);setDetailMessage("");
     const previous=detail?.knowledge_id===knowledgeId?detail:null;
     try{
       const result=await request<ZhsKnowledgeDetail>({
         operation:"zhidao.zhs.knowledge.detail",course_key:courseKey,knowledge_id:knowledgeId
       });
-      if(run!==currentRun.current)return;
+      if(run!==currentRun.current||scope!==currentDetailScope.current||
+          requestId!==detailRequestId.current)return;
       if(result.course_key!==courseKey||result.knowledge_id!==knowledgeId||
           result.verification!=="read_only"){
         throw new Error("ZHS_DETAIL_UNAVAILABLE");
@@ -86,12 +93,19 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
         setServerComparison("已建立 ZHS 服务器进度基线。目前无资源知识点尚未有经验证的执行心跳；重新核验只会读取真实服务器状态。");
       }
     }catch(error){
-      if(run!==currentRun.current)return;
+      if(run!==currentRun.current||scope!==currentDetailScope.current||
+          requestId!==detailRequestId.current)return;
       setDetail(null);
       setDetailMessage("知识点详情读取失败："+friendlyBridgeError(error));
     }finally{
-      if(run===currentRun.current)setDetailBusy(false);
+      if(run===currentRun.current&&scope===currentDetailScope.current&&
+          requestId===detailRequestId.current)setDetailBusy(false);
     }
+  }
+  function closeDetail(){
+    // Dismissing a detail also invalidates an outstanding read-only response.
+    detailRequestId.current++;
+    setDetail(null);setDetailBusy(false);setDetailMessage("");setServerComparison("");
   }
   type Row=NonNullable<LegacyTaskStatus["zhs_queue"]>["tasks"][number];
   function row(task:Row){
@@ -178,7 +192,7 @@ export function ZhsQueuePanel({status,unavailable=false,onRefresh}:{
     {detail&&<section className="sf-task-context" aria-label="ZHS 知识点详情（只读）">
       <div className="sf-ykt-worker-heading">
         <strong>{detail.name} · 服务器只读</strong>
-        <button className="secondary" type="button" onClick={()=>setDetail(null)}>收起详情</button>
+        <button className="secondary" type="button" onClick={closeDetail}>收起详情</button>
       </div>
       <p>ZHS 原会话知识点进度：{detail.knowledge_progress_percent}% ·
         资源目录来源：{detail.catalog_source==="mobile"?"移动版":detail.catalog_source==="desktop"?"桌面版":"未确认"} ·
