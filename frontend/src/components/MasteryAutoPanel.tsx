@@ -194,6 +194,8 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   });
   const remaining=Math.max(0,status.total-status.processed);
   const percent=status.total>0?Math.round(status.processed/status.total*100):0;
+  // "processed" includes skipped items; only "done" means server-confirmed target.
+  const confirmedPercent=status.total>0?Math.round(status.done/status.total*100):0;
   const failed=useMemo(()=>status.tasks.filter(item=>item.state==="skipped"),[status.tasks]);
 
   const update=(key:"target"|"max_rounds"|"stagnation_rounds"|"max_minutes"|"max_ai_calls"|"max_external_calls",value:number)=>{
@@ -449,13 +451,22 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         </div>
         <section className="sf-mastery-auto-overview" aria-label="整体处理进度">
           <div className="sf-mastery-auto-progress-top">
-            <strong>处理进度</strong>
+            <strong>任务已处理（含未达标项）</strong>
             <b>{status.processed}/{status.total} <small>知识点</small></b>
           </div>
           <div className="sf-mastery-auto-progress" role="progressbar"
             aria-label="已处理知识点进度" aria-valuemin={0}
             aria-valuemax={100} aria-valuenow={percent}>
             <span style={{width:percent+"%"}}/>
+          </div>
+          <div className="sf-mastery-auto-progress-top sf-mastery-auto-confirmed-top">
+            <strong>服务器确认达标</strong>
+            <b>{status.done}/{status.total} <small>知识点</small></b>
+          </div>
+          <div className="sf-mastery-auto-progress is-verified" role="progressbar"
+            aria-label="服务器确认达标知识点进度" aria-valuemin={0}
+            aria-valuemax={100} aria-valuenow={confirmedPercent}>
+            <span style={{width:confirmedPercent+"%"}}/>
           </div>
           <div className="sf-mastery-auto-metrics">
             <div><strong>{status.done}</strong><small>已达标</small></div>
@@ -464,6 +475,11 @@ export function MasteryAutoPanel({courseKey,desktop}:{
             <div><strong>{status.selected_chapters?.length??0}/{status.chapter_total??chapters.length}</strong><small>本次章节</small></div>
           </div>
           <p className="sf-mastery-auto-note">{status.message||"尚未启动自动任务"}</p>
+          {status.state==="completed"&&status.skipped>0&&
+            <p className="sf-mastery-auto-evidence-note" role="status">
+              本次扫描已结束，但仍有 {status.skipped} 个知识点未确认达标。
+              请展开知识点明细查看原因，处理完毕不等于全部达标。
+            </p>}
         </section>
         {chapterProgress.length>0&&<section className="sf-mastery-auto-chapter-progress">
           <div className="sf-mastery-auto-card-heading">
@@ -471,10 +487,22 @@ export function MasteryAutoPanel({courseKey,desktop}:{
           </div>
           <div className="sf-mastery-auto-chapter-list">
             {chapterProgress.map(ch=><div key={ch.index} className={ch.active?"is-active":""}>
-              <div><span>第{ch.index}章 · {ch.name}</span><small>{ch.processed}/{ch.knowledge_count}</small></div>
-              <div className="sf-mastery-auto-progress">
+              <div><span>第{ch.index}章 · {ch.name}</span>
+                <small>已处理 {ch.processed}/{ch.knowledge_count}</small>
+              </div>
+              <div className="sf-mastery-auto-progress" role="progressbar"
+                aria-label={`第${ch.index}章任务已处理`} aria-valuemin={0} aria-valuemax={100}
+                aria-valuenow={ch.knowledge_count?Math.round(ch.processed/ch.knowledge_count*100):0}>
                 <span style={{width:(ch.knowledge_count?
                   ch.processed/ch.knowledge_count*100:0)+"%"}}/>
+              </div>
+              <p className="sf-mastery-auto-chapter-confirmed">服务器确认达标 {ch.done}/{ch.knowledge_count}</p>
+              <div className="sf-mastery-auto-progress is-verified" role="progressbar"
+                aria-label={`第${ch.index}章服务器确认达标`} aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={ch.knowledge_count?Math.round(ch.done/ch.knowledge_count*100):0}>
+                <span style={{width:(ch.knowledge_count?
+                  ch.done/ch.knowledge_count*100:0)+"%"}}/>
               </div>
             </div>)}
           </div>
