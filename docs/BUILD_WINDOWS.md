@@ -44,3 +44,10 @@ Windows 的冻结运行时与 NSIS 产物由 CI 检查，官方账号扫码及�
 - Windows sidecar 的 PyInstaller 收集规则仍保留 `keyring` 正式凭据后端及 `zhs` 原版依赖；排除只服务开发测试的 `keyring.testing`、`pytest` 模块。此次仅精简打包，不更改账号会话与业务协议。
 - 保留 `--zhidao-env-check`、`--yuketang-env-check` 和 `--ucampus-socket-env-check`（只检查 Socket.IO 诊断依赖，不联网、不读取账号）；旧 `ucampus.heartbeat.capabilities` 入口必须返回 `UNKNOWN_OPERATION`。
 - 精简有效性以 Windows CI 生成的可安装 NSIS、冻结 sidecar 检查、安装升级卸载烟测为准。构建依赖排除并不代表软件实际大小必然按比例下降，不能未经比较宣称体积收益。
+
+## 依赖清单与前端可重复构建（2026-11-24）
+
+- Python 安装与 PyInstaller 构建统一以 `pyproject.toml` 为依赖来源：`scripts/build-windows.ps1` 执行 `python -m pip install -e '.[desktop,dev]'`。已删除未被当前构建使用且依赖集合不完整的 `packaging/requirements.txt`。原版 `legacy/yuketang/requirements.txt` 受源码清单保护，必须保留。
+- 前端已提交 `frontend/package-lock.json`，在 Windows 构建、PR CI 与主分支发布门禁中统一使用 `npm ci`，防止 `npm install` 意外重解版本。手动开发同样优先运行 `cd frontend; npm ci`。
+- 仓库根目录的 `@tauri-apps/cli` 目前**尚无**根级 `package-lock.json`，因此根目录暂时保留 `npm install` 而非未经锁文件验证的 `npm ci`。需要根目录可重复构建时，应先生成并审核根锁文件，再切换该命令，不能声称目前所有 npm 依赖都已锁定。
+- `tests/test_build_dependency_contract.py` 核对 Python 清单、前端锁文件与三处构建入口；这只能保证清单一致，是否能安装、打包和保留原数据仍由 Windows CI 与实机验收决定。
