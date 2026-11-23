@@ -33,8 +33,7 @@ from studyflow.platforms.xuexitong.adapter import XuexitongAdapter
 from studyflow.platforms.xuexitong import credentials as xuexitong_credentials
 from studyflow.platforms.xuexitong import settings as xuexitong_settings
 from studyflow.services.xuexitong_heartbeat_bridge import dispatch as xuexitong_heartbeat_dispatch
-from studyflow.services.ucampus_runtime_bridge import dispatch as ucampus_heartbeat_dispatch
-from studyflow.services import ucampus_runtime_bridge
+from studyflow.services.ucampus_socket_diagnostics import diagnose_legacy_socket
 from studyflow.services import ucampus_fabricated_bridge
 from studyflow.services.ucampus_fabricated_bridge import dispatch as ucampus_fabricated_dispatch
 from studyflow.services import xuexitong_heartbeat_bridge
@@ -130,12 +129,12 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": uc_fabricated}
         return {"id": request_id, "ok": False,
                 "error": str(uc_fabricated.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
-    uc_heartbeat = ucampus_heartbeat_dispatch(operation, request)
-    if uc_heartbeat is not None:
-        if uc_heartbeat.get("ok") is True:
-            return {"id": request_id, "ok": True, "data": uc_heartbeat}
+    if operation == "ucampus.socket.diagnose":
+        socket_status = diagnose_legacy_socket()
+        if socket_status.get("ok") is True:
+            return {"id": request_id, "ok": True, "data": socket_status}
         return {"id": request_id, "ok": False,
-                "error": str(uc_heartbeat.get("error") or "UCAMPUS_RUNTIME_UNAVAILABLE")}
+                "error": str(socket_status.get("error") or "UCAMPUS_SOCKET_TRANSPORT_UNKNOWN")}
     if operation in ("questionbank.providers", "questionbank.tokens.list",
                      "questionbank.tokens.add", "questionbank.tokens.select",
                      "questionbank.tokens.remove", "questionbank.tokens.import",
@@ -294,7 +293,6 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_LOGIN_UNAVAILABLE"}
         try:
-            ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.save(config.__dict__)
             monitor_reset = _clear_ucampus_monitor_safely()
@@ -312,7 +310,6 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
                 config = ucampus_enrich_school(config)
             except Exception:
                 pass
-            ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.save(config.__dict__)
             monitor_reset = _clear_ucampus_monitor_safely()
@@ -324,7 +321,6 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "ucampus.session.clear":
         try:
-            ucampus_runtime_bridge.reset_runner()
             ucampus_fabricated_bridge.reset_runner()
             ucampus_credentials.clear()
             monitor_reset = _clear_ucampus_monitor_safely()
