@@ -2,6 +2,7 @@ from studyflow.platforms.yuketang.readonly import YuketangReadOnly
 
 
 class FakeResponse:
+    status_code = 200
     def raise_for_status(self): pass
     def json(self):
         return {"success": True, "data": {"course_chapter": [
@@ -25,9 +26,11 @@ def test_read_only_video_metadata():
     assert reader.video_metadata("123") == [{"id": "12", "name": "视频一", "chapter": "第一章"}]
     assert len(session.calls) == 1
     assert session.calls[0][0].endswith("/mooc-api/v1/lms/learn/course/chapter")
+    assert session.calls[0][1]["allow_redirects"] is False
 
 
 class FlatVideoResponse:
+    status_code = 200
     def raise_for_status(self): pass
     def json(self):
         return {"success": True, "data": {"course_chapter": [
@@ -213,3 +216,26 @@ def test_server_completed_flag_must_be_explicit_boolean_or_0_or_1():
         result = YuketangReadOnly({"sessionid":"own"}, session=ServerProgressSession(
             rate=0.981, completed=flagged)).read_video_progress("123", "12")
         assert result["server_completed"] is False
+
+
+def test_readonly_metadata_never_follows_redirect_or_trusts_non_200():
+    import pytest
+
+    class UnexpectedResponse:
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+        def json(self):
+            # Even if a non-200 endpoint returns plausible JSON, it is not
+            # authenticated Rain Classroom metadata.
+            return {"success": True, "data": {"course_chapter": []}}
+
+    session = FakeSession()
+    session.get = lambda url, **kwargs: UnexpectedResponse(302)
+    reader = YuketangReadOnly({"sessionid": "own"}, session=session)
+    with pytest.raises(ValueError, match="Unverified Rain Classroom metadata"):
+        reader.video_metadata("123")
+
+    session.get = lambda url, **kwargs: UnexpectedResponse(401)
+    with pytest.raises(ValueError, match="Unverified Rain Classroom metadata"):
+        reader.classroom_info("123")
