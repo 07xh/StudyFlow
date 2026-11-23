@@ -73,6 +73,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const [detailsOpen,setDetailsOpen]=useState(false);
   const [error,setError]=useState("");
   const [statusReadError,setStatusReadError]=useState("");
+  // A visit starts unverified even if the placeholder status says "idle".
+  // Keying verification by visit protects A → B → A during render, before effects run.
+  const [verifiedVisit,setVerifiedVisit]=useState<number|null>(null);
   const statusVersion=useRef(0);
   const statusInFlight=useRef<Set<string>>(new Set());
   const manualReadInFlight=useRef<Set<number>>(new Set());
@@ -99,6 +102,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         if(value.course_key&&value.course_key!==courseKey)
           throw new Error("状态结果所属课程不匹配，请重新刷新核验。");
         applyStatus(value);
+        setVerifiedVisit(revision);
         setStatusReadError(previous=>previous?"":previous);
       }
     }catch(cause){
@@ -218,8 +222,11 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   const missingExternalToken=Boolean(settings.use_external_bank)&&
     (configuredBankTokens.length===0||missingSelectedToken||Boolean(bankError));
   const running=ACTIVE.has(status.state);
-  // Keep old evidence visible without treating it as a verified live worker.
+  // The initial idle snapshot is only a placeholder until this visit reads
+  // the backend; a failed subsequent read likewise makes controls uncertain.
   const statusUnavailable=Boolean(statusReadError);
+  const statusPending=verifiedVisit!==revision&&!statusUnavailable;
+  const statusBlocked=verifiedVisit!==revision||statusUnavailable;
   const pausing=status.state==="pausing";
   const canResume=pausing||status.state==="paused";
   const scopeMode=settings.scope_mode||"all";
@@ -259,7 +266,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     setSettings(previous=>({...previous,[key]:value}));
   };
   const start=async()=>{
-    if(!desktop||busy||running||statusUnavailable||missingScope||missingExternalToken||invalidConfig)return;
+    if(!desktop||busy||running||statusBlocked||missingScope||missingExternalToken||invalidConfig)return;
     statusVersion.current+=1;
     setBusy(true);setError("");
     try{
@@ -278,7 +285,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     }finally{if(isCurrent())setBusy(false);}
   };
   const control=async(action:"pause"|"resume"|"stop")=>{
-    if(!desktop||busy||!running||statusUnavailable)return;
+    if(!desktop||busy||!running||statusBlocked)return;
     statusVersion.current+=1;
     setBusy(true);setError("");
     try{
@@ -303,9 +310,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         <h4>自动掌握度工作台</h4>
         <p>选择执行章节与答题策略，右侧实时查看知识点、轮次和后台状态。</p>
       </div>
-      <strong className={"sf-mastery-auto-state is-"+(statusUnavailable?"unavailable":status.state)}
+      <strong className={"sf-mastery-auto-state is-"+(statusBlocked?"unavailable":status.state)}
         aria-live="polite">
-        {statusUnavailable?"状态待确认":LABEL[status.state]??status.state}
+        {statusUnavailable?"状态待确认":statusPending?"正在核验后台状态":LABEL[status.state]??status.state}
       </strong>
     </header>
 
@@ -493,32 +500,36 @@ export function MasteryAutoPanel({courseKey,desktop}:{
       <aside className="sf-mastery-auto-monitor" aria-label="执行进度与状态">
         <div className="sf-mastery-auto-actions">
           <button type="button" className="sf-mastery-auto-start"
-            disabled={busy||running||statusUnavailable||missingExternalToken||missingScope||invalidConfig||
+            disabled={busy||running||statusBlocked||missingExternalToken||missingScope||invalidConfig||
               (["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())}
             onClick={()=>void start()}>
             <Play size={14}/>{status.total>0?"重新执行选定范围":"开始执行"}
           </button>
           <button type="button" className="secondary"
-            disabled={busy||!running||statusUnavailable||status.state==="stopping"}
+            disabled={busy||!running||statusBlocked||status.state==="stopping"}
             onClick={()=>void control(canResume?"resume":"pause")}>
             {canResume?<><RotateCcw size={14}/>{pausing?"取消待暂停":"继续"}</>
               :<><Pause size={14}/>完成当前项后暂停</>}
           </button>
           <button type="button" className="secondary"
-            disabled={busy||!running||statusUnavailable||status.state==="stopping"}
+            disabled={busy||!running||statusBlocked||status.state==="stopping"}
             onClick={()=>void control("stop")}><Square size={14}/>停止</button>
           <button type="button" className="secondary sf-mastery-auto-mini"
             disabled={busy||manualReadInFlight.current.has(revision)}
             onClick={()=>void refresh(true)}><RefreshCw size={13}/>刷新</button>
         </div>
         {error&&<p className="sf-mastery-auto-error" role="alert">{error}</p>}
+        {statusPending&&<p className="sf-mastery-auto-note" role="status">
+          正在核验当前课程后台任务状态；完成读取后才能启动或控制任务。
+          如果读取长时间没有结果，可以点击「刷新」重试。
+        </p>}
         {statusUnavailable&&<p className="sf-mastery-auto-error" role="alert">
           状态读取失败：{statusReadError}。目前是上次读取的记录，无法确认后台任务是否仍在运行。
           启动和控制按钮已暂时停用；请点击「刷新」重新核验。
         </p>}
         <div className="sf-mastery-auto-live" aria-live="polite">
           <span className="sf-mastery-auto-eyebrow">
-            {statusUnavailable?"上次确认的执行信息":"当前执行"}
+            {statusUnavailable?"上次确认的执行信息":statusPending?"待核验的执行信息":"当前执行"}
           </span>
           <strong>{status.current?.name||(
             status.state==="paused"?"已暂停，下一知识点尚未开始":
