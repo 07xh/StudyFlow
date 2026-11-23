@@ -109,3 +109,24 @@ test("initial status failure prevents starting until a successful authenticated 
     assert.equal(start.props.disabled,false);
   }finally{await cleanup();}
 });
+
+
+test("status belonging to a different course cannot make stale controls look live",async()=>{
+  let count=0;
+  const {view,button,cleanup}=await setup(async()=>{
+    count++;
+    return count===1?{...snapshot("running","不属于当前课程的结果"),course_key:"b".repeat(64)}
+      :snapshot("idle","当前课程已核验");
+  });
+  try{
+    assert.match(textOf(view.root),/状态待确认/);
+    assert.match(textOf(view.root),/状态结果所属课程不匹配/);
+    assert.doesNotMatch(textOf(view.root),/不属于当前课程的结果/);
+    const start=view.root.findAllByType("button").find(b=>b.props.className==="sf-mastery-auto-start");
+    assert.equal(start.props.disabled,true);
+    await act(async()=>button("刷新").props.onClick());
+    assert.match(textOf(view.root),/当前课程已核验/);
+    assert.doesNotMatch(textOf(view.root),/状态待确认/);
+    assert.equal(start.props.disabled,false);
+  }finally{await cleanup();}
+});
