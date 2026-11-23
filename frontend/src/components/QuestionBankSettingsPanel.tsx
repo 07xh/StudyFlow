@@ -86,7 +86,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   },[desktop]);
 
   useEffect(()=>{
-    if(!desktop||typeof window.addEventListener!=="function")return;
+    if(!desktop||typeof window==="undefined"||typeof window.addEventListener!=="function")return;
     const onVaultChange=()=>{
       if(locallyAnnouncing.current)return;
       pendingExternalRead.current=true;
