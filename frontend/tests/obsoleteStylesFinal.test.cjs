@@ -54,3 +54,10 @@ test("retired WPF palette does not override the active desktop shell", () => {
   assert.match(style, /\.legacy-run-state\s*\{/);
   assert.doesNotMatch(foundation, /--subtle-text:/);
 });
+
+test("first-run consent sheet avoids duplicate declarations", () => {
+  const foundation = readCss("ui/foundation.css");
+  assert.equal((foundation.match(/\.sf-consent-header>div\{flex:1;min-width:0\}/g) || []).length, 1);
+  // max-width:600px already covers the old max-width:540px padding override.
+  assert.equal((foundation.match(/\.sf-consent-header\{padding:14px\}/g) || []).length, 1);
+});
