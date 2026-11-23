@@ -32,3 +32,10 @@ def test_frontend_lockfile_is_aligned_with_manifest_and_all_build_gates():
     assert "npm ci --prefix frontend --no-audit --no-fund" in windows
     assert "npm ci --no-audit --no-fund" in validation
     assert "npm ci --prefix frontend --no-audit --no-fund" in release
+
+def test_playwright_browser_cache_tracks_the_pinned_smoke_dependency():
+    workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
+    assert "playwright@1.62.1" in workflow
+    assert "key: studyflow-playwright-chromium-${{ runner.os }}-1.62.1" in workflow
+    assert "path: ~/.cache/ms-playwright" in workflow
+    assert "playwright\" install --with-deps chromium" in workflow
