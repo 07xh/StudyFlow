@@ -8,6 +8,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Reviewed upstream ZHS sources do not match thi
 $flags = @('--noconfirm','--clean','--onefile','--console',
   '--name','studyflow-bridge','--paths','src','--paths',$stage,
   '--collect-all','keyring','--collect-all','zhs','--copy-metadata','zhs',
+  # keyring's optional test suite is not a runtime credential backend.
+  # Keep all actual keyring backends; exclude only bundled test code.
+  '--exclude-module','keyring.testing','--exclude-module','pytest',
   '--add-data',"$((Resolve-Path 'legacy/yuketang/main.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/yuketang/exe_entry.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/zhidao').Path);legacy/zhidao",
