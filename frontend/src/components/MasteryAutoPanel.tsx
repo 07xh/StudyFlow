@@ -19,6 +19,16 @@ const IDLE:MasteryAutoStatus={
   state:"idle",total:0,processed:0,done:0,skipped:0,tasks:[],
 };
 const ACTIVE=new Set(["starting","running","pausing","paused","stopping"]);
+// Mirror the Python start() bounds so invalid edits never reach the native IPC.
+const NUMBER_LIMITS={
+  target:{min:1,max:100,label:"目标分数"},
+  max_rounds:{min:1,max:30,label:"每知识点最多轮次"},
+  stagnation_rounds:{min:1,max:10,label:"连续不涨分停止"},
+  max_minutes:{min:1,max:720,label:"最长运行（分钟）"},
+  max_ai_calls:{min:1,max:100,label:"AI 调用上限"},
+  max_external_calls:{min:1,max:200,label:"外部查询次数上限"},
+} as const;
+type NumberLimitKey=keyof typeof NUMBER_LIMITS;
 // Timestamps are diagnostic metadata, not a change to displayed task progress.
 const NON_VISUAL_FIELDS=new Set(["updated_at"]);
 const LABEL:Record<string,string>={
@@ -186,6 +196,18 @@ export function MasteryAutoPanel({courseKey,desktop}:{
   // courses can start a task before the new course's scope is known.
   const missingScope=chapterLoading||Boolean(chapterError)||chapters.length===0||
     scopedChapters.length===0;
+  const invalidParameters=(Object.keys(NUMBER_LIMITS) as NumberLimitKey[]).filter(key=>{
+    const value=settings[key]??(key==="max_external_calls"?40:undefined);
+    const {min,max}=NUMBER_LIMITS[key];
+    return typeof value!=="number"||!Number.isInteger(value)||value<min||value>max;
+  });
+  const chapterCount=settings.chapter_count??1;
+  if(!Number.isInteger(chapterCount)||chapterCount<1||chapterCount>200||
+     (scopeMode==="first_n"&&chapters.length>0&&chapterCount>chapters.length))
+    invalidParameters.push("chapter_count" as NumberLimitKey);
+  const invalidParameterLabels=invalidParameters.map(key=>key==="chapter_count"
+    ?"前 N 章数量":NUMBER_LIMITS[key].label);
+  const invalidConfig=invalidParameterLabels.length>0;
   const currentTask=status.current?status.tasks.find(t=>t.knowledge_id===status.current?.knowledge_id):undefined;
   const chapterProgress=(status.selected_chapters||[]).map(chapter=>{
     const items=status.tasks.filter(item=>item.chapter_index===chapter.index);
@@ -200,7 +222,7 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     setSettings(previous=>({...previous,[key]:value}));
   };
   const start=async()=>{
-    if(!desktop||busy||running||missingScope||missingExternalToken)return;
+    if(!desktop||busy||running||missingScope||missingExternalToken||invalidConfig)return;
     statusVersion.current+=1;
     setBusy(true);setError("");
     try{
@@ -409,13 +431,16 @@ export function MasteryAutoPanel({courseKey,desktop}:{
                 value={settings.max_minutes} onChange={event=>update("max_minutes",Number(event.target.value))}/>
             </label>
           </div>
+          {invalidConfig&&<p className="sf-mastery-auto-error" role="alert">
+            参数不符合允许范围：{invalidParameterLabels.join("、")}。请填写范围内的整数后再启动。
+          </p>}
         </section>
       </div>
 
       <aside className="sf-mastery-auto-monitor" aria-label="执行进度与状态">
         <div className="sf-mastery-auto-actions">
           <button type="button" className="sf-mastery-auto-start"
-            disabled={busy||running||missingExternalToken||missingScope||
+            disabled={busy||running||missingExternalToken||missingScope||invalidConfig||
               (["bank_ai","ai_first"].includes(settings.first_round_mode)&&!aiKey.trim())}
             onClick={()=>void start()}>
             <Play size={14}/>{status.total>0?"重新执行选定范围":"开始执行"}
