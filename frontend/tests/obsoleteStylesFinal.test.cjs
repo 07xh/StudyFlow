@@ -45,6 +45,10 @@ test("retired WPF palette does not override the active desktop shell", () => {
   assert.doesNotMatch(style, /Zhidao v5\.2\.9 WPF interaction migration/);
   assert.doesNotMatch(style, /--side:#13243d/);
   assert.doesNotMatch(style, /\.nav\.active\{background:#426ac5/);
+  assert.doesNotMatch(style, /\.nav:hover\{background:#8270f01a/);
+  assert.doesNotMatch(style, /\.nav\.active\{background:#8061ed25/);
+  assert.match(foundation, /\.sf-shell \.nav:hover\{/);
+  assert.match(foundation, /\.sf-shell \.nav.active\{/);
   assert.match(foundation, /\.app\.sf-shell\s*\{[^}]*--subtle:#2c405d/);
   assert.match(foundation, /\.app\.sf-shell:not\(\.dark\)\s*\{[^}]*--subtle:#edf3fc/);
   assert.match(style, /\.legacy-run-state\s*\{/);
