@@ -76,3 +76,15 @@ def test_one_time_lockfile_resolution_is_not_a_permanent_ci_job():
     workflow = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
     assert "dependency-lock-review" not in workflow
     assert "STUDYFLOW_LOCK_DATA" not in workflow
+
+
+
+def test_windows_build_compiles_frontend_once_via_tauri_before_build():
+    windows = (ROOT / "scripts/build-windows.ps1").read_text(encoding="utf-8")
+    tauri = json.loads((ROOT / "src-tauri/tauri.conf.json").read_text(encoding="utf-8"))
+    assert tauri["build"]["beforeBuildCommand"] == "npm --prefix frontend run build"
+    assert "npm run tauri -- build" in windows
+    assert "npm --prefix frontend run build" not in windows
+    # The React build is still required; removing the duplicate script call
+    # must never disable the Tauri packaging hook.
+    assert "npm ci --prefix frontend --no-audit --no-fund" in windows
