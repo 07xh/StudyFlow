@@ -14,6 +14,35 @@ permissions:
   contents: read
 
 jobs:
+  dependency-lock-review:
+    # Temporary, read-only resolver. Export public lock text to CI logs for review,
+    # then commit via the authenticated GitHub file API and remove this job.
+    if: github.event_name == 'pull_request' && github.head_ref == 'cleanup/retire-ucampus-local-pulse-20261123'
+    name: Resolve desktop root lockfiles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve actual npm and Cargo dependency trees
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          cargo generate-lockfile --manifest-path src-tauri/Cargo.toml
+          node -e 'const p=require("./package.json"),l=require("./package-lock.json");if(p.version!==l.version||JSON.stringify(p.devDependencies)!==JSON.stringify(l.packages[""].devDependencies))process.exit(1)'
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          for label,path in (("npm","package-lock.json"),("cargo","src-tauri/Cargo.lock")):
+              raw=Path(path).read_bytes()
+              print(f"STUDYFLOW_LOCK_BEGIN {label} {len(raw)}", flush=True)
+              value=base64.b64encode(raw).decode("ascii")
+              for i in range(0,len(value),512):
+                  print("STUDYFLOW_LOCK_DATA " + label + " " + value[i:i+512], flush=True)
+              print(f"STUDYFLOW_LOCK_END {label}", flush=True)
+          PY
   test:
     name: Python regression tests
     runs-on: ubuntu-latest
