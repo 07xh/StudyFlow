@@ -20,6 +20,8 @@ async function withPanels(check,{delayInitialMastery=false}={}){
     setTimeout:()=>2,clearTimeout:()=>{}});
   global.window=bus;
   let tokens=[],listCalls=0,mastery,settings;
+  let lookupRemaining=7;
+  const lookupCalls=[];
   const old=deferred();
   const seen=[];
   bus.addEventListener("studyflow:question-bank-config-changed",event=>seen.push(event));
@@ -48,6 +50,19 @@ async function withPanels(check,{delayInitialMastery=false}={}){
         {...t,validity:"valid",...(quota?{remaining:12}: {})}:t);
       return snap(tokens);
     },
+    questionBankQuery:async(provider,question,tokenId)=>{
+      lookupCalls.push([provider,question,tokenId]);
+      assert.equal(provider,"yanxi");
+      assert.ok(tokens.length);
+      const id=tokenId||tokens[0].id;
+      if(lookupRemaining!==null)
+        tokens=tokens.map(t=>t.id===id?{...t,remaining:lookupRemaining}:t);
+      return {
+        found:true,answer:"B",status:"matched",remaining:lookupRemaining,
+        provider_id:"yanxi",provider_name:"言溪题库",token_id:id,
+        token_label:"Token 001",verified:false,
+      };
+    },
     masteryAutoStatus:async()=>EMPTY,
     masteryAutoStart:async()=>EMPTY,
     masteryAutoControl:async()=>EMPTY,
@@ -68,6 +83,9 @@ async function withPanels(check,{delayInitialMastery=false}={}){
     const {QuestionBankSettingsPanel}=load("components/QuestionBankSettingsPanel.tsx",{
       "bridge.ts":mocks,...modal,
     });
+    const {QuestionBankQuestionAction}=load("components/QuestionBankQuestionAction.tsx",{
+      "bridge.ts":mocks,
+    });
     await act(async()=>{
       mastery=create(React.createElement(MasteryAutoPanel,{courseKey:COURSE,desktop:true}));
       settings=create(React.createElement(QuestionBankSettingsPanel,{desktop:true}));
@@ -77,7 +95,9 @@ async function withPanels(check,{delayInitialMastery=false}={}){
       .find(b=>b.props.className==="sf-mastery-auto-start");
     const checkbox=mastery.root.findAllByType("input").find(x=>x.props.type==="checkbox");
     await act(async()=>checkbox.props.onChange({target:{checked:true}}));
-    await check({mastery,settings,button,start,seen,old,getListCalls:()=>listCalls});
+    await check({mastery,settings,button,start,seen,old,getListCalls:()=>listCalls,
+      setLookupRemaining:value=>{lookupRemaining=value;},lookupCalls,
+      QuestionBankQuestionAction});
   }finally{
     if(mastery||settings)await act(async()=>{
       if(mastery)mastery.unmount();
@@ -163,5 +183,58 @@ test("bulk checks notify only once after all tokens, and verified quota uses rec
     assert.equal(seen.length,before+2,"quota run must emit once after processing both");
     assert.match(textOf(mastery.root),/已知余量 24 次/);
     assert.match(textOf(mastery.root),/2\/2 条有有效数值记录/);
+  });
+});
+
+test("ordinary homework lookup synchronizes known quota into open vault and mastery summaries",async()=>{
+  await withPanels(async context=>{
+    const {QuestionBankQuestionAction,mastery,settings,button,seen,getListCalls,lookupCalls}=context;
+    const readsBeforeImport=getListCalls();
+    await importOne(context);
+    assert.equal(getListCalls(),readsBeforeImport+1,
+      "own settings change must notify mastery without reloading settings itself");
+    const readsBeforeQuery=getListCalls(),signalsBeforeQuery=seen.length;
+    let lookup;
+    try{
+      await act(async()=>lookup=create(React.createElement(QuestionBankQuestionAction,{
+        desktop:true,question:{title:"普通习题",question_type:"单选"},
+      })));
+      await act(async()=>button(lookup,"题库查题").props.onClick());
+      await act(async()=>button(lookup,"查询这道题").props.onClick());
+      assert.equal(lookupCalls.length,1);
+      assert.match(textOf(lookup.root),/剩余次数：7/);
+      assert.equal(seen.length,signalsBeforeQuery+1,
+        "successful numeric-balance lookup should invalidate open summaries once");
+      assert.equal(getListCalls(),readsBeforeQuery+3,
+        "one lookup list read plus one each from the two subscribed panels");
+      assert.match(textOf(mastery.root),/已知余量 7 次/);
+      assert.match(textOf(settings.root),/已知剩余总量7 次/);
+      assert.equal(seen.at(-1).detail,undefined,"signal must not carry question or token");
+    }finally{
+      if(lookup)await act(async()=>lookup.unmount());
+    }
+  });
+});
+
+test("lookup with unknown remaining balance does not fan out redundant list reads",async()=>{
+  await withPanels(async context=>{
+    const {QuestionBankQuestionAction,button,seen,getListCalls,lookupCalls}=context;
+    await importOne(context);
+    context.setLookupRemaining(null);
+    let lookup;
+    try{
+      await act(async()=>lookup=create(React.createElement(QuestionBankQuestionAction,{
+        desktop:true,question:{title:"余量未知的普通习题"},
+      })));
+      await act(async()=>button(lookup,"题库查题").props.onClick());
+      const before=getListCalls(),signals=seen.length;
+      await act(async()=>button(lookup,"查询这道题").props.onClick());
+      assert.equal(lookupCalls.length,1);
+      assert.match(textOf(lookup.root),/参考答案（未核验）/);
+      assert.equal(seen.length,signals);
+      assert.equal(getListCalls(),before);
+    }finally{
+      if(lookup)await act(async()=>lookup.unmount());
+    }
   });
 });

@@ -1,4 +1,5 @@
 import {useState} from "react";
+import {announceQuestionBankConfigChanged} from "../questionBankChangeSignal";
 import {
   friendlyBridgeError,questionBankList,questionBankQuery,
   type QuestionBankAnswer,type QuestionBankQuestion,type QuestionBankState,
@@ -47,6 +48,10 @@ export function QuestionBankQuestionAction({desktop,question}:{
     try{
       const answer=await questionBankQuery(provider,question,tokenId);
       setResult(answer);
+      // The shared vault persists numeric balances returned by normal lookups.
+      // Invalidate open summaries; the event contains no question or token data.
+      if(typeof answer.remaining==="number"&&answer.remaining>=0)
+        announceQuestionBankConfigChanged();
     }catch(cause){setError(friendlyBridgeError(cause));}
     finally{setBusy(false);}
   };
