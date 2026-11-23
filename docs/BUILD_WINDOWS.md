@@ -13,7 +13,7 @@
 powershell -NoProfile -File .\scripts\build-windows.ps1
 \`\`\`
 
-脚本依次安装依赖、运行 Python 测试、构建 React、使用 PyInstaller 编译 sidecar、生成本项目原创图标，再使用 Tauri 2 打包 NSIS 安装程序。
+脚本依次安装已锁定的根目录与 React 依赖、运行 Python 测试、使用 PyInstaller 编译 sidecar、生成本项目图标、运行 Rust `cargo test --locked`，最后由 Tauri 2 的 `beforeBuildCommand` **只构建一次 React 前端**并打包 NSIS 安装程序。React 的独立 CI 构建检查仍保留。
 
 输出目录：\`src-tauri/target/release/bundle/nsis/\`
 
@@ -58,3 +58,9 @@ Windows 的冻结运行时与 NSIS 产物由 CI 检查，官方账号扫码及�
 - Windows 构建脚本通过两次 `npm ci` 分别固定根 Tauri CLI 和 `frontend` React 依赖，并通过 `cargo test --locked --manifest-path src-tauri/Cargo.toml` 验证 Rust 清单与锁文件一致。
 - 单元契约测试额外检查根 npm 包与依赖表、Windows x64 CLI 二进制记录、Cargo 依赖树及禁止重新引入一次性 CI 解析任务。依赖锁定能降低构建漂移，但无法冻结系统 SDK、第三方 API 或学校服务端行为。
 - 对应 PR 的最新 Windows NSIS、安装/升级/卸载、React UI/IPC、Python 测试必须再次全部通过，才能视作构建依赖锁定完成验收。
+
+## 前端重复编译清理（2026-11-24）
+
+- Windows 成功构建日志证明，旧脚本先运行一次 `npm --prefix frontend run build`，随后 `npm run tauri -- build` 又根据 `src-tauri/tauri.conf.json` 中的 `beforeBuildCommand` 重复执行一次。
+- 已删除 PowerShell 脚本中的首次冗余调用；Tauri 正式打包命令仍触发完整的 `tsc -b && vite build`，并在前端构建失败时直接使 Windows 打包失败。
+- Python 构建契约测试检查脚本不再直接启动 React build、Tauri 配置仍包含正式 `beforeBuildCommand` 且 `npm ci` 保留；真实结果须以最新 Windows NSIS CI 为准，不能凭静态配置宣称运行时性能提升。
