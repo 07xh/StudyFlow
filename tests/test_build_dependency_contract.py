@@ -88,3 +88,23 @@ def test_windows_build_compiles_frontend_once_via_tauri_before_build():
     # The React build is still required; removing the duplicate script call
     # must never disable the Tauri packaging hook.
     assert "npm ci --prefix frontend --no-audit --no-fund" in windows
+
+
+def test_ci_npm_caches_follow_committed_lockfiles():
+    validation = (ROOT / ".github/workflows/test.yml").read_text(encoding="utf-8")
+    release = (ROOT / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
+    for workflow in (validation, release):
+        assert workflow.count("cache: npm") == 2
+        assert workflow.count("cache-dependency-path: frontend/package-lock.json") == 1
+        assert workflow.count("cache-dependency-path: '**/package-lock.json'") == 1
+    assert "cache-dependency-path: pyproject.toml" in validation
+
+
+def test_release_gate_checks_versions_in_both_npm_locks_and_cargo_lock():
+    workflow = (ROOT / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
+    assert "      - 'package-lock.json'" in workflow
+    assert 'root_lock=json.loads(Path("package-lock.json").read_text(encoding="utf-8"))' in workflow
+    assert 'root_lock["version"] == version' in workflow
+    assert 'root_lock["packages"][""]["devDependencies"] == root_package["devDependencies"]' in workflow
+    assert 'cargo_lock=Path("src-tauri/Cargo.lock").read_text(encoding="utf-8")' in workflow
+    assert "re.escape(version)+r'\"$',cargo_lock,re.M)" in workflow
