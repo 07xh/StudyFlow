@@ -96,7 +96,10 @@ test("a token imported in settings immediately unlocks the open mastery panel wi
     assert.equal(seen.length,1);
     assert.equal(seen[0].detail,undefined,"event must have no token payload");
     assert.doesNotMatch(textOf(context.mastery.root),/private-example-token/);
-    await act(async()=>button(settings,"删除 Token Token 001").props.onClick());
+    const remove=settings.root.findAllByType("button")
+      .find(b=>b.props["aria-label"]==="删除 Token Token 001");
+    assert.ok(remove);
+    await act(async()=>remove.props.onClick());
     assert.equal(start().props.disabled,true,"removing the last token should block external lookup");
     assert.equal(seen.length,2);
     assert.doesNotMatch(JSON.stringify(seen),/private-example-token/);
