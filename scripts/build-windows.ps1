@@ -9,8 +9,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Root npm install failed' }
 # frontend/package-lock.json is committed: install exactly the tested dependency tree.
 npm ci --prefix frontend --no-audit --no-fund
 if ($LASTEXITCODE -ne 0) { throw 'Frontend npm install failed' }
-npm --prefix frontend run build
-if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
+# Tauri's beforeBuildCommand compiles the frontend exactly once when packaging.
 & (Join-Path $PSScriptRoot 'build-sidecar.ps1')
 # Tauri's build script requires the bundled sidecar and generated icons to exist.
 npm run tauri -- icon packaging/icon.svg
