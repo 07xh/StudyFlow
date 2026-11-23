@@ -88,3 +88,60 @@ test("a superseded success cannot clear the latest token refresh error",async()=
       assert.doesNotMatch(textOf(view.root),/过期题库 Token/);
     });
 });
+
+const specificTokens=[
+  {id:"1".repeat(32),provider_id:"yanxi",label:"第一条 Token",active:true},
+  {id:"2".repeat(32),provider_id:"yanxi",label:"第二条 Token",active:false},
+];
+const tokenState=tokens=>({
+  providers:[{id:"yanxi",name:"共享题库",description:""}],
+  tokens,
+});
+
+test("removing explicitly selected token never silently switches to automatic rotation",async()=>{
+  let tokens=specificTokens;
+  await withPanel(async()=>tokenState(tokens),async({view,refresh})=>{
+    const start=()=>view.root.findAllByType("button")
+      .find(x=>x.props.className==="sf-mastery-auto-start");
+    const tokenSelect=()=>view.root.findAllByType("select")
+      .find(x=>x.props.value===""||x.props.value===specificTokens[0].id);
+    assert.ok(tokenSelect(),"token selection should be present");
+    await act(async()=>tokenSelect().props.onChange({
+      target:{value:specificTokens[0].id},
+    }));
+    assert.equal(start().props.disabled,false);
+    tokens=[specificTokens[1]];
+    await act(async()=>refresh().props.onClick());
+    assert.equal(tokenSelect().props.value,specificTokens[0].id,
+      "removed explicit selection must remain visible and unresolved");
+    assert.match(textOf(view.root),/原指定 Token 不再可用/);
+    assert.equal(start().props.disabled,true,
+      "never launch using a different paid token without an explicit choice");
+    const stale=tokenSelect().findAllByType("option")
+      .find(x=>x.props.value===specificTokens[0].id);
+    assert.equal(stale.props.disabled,true);
+    await act(async()=>tokenSelect().props.onChange({target:{value:""}}));
+    assert.equal(start().props.disabled,false,
+      "user explicitly switching to automatic mode restores launch");
+  });
+});
+
+test("token list refresh failure blocks external start until a newer verified read",async()=>{
+  let calls=0;
+  await withPanel(async()=>{
+    calls++;
+    if(calls===2)throw new Error("SHARED_VAULT_READ_FAILURE");
+    return tokenState(specificTokens);
+  },async({view,refresh})=>{
+    const start=()=>view.root.findAllByType("button")
+      .find(x=>x.props.className==="sf-mastery-auto-start");
+    assert.equal(start().props.disabled,false);
+    await act(async()=>refresh().props.onClick());
+    assert.match(textOf(view.root),/SHARED_VAULT_READ_FAILURE/);
+    assert.equal(start().props.disabled,true,"cached tokens are not trusted after a read failure");
+    await act(async()=>refresh().props.onClick());
+    assert.doesNotMatch(textOf(view.root),/SHARED_VAULT_READ_FAILURE/);
+    assert.equal(start().props.disabled,false);
+    assert.equal(calls,3);
+  });
+});
