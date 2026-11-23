@@ -157,7 +157,7 @@ def configure(course_id: str, unit_id: str, enabled: bool) -> dict[str, Any]:
 
 
 def tick(*, clock=None, reader_factory=UCampusProgressReader) -> dict[str, Any]:
-    """One bounded read-only GET, no media event, POST, or automatic replay."""
+    """One bounded, read-only GET; old results cannot undo a reconfiguration."""
     with _LOCK:
         saved = _load()
         public = _public(saved)
@@ -171,22 +171,39 @@ def tick(*, clock=None, reader_factory=UCampusProgressReader) -> dict[str, Any]:
         if now - float(previous_attempt) < _MIN_INTERVAL_SECONDS:
             return public
         saved["last_attempt"] = now
-        _write(saved)  # persist attempt before GET to avoid restart request storms
-        try:
-            tasks = reader_factory().list_tasks(saved["course_id"], saved["unit_id"])
-            if not isinstance(tasks, list):
-                raise UCampusProgressError("UCAMPUS_PROGRESS_FORMAT_UNVERIFIED")
-            saved.update(
-                state="verified",
-                checked_at=datetime.fromtimestamp(now, timezone.utc).isoformat(),
-                total=len(tasks),
-                passed=sum(task.get("completed") is True for task in tasks),
-                unknown=sum(task.get("completed") is None for task in tasks),
-            )
-        except UCampusProgressError as exc:
-            code = str(exc)
-            saved["state"] = code if code in _ALLOWED_STATUS else "UCAMPUS_PROGRESS_UNAVAILABLE"
-        except Exception:
-            saved["state"] = "UCAMPUS_PROGRESS_UNAVAILABLE"
-        _write(saved)
-        return _public(saved)
+        _write(saved)  # claim before GET: concurrent ticks do not duplicate it
+        course_id, unit_id = saved["course_id"], saved["unit_id"]
+        session_marker = saved["session_marker"]
+
+    # Network I/O must not hold the lock used by status() and configure().
+    # A logout, disable or course switch can happen while this GET is pending.
+    try:
+        tasks = reader_factory().list_tasks(course_id, unit_id)
+        if not isinstance(tasks, list):
+            raise UCampusProgressError("UCAMPUS_PROGRESS_FORMAT_UNVERIFIED")
+        update = {
+            "state": "verified",
+            "checked_at": datetime.fromtimestamp(now, timezone.utc).isoformat(),
+            "total": len(tasks),
+            "passed": sum(task.get("completed") is True for task in tasks),
+            "unknown": sum(task.get("completed") is None for task in tasks),
+        }
+    except UCampusProgressError as exc:
+        code = str(exc)
+        update = {"state": code if code in _ALLOWED_STATUS else "UCAMPUS_PROGRESS_UNAVAILABLE"}
+    except Exception:
+        update = {"state": "UCAMPUS_PROGRESS_UNAVAILABLE"}
+
+    with _LOCK:
+        current = _load()
+        if (current is None or current.get("course_id") != course_id
+                or current.get("unit_id") != unit_id
+                or current.get("session_marker") != session_marker
+                or current.get("last_attempt") != now
+                or _session_marker() != session_marker):
+            # The user changed scope/account or disabled monitoring mid-GET.
+            # The in-flight result is obsolete and must not be persisted.
+            return _public(current)
+        current.update(update)
+        _write(current)
+        return _public(current)
