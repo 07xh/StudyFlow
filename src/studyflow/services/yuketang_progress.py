@@ -123,6 +123,19 @@ def parse_original_log(text: str) -> dict:
 
     for raw in text.splitlines():
         line = raw.strip()
+        if "开始批量观看视频" in line or "开始并发观看视频" in line:
+            # The original executor may write several batches into one log.
+            # A fresh batch must never inherit the prior batch's terminal state,
+            # locally reported position, or server progress evidence.
+            for field in ("simulation_percent", "simulation_position", "simulation_duration",
+                          "server_percent", "server_position", "server_source",
+                          "total", "current_index"):
+                result[field] = None
+            for field in ("processed", "success", "skipped", "failed", "stopped"):
+                result[field] = 0
+            worker_slots = []
+            active_workers.clear()
+            tasks.clear()
         if "开始并发观看视频" in line:
             # A new batch starts; all slot assignments belong to this batch.
             concurrent_match = WORKER_MAX.search(line)
@@ -132,8 +145,6 @@ def parse_original_log(text: str) -> dict:
                     {"slot": index, "video_index": None, "state": "waiting"}
                     for index in range(1, count + 1)
                 ]
-            active_workers.clear()
-            tasks.clear()
         match = WORKER_START.search(line)
         if match:
             named = WORKER_NAME.search(line) or WORKER_NAME_FALLBACK.search(line)
@@ -331,7 +342,7 @@ def parse_original_log(text: str) -> dict:
                 result[field] = min(int(match.group(2)), 100_000)
 
     # Summary counters represent completed results, not started jobs.
-    if "批量观看完成" in text or "并发观看完成" in text:
+    if video_summary:
         result["processed"] = (result["success"] + result["skipped"]
                                + result["failed"] + result["stopped"])
     if result["total"] is not None:
