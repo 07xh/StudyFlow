@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Protocol
@@ -77,9 +78,9 @@ def _as_seconds(value: Any, duration: int) -> int:
     """
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
-    if number < 0:
+    if not math.isfinite(number) or number < 0:
         return 0
     while number > duration and number >= 1000:
         number /= 1000.0
@@ -91,7 +92,7 @@ def parse_video_status(payload: Any, object_id: str) -> VideoStatus | None:
         return None
     try:
         duration = int(payload.get("duration") or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if duration <= 0:
         return None
@@ -123,7 +124,11 @@ def fetch_video_status(
         )
     except Exception:
         return None
-    if int(getattr(response, "status_code", 0) or 0) != 200:
+    try:
+        http_status = int(getattr(response, "status_code", 0) or 0)
+    except (ValueError, TypeError, OverflowError):
+        return None
+    if http_status != 200:
         return None
     try:
         payload = response.json() if hasattr(response, "json") else None
