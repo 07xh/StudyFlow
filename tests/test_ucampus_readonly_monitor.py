@@ -202,3 +202,27 @@ def test_simultaneous_ticks_claim_only_one_readonly_get(store):
     assert not worker.is_alive()
     assert monitor.status()["state"] == "verified"
     assert len(calls) == 1
+
+
+def test_clock_rollback_resumes_readonly_polling_without_request_storm(store):
+    monitor.configure("course-v2:eng+course+1", "U1", True)
+    calls = []
+
+    class Reader:
+        def list_tasks(self, course_id, unit_id):
+            calls.append((course_id, unit_id))
+            return [{"id": "v", "completed": True}]
+
+    first = monitor.tick(clock=lambda: 2_000_000, reader_factory=Reader)
+    assert first["state"] == "verified"
+    assert len(calls) == 1
+
+    # A Windows clock adjustment can make the persisted last_attempt appear
+    # to be in the future. One fresh GET must be allowed, rather than
+    # suppressing all reads until the old wall-clock timestamp is reached.
+    rolled_back = monitor.tick(clock=lambda: 1_999_000, reader_factory=Reader)
+    assert rolled_back["state"] == "verified"
+    assert len(calls) == 2
+
+    monitor.tick(clock=lambda: 1_999_010, reader_factory=Reader)
+    assert len(calls) == 2, "ordinary 60-second pacing must still apply"
