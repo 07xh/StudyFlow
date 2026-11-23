@@ -38,3 +38,9 @@ Windows 的冻结运行时与 NSIS 产物由 CI 检查，官方账号扫码及�
 冻结后的 sidecar 增加 `--yuketang-env-check`，在临时目录中导入原版 main.py（不调用 main、不访问网络），验证 runpy 脚本依赖和原版配置入口均已打包。`--zhidao-env-check` 同时导入 CLI、课程、扫码和单课核验入口。两者失败均阻止 NSIS 打包。
 
 知到官方播放器参数保存到 `%LOCALAPPDATA%/StudyFlow/zhidao/official-player-settings.json`。初次读取可兼容旧 ZHSDesktop 设置，保存时不会写回旧安装目录。
+
+## 冻结运行时精简与回归（2026-11-24）
+
+- Windows sidecar 的 PyInstaller 收集规则仍保留 `keyring` 正式凭据后端及 `zhs` 原版依赖；排除只服务开发测试的 `keyring.testing`、`pytest` 模块。此次仅精简打包，不更改账号会话与业务协议。
+- 保留 `--zhidao-env-check`、`--yuketang-env-check` 和 `--ucampus-socket-env-check`（只检查 Socket.IO 诊断依赖，不联网、不读取账号）；旧 `ucampus.heartbeat.capabilities` 入口必须返回 `UNKNOWN_OPERATION`。
+- 精简有效性以 Windows CI 生成的可安装 NSIS、冻结 sidecar 检查、安装升级卸载烟测为准。构建依赖排除并不代表软件实际大小必然按比例下降，不能未经比较宣称体积收益。
