@@ -18,6 +18,9 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
   const [socketDiagnostic,setSocketDiagnostic]=useState<UCampusSocketDiagnostic|null>(null);
   const [socketError,setSocketError]=useState("");
   const verificationToken=useRef(0);
+  const monitorToken=useRef(0);
+  const monitorScope=useRef("");
+  monitorScope.current=JSON.stringify([courseId,unitId]);
   const [monitor,setMonitor]=useState<UCampusMonitorStatus|null>(null);
   const [monitorBusy,setMonitorBusy]=useState(false);
   const [monitorError,setMonitorError]=useState("");
@@ -25,14 +28,16 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
   useEffect(()=>{
     let active=true;
     verificationToken.current++;
+    const initialMonitorToken=++monitorToken.current;
     setUnits([]);setUnitId("");setUnitsError("");setUnitsBusy(false);
     setServerBusy(false);setServerProgress(null);setPreviousProgress(null);setServerError("");
     setSocketDiagnostic(null);setSocketError("");setSocketBusy(false);
     setMonitor(null);setMonitorBusy(false);setMonitorError("");
     if(!desktop)return()=>{active=false;verificationToken.current++;};
     void request<UCampusMonitorStatus>({operation:"ucampus.monitor.status"})
-      .then(value=>{if(active)setMonitor(value);})
-      .catch(error=>{if(active)setMonitorError(friendlyBridgeError(error));});
+      .then(value=>{if(active&&initialMonitorToken===monitorToken.current)setMonitor(value);})
+      .catch(error=>{if(active&&initialMonitorToken===monitorToken.current)
+        setMonitorError(friendlyBridgeError(error));});
     setUnitsBusy(true);
     void request<UCampusUnit[]>({operation:"ucampus.units.list",course_id:courseId})
       .then(value=>{
@@ -42,7 +47,7 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
       })
       .catch(error=>{if(active)setUnitsError(friendlyBridgeError(error));})
       .finally(()=>{if(active)setUnitsBusy(false);});
-    return()=>{active=false;verificationToken.current++;};
+    return()=>{active=false;verificationToken.current++;monitorToken.current++;};
   },[courseId,desktop]);
 
   const newlyPassed=previousProgress&&serverProgress
@@ -74,20 +79,39 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
   async function toggleMonitor(){
     if(!desktop||monitorBusy||!unitId)return;
     const enabled=!(monitor?.enabled&&monitor.course_id===courseId&&monitor.unit_id===unitId);
+    const token=++monitorToken.current;
+    const scope=monitorScope.current;
+    const stillCurrent=()=>token===monitorToken.current&&scope===monitorScope.current;
     setMonitorBusy(true);setMonitorError("");
     try{
       const value=await request<UCampusMonitorStatus>({
         operation:"ucampus.monitor.configure",enabled,
         ...(enabled?{course_id:courseId,unit_id:unitId}:{})
       });
+      if(!stillCurrent())return;
       setMonitor(value);
       if(enabled){
         // A first server read is opt-in. Subsequent GETs are restored on launch.
         const first=await request<UCampusMonitorStatus>({operation:"ucampus.monitor.tick"});
+        if(!stillCurrent())return;
         setMonitor(first);
       }
-    }catch(error){setMonitorError(friendlyBridgeError(error));}
-    finally{setMonitorBusy(false);}
+    }catch(error){if(stillCurrent())setMonitorError(friendlyBridgeError(error));}
+    finally{if(stillCurrent())setMonitorBusy(false);}
+  }
+
+  function refreshMonitorStatus(){
+    const token=++monitorToken.current;
+    const scope=monitorScope.current;
+    setMonitorError("");
+    void request<UCampusMonitorStatus>({operation:"ucampus.monitor.status"})
+      .then(value=>{
+        if(token===monitorToken.current&&scope===monitorScope.current)setMonitor(value);
+      })
+      .catch(error=>{
+        if(token===monitorToken.current&&scope===monitorScope.current)
+          setMonitorError(friendlyBridgeError(error));
+      });
   }
 
   async function diagnoseSocket(){
@@ -107,9 +131,9 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
       <label>课程单元
         <select value={unitId} disabled={!desktop||unitsBusy}
           onChange={e=>{
-            verificationToken.current++;
+            verificationToken.current++;monitorToken.current++;
             setUnitId(e.target.value);setServerProgress(null);setPreviousProgress(null);
-            setServerError("");setServerBusy(false);
+            setServerError("");setServerBusy(false);setMonitorBusy(false);setMonitorError("");
           }}>
           <option value="">请选择</option>
           {units.map(unit=><option key={unit.id} value={unit.id}>{unit.title||unit.id}</option>)}
@@ -131,8 +155,7 @@ export function UCampusProgressVerifyPanel({course,desktop}:{course:Course;deskt
           {monitorBusy?"正在更新…":monitor?.enabled&&monitor.course_id===courseId&&monitor.unit_id===unitId?"停止自动核验":monitor?.enabled?"切换核验到当前单元":"启用重启后自动核验"}
         </button>
         <button type="button" className="secondary" disabled={!desktop||monitorBusy}
-          onClick={()=>void request<UCampusMonitorStatus>({operation:"ucampus.monitor.status"})
-            .then(setMonitor).catch(error=>setMonitorError(friendlyBridgeError(error)))}>
+          onClick={refreshMonitorStatus}>
           查看恢复状态
         </button>
       </div>
