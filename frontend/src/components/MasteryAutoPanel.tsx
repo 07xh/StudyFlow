@@ -135,10 +135,15 @@ export function MasteryAutoPanel({courseKey,desktop}:{
     return ()=>window.clearInterval(timer);
   },[desktop,refresh]);
 
+  const bankRequestId=useRef(0);
   const reloadBanks=useCallback(async()=>{
     if(!desktop)return;
+    const requestId=++bankRequestId.current;
+    // A manual refresh may finish before the initial request or a prior refresh.
+    // Only the newest read may update providers, token selection or errors.
     try{
       const state=await questionBankList();
+      if(requestId!==bankRequestId.current)return;
       setBankState(state);
       setBankError("");
       setSettings(previous=>{
@@ -148,7 +153,9 @@ export function MasteryAutoPanel({courseKey,desktop}:{
         const token=valid?previous.external_token_id:"";
         return {...previous,external_provider_id:provider,external_token_id:token};
       });
-    }catch(cause){setBankError(friendlyBridgeError(cause));}
+    }catch(cause){
+      if(requestId===bankRequestId.current)setBankError(friendlyBridgeError(cause));
+    }
   },[desktop]);
   useEffect(()=>{void reloadBanks();},[reloadBanks]);
 
