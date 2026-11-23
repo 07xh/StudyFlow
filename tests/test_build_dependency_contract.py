@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
+import textwrap
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,3 +111,20 @@ def test_release_gate_checks_versions_in_both_npm_locks_and_cargo_lock():
     assert 'root_lock["packages"][""]["devDependencies"] == root_package["devDependencies"]' in workflow
     assert 'cargo_lock=Path("src-tauri/Cargo.lock").read_text(encoding="utf-8")' in workflow
     assert "re.escape(version)+r'\"$',cargo_lock,re.M)" in workflow
+
+
+def test_release_version_gate_runs_against_current_manifests():
+    """Exercise the real embedded pre-release gate, not just textual matches."""
+    workflow = (ROOT / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
+    start_token = "          python - <<'PY'\n"
+    end_token = "\n          PY"
+    assert workflow.count(start_token) == 1
+    start = workflow.index(start_token) + len(start_token)
+    end = workflow.index(end_token, start)
+    script = textwrap.dedent(workflow[start:end])
+    completed = subprocess.run(
+        [sys.executable, "-c", script], cwd=ROOT,
+        capture_output=True, text=True, check=False, timeout=15,
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert "Version manifests aligned:" in completed.stdout
