@@ -146,9 +146,16 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   const eligible=state.tokens.filter(t=>state.providers.some(p=>p.id===t.provider_id&&p.supports_check!==false));
   const rotation=selected?state.rotation_modes?.[selected.id]||"fixed":"fixed";
 
+  function beginMutation(){
+    // An earlier external list read can resolve after this mutation completes.
+    // Its snapshot (or error) must never replace the mutation's authoritative result.
+    listReadId.current+=1;
+    setBusy(true);
+  }
+
   async function runAll(quota:boolean){
     if(busy||loading||refreshing||eligible.length===0)return;
-    setQuotaConfirm(false);setBusy(true);setError("");setNotice("");
+    setQuotaConfirm(false);beginMutation();setError("");setNotice("");
     let done=0,failed=0,updated=false;
     setJob({done,total:eligible.length,failed,quota});
     for(const token of eligible){
@@ -173,7 +180,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   }
   async function checkOne(id:string,quota=false){
     if(busy||loading||refreshing)return;
-    setBusy(true);setCheckingId(id);setError("");setNotice("");
+    beginMutation();setCheckingId(id);setError("");setNotice("");
     try{
       setState(await questionBankCheckToken(id,quota));
       announceLocalChange();
@@ -183,7 +190,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   }
   async function importBatch(){
     if(busy||loading||refreshing||!selected||!tokenLines.trim())return;
-    setBusy(true);setError("");setNotice("");
+    beginMutation();setError("");setNotice("");
     try{
       const next=await questionBankImportTokens(selected.id,tokenLines);
       setState(next);setTokenLines("");
@@ -194,7 +201,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   }
   async function setRotation(mode:"fixed"|"round_robin"){
     if(busy||loading||refreshing||!selected)return;
-    setBusy(true);setError("");setNotice("");
+    beginMutation();setError("");setNotice("");
     try{
       setState(await questionBankSetRotation(selected.id,mode));
       announceLocalChange();
@@ -204,7 +211,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   }
   async function selectToken(id:string){
     if(busy||loading||refreshing)return;
-    setBusy(true);setError("");setNotice("");
+    beginMutation();setError("");setNotice("");
     try{
       setState(await questionBankSelectToken(id));
       announceLocalChange();
@@ -214,7 +221,7 @@ export function QuestionBankSettingsPanel({desktop,dark=false}:{desktop:boolean;
   }
   async function removeToken(id:string){
     if(busy||loading||refreshing)return;
-    setBusy(true);setError("");setNotice("");
+    beginMutation();setError("");setNotice("");
     try{
       setState(await questionBankRemoveToken(id));
       announceLocalChange();
