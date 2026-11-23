@@ -12,6 +12,8 @@ def test_obsolete_duplicate_packaging_manifest_is_not_used():
     # The installer installs '.[desktop,dev]' from pyproject.toml, not a
     # divergent packaging/requirements.txt that misses active dependencies.
     assert (ROOT / "pyproject.toml").is_file()
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"pyinstaller>=6,<7"' in pyproject
     assert not (ROOT / "packaging/requirements.txt").exists()
     script = (ROOT / "scripts/build-windows.ps1").read_text(encoding="utf-8")
     assert "pip install -e '.[desktop,dev]'" in script
