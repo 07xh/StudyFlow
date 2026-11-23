@@ -139,7 +139,8 @@ def parse_tasks(rt: dict[str, Any], unit_id: str) -> list[dict[str, Any]]:
         required = strategies.get("required") if isinstance(strategies, dict) else None
         passed = state.get("pass") if isinstance(state, dict) else None
         if (passed is True or
-                type(passed) in (int, float) and math.isfinite(passed) and passed >= 1):
+                (type(passed) is int or type(passed) is float and math.isfinite(passed))
+                and passed >= 1):
             completed = True
         elif passed in (0, "0") and passed is not None:
             completed = False
