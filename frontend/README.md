@@ -8,7 +8,7 @@
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 npm run build
 npm test
