@@ -128,3 +128,30 @@ def test_release_version_gate_runs_against_current_manifests():
     )
     assert completed.returncode == 0, completed.stderr[-2000:]
     assert "Version manifests aligned:" in completed.stdout
+
+
+def test_official_previous_release_is_verified_before_real_windows_upgrade():
+    fetch = (ROOT / "scripts/fetch-previous-installer.ps1").read_text(encoding="utf-8")
+    smoke = (ROOT / "scripts/test-windows-install.ps1").read_text(encoding="utf-8")
+    for workflow_path in (".github/workflows/test.yml", ".github/workflows/build-windows.yml"):
+        workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
+        assert workflow.count("run: ./scripts/fetch-previous-installer.ps1") == 1
+        assert workflow.index("run: ./scripts/fetch-previous-installer.ps1") < workflow.index(
+            "run: ./scripts/test-windows-install.ps1"
+        )
+        assert "GH_TOKEN:" in workflow
+
+    assert 'gh api "repos/$releaseRepo/releases/tags/$previousTag"' in fetch
+    assert "gh release download $previousTag --repo $releaseRepo" in fetch
+    assert "Get-FileHash -LiteralPath $installer -Algorithm SHA256" in fetch
+    assert "$asset.digest.Substring(7)" in fetch
+    assert "STUDYFLOW_PREVIOUS_INSTALLER=$installer" in fetch
+    assert 'if ($actualSha -cne $expectedSha.ToUpperInvariant())' in fetch
+
+    assert "$previousInstaller = $env:STUDYFLOW_PREVIOUS_INSTALLER" in smoke
+    assert "upgrade-from-prior-release" in smoke
+    assert "same-version-reinstall" in smoke
+    assert "No prior installer provided: cross-version upgrade is not verified" in smoke
+    for subdirectory in ("zhidao", "question-bank", "legacy-logs", "updates"):
+        assert f"'{subdirectory}'" in smoke
+    assert smoke.count("Assert-AdditionalDataPreserved") >= 5
