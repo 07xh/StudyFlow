@@ -111,6 +111,11 @@ jobs:
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 14
+      - name: Verify official previous RC installer and its SHA-256
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/fetch-previous-installer.ps1
       - name: Verify clean install upgrade launch and uninstall
         shell: pwsh
         run: ./scripts/test-windows-install.ps1
