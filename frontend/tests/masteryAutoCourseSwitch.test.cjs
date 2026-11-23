@@ -170,7 +170,8 @@ test("A to B to A creates a new visit; the first A response cannot replace the s
 
 test("a delayed idle poll cannot replace a completed Start result",async()=>{
   const original=global.window;
-  global.window={setInterval:()=>11,clearInterval:()=>{},
+  const callbacks=[];
+  global.window={setInterval:fn=>{callbacks.push(fn);return 11;},clearInterval:()=>{},
     setTimeout:()=>12,clearTimeout:()=>{}};
   const pending=deferred();
   let reads=0;
@@ -190,9 +191,8 @@ test("a delayed idle poll cannot replace a completed Start result",async()=>{
     await act(async()=>view=create(React.createElement(MasteryAutoPanel,{courseKey:A,desktop:true})));
     const start=()=>view.root.findAllByType("button").find(x=>x.props.className==="sf-mastery-auto-start");
     assert.equal(start()?.props.disabled,false,"first verified idle snapshot enables launch");
-    const tick=()=>view.root.findAllByType("button").find(x=>textOf(x)==="刷新");
-    await act(async()=>tick().props.onClick());
-    assert.equal(reads,2,"a second status read should be pending before Start");
+    await act(async()=>callbacks[0]());
+    assert.equal(reads,2,"a second status poll should be pending before Start");
     await act(async()=>start().props.onClick());
     assert.match(textOf(view.root),/新任务运行中/);
     assert.equal(start()?.props.disabled,true);
