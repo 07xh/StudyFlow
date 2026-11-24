@@ -897,15 +897,15 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         </CollapsibleSection>
       </>:course.platform==="ucampus"?<>
         <CollapsibleSection id={scope+"chapters"} title="课程章节与资源" defaultExpanded={true}>
-          <UCampusCourseDetailPanel course={course} desktop={desktop}/>
+          <UCampusCourseDetailPanel key={"ucampus-catalog:"+course.course_id} course={course} desktop={desktop}/>
         </CollapsibleSection>
       </>:course.platform==="xuexitong"?<>
         <CollapsibleSection id={scope+"chapters"} title="课程章节与资源" defaultExpanded={true}>
-          <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
+          <XuexitongCourseDetailPanel key={"xuexitong-catalog:"+course.course_id} course={course} desktop={desktop}/>
         </CollapsibleSection>
       </>:<>
         <CollapsibleSection id={scope+"chapters"} title="课程章节与资源" defaultExpanded={true}>
-          <YuketangCourseDetailPanel course={course} desktop={desktop}
+          <YuketangCourseDetailPanel key={"yuketang-catalog:"+course.course_id} course={course} desktop={desktop}
             connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
         </CollapsibleSection>
       </>}
