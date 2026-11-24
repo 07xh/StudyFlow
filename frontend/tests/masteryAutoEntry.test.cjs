@@ -11,7 +11,7 @@ const workspace=app.slice(start,end);
 
 test("Zhidao course toolbar exposes full-auto mastery launch without scrolling or unfolding",()=>{
   const toolbar=workspace.slice(workspace.indexOf('className="sf-course-detail-topline"'),
-    workspace.indexOf('className="sf-course-playback-heading"'));
+    workspace.indexOf('className="sf-course-playback-stage"'));
   assert.match(toolbar,/course.platform==="zhidao"&&<button/);
   assert.match(toolbar,/全自动掌握度/);
   assert.match(toolbar,/onClick=\{\(\)=>setMasteryDialogCourseKey\(course.course_id\)\}/);
