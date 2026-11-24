@@ -242,8 +242,10 @@ fn status_of(job: &mut ZhidaoPlayerJob) -> OfficialPlayerStatus {
             "已切换系统浏览器；外部浏览器关闭时间无法自动观测".into()
         } else if job.state == "stopped" {
             "官方播放器已停止".into()
-        } else {
+        } else if job.exit_code == Some(0) {
             "官方播放器已关闭；可核验服务器课程记录".into()
+        } else {
+            format!("官方播放器异常退出（退出码 {}）；请检查网页或 WebView2，学习记录以服务器为准", job.exit_code.map_or("未知".into(), |code| code.to_string()))
         },
     }
 }

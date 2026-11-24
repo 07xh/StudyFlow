@@ -85,6 +85,11 @@ def main() -> int:
         if mode == "--zhidao-verify-one" and len(sys.argv) == 3:
             from studyflow.platforms.zhidao.verify_entry import main as verify_main
             return verify_main([sys.argv[2]])
+        if mode == "--zhidao-login-env-check" and len(sys.argv) == 2:
+            from studyflow.platforms.zhidao.login_environment import offline_login_probe
+            result = offline_login_probe()
+            print("[ZHS_LOGIN_INIT_OK]" if result == 0 else "[ZHS_LOGIN_INIT_FAILED]")
+            return result
         if mode == "--zhidao-env-check" and len(sys.argv) == 2:
             from importlib.metadata import PackageNotFoundError, version
             try:

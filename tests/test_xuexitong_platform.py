@@ -55,7 +55,7 @@ def test_cookie_validation_does_not_expose_values():
         credentials.parse_cookie_header("_uid=123\r\nx: bad")
 
 
-def test_windows_logout_does_not_revive_environment_cookie(monkeypatch):
+def test_windows_logout_does_not_revive_environment_cookie(monkeypatch, tmp_path):
     import sys
     from types import SimpleNamespace
 
@@ -73,6 +73,9 @@ def test_windows_logout_does_not_revive_environment_cookie(monkeypatch):
         errors=SimpleNamespace(PasswordDeleteError=KeyError),
     )
     monkeypatch.setitem(sys.modules, "keyring", fake_keyring)
+    from studyflow.services import session_storage
+    monkeypatch.setattr(session_storage, "crypt", lambda data, protect: data)
+    monkeypatch.setattr(credentials, "_store", lambda: session_storage.SessionStore("xuexitong", credentials.SERVICE, credentials.ACCOUNT, tmp_path))
     monkeypatch.setattr(credentials, "os", SimpleNamespace(
         name="nt", environ={"STUDYFLOW_XUEXITONG_COOKIE": "_uid=999; fid=99"},
     ))

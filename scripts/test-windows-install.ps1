@@ -75,6 +75,8 @@ try {
         if (-not (Test-Path -LiteralPath $bridge)) { throw 'Installed bundled Python sidecar missing' }
         & $bridge --zhidao-env-check
         if ($LASTEXITCODE -ne 0) { throw 'Installed ZHS runtime failed' }
+        & $bridge --zhidao-login-env-check
+        if ($LASTEXITCODE -ne 0) { throw 'Installed ZHS fresh Unicode profile login initialization failed' }
         & $bridge --yuketang-env-check
         if ($LASTEXITCODE -ne 0) { throw 'Installed Rain Classroom runtime failed' }
         $ping = Invoke-InstalledJsonlProbe '{"id":"installed-smoke","version":1,"operation":"ping"}'

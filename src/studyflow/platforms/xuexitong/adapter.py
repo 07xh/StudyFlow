@@ -87,7 +87,11 @@ def _embedded_marg(text: str) -> dict[str, Any] | None:
 
 class XuexitongAdapter:
     def connection_info(self) -> ConnectionInfo:
-        if credentials.load() is None:
+        try:
+            stored = credentials.load()
+        except credentials.SessionStorageError:
+            return ConnectionInfo(Platform.XUEXITONG, False, "本机登录凭据存储异常，请检查用户权限")
+        if stored is None:
             return ConnectionInfo(Platform.XUEXITONG, False, "未导入学习通登录会话")
         try:
             self._course_html()

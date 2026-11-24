@@ -276,7 +276,10 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {"id": request_id, "ok": False, "error": "UCAMPUS_MONITOR_UNAVAILABLE"}
     if operation == "ucampus.session.info":
-        return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
+        try:
+            return {"id": request_id, "ok": True, "data": ucampus_credentials.status()}
+        except ucampus_credentials.SessionStorageError:
+            return {"id": request_id, "ok": False, "error": "UCAMPUS_CREDENTIAL_STORAGE_FAILED"}
     if operation == "ucampus.session.login":
         try:
             # The username/password only live inside this one request. Persist

@@ -12,6 +12,7 @@ const labels:Record<ZhidaoQrStage,string>={
   cancelled:"已取消扫码登录",failed:"登录任务未完成，请检查运行环境",
   "environment-error":"知到扫码组件不可用，请检查本地安装"
 };
+const reasonLabels:Record<string,string>={QR_STORAGE:"无法清理临时二维码，请检查用户目录权限",RUNTIME_MISSING:"内置登录运行时缺失，请重新安装",WORKER_START:"无法启动扫码子进程，请检查安装与系统权限",WORKER_EXIT:"扫码子进程异常退出，请运行连接诊断",LOGIN_INIT:"知到首次初始化失败，请检查用户目录、配置及运行环境"};
 const terminal=new Set<ZhidaoQrStage>(["verified","unavailable","rejected","expired","cancelled","failed","environment-error"]);
 type Props={dark:boolean;onClose:()=>void;onVerified:()=>void};
 
@@ -99,7 +100,7 @@ export default function ZhidaoQrDialog({dark,onClose,onVerified}:Props){
         ?<img className="qr-image" src={"data:image/png;base64,"+image} alt="本次知到登录二维码" draggable={false}/>
         :<div className="qr-placeholder"><ShieldCheck size={40}/><span>{state.stage==="ready"?"二维码图片尚未生成":labels[state.stage]}</span></div>}</div>
       <p className="qr-stage" role="status">{labels[state.stage]}</p>
-      {message&&<p className="qr-error" role="alert">{message}</p>}
+      {(state.reason||message)&&<p className="qr-error" role="alert">{(state.reason&&reasonLabels[state.reason])||message}</p>}
       <div className="qr-footer">
         <button className="secondary" onClick={()=>void cancel()}>取消</button>
         <button className="secondary" disabled={busy||!terminal.has(state.stage)} onClick={()=>void retry()}>

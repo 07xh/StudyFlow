@@ -114,10 +114,10 @@ def start() -> dict:
         # its finally block never ran. Clean the previous attempt before
         # replacing _TOKEN, otherwise that image becomes unreachable.
         if not _cleanup_attempt(_TOKEN):
-            return {"stage": "environment-error"}
+            return {"stage": "environment-error", "reason": "QR_STORAGE"}
         python = python_executable()
         if not python.is_file():
-            return {"stage": "environment-error"}
+            return {"stage": "environment-error", "reason": "RUNTIME_MISSING"}
         token = secrets.token_hex(16)
         if _qr_path(token).exists():
             return {"stage": "environment-error"}
@@ -130,13 +130,17 @@ def start() -> dict:
                          else [str(python), "-m", "studyflow.platforms.zhidao.qr_login_core", token])
             environment = os.environ.copy()
             environment["STUDYFLOW_QR_STATUS_DIR"] = str(installation_root())
+            # An independently started frozen worker must not depend on the
+            # extraction directory or lifetime of another PyInstaller process.
+            if getattr(sys, "frozen", False):
+                environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
             worker = subprocess.Popen(
                 arguments, cwd=str(Path.home()), env=environment,
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, creationflags=flags,
             )
         except OSError:
-            return {"stage": "environment-error"}
+            return {"stage": "environment-error", "reason": "WORKER_START"}
         _TOKEN, _STARTED, _WORKER, _FINAL_STAGE = token, started, worker, None
         return {"stage": "requesting"}
 
@@ -153,7 +157,12 @@ def status() -> dict:
                 stage = _FINAL_STAGE or "failed"
             _FINAL_STAGE = stage
             _cleanup_qr(_TOKEN)
-            return {"stage": stage, "image_png_base64": None}
+            result = {"stage": stage, "image_png_base64": None}
+            if stage == "failed":
+                result["reason"] = "WORKER_EXIT"
+            elif stage == "environment-error":
+                result["reason"] = "LOGIN_INIT"
+            return result
         stage = stage or "requesting"
         image = _fresh_image(_TOKEN, _STARTED) if stage in ("ready", "requesting") else None
         return {"stage": stage, "image_png_base64": image}

@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 use tauri::menu::{Menu, MenuItem};
@@ -840,10 +841,26 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
     };
 }
 
+#[derive(Default)]
+struct ShutdownState(AtomicBool);
+
+// Native close/tray callbacks execute on the window event loop. Never wait
+// for child processes or synchronous IPC there: WebView teardown must remain
+// responsive. All exit entry points share one idempotent cleanup request.
+fn request_shutdown(app: &tauri::AppHandle) {
+    if app.state::<ShutdownState>().0.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        shutdown_owned_services(&app);
+        app.exit(0);
+    });
+}
+
 #[tauri::command]
 fn studyflow_exit(app: tauri::AppHandle) {
-    shutdown_owned_services(&app);
-    app.exit(0);
+    request_shutdown(&app);
 }
 
 fn studyflow_release_url(tag: Option<&str>) -> Result<String, String> {
@@ -1017,6 +1034,7 @@ pub fn run() {
         .manage(Arc::new(Mutex::new(None::<QrBridgeWorker>)))
         .manage(legacy_tasks::LegacyTasks::default())
         .manage(zhidao_player::ZhidaoPlayerManager::default())
+        .manage(ShutdownState::default())
         .setup(|app| {
             // Built-in Windows tray; no OCS UI or second browser/HTTP listener.
             let show = MenuItem::with_id(app, "tray-show", "显示学序", true, None::<&str>)?;
@@ -1033,8 +1051,7 @@ pub fn run() {
                     match event.id().as_ref() {
                         "tray-show" => show_main_from_tray(app),
                         "tray-quit" => {
-                            shutdown_owned_services(app);
-                            app.exit(0);
+                            request_shutdown(app);
                         }
                         _ => {}
                     }
@@ -1070,8 +1087,7 @@ pub fn run() {
                     // need to exercise real exit without force-killing the app.
                     api.prevent_close();
                     if std::env::args_os().any(|arg| arg == "--exit-on-close") {
-                        shutdown_owned_services(window.app_handle());
-                        window.app_handle().exit(0);
+                        request_shutdown(window.app_handle());
                     } else {
                         let _ = window.hide();
                     }
@@ -1079,7 +1095,7 @@ pub fn run() {
                 tauri::WindowEvent::Destroyed => {
                     // Last-resort cleanup if the main WebView is actually
                     // destroyed by the OS or another native path.
-                    shutdown_owned_services(window.app_handle());
+                    request_shutdown(window.app_handle());
                 }
                 _ => {}
             }

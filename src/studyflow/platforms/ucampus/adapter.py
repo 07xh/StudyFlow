@@ -129,7 +129,11 @@ def parse_catalog(payload: Any) -> list[Course]:
 
 class UCampusAdapter:
     def connection_info(self) -> ConnectionInfo:
-        if credentials.load() is None:
+        try:
+            stored = credentials.load()
+        except credentials.SessionStorageError:
+            return ConnectionInfo(Platform.UCAMPUS, False, "本机登录凭据存储异常，请检查用户权限")
+        if stored is None:
             return ConnectionInfo(Platform.UCAMPUS, False, "尚未配置 U校园会话")
         try:
             courses = self.list_courses()

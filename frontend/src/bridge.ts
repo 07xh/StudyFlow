@@ -446,7 +446,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "UCAMPUS_PROGRESS_FORMAT_UNVERIFIED": return "U校园返回的数据结构与已知开源接口不一致，未推断任何进度。";
     case "UCAMPUS_PROGRESS_UNAVAILABLE": return "U校园单元/任务进度接口请求失败，请检查账号、网络和课程。";
     case "INVALID_UCAMPUS_CONFIG": return "U校园配置不符合要求：仅支持官方 HTTPS 域名与正确格式的登录会话。";
-    case "UCAMPUS_CREDENTIAL_STORAGE_FAILED": return "U校园登录信息未能写入 Windows 凭据管理器。";
+    case "UCAMPUS_CREDENTIAL_STORAGE_FAILED": return "U校园本机加密会话无法读取或保存，请检查用户目录权限。";
     case "UCAMPUS_INVALID_FABRICATED_PARAMETER": return "虚构心跳参数超出允许范围。";
     case "UCAMPUS_INVALID_FABRICATED_TARGET": return "课程资源标识校验失败，已停止发送。";
     case "UCAMPUS_INVALID_FABRICATED_PAYLOAD": return "虚构心跳包字段校验失败，已停止发送。";
@@ -462,10 +462,10 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_XUEXITONG_SETTINGS": return "学习通参数超出允许范围，原设置未修改。";
     case "XUEXITONG_SETTINGS_UNAVAILABLE": return "学习通本机设置保存失败，请检查本地文件权限。";
     case "INVALID_XUEXITONG_COOKIE": return "学习通登录会话格式不正确，请确认包含有效的 _uid/UID。";
-    case "XUEXITONG_CREDENTIAL_STORAGE_FAILED": return "学习通登录会话未能写入 Windows 凭据管理器。";
+    case "XUEXITONG_CREDENTIAL_STORAGE_FAILED": return "学习通本机加密会话无法读取或保存，请检查用户目录权限。";
     case "INVALID_IPC_RESPONSE": return "本机数据响应不符合协议，课程未加载。";
     case "PLATFORM_NOT_READY": return "真实平台课程读取失败；请检查账号、网络和原版运行时。";
-    case "CREDENTIAL_STORAGE_FAILED": return "Windows 凭据管理器保存失败。";
+    case "CREDENTIAL_STORAGE_FAILED": return "本机加密登录凭据无法读取或保存，请检查用户目录权限。";
     case "INVALID_YUKETANG_CONFIGURATION": return "雨课堂配置格式无效：请核对 Session ID、CSRF Token，并确保课堂 ID 和学校 ID 均为 1–24 位数字。";
     case "YUKETANG_SETTINGS_UNAVAILABLE": return "原版雨课堂配置未能读取或保存；旧配置未被覆盖。";
     case "INVALID_YUKETANG_SETTINGS": return "雨课堂参数不符合原版可用范围，未保存。";
@@ -518,7 +518,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "XUEXITONG_INTERNAL_ERROR": return "本地心跳服务内部错误，请查看运行日志。";
     case "XUEXITONG_UNKNOWN_OPERATION": return "不支持的心跳操作。";
     case "XUEXITONG_NO_TARGET_FOR_DTYPE": return "所选任务类型下没有可运行的任务点。";
-    case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
+    case "COOKIE_IMPORT_FAILED": return "Cookie 登录组件异常或无法完成服务器核验，请运行连接诊断。";
     default: return "本机服务调用失败，请检查运行环境。";
   }
 }
@@ -533,7 +533,7 @@ export async function openLegacyZhidao(): Promise<void> {
 export type ZhidaoQrStage = "idle" | "busy" | "requesting" | "ready" | "scanned" |
   "confirming" | "verified" | "unavailable" | "rejected" | "expired" |
   "cancelled" | "failed" | "environment-error";
-export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null};
+export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null;reason?:string};
 export function zhidaoQrCommand(action:"start"|"status"|"cancel"):Promise<ZhidaoQrState>{
   const operation = ({start:"zhidao.qr.start",status:"zhidao.qr.status",
     cancel:"zhidao.qr.cancel"} as const)[action];

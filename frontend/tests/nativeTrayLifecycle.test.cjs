@@ -14,7 +14,7 @@ test("StudyFlow owns one native tray with an explicit restore and quit",()=>{
   assert.match(source,/MenuItem::with_id\(app, "tray-quit", "完全退出学序"/);
   assert.match(source,/\.show_menu_on_left_click\(false\)/);
   assert.match(source,/"tray-show" => show_main_from_tray\(app\)/);
-  assert.match(source,/"tray-quit" => \{\s*shutdown_owned_services\(app\);\s*app\.exit\(0\);/);
+  assert.match(source,/"tray-quit" => \{\s*request_shutdown\(app\);/);
   assert.match(source,/let _ = window\.unminimize\(\);\s*let _ = window\.show\(\);\s*let _ = window\.set_focus\(\);/);
   assert.match(source,/show_main_from_tray\(tray\.app_handle\(\)\)/);
   assert.doesNotMatch(source,/OCSWorker|ocsjs|localhost:8194/);
@@ -29,10 +29,18 @@ test("close hides the existing main window but explicit exit still cleans up Sid
   // graceful app exit instead of merely hiding it.
   assert.match(source,/api\.prevent_close\(\);/);
   assert.match(source,/std::env::args_os\(\)\.any\(\|arg\| arg == "--exit-on-close"\)/);
-  assert.match(source,/if std::env::args_os\(\)\.any\([^)]+\) \{\s*shutdown_owned_services\(window\.app_handle\(\)\);\s*window\.app_handle\(\)\.exit\(0\);\s*\} else \{\s*let _ = window\.hide\(\);/s);
-  assert.match(source,/tauri::WindowEvent::Destroyed => \{[^}]*shutdown_owned_services\(window\.app_handle\(\)\);/s);
-  assert.match(source,/fn studyflow_exit\(app: tauri::AppHandle\) \{\s*shutdown_owned_services\(&app\);\s*app\.exit\(0\);/);
+  assert.match(source,/if std::env::args_os\(\)\.any\([^)]+\) \{\s*request_shutdown\(window\.app_handle\(\)\);\s*\} else \{\s*let _ = window\.hide\(\);/s);
+  assert.match(source,/tauri::WindowEvent::Destroyed => \{[^}]*request_shutdown\(window\.app_handle\(\)\);/s);
+  assert.match(source,/fn studyflow_exit\(app: tauri::AppHandle\) \{\s*request_shutdown\(&app\);/);
   assert.match(shell,/aria-label="关闭窗口（收起到系统托盘）"/);
   assert.match(shell,/getCurrentWindow\(\)\.close\(\)/);
   assert.doesNotMatch(shell,/\bnew Window\(|window\.open\(/);
+});
+
+
+test("explicit exit cleanup is single-flight and off the native event loop",()=>{
+  const source=read("src-tauri/src/lib.rs");
+  assert.match(source,/\.manage\(ShutdownState::default\(\)\)/);
+  assert.match(source,/\.swap\(true, Ordering::AcqRel\) \{\s*return;/);
+  assert.match(source,/std::thread::spawn\(move \|\| \{\s*shutdown_owned_services\(&app\);\s*app\.exit\(0\);/);
 });

@@ -49,3 +49,42 @@ def test_cookie_import_wrapper_reuses_original_modules():
     assert "Convert-ZhidaoCookieText" in wrapper
     assert "Begin-ZhidaoCookieImport" in wrapper
     assert "Complete-ZhidaoCookieImport" in wrapper
+
+
+def test_native_cookie_validation_scopes_and_rejects_unsafe_input():
+    import pytest
+    from studyflow.platforms.zhidao.cookie_import import parse_cookie
+    assert parse_cookie("Cookie: session=local-test", "text") == [
+        {"name": "session", "value": "local-test", "domain": ".zhihuishu.com", "path": "/"}]
+    assert parse_cookie('[{"name":"session","value":"local-test"}]', "file")[0]["domain"] == ".zhihuishu.com"
+    for value in ('[{"name":"x","value":"v","domain":"example.org"}]', "x=1;x=2", "x=1\ny=2"):
+        with pytest.raises(ValueError):
+            parse_cookie(value, "text")
+
+
+def test_cookie_auth_does_not_replace_prior_session_until_verified(monkeypatch, tmp_path):
+    import sys
+    from types import ModuleType, SimpleNamespace
+    from studyflow.platforms.zhidao import cookie_import
+    directory = tmp_path / ".zhs"
+    directory.mkdir()
+    destination = directory / "cookies.json"
+    destination.write_bytes(b"prior-session")
+    status = SimpleNamespace(OK="ok", EXPIRED="expired", UNAVAILABLE="unavailable")
+    candidate = SimpleNamespace(cookies=None, close=lambda: None)
+    for name in ("loguru", "zhs", "zhs.api", "zhs.api.session_auth", "zhs.utils", "zhs.utils.cookie"):
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+    sys.modules["loguru"].logger = SimpleNamespace(remove=lambda: None)
+    auth = sys.modules["zhs.api.session_auth"]
+    auth.SessionStatus = status
+    sys.modules["zhs.utils.cookie"].list_to_cookies = lambda rows: rows
+    monkeypatch.setattr(cookie_import, "initialize_login", lambda home: (None, candidate, directory))
+    monkeypatch.setattr(cookie_import, "save_cookies_atomic", lambda path, cookies: path.write_bytes(b"verified-session"))
+    for outcome in (status.EXPIRED, status.UNAVAILABLE):
+        auth.verify_session = lambda session: outcome
+        result = cookie_import.import_cookie("session=local-test", "text")
+        assert not result["imported"] and destination.read_bytes() == b"prior-session"
+        assert "local-test" not in str(result)
+    auth.verify_session = lambda session: status.OK
+    assert cookie_import.import_cookie("session=local-test", "text")["imported"]
+    assert destination.read_bytes() == b"verified-session"

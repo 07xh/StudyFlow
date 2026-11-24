@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "studyflow"
-version = "0.1.1rc67"
+version = "0.1.1rc68"
 description = "学序 StudyFlow：知到、雨课堂、学习通与 U校园 Windows 学习客户端"
 requires-python = ">=3.10"
 dependencies = ["requests>=2.31,<3", "python-dotenv>=1,<2", "beautifulsoup4>=4.12,<5", "cryptography>=42,<50"]
