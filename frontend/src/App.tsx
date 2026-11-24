@@ -590,7 +590,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   };
   const renderSettingsNavigation=(platform:Platform)=>
     <nav className="sf-settings-menu" aria-label="平台设置分类">
-      {([["account","账号与连接"],["parameters",platform==="xuexitong"?"运行参数预设":platform==="ucampus"?"只读接口设置":"播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
+      {([["account","账号与连接"],["parameters",platform==="ucampus"?"只读接口说明":"平台默认参数"],["advanced","高级管理"]] as const).map(([section,label])=>
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
           onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
     </nav>;
@@ -606,7 +606,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={true}>
       {renderZhidaoModeSwitch()}
       <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-      <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「参数设置」中调整；此处仅管理官方播放器的默认参数。</p>
+      <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「本课参数」中调整；此处仅管理官方播放器的默认参数。</p>
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
@@ -662,7 +662,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         }}>账号与连接</button>
         <button type="button" className="secondary sf-platform-settings-action"
           onClick={()=>openPlatformSettings(platform,"parameters")}>
-          <SlidersHorizontal size={15}/>参数设置
+          <SlidersHorizontal size={15}/>平台设置
         </button>
         <button type="button" className="secondary"
           disabled={!desktop||Boolean(busy)||syncFeedback[platform].phase==="syncing"||platforms[platform].status!=="connected"}
@@ -820,7 +820,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
                 openPlatformSettings(course.platform,"parameters");
               }
             }}>
-            <SlidersHorizontal size={15}/>参数设置
+            <SlidersHorizontal size={15}/>{course.platform==="zhidao"&&mode==="zhs-original"?"本课参数":"平台设置"}
           </button>
           <button className="secondary sf-course-logs-action" type="button"
             onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
@@ -1067,6 +1067,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       {globalSettingsTab==="questionbank"&&<QuestionBankSettingsPanel desktop={desktop&&consentAccepted} dark={dark}/>}
       {globalSettingsTab==="general"&&<section className="settings-card">
         <h3>外观</h3>
+        <p className="sf-muted">外观偏好即时生效，无需另行保存。</p>
         <div className="sf-settings-line">
           <div><strong>界面主题</strong></div>
           <ThemeModeSelector mode={mode} onChange={setMode}/>
