@@ -2272,3 +2272,13 @@
 .sf-shell .sf-mastery-start-shortcut button{display:inline-flex;align-items:center;gap:6px}
 .sf-shell .sf-mastery-course-notice{font-size:13px;line-height:1.7;color:var(--text)}
 .sf-shell .sf-mastery-course-notice p{color:var(--muted)}
+
+/* Shared history and log filters; keep labels visible and wrap on narrow windows. */
+.sf-shell .sf-activity-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 12px;margin:0 0 12px;min-width:0}
+.sf-shell .sf-activity-toolbar label{display:grid;gap:4px;min-width:0;flex:0 1 148px;font-size:11px;color:var(--muted)}
+.sf-shell .sf-activity-toolbar .sf-activity-search{flex:1 1 220px}
+.sf-shell .sf-activity-toolbar :is(input,select){width:100%;min-width:0;min-height:34px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;color:var(--text);background:var(--panel-raised);font-size:12px}
+.sf-shell .sf-activity-toolbar :is(input,select):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sf-shell .sf-activity-toolbar>[role="status"]{align-self:center;font-size:11px;white-space:nowrap}
+.sf-shell .sf-log-course{flex:none;align-self:center}
+@media(max-width:650px){.sf-shell .sf-activity-toolbar label{flex:1 1 130px}.sf-shell .sf-activity-toolbar .sf-activity-search{flex-basis:100%}.sf-shell .sf-log-course{margin-left:auto}}

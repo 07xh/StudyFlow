@@ -26,3 +26,13 @@ export function courseEvents(events:ActivityEntry[],platform:Platform,courseId:s
 export function executionEvents(events:ActivityEntry[]):ActivityEntry[]{
  return events.filter(event=>event.runner||/启动|停止|核验|同步学习进度/.test(event.action));
 }
+
+export type ActivityFilter={platform:string;result:EventResult|"all";query:string};
+export function filterActivity(events:ActivityEntry[],filter:ActivityFilter):ActivityEntry[]{
+ const query=filter.query.trim().toLocaleLowerCase();
+ return events.filter(event=>
+  (filter.platform==="all"||event.platform===filter.platform)&&
+  (filter.result==="all"||event.result===filter.result)&&
+  (!query||[event.platform,event.action,event.detail,event.courseId??""].some(value=>value.toLocaleLowerCase().includes(query))));
+}
+export const activityResultLabels:Record<EventResult,string>={success:"成功",warning:"异常",info:"信息"};
