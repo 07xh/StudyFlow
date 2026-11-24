@@ -12,7 +12,7 @@ const typeLabels:Record<string,string>={
 function labelType(type:string){return typeLabels[type]??type;}
 export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop:boolean}){
   const [units,setUnits]=useState<UCampusUnit[]>([]);
-  const [busy,setBusy]=useState(false);
+  const [busy,setBusy]=useState(desktop);
   const [error,setError]=useState("");
   const [revision,setRevision]=useState(0);
   const [expanded,setExpanded]=useState<string|null>(null);
@@ -21,11 +21,12 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
   const [taskError,setTaskError]=useState("");
   const [filter,setFilter]=useState<"all"|"pending"|"completed"|"unknown">("all");
   const [search,setSearch]=useState("");
+  const [unitSearch,setUnitSearch]=useState("");
 
   useEffect(()=>{
     let active=true;
     setUnits([]);setExpanded(null);setTasks([]);setError("");
-    if(!desktop)return()=>{active=false;};
+    if(!desktop){setBusy(false);return()=>{active=false;};}
     setBusy(true);
     void request<UCampusUnit[]>({operation:"ucampus.units.list",course_id:course.course_id})
       .then(list=>{if(!active)return;if(!Array.isArray(list))throw Error("INVALID_IPC_RESPONSE");setUnits(list);})
@@ -37,7 +38,7 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
   useEffect(()=>{
     let active=true;
     setTasks([]);setTaskError("");
-    if(!desktop||!expanded)return()=>{active=false;};
+    if(!desktop||!expanded){setTaskBusy(false);return()=>{active=false;};}
     setTaskBusy(true);
     void request<UCampusTask[]>({operation:"ucampus.unit.tasks",course_id:course.course_id,unit_id:expanded})
       .then(list=>{if(!active)return;if(!Array.isArray(list))throw Error("INVALID_IPC_RESPONSE");setTasks(list);})
@@ -46,6 +47,9 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
     return()=>{active=false;};
   },[course.course_id,desktop,expanded,revision]);
 
+  const unitQuery=unitSearch.trim().toLowerCase();
+  const visibleUnits=units.map((unit,index)=>({unit,title:unit.title||"单元 "+(index+1)}))
+    .filter(({unit,title})=>title.toLowerCase().includes(unitQuery)||unit.id.toLowerCase().includes(unitQuery));
   const normalizedSearch=search.trim().toLowerCase();
   const visible=tasks.filter(t=>(filter==="all"||
     (filter==="completed"&&t.completed===true)||
@@ -59,27 +63,32 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
     <div className="section-head sf-xxt-heading">
       <div>
         <h3>单元与任务</h3>
-        <p className="sf-muted">已读取 {units.length} 个单元 · 单元完成率尚未核验</p>
+        <p className="sf-muted">{busy?"正在读取单元…":error?"单元读取失败":!desktop?"请在 Windows 桌面版读取":`显示 ${visibleUnits.length} / ${units.length} 个单元`}</p>
       </div>
       <button type="button" className="secondary" disabled={!desktop||busy}
-        onClick={()=>{setRevision(v=>v+1);}}>刷新</button>
+        onClick={()=>{setBusy(true);setExpanded(null);setTasks([]);setError("");setRevision(v=>v+1);}}>{busy?"读取中…":"刷新单元"}</button>
     </div>
-    <p className="sf-muted">数据来自 U校园AI 课程进度接口；任务的“已通过”仅指服务器返回的 pass 标记，不代表整门课程完成。</p>
+    <div className="sf-xxt-filters" role="group" aria-label="单元筛选">
+      <label className="sf-xxt-search"><span>搜索单元</span>
+        <input type="search" value={unitSearch} onChange={e=>setUnitSearch(e.target.value)} placeholder="单元名称或 ID"/>
+      </label>
+    </div>
     {busy&&<p role="status">正在读取课程单元…</p>}
     {error&&<p role="alert">{error}</p>}
-    {!busy&&!error&&units.length===0&&<p role="status" className="sf-muted">服务器未返回可识别的课程单元。</p>}
+    {!desktop&&<p role="status" className="sf-muted">请在 Windows 桌面版读取真实课程单元。</p>}
+    {desktop&&!busy&&!error&&units.length===0&&<p role="status" className="sf-muted">服务器未返回可识别的课程单元。</p>}
+    {!busy&&!error&&units.length>0&&visibleUnits.length===0&&<p role="status" className="sf-muted">没有符合搜索条件的单元。</p>}
     <div className="sf-xxt-chapters">
-      {units.map((unit,index)=><article className="sf-xxt-chapter" key={unit.id}>
+      {visibleUnits.map(({unit,title})=><article className="sf-xxt-chapter" key={unit.id}>
         <div className="sf-xxt-chapter-head">
           <div className="sf-xxt-chapter-title">
-            <strong>{unit.title||"单元 "+(index+1)}</strong>
-            <span className="sf-xxt-chapter-id">#{unit.id}</span>
+            <strong title={title+" · ID: "+unit.id}>{title}</strong>
           </div>
           <span className="sf-xxt-state unknown">单元状态待核验</span>
           <button type="button" className="secondary"
-            aria-expanded={expanded===unit.id}
+            aria-expanded={expanded===unit.id} aria-label={title+"："+(expanded===unit.id?"收起任务":"查看任务")}
             disabled={!desktop||busy}
-            onClick={()=>{setFilter("all");setSearch("");setExpanded(v=>v===unit.id?null:unit.id);}}>
+            onClick={()=>{const next=expanded===unit.id?null:unit.id;setTasks([]);setTaskError("");setTaskBusy(next!==null);setFilter("all");setSearch("");setExpanded(next);}}>
             {expanded===unit.id?"收起":"查看任务"}
           </button>
         </div>
@@ -97,12 +106,12 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
               </select>
             </label>
           </div>
-          <p className="sf-muted">{unit.title||"单元 "+(index+1)} · 任务按服务器返回的资源标识展示</p>
+          {!taskBusy&&!taskError&&tasks.length>0&&<p className="sf-xxt-task-summary">显示 {visible.length} / {tasks.length} 项任务</p>}
           {taskBusy&&<p role="status">正在读取本单元任务…</p>}
           {taskError&&<p role="alert">{taskError}</p>}
           {!taskBusy&&!taskError&&tasks.length===0&&<p className="sf-muted" role="status">本单元未返回任务。</p>}
           <ul className="sf-xxt-task-list">
-            {!taskBusy&&visible.map(t=><li className="sf-xxt-task-item" key={t.id}>
+            {!taskBusy&&!taskError&&visible.map(t=><li className="sf-xxt-task-item" key={t.id}>
               <span className="sf-xxt-task-type">{labelType(t.type)}</span>
               <strong>{t.title||t.id}</strong>
               <span className={"sf-xxt-state "+(t.completed===true?"completed":t.completed===false?"pending":"unknown")}>
@@ -116,8 +125,6 @@ export function UCampusCourseDetailPanel({course,desktop}:{course:Course;desktop
         </div>}
       </article>)}
     </div>
-    <p className="sf-muted sf-xxt-evidence-note">
-      当前仅支持课程与任务状态只读核验。学习内容、媒体播放与本地心跳发送仍待真实协议验收。
-    </p>
+    <details className="sf-technical-note"><summary>数据口径</summary><p className="sf-muted sf-xxt-evidence-note">当前仅提供课程与任务状态的只读展示。任务“已通过”来自服务器 pass 标记，不代表整门课程完成。</p></details>
   </section>;
 }
