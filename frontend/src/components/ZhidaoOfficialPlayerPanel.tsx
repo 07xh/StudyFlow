@@ -111,7 +111,7 @@ export function ZhidaoOfficialPlayerPanel({courses,desktop,onEvent,courseId,deta
       if(revision===statusRevision.current&&!actionInFlight.current){
         // Last observation is not live playback while native status is unknown.
         setStatus(previous=>{
-          const unknown={...previous,positionSeconds:null,durationSeconds:null,observedAt:null};
+          const unknown={...previous,event:null,positionSeconds:null,durationSeconds:null,visible:null,observedAt:null,message:"播放器状态暂不可读取；不代表播放已停止"};
           return sameStatusSnapshot(previous,unknown)?previous:unknown;
         });
         setMessage(error instanceof Error&&error.message==="PLAYER_STATUS_TIMEOUT"

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from studyflow.core.models import Course, Platform
 from studyflow.core.platform_api import ConnectionInfo
-from .credentials import YuketangConfig, load
+from .credentials import YuketangConfig, load, SessionStorageError
 from .readonly import YuketangReadOnly
 
 
@@ -43,7 +43,10 @@ def _course_name(info: dict) -> str:
 
 class YuketangAdapter:
     def connection_info(self) -> ConnectionInfo:
-        config = load()
+        try:
+            config = load()
+        except SessionStorageError:
+            return ConnectionInfo(Platform.YUKETANG, False, "本机登录凭据存储异常，请检查用户权限")
         if config is None:
             return ConnectionInfo(Platform.YUKETANG, False, "未配置有效雨课堂登录会话")
         try:

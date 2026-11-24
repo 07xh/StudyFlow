@@ -1,4 +1,4 @@
-"""Windows Credential Manager storage of the user's own U校园 session."""
+"""Windows DPAPI storage of the user's own U校园 session."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,6 +11,12 @@ from urllib.parse import urlsplit
 
 SERVICE = "StudyFlow.UCampus"
 ACCOUNT = "local-session"
+
+from studyflow.services.session_storage import SessionStore, SessionStorageError
+
+
+def _store():
+    return SessionStore("ucampus", SERVICE, ACCOUNT)
 ALLOWED_HOSTS = {
     "ai": frozenset(("uai.unipus.cn", "ucloud.unipus.cn", "ucontent.unipus.cn")),
     "classic": frozenset(("u.unipus.cn", "ucontent.unipus.cn")),
@@ -71,33 +77,33 @@ class UCampusConfig:
                    authorization=auth, annotator_token=annotator, school_id=school)
 
 
+def _decode(value: str) -> UCampusConfig:
+    return UCampusConfig.from_dict(json.loads(value))
+
+
 def load() -> UCampusConfig | None:
     if os.name != "nt":
         return None
-    try:
-        import keyring
-        secret = keyring.get_password(SERVICE, ACCOUNT)
-        return UCampusConfig.from_dict(json.loads(secret)) if secret else None
-    except Exception:
+    secret = _store().load(validate=_decode)
+    if secret is None:
         return None
+    try:
+        return _decode(secret)
+    except (ValueError, TypeError):
+        raise SessionStorageError() from None
 
 
 def save(data: dict) -> None:
     config = UCampusConfig.from_dict(data)
     if os.name != "nt":
-        raise RuntimeError("WINDOWS_CREDENTIAL_STORAGE_REQUIRED")
-    import keyring
-    keyring.set_password(SERVICE, ACCOUNT, json.dumps(config.__dict__, ensure_ascii=False))
+        raise SessionStorageError()
+    _store().save(json.dumps(config.__dict__, ensure_ascii=False))
 
 
 def clear() -> None:
     if os.name != "nt":
-        raise RuntimeError("WINDOWS_CREDENTIAL_STORAGE_REQUIRED")
-    import keyring
-    try:
-        keyring.delete_password(SERVICE, ACCOUNT)
-    except keyring.errors.PasswordDeleteError:
-        pass
+        raise SessionStorageError()
+    _store().clear()
 
 
 def _jwt_lifetime_state(config: UCampusConfig | None) -> str:

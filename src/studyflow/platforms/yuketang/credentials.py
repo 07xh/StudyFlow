@@ -1,4 +1,4 @@
-"""Windows Credential Manager backed configuration for a user's own YKT login.
+"""Windows DPAPI backed configuration for a user's own YKT login.
 
 Credentials are never saved in the StudyFlow source tree or printed to stdout.
 The original Rain Classroom installation and its .env remain unchanged.
@@ -11,6 +11,12 @@ import os
 
 SERVICE = "StudyFlow.RainClassroom"
 ACCOUNT = "local-session"
+
+from studyflow.services.session_storage import SessionStore, SessionStorageError
+
+
+def _store():
+    return SessionStore("yuketang", SERVICE, ACCOUNT)
 
 
 @dataclass(frozen=True)
@@ -40,8 +46,7 @@ class YuketangConfig:
                    classroom_id=classroom_id, university_id=university_id, sign=sign)
 
 
-def load() -> YuketangConfig | None:
-    # Support the existing external environment without modifying legacy .env.
+def _environment_config() -> YuketangConfig | None:
     existing = {
         "session_id": os.getenv("YKT_SESSION_ID", ""),
         "csrf_token": os.getenv("YKT_CSRF_TOKEN", ""),
@@ -49,36 +54,41 @@ def load() -> YuketangConfig | None:
         "university_id": os.getenv("YKT_UNIVERSITY_ID", ""),
         "sign": os.getenv("YKT_SIGN", ""),
     }
-    if all(existing[k] for k in ("session_id", "csrf_token", "classroom_id", "university_id")):
+    try:
         return YuketangConfig.from_dict(existing)
+    except ValueError:
+        return None
+
+
+def _decode(value: str) -> YuketangConfig:
+    return YuketangConfig.from_dict(json.loads(value))
+
+
+def load() -> YuketangConfig | None:
+    existing = _environment_config()
     if os.name != "nt":
+        return existing
+    fallback = json.dumps(existing.__dict__, ensure_ascii=False) if existing else None
+    blob = _store().load(fallback=fallback, validate=_decode)
+    if blob is None:
         return None
     try:
-        import keyring
-        blob = keyring.get_password(SERVICE, ACCOUNT)
-        if not blob:
-            return None
-        return YuketangConfig.from_dict(json.loads(blob))
-    except Exception:
-        return None
+        return _decode(blob)
+    except (ValueError, TypeError):
+        raise SessionStorageError() from None
 
 
 def save(configuration: dict) -> None:
     cfg = YuketangConfig.from_dict(configuration)
     if os.name != "nt":
-        raise RuntimeError("Credential storage requires Windows")
-    import keyring
-    keyring.set_password(SERVICE, ACCOUNT, json.dumps(cfg.__dict__, ensure_ascii=False))
+        raise SessionStorageError()
+    _store().save(json.dumps(cfg.__dict__, ensure_ascii=False))
 
 
 def clear() -> None:
     if os.name != "nt":
-        raise RuntimeError("Credential storage requires Windows")
-    import keyring
-    try:
-        keyring.delete_password(SERVICE, ACCOUNT)
-    except keyring.errors.PasswordDeleteError:
-        pass
+        raise SessionStorageError()
+    _store().clear()
 
 
 def scope_metadata(config: YuketangConfig | None) -> dict:

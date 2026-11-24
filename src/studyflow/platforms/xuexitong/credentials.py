@@ -1,4 +1,4 @@
-"""Windows Credential Manager storage for the user's own Xuexitong session."""
+"""Windows DPAPI storage for the user's own Xuexitong session."""
 from __future__ import annotations
 
 import os
@@ -6,6 +6,12 @@ import re
 
 SERVICE = "StudyFlow.Xuexitong"
 ACCOUNT = "local-session"
+
+from studyflow.services.session_storage import SessionStore, SessionStorageError
+
+
+def _store():
+    return SessionStore("xuexitong", SERVICE, ACCOUNT)
 _COOKIE_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,100}$")
 
 
@@ -31,39 +37,29 @@ def parse_cookie_header(value: str) -> dict[str, str]:
 
 
 def load() -> dict[str, str] | None:
-    # A packaged Windows app must only accept the user's Credential Manager
-    # entry. Otherwise a stale inherited environment variable can silently
-    # resurrect a session after the user explicitly clears their credentials.
+    # On Windows the encrypted store and its logout marker are authoritative.
     if os.name == "nt":
-        try:
-            import keyring
-            value = keyring.get_password(SERVICE, ACCOUNT)
-        except Exception:
-            return None
+        value = _store().load(validate=parse_cookie_header)
     else:
-        # Development-only fallback for offline and non-Windows tests.
         value = os.environ.get("STUDYFLOW_XUEXITONG_COOKIE")
     if not value:
         return None
     try:
         return parse_cookie_header(value)
     except ValueError:
+        if os.name == "nt":
+            raise SessionStorageError() from None
         return None
 
 
 def save(value: str) -> None:
     parse_cookie_header(value)
     if os.name != "nt":
-        raise RuntimeError("WINDOWS_CREDENTIAL_STORAGE_REQUIRED")
-    import keyring
-    keyring.set_password(SERVICE, ACCOUNT, value)
+        raise SessionStorageError()
+    _store().save(value)
 
 
 def clear() -> None:
     if os.name != "nt":
-        raise RuntimeError("WINDOWS_CREDENTIAL_STORAGE_REQUIRED")
-    import keyring
-    try:
-        keyring.delete_password(SERVICE, ACCOUNT)
-    except keyring.errors.PasswordDeleteError:
-        pass
+        raise SessionStorageError()
+    _store().clear()
