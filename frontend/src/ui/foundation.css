@@ -1,5 +1,5 @@
 /* StudyFlow desktop shell — compact glass surfaces, graphite palette and green accent. */
-.app.sf-shell{
+.app.sf-shell,.app.sf-shell.dark{
   --bg:#191f25;
   --panel:rgba(43,50,57,.92);
   --panel-raised:rgba(53,61,69,.92);
@@ -17,6 +17,14 @@
   --warning:#e7b66d;
   --warning-bg:rgba(231,182,109,.12);
   --soft-shadow:0 15px 38px rgba(0,0,0,.22);
+  --sf-control-height:35px;
+  --sf-control-radius:10px;
+  --sf-filter-height:34px;
+  --sf-filter-radius:9px;
+  --sf-focus-width:2px;
+  --sf-focus-offset:2px;
+}
+.app.sf-shell{
   display:flex;
   gap:12px;
   min-height:100vh;
@@ -28,25 +36,7 @@
     linear-gradient(145deg,#171c22,#20262d);
   transition:background .2s,color .2s;
 }
-.app.sf-shell.dark{
-  color-scheme:dark;
-  --bg:#191f25;
-  --panel:rgba(43,50,57,.92);
-  --panel-raised:rgba(53,61,69,.92);
-  --text:#edf2f3;
-  --muted:#a2adb5;
-  --line:rgba(255,255,255,.095);
-  --side:rgba(31,37,43,.96);
-  --accent:#13d992;
-  --accent-strong:#08bf7b;
-  --accent-text:#56e9aa;
-  --soft-accent:rgba(19,217,146,.13);
-  --subtle:#2c405d;
-  --success:#4de2a2;
-  --success-bg:rgba(19,217,146,.13);
-  --warning:#e7b66d;
-  --warning-bg:rgba(231,182,109,.12);
-}
+.app.sf-shell.dark{color-scheme:dark}
 .app.sf-shell:not(.dark){
   color-scheme:light;
   --bg:#edf2ef;
@@ -207,8 +197,8 @@
 .sf-shell .actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .sf-shell .actions button,.sf-shell .primary,.sf-shell .secondary{
   display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  min-height:35px;margin:0;padding:8px 12px;
-  border-radius:10px;font-size:11px;font-weight:650;line-height:1.25;
+  min-height:var(--sf-control-height);margin:0;padding:8px 12px;
+  border-radius:var(--sf-control-radius);font-size:11px;font-weight:650;line-height:1.25;
   cursor:pointer;transition:transform .15s,background .15s,border-color .15s,box-shadow .15s;
 }
 .sf-shell .primary{
@@ -225,7 +215,7 @@
 .sf-shell .secondary:hover:not(:disabled){color:var(--accent-text);border-color:rgba(19,217,146,.4);background:var(--soft-accent)}
 .sf-shell button:disabled{opacity:.46;cursor:not-allowed;transform:none!important;filter:none!important}
 .sf-shell button:focus-visible,.sf-shell input:focus-visible,.sf-shell select:focus-visible{
-  outline:2px solid var(--accent);outline-offset:2px;
+  outline:var(--sf-focus-width) solid var(--accent);outline-offset:var(--sf-focus-offset);
 }
 .sf-shell .sf-refresh{min-height:33px}
 .sf-shell .text-button{
@@ -1836,7 +1826,6 @@
   display:flex;flex-direction:column;gap:12px;min-width:0;padding:16px;
   border:1px solid var(--line);border-radius:15px;background:var(--panel-raised)
 }
-.sf-shell:not(.dark) .sf-course-playback-stage{background:var(--panel-raised)}
 .sf-shell .sf-course-player-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px}
 .sf-shell .sf-course-player-heading h3{margin:0;font-size:15px;font-weight:720}
 .sf-shell .sf-course-scope-note{margin:0;padding:10px 12px;border-radius:10px;background:var(--soft-accent);font-size:11px;line-height:1.65;color:var(--text)}
@@ -1983,9 +1972,7 @@
   font-variant-numeric:tabular-nums;
 }
 .sf-shell .sf-ykt-course-chapters .sf-ykt-videos{
-  display:grid;
   grid-template-columns:minmax(0,1fr);
-  gap:10px;
   width:100%;
   min-width:0;
 }
@@ -2277,7 +2264,7 @@
 .sf-shell .sf-activity-toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 12px;margin:0 0 12px;min-width:0}
 .sf-shell .sf-activity-toolbar label{display:grid;gap:4px;min-width:0;flex:0 1 148px;font-size:11px;color:var(--muted)}
 .sf-shell .sf-activity-toolbar .sf-activity-search{flex:1 1 220px}
-.sf-shell .sf-activity-toolbar :is(input,select){width:100%;min-width:0;min-height:34px;padding:7px 9px;border:1px solid var(--line);border-radius:9px;color:var(--text);background:var(--panel-raised);font-size:12px}
+.sf-shell .sf-activity-toolbar :is(input,select){width:100%;min-width:0;min-height:var(--sf-filter-height);padding:7px 9px;border:1px solid var(--line);border-radius:var(--sf-filter-radius);color:var(--text);background:var(--panel-raised);font-size:12px}
 .sf-shell .sf-activity-toolbar :is(input,select):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .sf-shell .sf-activity-toolbar>[role="status"]{align-self:center;font-size:11px;white-space:nowrap}
 .sf-shell .sf-log-course{flex:none;align-self:center}
