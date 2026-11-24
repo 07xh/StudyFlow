@@ -1,6 +1,6 @@
 # U校园5.0（AI版）接入现状
 
-> 最后整理：2026-11-17。本文只记录当前代码结构和可核验状态，历史探索性假设不作为生产契约。
+> 最后整理：2026-11-24。本文只记录当前代码结构和可核验状态，历史探索性假设不作为生产契约。
 > **状态：支持应用内官方 WebView2 扫码/验证码窗口及本机 JWT 导入，仍需本人账号核验 JWT 是否生成并能回读课程；账号密码和手动 Cookie 仍作为备用。自动化通过不能替代真实账号与服务器验收。**
 
 ## 功能边界与当前入口
@@ -12,14 +12,14 @@
 | 凭据保存、状态查询和删除 | `platforms/ucampus/credentials.py` | Windows Credential Manager；不回传原始凭据 |
 | 应用内 SSO 账号密码登录 | `platforms/ucampus/sso_login.py` → `ucampus.session.login` → `UCampusLoginPanel.tsx` | 使用参考项目记录的 U校园AI 官方 SSO 登录接口；本机登录、仅保存返回的 JWT 会话，**待真实账号验收**；验证码/限流不绕过 |
 | 账号页验证课程接口 | `UCampusLoginPanel.tsx` → `courses.list` | 主动执行一次真实目录 GET；识别会话过期、格式不匹配及空课程，**不把配置成功当成登录成功** |
-| 本地模拟事件 | `platforms/ucampus/local_runtime.py`、`services/ucampus_runtime_bridge.py` | 不发送学习事件；与课程完成无关 |
-| 旧版 Socket.IO 诊断 | `platforms/ucampus/socketio_client.py` | 手动认证握手，不发送学习事件 |
+| 已退役的本地模拟事件 | 原 `local_runtime.py`、`ucampus_runtime_bridge.py` | 纯本地运行器和对应 IPC 已移除；课程只读核验不受影响 |
+| 旧版 Socket.IO 诊断 | `platforms/ucampus/socketio_client.py`、`services/ucampus_socket_diagnostics.py` | 手动认证握手，不发送学习事件 |
 | 独立 HTTP 契约研究层 | `platforms/ucampus/send_transport.py`、`submission_coordinator.py` | 未注册生产协议；只在单测中使用 |
 | 实验性网络运行模块 | `fabricated_heartbeat.py`、`fabricated_transport.py`、`fabricated_runner.py`、`services/ucampus_fabricated_bridge.py` | 有独立写入调用链；**未经 U校园5.0 账号及进度效果验收** |
 | React UI | `UCampusCourseDetailPanel.tsx`、`UCampusProgressVerifyPanel.tsx`、`UCampusFabricatedPanel.tsx` | 已移除纯本地练习 UI，服务器进度查询独立呈现；实验模块仍隔离 |
 
 `services/bridge.py` 提供统一 JSONL IPC；`src-tauri/src/lib.rs` 对操作与请求范围进行校验。
-`App.tsx` 现在挂载独立的**服务器只读进度核验**及实验性事件模块；旧版 `UCampusHeartbeatPanel.tsx` 本地练习 UI 已删除。`local_runtime.py`、`ucampus_runtime_bridge.py` 目前保留为后端兼容代码，不在前端展示，也不能用于判定观看完成。
+`App.tsx` 仍挂载**服务器只读进度核验**及独立的实验性网络模块。旧版 `UCampusHeartbeatPanel.tsx` 本地练习 UI 和相应的纯本地运行器/IPC 已删除；旧版 Socket.IO 只读诊断独立迁至 `ucampus_socket_diagnostics.py`。
 
 ## 账号登录边界
 
@@ -46,14 +46,12 @@
 - **“重启后自动续核验”指下次打开学序后继续只读查询，不表示 Windows 开机自启动、后台常驻，亦非本地心跳任务断点续传。**
 - 这部分有离线回归验证，但实际账号能否读取 U校园AI 的当前 `course_progress` 接口仍需用户本机核验，不能据 CI 结果宣称完成生产接入。
 
-## 本地练习与服务器状态的区别
+## 已退役的本地练习与服务器状态
 
-- 原本地练习的 `generated`、`pulses_per_resource` 只表示模拟事件数量；相应 UI 已移除，不再占用课程页面。
-- 后端兼容用的纯本地运行器 `sent=0`、`server_confirmed=null`；其入口不再由页面触发，也没有注册网络发送器。
-- 实验模块的 `sent` 是发送帧/尝试数，`transport_accepted` 是响应分类；这两个值**均不是**平台已完成的证明。
-- 历史字段 `server_confirmed` 反映的是读取时服务器记录的通过状态，**不证明**状态由当前某次请求造成。UI 使用“回读已通过（归因未知）”。
-- 独立只读入口 `ucampus.progress.verify` 查询课程任务状态；前后两次快照有差异也不能自动认定因果关系。
-- `ucampus.socket.diagnose` 仅测试旧版认证/连接；握手成功不代表 AI 5.0 学习协议兼容。
+- 旧本地练习的 `generated`、`pulses_per_resource` 仅表示虚拟本机事件；其 UI、运行器和 `ucampus.heartbeat.*` IPC 均已移除。
+- `LocalPulse` 数据类型迁入 `pulse_types.py`，只供既有独立网络研究层及对应测试使用，不负责调度或发送。
+- 实验性网络模块仍独立存在：发送尝试、HTTP 回执与服务器回读不能证明某次请求导致进度变更。
+- `ucampus.progress.verify` 继续只读查询真实服务器状态；`ucampus.socket.diagnose` 只做认证握手、不发送学习事件。
 
 ## 安全与本地历史
 
@@ -63,7 +61,7 @@
 - `FabricatedStateStore` 的保存、旧文件迁移、删除和历史列表读取**共用字段白名单**，只保留合法的课程/单元 ID、运行阶段和有限范围的 `generated/sent/accepted/confirmed` 计数；不保留视频标题、会话令牌或原始异常。
 - 旧 JSON 历史会在存储器初始化时按同一白名单脱敏；无法解析的旧文件保留，不擅自删除用户数据。
 - `ucampus.fabricated.history` 只读列出历史快照。状态为“运行中”的旧记录显示为“中断”；**不自动恢复、不补发网络事件**。进程内“恢复”仅指解除暂停。
-- 凭据切换时分别重置两套运行器，防止旧账号状态穿透新会话。
+- 凭据切换时停止实验模块运行器并重置服务器只读监控，防止旧账号状态穿透新会话。已删除的纯本地心跳运行器不再参与清理。
 
 ## 自动化检查与真实验收
 
@@ -103,7 +101,7 @@ Windows 层检查 sidecar/NSIS。CI 通过只能说明本仓库代码和打包�
 - 删除 `frontend/src/components/UCampusHeartbeatPanel.tsx`，保留 `ucampus.progress.verify` 与真实单元选择为新的 `UCampusProgressVerifyPanel.tsx`。
 - 旧版 WebSocket 诊断放入折叠区域；仅连接认证，不发送学习事件。
 - 只读面板保留服务器快照计数、必修统计、未知状态、逐资源状态与前后快照差异；切换课程或单元时丢弃过期异步响应。
-- 纯本地模拟按钮、参数、进度条与任务列表均从 UI 移除。保留后端 `LocalPulse` 类型及兼容入口，避免破坏当前其他模块引用。
+- 纯本地模拟按钮、参数、进度条与任务列表此前已从 UI 移除；现进一步移除后端运行器及旧 IPC，`LocalPulse` 类型改为独立研究数据契约。
 - 实验性网络模块未经真实账号验收；此 UI 清理不变更其代码、发送协议或服务器回读机制。
 
 - 2026-11-17 二维码窗口修复：原内置 WebView2 始终加载 `https://uai.unipus.cn/`，与独立扫码入口不对应。现在“打开二维码登录”使用独立 `ucampus-official-qr` 窗口直接加载官方 `https://sso.unipus.cn/sso/login`，而账号/图片数字验证码使用原 `ucampus-official-auth`。两种登录窗口使用各自的私密数据目录，导入时只读取所选窗口中的 AI JWT，二者不可混用。

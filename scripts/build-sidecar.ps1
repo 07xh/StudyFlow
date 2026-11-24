@@ -8,6 +8,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Reviewed upstream ZHS sources do not match thi
 $flags = @('--noconfirm','--clean','--onefile','--console',
   '--name','studyflow-bridge','--paths','src','--paths',$stage,
   '--collect-all','keyring','--collect-all','zhs','--copy-metadata','zhs',
+  # keyring's optional test suite is not a runtime credential backend.
+  # Keep all actual keyring backends; exclude only bundled test code.
+  '--exclude-module','keyring.testing','--exclude-module','pytest',
   '--add-data',"$((Resolve-Path 'legacy/yuketang/main.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/yuketang/exe_entry.py').Path);legacy/yuketang",
   '--add-data',"$((Resolve-Path 'legacy/zhidao').Path);legacy/zhidao",
@@ -45,14 +48,16 @@ if ($ping.id -cne 'packaging-probe' -or -not $ping.ok -or $ping.data.service -cn
   throw 'Frozen StudyFlow ping contract mismatch'
 }
 
-# Validate that the new local Socket.IO client is truly packaged in the frozen
-# Python sidecar, without opening a socket or using a real school account.
-$ucSocket = Invoke-JsonlProbe '{"id":"packaging-ucampus","version":1,"operation":"ucampus.heartbeat.capabilities"}'
-if ($ucSocket.id -cne 'packaging-ucampus' -or -not $ucSocket.ok -or
-    -not $ucSocket.data.local_generation -or
-    -not $ucSocket.data.socket_transport_available -or
-    $ucSocket.data.sender_connected -or $ucSocket.data.server_verified) {
-  throw 'Frozen UCampus local heartbeat and socket dependency contract mismatch'
+# Confirm the packaged socket diagnostic dependencies without network access,
+# account lookup, or resurrecting the retired ucampus.heartbeat.* IPC.
+& $bridge --ucampus-socket-env-check
+if ($LASTEXITCODE -ne 0) {
+  throw 'Frozen UCampus read-only Socket.IO diagnostic dependency check failed'
+}
+$oldPulse = Invoke-JsonlProbe '{"id":"packaging-ucampus-retired","version":1,"operation":"ucampus.heartbeat.capabilities"}'
+if ($oldPulse.id -cne 'packaging-ucampus-retired' -or $oldPulse.ok -or
+    $oldPulse.error -cne 'UNKNOWN_OPERATION') {
+  throw 'Retired UCampus local pulse IPC was unexpectedly restored'
 }
 # Exercise a real local settings handler as well; this checks the request/response
 # contract without requiring school credentials or contacting a remote platform.
@@ -86,4 +91,4 @@ try {
   else { $env:YKT_HOME = $oldYktHome }
   Remove-Item -LiteralPath $probeHome -Recurse -Force -ErrorAction SilentlyContinue
 }
-Write-Host '[READY] Frozen ZHS, Rain Classroom, clean JSONL output and both settings adapters verified without server access.'
+Write-Host '[READY] Frozen ZHS, Rain Classroom, UCampus read-only diagnostics, JSONL output and settings verified without server access.'

@@ -18,3 +18,23 @@ def test_yuketang_probe_reports_missing_bundled_resource(monkeypatch, tmp_path):
     from studyflow.services import legacy_playback, runtime_check
     monkeypatch.setattr(legacy_playback, "_legacy_source", lambda: tmp_path / "missing.py")
     assert runtime_check.check_yuketang() == 5
+
+
+def test_ucampus_socket_packaging_check_never_loads_credentials_or_connects(monkeypatch):
+    import websocket
+    from studyflow.services import runtime_check
+    from studyflow.platforms.ucampus import credentials
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("No network connection or credential lookup is permitted")
+
+    monkeypatch.setattr(websocket, "create_connection", forbidden, raising=False)
+    monkeypatch.setattr(credentials, "load", forbidden)
+    assert runtime_check.check_ucampus_socket() == 0
+
+
+def test_ucampus_socket_packaging_check_fails_closed_on_missing_dependency(monkeypatch):
+    import websocket
+    from studyflow.services import runtime_check
+    monkeypatch.delattr(websocket, "create_connection", raising=False)
+    assert runtime_check.check_ucampus_socket() == 5

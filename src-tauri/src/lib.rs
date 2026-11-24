@@ -286,7 +286,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
         | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
         | "ucampus.session.info" | "ucampus.session.clear"
-        | "ucampus.heartbeat.capabilities" | "ucampus.socket.diagnose"
+        | "ucampus.socket.diagnose"
         | "ucampus.fabricated.capabilities" => Ok(()),
         "updates.settings.save" if request.get("settings").is_some_and(|value|
             matches!(value.get("channel").and_then(|v| v.as_str()), Some("stable" | "beta"))
@@ -431,25 +431,6 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
                 .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 128
                 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')))
                 => Ok(()),
-        "ucampus.heartbeat.status" if request.get("course_id").and_then(|v| v.as_str())
-            .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')) => Ok(()),
-        "ucampus.heartbeat.start" if request.get("course_id").and_then(|v| v.as_str())
-            .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
-            && request.get("unit_id").and_then(|v| v.as_str())
-            .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
-            && request.get("pulses").map_or(true, |v| v.as_u64().is_some_and(|n| (1..=100).contains(&n)))
-            => Ok(()),
-        "ucampus.heartbeat.pause" | "ucampus.heartbeat.resume" | "ucampus.heartbeat.stop"
-            if request.get("graceful").is_none()
-                && request.get("course_id").and_then(|v| v.as_str())
-                    .is_some_and(|v| !v.is_empty() && v.len() <= 128
-                        && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+'))
-                && request.get("run_id").and_then(|v| v.as_str())
-                    .is_some_and(|id| id.len() == 32
-                        && id.bytes().all(|b| b.is_ascii_hexdigit())) => Ok(()),
         "ucampus.fabricated.status" | "ucampus.fabricated.history" if request.get("course_id").and_then(|v| v.as_str())
             .is_some_and(|v| !v.is_empty() && v.len() <= 128
                 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-' || b == b':' || b == b'+')) => Ok(()),
@@ -593,7 +574,6 @@ async fn bridge_request(app: tauri::AppHandle, request: serde_json::Value)
         .map_or(false, |op| op.starts_with("zhidao.qr.")
                         || op.starts_with("zhidao.mastery.")
                         || op.starts_with("xuexitong.heartbeat.")
-                        || op.starts_with("ucampus.heartbeat.")
                         || op.starts_with("ucampus.socket.")
                         || op.starts_with("ucampus.fabricated.")
                         || op.starts_with("ucampus.monitor.")
@@ -850,10 +830,6 @@ fn shutdown_owned_services(app: &tauri::AppHandle) {
             let _ = worker.request(
                 b"{\"id\":\"hb-shutdown\",\"version\":1,\"operation\":\"xuexitong.heartbeat.stop\",\"graceful\":true}\n",
                 "hb-shutdown",
-            );
-            let _ = worker.request(
-                b"{\"id\":\"u-hb-shutdown\",\"version\":1,\"operation\":\"ucampus.heartbeat.stop\",\"graceful\":true}\n",
-                "u-hb-shutdown",
             );
             let _ = worker.request(
                 b"{\"id\":\"uf-hb-shutdown\",\"version\":1,\"operation\":\"ucampus.fabricated.stop\",\"graceful\":true}\n",
@@ -1278,7 +1254,6 @@ mod ipc_validation_tests {
         // Identifiers in the real catalogue use '+' as a literal separator.
         // Status/history must accept the same scope that read-only units accept.
         for operation in [
-            "ucampus.heartbeat.status",
             "ucampus.fabricated.status", "ucampus.fabricated.history",
         ] {
             assert!(validate(&json!({
@@ -1286,7 +1261,7 @@ mod ipc_validation_tests {
             })).is_ok(), "real UCampus course id rejected for {operation}");
         }
         for operation in [
-            "ucampus.heartbeat.start", "ucampus.fabricated.start",
+            "ucampus.fabricated.start",
         ] {
             assert!(validate(&json!({
                 "id":"u", "version":1, "operation":operation,
@@ -1296,7 +1271,6 @@ mod ipc_validation_tests {
             })).is_ok(), "valid UCampus run parameters rejected for {operation}");
         }
         for operation in [
-            "ucampus.heartbeat.pause", "ucampus.heartbeat.resume", "ucampus.heartbeat.stop",
             "ucampus.fabricated.pause", "ucampus.fabricated.resume", "ucampus.fabricated.stop"
         ] {
             assert!(validate(&json!({
@@ -1308,7 +1282,7 @@ mod ipc_validation_tests {
             "course-v2:../../etc", "course-v2:abc%2Fdef", "course-v2:abc?x=y",
             "course-v2:abc/def", "course-v2:abc#def",
         ] {
-            for operation in ["ucampus.fabricated.status", "ucampus.heartbeat.status"] {
+            for operation in ["ucampus.fabricated.status"] {
                 assert!(validate(&json!({
                     "id":"u", "version":1, "operation":operation, "course_id":bad
                 })).is_err());
@@ -1359,24 +1333,18 @@ mod ipc_validation_tests {
     }
 
     #[test]
-    fn ucampus_heartbeat_operation_guard() {
-        assert!(validate(&json!({"id":"u","version":1,
-            "operation":"ucampus.heartbeat.start","course_id":"c1",
-            "unit_id":"u1","pulses":5})).is_ok());
-        assert!(validate(&json!({"id":"u","version":1,
-            "operation":"ucampus.heartbeat.start","course_id":"course-v2:real-course-id",
-            "unit_id":"u1","pulses":5})).is_ok());
-        assert!(validate(&json!({"id":"u","version":1,
-            "operation":"ucampus.heartbeat.start","course_id":"c1",
-            "unit_id":"u1","pulses":101})).is_err());
-        assert!(validate(&json!({"id":"u","version":1,
-            "operation":"ucampus.heartbeat.stop","course_id":"c1"})).is_err());
-        assert!(validate(&json!({"id":"u","version":1,
-            "operation":"ucampus.heartbeat.pause","course_id":"c1",
-            "run_id":"abcdef0123456789abcdef0123456789"})).is_ok());
-        assert!(validate(&json!({"id":"u","version":1,
-            "operation":"ucampus.heartbeat.stop","course_id":"c1",
-            "run_id":"abcdef0123456789abcdef0123456789","graceful":true})).is_err());
+    fn retired_ucampus_local_heartbeat_operations_are_rejected() {
+        for operation in [
+            "ucampus.heartbeat.capabilities", "ucampus.heartbeat.status",
+            "ucampus.heartbeat.start", "ucampus.heartbeat.pause",
+            "ucampus.heartbeat.resume", "ucampus.heartbeat.stop",
+        ] {
+            assert!(validate(&json!({
+                "id":"u", "version":1, "operation":operation,
+                "course_id":"course-v2:real-course-id", "unit_id":"u1",
+                "run_id":"0123456789abcdef0123456789abcdef", "pulses":5
+            })).is_err(), "retired UCampus IPC unexpectedly accepted: {operation}");
+        }
     }
 
     #[test]

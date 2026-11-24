@@ -4,6 +4,7 @@ import pytest
 from studyflow.services import bridge
 from studyflow.services import question_bank as bank
 from studyflow.services import yanxi_question_bank as yanxi
+from studyflow.services import dpapi_storage
 
 ONE = "a" * 32
 TWO = "b" * 32
@@ -13,7 +14,7 @@ TWO = "b" * 32
 def clean_vault(tmp_path, monkeypatch):
     monkeypatch.setattr(bank, "STORE_PATH", tmp_path / "providers.dpapi")
     monkeypatch.setattr(yanxi, "STORE_PATH", tmp_path / "legacy.dpapi")
-    monkeypatch.setattr(yanxi, "_dpapi", lambda data, protect:
+    monkeypatch.setattr(dpapi_storage, "crypt", lambda data, protect:
                         bytes(value ^ 0x5A for value in data))
 
 
@@ -323,3 +324,20 @@ def test_invalid_adapter_result_does_not_reach_ipc(monkeypatch):
                                     "provider_id": "yanxi", "question": {"title": "练习"}})
         assert response == {"id": "q1", "ok": False, "error": "QUESTIONBANK_BAD_RESPONSE"}
         assert ONE not in repr(response)
+
+
+def test_shared_vault_does_not_call_provider_legacy_crypto(monkeypatch):
+    def legacy_crypto_must_not_run(*_args, **_kwargs):
+        raise AssertionError("Provider-specific legacy crypto must not be used for shared vault")
+    monkeypatch.setattr(yanxi, "_dpapi", legacy_crypto_must_not_run)
+    added = bank.add_token("yanxi", "通用保险库", ONE)
+    assert len(added["tokens"]) == 1
+    assert bank.list_tokens()["tokens"][0]["label"] == "通用保险库"
+
+
+def test_generic_dpapi_failure_maps_to_existing_storage_error(monkeypatch):
+    def broken(_data, *, protect):
+        raise dpapi_storage.DpapiStorageError("DPAPI_STORAGE_FAILED")
+    monkeypatch.setattr(dpapi_storage, "crypt", broken)
+    with pytest.raises(bank.QuestionBankError, match="QUESTIONBANK_STORAGE_FAILED"):
+        bank.add_token("yanxi", "无法写入", ONE)

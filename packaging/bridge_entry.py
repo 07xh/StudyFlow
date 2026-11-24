@@ -54,6 +54,11 @@ def main() -> int:
         if mode == "--zhs-video-worker":
             from studyflow.services.zhs_queue import video_worker
             return video_worker(sys.argv[2:])
+        if mode == "--ucampus-socket-env-check" and len(sys.argv) == 2:
+            from studyflow.services.runtime_check import check_ucampus_socket
+            result = check_ucampus_socket()
+            print("[UCAMPUS_SOCKET_RUNTIME_OK]" if result == 0 else "[UCAMPUS_SOCKET_RUNTIME_MISSING]")
+            return result
         if mode == "--yuketang-env-check" and len(sys.argv) == 2:
             from studyflow.services.runtime_check import check_yuketang
             result = check_yuketang()

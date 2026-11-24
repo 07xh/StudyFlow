@@ -51,3 +51,28 @@ def check_yuketang() -> int:
         os.chdir(cwd)
         os.environ.clear()
         os.environ.update(environment)
+
+
+def check_ucampus_socket() -> int:
+    """Check packaged, authentication-only UCampus diagnostics without I/O.
+
+    Never read a stored session, create a socket, or emit a learning event.
+    This replaces the obsolete local heartbeat generator packaging probe.
+    """
+    try:
+        import websocket
+        from studyflow.platforms.ucampus.socketio_client import (
+            SocketSession, UCampusLegacySocket, _default_connect,
+        )
+        from studyflow.services.ucampus_socket_diagnostics import diagnose_legacy_socket
+        if not (
+            callable(getattr(websocket, "create_connection", None))
+            and callable(diagnose_legacy_socket)
+            and callable(_default_connect)
+            and callable(UCampusLegacySocket)
+            and callable(SocketSession)
+        ):
+            return 5
+        return 0
+    except (ImportError, AttributeError):
+        return 5

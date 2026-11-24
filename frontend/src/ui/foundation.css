@@ -11,6 +11,7 @@
   --accent-strong:#08bf7b;
   --accent-text:#56e9aa;
   --soft-accent:rgba(19,217,146,.13);
+  --subtle:#2c405d;
   --success:#4de2a2;
   --success-bg:rgba(19,217,146,.13);
   --warning:#e7b66d;
@@ -40,6 +41,7 @@
   --accent-strong:#08bf7b;
   --accent-text:#56e9aa;
   --soft-accent:rgba(19,217,146,.13);
+  --subtle:#2c405d;
   --success:#4de2a2;
   --success-bg:rgba(19,217,146,.13);
   --warning:#e7b66d;
@@ -58,6 +60,7 @@
   --accent-strong:#08a96c;
   --accent-text:#078f5c;
   --soft-accent:rgba(13,193,125,.11);
+  --subtle:#edf3fc;
   --success:#0a9b66;
   --success-bg:rgba(13,193,125,.12);
   --warning:#a66d22;
@@ -1022,7 +1025,6 @@
 .sf-consent-message{margin:0 20px 10px;color:var(--warning);font-size:12px}
 @media(max-width:540px){
   .sf-consent-overlay{padding:10px}
-  .sf-consent-header{padding:14px}
   .sf-consent-exit{min-height:32px;padding:6px 8px}
   .sf-consent-document{max-height:50vh;padding:12px 14px}
   .sf-consent-confirmation{padding:11px 14px}
@@ -1259,7 +1261,6 @@
 .sf-shell .sf-switch-thumb{width:18px;height:18px}
 .sf-shell .sf-switch input:checked+.sf-switch-thumb{transform:translateX(18px)}
 .sf-consent-header{min-height:78px}
-.sf-consent-header>div{flex:1;min-width:0}
 .sf-consent-tabs{flex-wrap:wrap;gap:8px;padding:13px 20px 0}
 .sf-consent-tabs button{min-height:36px;font-size:12px}
 .sf-consent-document h3{font-size:14px;line-height:1.4}

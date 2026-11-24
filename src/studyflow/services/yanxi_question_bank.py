@@ -6,16 +6,16 @@ The adapter never writes a separate credential store.
 """
 from __future__ import annotations
 
-import ctypes
 import json
 import os
 import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from ctypes import wintypes
 from pathlib import Path
 from typing import Any
+
+from studyflow.services import dpapi_storage
 
 API_URL = "https://tk.enncy.cn/query"
 STORE_PATH = (Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".studyflow")
@@ -32,33 +32,13 @@ class QuestionBankError(ValueError):
         self.code = code
 
 
-class _Blob(ctypes.Structure):
-    _fields_ = [("cbData", wintypes.DWORD),
-                ("pbData", ctypes.POINTER(ctypes.c_ubyte))]
-
-
 def _dpapi(data: bytes, *, protect: bool) -> bytes:
-    if os.name != "nt":
-        raise QuestionBankError("YANXI_WINDOWS_ONLY")
-    buffer = ctypes.create_string_buffer(data, len(data))
-    source = _Blob(len(data), ctypes.cast(buffer, ctypes.POINTER(ctypes.c_ubyte)))
-    result = _Blob()
-    crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    func = crypt32.CryptProtectData if protect else crypt32.CryptUnprotectData
-    # Avoid 32-bit pointer truncation on x64 Windows.
-    func.argtypes = [ctypes.POINTER(_Blob), ctypes.c_void_p, ctypes.c_void_p,
-                     ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD,
-                     ctypes.POINTER(_Blob)]
-    func.restype = wintypes.BOOL
-    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
-    kernel32.LocalFree.restype = ctypes.c_void_p
-    if not func(ctypes.byref(source), None, None, None, None, 0x1, ctypes.byref(result)):
-        raise QuestionBankError("YANXI_TOKEN_STORAGE_FAILED")
+    """Compatibility entry for rc.57 token migration (same DPAPI blob format)."""
     try:
-        return ctypes.string_at(result.pbData, result.cbData)
-    finally:
-        kernel32.LocalFree(ctypes.cast(result.pbData, ctypes.c_void_p))
+        return dpapi_storage.crypt(data, protect=protect)
+    except dpapi_storage.DpapiStorageError as exc:
+        code = "YANXI_WINDOWS_ONLY" if exc.reason == "WINDOWS_ONLY" else "YANXI_TOKEN_STORAGE_FAILED"
+        raise QuestionBankError(code) from exc
 
 
 def _valid_token(token: Any) -> str:

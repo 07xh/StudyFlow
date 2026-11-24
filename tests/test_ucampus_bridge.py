@@ -105,7 +105,6 @@ def test_sso_login_persists_only_session_and_no_password(monkeypatch):
                         lambda user, password: UCampusConfig.from_dict({
                             "variant": "ai", "cookie": "jwt=header.payload.signature"}))
     monkeypatch.setattr(bridge, "ucampus_enrich_school", lambda config: config)
-    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda value: changes.append(value))
     monkeypatch.setattr(bridge.ucampus_monitor, "configure", lambda course, unit, enabled: {"enabled": False})
@@ -138,7 +137,6 @@ def test_sso_login_preserves_session_if_optional_school_query_fails(monkeypatch)
                                       "cookie": "jwt=header.payload.signature"})
     monkeypatch.setattr(bridge, "ucampus_authenticate", lambda user, pw: config)
     monkeypatch.setattr(bridge, "ucampus_enrich_school", lambda incoming: incoming)
-    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda payload: stored.append(payload))
     result = call("ucampus.session.login", username="student", password="secret")
@@ -180,7 +178,6 @@ def test_sso_success_does_not_mask_optional_monitor_cleanup_failure(monkeypatch)
     stored = []
     monkeypatch.setattr(bridge, "ucampus_authenticate", lambda user, pw: config)
     monkeypatch.setattr(bridge, "ucampus_enrich_school", lambda incoming: incoming)
-    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_credentials, "save", lambda data: stored.append(data))
     def cleanup_failure(*args):
@@ -198,7 +195,6 @@ def test_webview_import_enriches_school_for_content_read_without_password(monkey
 
     saved = []
     enriched = []
-    monkeypatch.setattr(bridge.ucampus_runtime_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_fabricated_bridge, "reset_runner", lambda: None)
     monkeypatch.setattr(bridge.ucampus_monitor, "configure",
                         lambda course, unit, enabled: {"enabled": False})

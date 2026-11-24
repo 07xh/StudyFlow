@@ -1,1 +1,1 @@
-"""U校园AI platform integration: read-only progress, local simulation and experimental modules."""
+"""U校园适配器：课程和进度只读核验、Socket.IO 诊断、独立实验模块。"""

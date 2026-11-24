@@ -1,4 +1,4 @@
-:root{font-family:Inter,"Microsoft YaHei UI",system-ui,sans-serif;font-synthesis:none}*{box-sizing:border-box}body{margin:0}.app{--bg:#f5f6fb;--panel:#fff;--text:#25263b;--muted:#74778c;--line:#e8e9f0;--side:#fff;min-height:100vh;display:flex;background:var(--bg);color:var(--text);transition:background .2s}.app.dark{--bg:#10111c;--panel:#1a1c2b;--text:#f1f0ff;--muted:#989bb6;--line:#2a2d40;--side:#151725}.nav{border:0;background:none;color:var(--muted);width:100%;display:flex;align-items:center;gap:14px;padding:14px 17px;margin-bottom:6px;border-radius:12px;font-size:14px;cursor:pointer;text-align:left}.nav:hover{background:#8270f01a}.nav.active{background:#8061ed25;color:#aa91ff;font-weight:600}.privacy{display:flex;gap:8px;align-items:center;line-height:1.5}.main{flex:1;max-width:1500px;padding:43px clamp(24px,5vw,78px);margin:0 auto;min-width:0;width:100%}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px}.eyebrow{font-size:11px;letter-spacing:2px;color:#9b83ff;font-weight:700}h1{font-size:30px;letter-spacing:-.5px;margin:10px 0 8px}h2{font-size:30px;margin:16px 0 10px}h3{margin:0;font-size:18px}.section-head p,
+:root{font-family:Inter,"Microsoft YaHei UI",system-ui,sans-serif;font-synthesis:none}*{box-sizing:border-box}body{margin:0}.app{--bg:#f5f6fb;--panel:#fff;--text:#25263b;--muted:#74778c;--line:#e8e9f0;--side:#fff;min-height:100vh;display:flex;background:var(--bg);color:var(--text);transition:background .2s}.app.dark{--bg:#10111c;--panel:#1a1c2b;--text:#f1f0ff;--muted:#989bb6;--line:#2a2d40;--side:#151725}.privacy{display:flex;gap:8px;align-items:center;line-height:1.5}.main{flex:1;max-width:1500px;padding:43px clamp(24px,5vw,78px);margin:0 auto;min-width:0;width:100%}header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px}.eyebrow{font-size:11px;letter-spacing:2px;color:#9b83ff;font-weight:700}h1{font-size:30px;letter-spacing:-.5px;margin:10px 0 8px}h2{font-size:30px;margin:16px 0 10px}h3{margin:0;font-size:18px}.section-head p,
 .platform-card p,
 .settings-card p{color:var(--muted);font-size:13px}.theme-button{border:1px solid var(--line);background:var(--panel);color:var(--text);padding:11px;border-radius:12px;cursor:pointer}.primary{display:flex;align-items:center;gap:8px;border:0;border-radius:10px;background:#fff;color:#5d45ac;padding:11px 16px;font-weight:700;cursor:pointer;margin-top:19px}.platform-card,
 .empty,
@@ -14,21 +14,7 @@
 .course-card small{font-size:12px;color:var(--muted)}
 .course-provider{width:max-content;background:#846ae721;color:#aa91ff;font-size:11px;font-weight:700;border-radius:20px;padding:5px 9px}
 
-/* Zhidao v5.2.9 WPF interaction migration: own responsive React implementation. */
-.app{
-  --bg:#f3f6fb;--panel:#ffffff;--text:#203047;--muted:#72849c;
-  --line:#dfe7f2;--side:#13243d;--subtle:#edf3fc;--subtle-text:#315ca4;
-  --success:#297b67;--success-bg:#edf8f4;--warning:#9b713f;--warning-bg:#fff7eb;
-}
-.app.dark{
-  --bg:#101a29;--panel:#1b2a40;--text:#e8f0ff;--muted:#abbdd7;
-  --line:#344761;--side:#0b1628;--subtle:#2c405d;--subtle-text:#b7d2ff;
-  --success:#8fe0bc;--success-bg:#1f4238;--warning:#f0c58f;--warning-bg:#463727;
-}
-.nav{color:#cbd9ed}
-.nav.active{background:#426ac5;color:#fff}
-.nav:hover{background:#ffffff19;color:#fff}
-.main{min-width:0}
+/* The desktop shell and light/dark palette now live in ui/foundation.css. */
 button:focus-visible{outline:3px solid #86b5f5;outline-offset:2px}
 .course-v2-detail{
   border:1px solid var(--line);background:var(--panel);border-radius:18px

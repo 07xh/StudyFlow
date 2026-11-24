@@ -7,6 +7,7 @@ on:
       - 'frontend/**'
       - 'src-tauri/**'
       - 'package.json'
+      - 'package-lock.json'
       - 'pyproject.toml'
       - 'docs/RELEASE_CANDIDATE_*.md'
       - 'src/**'
@@ -15,6 +16,7 @@ on:
       - 'scripts/build-sidecar.ps1'
       - '.github/workflows/build-windows.yml'
       - 'scripts/test-windows-install.ps1'
+      - 'scripts/fetch-previous-installer.ps1'
 
 concurrency:
   group: studyflow-windows-${{ github.ref }}
@@ -33,6 +35,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: '**/package-lock.json'
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with:
@@ -40,6 +44,11 @@ jobs:
       - name: Build full Windows package
         shell: pwsh
         run: ./scripts/build-windows.ps1
+      - name: Verify official previous RC installer and its SHA-256
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/fetch-previous-installer.ps1
       - name: Verify clean install upgrade launch and uninstall
         shell: pwsh
         run: ./scripts/test-windows-install.ps1
@@ -58,6 +67,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install deterministic frontend dependencies
         run: npm ci --prefix frontend --no-audit --no-fund
       - name: TypeScript and production bundle
@@ -105,7 +116,13 @@ jobs:
           assert json.loads(Path("package.json").read_text(encoding="utf-8"))["version"] == version
           lock=json.loads(Path("frontend/package-lock.json").read_text(encoding="utf-8"))
           assert lock["version"] == version and lock["packages"][""]["version"] == version
+          root_package=json.loads(Path("package.json").read_text(encoding="utf-8"))
+          root_lock=json.loads(Path("package-lock.json").read_text(encoding="utf-8"))
+          assert root_lock["version"] == version and root_lock["packages"][""]["version"] == version
+          assert root_lock["packages"][""]["devDependencies"] == root_package["devDependencies"]
           assert re.search(r'^version = "'+re.escape(version)+r'"$',Path("src-tauri/Cargo.toml").read_text(encoding="utf-8"),re.M)
+          cargo_lock=Path("src-tauri/Cargo.lock").read_text(encoding="utf-8")
+          assert re.search(r'^\[\[package\]\]\nname = "studyflow"\nversion = "'+re.escape(version)+r'"$',cargo_lock,re.M)
           print("Version manifests aligned:",version)
           PY
           # Avoid stale release artifacts from a superseded main build.

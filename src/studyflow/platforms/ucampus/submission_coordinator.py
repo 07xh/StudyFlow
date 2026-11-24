@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Protocol
 
 from .course_progress import UCampusProgressError
-from .local_runtime import LocalPulse
+from .pulse_types import LocalPulse
 from .send_transport import SendResult, UCampusSendError
 
 
