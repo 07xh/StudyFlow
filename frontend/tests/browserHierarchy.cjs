@@ -34,14 +34,14 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.locator('.sf-platform-card,.sf-platform-login,.sf-fold,.legacy-playback-panel').count(),0,
      'The full platform landing contains only the course library, not account or execution panels');
    const row=page.locator('.sf-platform-toolbar');
-   const actionLabels=['账号与连接','参数设置','同步课程列表'];
+   const actionLabels=['账号与连接','平台设置','同步课程列表'];
    const boxes=await Promise.all(actionLabels.map(async label=>page.getByRole('button',{name:label,exact:true}).boundingBox()));
    assert.ok(boxes.every(Boolean),'All platform actions must be visible');
    assert.ok(boxes.every(box=>Math.abs(box.y-boxes[0].y)<1.5),'Three platform actions must stay in the same row');
    assert.ok(boxes[0].x<boxes[1].x&&boxes[1].x<boxes[2].x,'Action order must be account / settings / sync');
    assert.equal(await page.getByRole('button',{name:'打开课程列表',exact:true}).count(),0);
    assert.equal(await row.evaluate(element=>getComputedStyle(element).flexWrap),'nowrap');
-   await page.getByRole('button',{name:'参数设置',exact:true}).click();
+   await page.getByRole('button',{name:'平台设置',exact:true}).click();
    assert.equal(await page.getByRole('dialog',{name:'雨课堂 · 设置'}).count(),1,
      'Platform settings open in a modal rather than replacing the course page');
    assert.equal(await page.locator('.sf-platform-courses').count(),1,
