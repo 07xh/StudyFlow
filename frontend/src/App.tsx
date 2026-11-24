@@ -126,10 +126,11 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const configurationRevision=useRef(0);
   const [courseModes,setCourseModes]=useState<Record<string,"official"|"zhs-original">>({});
   const [clearDialogOpen,setClearDialogOpen]=useState(false);
+  const [clearLogsOpen,setClearLogsOpen]=useState(false);
   const [qrOpen,setQrOpen]=useState(false);
   const [videos,setVideos]=useState<Video[]>([]);
   const [config,setConfig]=useState<Config>(emptyConfiguration);
-  const [query,setQuery]=useState("");
+  const [courseQueries,setCourseQueries]=useState<Record<Platform,string>>({zhidao:"",yuketang:"",xuexitong:"",ucampus:""});
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
@@ -509,7 +510,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     setCourseLogsOpen(false);
     setPlatformSettingsOpen(null);
     setSelectedCourse(null);
-    setQuery("");
     setPage("platform-"+platform as Page);
   }
 
@@ -943,13 +943,14 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     ||page==="platform-xuexitong"&&activeSelectedCourse?.platform==="xuexitong"
     ||page==="platform-ucampus"&&activeSelectedCourse?.platform==="ucampus")
     ?activeSelectedCourse:null;
-  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":null;
+  const headerPlatform:Platform|null=page==="platform-zhidao"?"zhidao":page==="platform-yuketang"?"yuketang":page==="platform-xuexitong"?"xuexitong":page==="platform-ucampus"?"ucampus":null;
   const activeMetric=workspaceCourse?courseMetric(workspaceCourse,workspaceCourse.platform==="yuketang"?yuketangSummaries[workspaceCourse.course_id]:undefined):null;
   const activeCourseProgress=activeMetric?.percent??null;
   const platformOverview=headerPlatform?platformProgressOverview(platforms[headerPlatform].courses,yuketangSummaries):null;
 
   const renderCourses=(platform:Platform)=>{
     const platformCourses=platforms[platform].courses;
+    const query=courseQueries[platform];
     const search=query.trim().toLocaleLowerCase();
     const visible=platformCourses.filter(course=>
       course.title.toLocaleLowerCase().includes(search)||
@@ -958,13 +959,13 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       <div className="section-head"><h3>课程列表</h3>
         <span className="sf-muted" role="status" aria-live="polite">
           {syncFeedback[platform].phase==="syncing"?"正在自动读取真实课程…":
-           syncFeedback[platform].phase==="failed"?"课程同步失败，可点击刷新重试":
+           syncFeedback[platform].phase==="failed"?"课程同步失败，可点击「同步课程列表」重试":
            syncFeedback[platform].phase==="synced"?"已同步真实课程":""}
         </span>
       </div>
       <div className="sf-search-toolbar">
         <label className="sf-search"><Search size={16}/><input type="search"
-          placeholder="搜索当前平台课程名称或 ID" value={query} onChange={event=>setQuery(event.target.value)}
+          placeholder="搜索当前平台课程名称或 ID" value={query} onChange={event=>{const value=event.target.value;setCourseQueries(previous=>({...previous,[platform]:value}));}}
           aria-label="搜索当前平台课程"/></label>
       </div>
       {visible.length>0
@@ -1005,7 +1006,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const renderLogs=()=> <section>
     <div className="section-head"><h3>本机操作记录</h3>
       <button className="secondary" type="button" disabled={activity.length===0}
-        onClick={()=>{setActivity([]);try{window.localStorage.removeItem(ACTIVITY_KEY);}catch{};}}>
+        onClick={()=>setClearLogsOpen(true)}>
         清空记录
       </button>
     </div>
@@ -1030,7 +1031,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       setSelectedCourse(null);
       setPage(next);
     }}
-      dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()}
+      dark={dark} onThemeToggle={toggleTheme} onRefresh={()=>void refresh()} refreshBusy={Boolean(busy)} refreshing={busy==="status"}
       desktop={desktop} notice={notice} onDismissNotice={()=>setNotice("")}
       compact={compactCards}
       headerTitle={workspaceCourse?"课程详情":undefined}
@@ -1094,6 +1095,13 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         invalidatePlatform("zhidao");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");
         void refresh().then(()=>setNotice(previous=>previous||"知到登录已通过服务端核验。"));}}/>}
+    <ConfirmDialog open={clearLogsOpen} dark={dark} danger
+      title="清空本机操作记录？"
+      description="将删除学序保存在本机的操作与核验记录。"
+      warning="不会删除平台课程、官方学习记录或账号凭据。清空后无法恢复这些本机记录。"
+      confirmLabel="清空记录" cancelLabel="取消"
+      onConfirm={()=>{setActivity([]);try{window.localStorage.removeItem(ACTIVITY_KEY);}catch{};setClearLogsOpen(false);}}
+      onCancel={()=>setClearLogsOpen(false)}/>
     <ConfirmDialog open={clearDialogOpen} dark={dark} danger busy={busy==="clear"}
       title="清除学序保存的雨课堂凭据？"
       description="此操作将清除学序在 Windows 凭据管理器中保存的雨课堂登录会话。"
