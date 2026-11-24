@@ -15,7 +15,9 @@ import pytest
 from pathlib import Path
 from unittest import mock
 
-for _name in ("requests", "websocket", "keyring", "bs4"):
+# Do not replace keyring globally during collection: Windows credential tests
+# need the actual installed backend. This module does not require a live account.
+for _name in ("requests", "websocket", "bs4"):
     if _name not in sys.modules:
         _stub = types.ModuleType(_name)
         if _name == "requests":
@@ -372,7 +374,9 @@ class RunnerTests(unittest.TestCase):
 
 class BridgeTests(unittest.TestCase):
     def test_capabilities_reports_no_player_needed(self):
-        data = bridge.dispatch("ucampus.fabricated.capabilities", {})
+        # Keep this offline capability query independent of the OS credential vault.
+        with mock.patch("studyflow.platforms.ucampus.credentials.load", return_value=None):
+            data = bridge.dispatch("ucampus.fabricated.capabilities", {})
         self.assertTrue(data["ok"])
         self.assertTrue(data["local_generation"])
         self.assertFalse(data["official_player_required"])

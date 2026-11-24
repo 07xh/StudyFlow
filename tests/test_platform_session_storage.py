@@ -53,3 +53,21 @@ def test_real_windows_large_session_and_logout(tmp_path):
     assert store.load() == secret
     store.clear()
     assert store.load() is None
+
+
+def test_blank_profile_without_legacy_credentials(tmp_path, monkeypatch):
+    fake = SimpleNamespace(get_password=lambda *_: None)
+    monkeypatch.setitem(sys.modules, "keyring", fake)
+    store = storage.SessionStore("yuketang", "test", "test", tmp_path)
+    assert store.load() is None
+    assert not store.path.exists()
+
+
+def test_unavailable_legacy_backend_is_not_reported_as_missing(tmp_path, monkeypatch):
+    def unavailable(*_args):
+        raise RuntimeError("synthetic private backend detail")
+    monkeypatch.setitem(sys.modules, "keyring", SimpleNamespace(get_password=unavailable))
+    store = storage.SessionStore("ucampus", "test", "test", tmp_path)
+    with pytest.raises(storage.SessionStorageError, match="^SESSION_STORAGE_FAILED$"):
+        store.load()
+    assert not store.path.exists()
