@@ -1,6 +1,7 @@
-import {useEffect,useId,useRef,useState,type KeyboardEvent,type MouseEvent,type PointerEvent as ReactPointerEvent,type ReactNode} from "react";
+import {useEffect,useId,useRef,useState,type KeyboardEvent,type PointerEvent as ReactPointerEvent,type ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {BookOpen,Globe2,Info,Palette,RefreshCw,X} from "lucide-react";
+import {acquireModalScrollLock,trapDialogTab} from "./modalInteraction";
 import "./globalSettings.css";
 
 export type GlobalSettingsTab="general"|"questionbank"|"updates"|"about"|"developer";
@@ -66,18 +67,17 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
   useEffect(()=>{
     if(!open)return;
     openerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const oldOverflow=document.body.style.overflow;
-    document.body.style.overflow="hidden";
+    const releaseLock=acquireModalScrollLock();
     const frame=window.requestAnimationFrame(()=>closeRef.current?.focus());
     return ()=>{
       window.cancelAnimationFrame(frame);
-      document.body.style.overflow=oldOverflow;
-      if(openerRef.current?.isConnected)openerRef.current.focus();
+      if(releaseLock()&&openerRef.current?.isConnected)openerRef.current.focus();
     };
   },[open]);
   useEffect(()=>{
     if(!open)return;
     const resize=()=>setViewport(window.innerWidth);
+    resize();
     window.addEventListener("resize",resize);
     return ()=>window.removeEventListener("resize",resize);
   },[open]);
@@ -108,6 +108,7 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
       window.removeEventListener("pointerup",stop);
       window.removeEventListener("pointercancel",stop);
       window.removeEventListener("blur",stop);
+      stop();
     };
   },[open]);
   function startDrag(event:ReactPointerEvent<HTMLDivElement>){
@@ -132,25 +133,14 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
       onClose();
       return;
     }
-    if(event.key!=="Tab")return;
-    const controls=Array.from(panelRef.current.querySelectorAll<HTMLElement>(
-      'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-    )).filter(item=>item.getClientRects().length>0);
-    if(!controls.length)return;
-    const first=controls[0],last=controls[controls.length-1];
-    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
-    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
-  }
-  function backdrop(event:MouseEvent<HTMLDivElement>){
-    if(open&&event.target===event.currentTarget)onClose();
+    trapDialogTab(event,panelRef.current);
   }
   if(!mounted&&!open)return null;
   return createPortal(
     <div className={"app sf-shell sf-global-settings-overlay"+(dark?" dark":"")}
-      data-state={entered&&open?"open":"closed"} data-theme={dark?"dark":"light"}
-      onMouseDown={backdrop}>
+      data-state={entered&&open?"open":"closed"} data-theme={dark?"dark":"light"}>
       <section className={"sf-global-settings-modal"+(resizing?" sf-global-settings-resizing":"")}
-        ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={keydown}>
+        ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={keydown}>
         <aside className="sf-global-settings-nav" style={{width:shownWidth}}>
           <div className="sf-global-settings-brand"><h2 id={titleId}>设置</h2></div>
           <nav aria-label="设置分类">
