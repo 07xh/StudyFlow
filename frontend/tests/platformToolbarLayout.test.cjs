@@ -9,7 +9,7 @@ test("platform toolbar keeps settings and sync in one ordered row without a dupl
   const css=source("style.css");
   const block=app.slice(app.indexOf('className="sf-platform-toolbar actions"'),app.indexOf('      {selected?renderCourseWorkspace(selected):renderCourses(platform)}'));
   assert.ok(block.length>0);
-  const account=block.indexOf("账号与连接"),settings=block.indexOf("参数设置"),sync=block.indexOf("同步课程列表");
+  const account=block.indexOf("账号与连接"),settings=block.indexOf("平台设置"),sync=block.indexOf("同步课程列表");
   assert.ok(account>=0&&settings>account&&sync>settings,"account, settings and synchronization remain together");
   assert.doesNotMatch(block,/打开课程列表/,"the platform landing already contains the course list");
   assert.match(block,/role="group" aria-label="平台操作"/);
