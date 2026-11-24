@@ -29,5 +29,6 @@ test("platform settings retain diagnostics navigation without duplicate inline a
  assert.ok(a>=0&&b>a);
  assert.doesNotMatch(app.slice(a,b),/打开完整日志与诊断记录/);
  assert.match(app,/footer=\{<div className="actions">[\s\S]*?setPage\("logs"\)/);
- assert.match(app,/onClick=\{\(\)=>setPlatformSettingsOpen\(null\)\}>关闭<\/button>/);
+ assert.match(app,/disabled=\{settingsDraft\.saving\} onClick=\{closePlatformSettings\}>关闭<\/button>/);
+ assert.match(app,/function closePlatformSettings\(\)\{guardSettingsNavigation\(\(\)=>setPlatformSettingsOpen\(null\)\);\}/);
 });
