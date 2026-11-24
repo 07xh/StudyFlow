@@ -134,8 +134,9 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
   course:Course;desktop:boolean;
 }){
   const [chapters,setChapters]=useState<Chapter[]>([]);
-  const [loading,setLoading]=useState(false);
+  const [loading,setLoading]=useState(desktop);
   const [message,setMessage]=useState("");
+  const [chapterError,setChapterError]=useState("");
   const [revision,setRevision]=useState(0);
   const [expanded,setExpanded]=useState<string|null>(null);
   const [taskLoading,setTaskLoading]=useState(false);
@@ -158,9 +159,9 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
   const visibleTasks=filterXuexitongTasks(tasks,taskSearch,taskFilter,taskCompletion);
 
   useEffect(()=>{
-    if(!desktop)return;
+    if(!desktop){setLoading(false);return;}
     let live=true;
-    setLoading(true);setMessage("");
+    setLoading(true);setMessage("");setChapterError("");
     setChapters([]);
     taskCache.current.clear();
     setExpanded(null);setTasks([]);setTaskError("");
@@ -170,13 +171,13 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
         if(!Array.isArray(list))throw Error("INVALID_IPC_RESPONSE");
         setChapters(list);
         if(!list.length)setMessage("当前课程未返回可读取的章节。");
-      }).catch(error=>{if(live)setMessage(friendlyBridgeError(error));})
+      }).catch(error=>{if(live)setChapterError(friendlyBridgeError(error));})
       .finally(()=>{if(live)setLoading(false);});
     return ()=>{live=false;};
   },[desktop,course.course_id,revision]);
 
   useEffect(()=>{
-    if(!desktop||expanded===null)return;
+    if(!desktop||expanded===null){setTaskLoading(false);return;}
     let live=true;
     const key=course.course_id+":"+expanded;
     const cached=taskCache.current.get(key);
@@ -203,11 +204,11 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
       <div>
         <h3>章节与任务点</h3>
         <p className="sf-muted">
-          已读取 {overview.total} 个章节 · 标记完成 {overview.completed} · 待学习 {overview.pending} · 未解锁 {overview.locked}
+          {loading?"正在读取章节…":chapterError?"章节读取失败":!desktop?"请在 Windows 桌面版读取":`显示 ${visibleChapters.length} / ${overview.total} 个章节 · 标记完成 ${overview.completed} · 待学习 ${overview.pending} · 未解锁 ${overview.locked}`}
         </p>
       </div>
       <button type="button" className="secondary" disabled={!desktop||loading}
-        onClick={()=>{setExpanded(null);setTasks([]);setTaskError("");taskCache.current.clear();setRevision(value=>value+1);}}>刷新章节</button>
+        onClick={()=>{setLoading(true);setExpanded(null);setTasks([]);setTaskError("");setChapterError("");taskCache.current.clear();setRevision(value=>value+1);}}>{loading?"读取中…":"刷新章节"}</button>
     </div>
     <div className="sf-xxt-filters" role="group" aria-label="章节筛选">
       <label className="sf-xxt-search"><span>搜索章节</span>
@@ -224,15 +225,16 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
       </label>
     </div>
     {loading&&<p role="status" className="sf-muted">正在读取真实章节…</p>}
-    {message&&<p role="status" className="sf-muted">{message}</p>}
+    {chapterError&&<p role="alert">{chapterError}</p>}
+    {!desktop&&<p role="status" className="sf-muted">请在 Windows 桌面版读取真实章节。</p>}
+    {!loading&&!chapterError&&message&&<p role="status" className="sf-muted">{message}</p>}
     {!loading&&chapters.length>0&&visibleChapters.length===0&&
       <p className="sf-muted" role="status">没有符合当前筛选条件的章节。</p>}
     <div className="sf-xxt-chapters">
       {visibleChapters.map(item=><article key={item.id} className="sf-xxt-chapter">
         <div className="sf-xxt-chapter-head">
           <div className="sf-xxt-chapter-title">
-            <strong title={item.title}>{item.title}</strong>
-            <span className="sf-xxt-chapter-id">#{item.id}</span>
+            <strong title={item.title+" · ID: "+item.id}>{item.title}</strong>
           </div>
           <span className={"sf-xxt-state "+(item.locked?"locked":item.completed?"completed":"pending")}>
             {item.locked?"未解锁":item.completed?"已标记完成":"待学习"}
@@ -240,7 +242,8 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
           <button type="button" className="secondary" disabled={!desktop||loading||item.locked}
             aria-expanded={expanded===item.id} aria-label={item.title+"："+(expanded===item.id?"收起任务点":"查看任务点")}
             onClick={()=>{
-              setExpanded(previous=>previous===item.id?null:item.id);
+              const next=expanded===item.id?null:item.id;
+              setTasks([]);setTaskError("");setTaskLoading(next!==null);setExpanded(next);
               setTaskSearch("");setTaskFilter("all");setTaskCompletion("all");
             }}>
             {expanded===item.id?"收起":"查看任务点"}
@@ -279,7 +282,7 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
               {tasks.length===0?"本章节未返回可识别的任务点。":"没有符合筛选条件的任务。"}
             </p>}
           <ul className="sf-xxt-task-list">
-            {!taskLoading&&visibleTasks.map(task=><li key={task.id} className="sf-xxt-task-item">
+            {!taskLoading&&!taskError&&visibleTasks.map(task=><li key={task.id} className="sf-xxt-task-item">
               <span className="sf-xxt-task-type">{taskLabels[task.type]??"其他任务"}</span>
               <strong title={task.title}>{task.title}</strong>
               <span className={"sf-xxt-state "+(task.completed===true?"completed":task.completed===false?"pending":"unknown")}>
@@ -290,8 +293,6 @@ export function XuexitongCourseDetailPanel({course,desktop}:{
         </div>}
       </article>)}
     </div>
-    <p className="sf-muted sf-xxt-evidence-note">
-      章节与任务状态来自学习通页面返回的标记，不等于官方课程总进度。
-    </p>
+    <details className="sf-technical-note"><summary>数据口径</summary><p className="sf-muted sf-xxt-evidence-note">章节与任务状态来自学习通页面返回的标记，不等于官方课程总进度。</p></details>
   </section>;
 }
