@@ -4,6 +4,7 @@
 import {useEffect,useId,useRef,type KeyboardEvent,type MouseEvent} from "react";
 import {createPortal} from "react-dom";
 import {AlertTriangle,ShieldCheck,X} from "lucide-react";
+import {acquireModalScrollLock,trapDialogTab} from "./modalInteraction";
 import "./interactions.css";
 
 interface ConfirmDialogProps {
@@ -32,13 +33,11 @@ export function ConfirmDialog({
   useEffect(()=>{
     if(!open)return;
     previousFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const previousOverflow=document.body.style.overflow;
-    document.body.style.overflow="hidden";
+    const releaseLock=acquireModalScrollLock();
     const frame=window.requestAnimationFrame(()=>cancelRef.current?.focus());
     return ()=>{
       window.cancelAnimationFrame(frame);
-      document.body.style.overflow=previousOverflow;
-      previousFocus.current?.focus();
+      if(releaseLock()&&previousFocus.current?.isConnected)previousFocus.current.focus();
     };
   },[open]);
 
@@ -46,18 +45,11 @@ export function ConfirmDialog({
 
   function onKeyboard(event:KeyboardEvent<HTMLElement>){
     if(event.key==="Escape"){
-      event.stopPropagation();
+      event.preventDefault();event.stopPropagation();
       if(!busy)onCancel();
       return;
     }
-    if(event.key!=="Tab")return;
-    const items=Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>(
-      "button:not(:disabled)"
-    )??[]);
-    if(items.length===0)return;
-    const first=items[0], last=items[items.length-1];
-    if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
-    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    trapDialogTab(event,dialogRef.current);
   }
 
   function onBackdrop(event:MouseEvent<HTMLDivElement>){
@@ -69,7 +61,7 @@ export function ConfirmDialog({
       onMouseDown={onBackdrop}>
       <section ref={dialogRef} role={danger?"alertdialog":"dialog"} aria-modal="true"
         aria-labelledby={titleId} aria-describedby={detailId}
-        className="sf-dialog" onKeyDown={onKeyboard}>
+        className="sf-dialog" tabIndex={-1} onKeyDown={onKeyboard}>
         <div className="sf-dialog-heading">
           <span className={danger?"sf-dialog-symbol danger":"sf-dialog-symbol"}>
             {danger?<AlertTriangle size={21}/>:<ShieldCheck size={21}/>}

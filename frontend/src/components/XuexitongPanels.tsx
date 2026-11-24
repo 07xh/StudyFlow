@@ -60,19 +60,23 @@ export function XuexitongLoginPanel({desktop,onConnected}:{
   </div>;
 }
 
-export function XuexitongSettingsPanel({desktop}:{
+export function XuexitongSettingsPanel({desktop,onDraftChange}:{
   desktop:boolean;
+  onDraftChange?:(state:{dirty:boolean;saving:boolean})=>void;
 }){
   const [settings,setSettings]=useState<XuexitongSettings>(initialSettings);
+  const [baseline,setBaseline]=useState<XuexitongSettings|null>(null);
   const [busy,setBusy]=useState(false);
   const [notice,setNotice]=useState("");
   const [loaded,setLoaded]=useState(false);
+  const dirty=baseline!==null&&JSON.stringify(settings)!==JSON.stringify(baseline);
+  useEffect(()=>{onDraftChange?.({dirty,saving:busy});},[dirty,busy,onDraftChange]);
 
   useEffect(()=>{
     if(!desktop)return;
     let live=true;
     void request<XuexitongSettings>({operation:"xuexitong.settings.get"})
-      .then(result=>{if(live){setSettings(result);setLoaded(true);}})
+      .then(result=>{if(live){setSettings(result);setBaseline(result);setLoaded(true);}})
       .catch(error=>{if(live)setNotice(friendlyBridgeError(error));});
     return ()=>{live=false;};
   },[desktop]);
@@ -84,7 +88,7 @@ export function XuexitongSettingsPanel({desktop}:{
       const saved=await request<XuexitongSettings>({operation:"xuexitong.settings.save",settings});
       const confirmed=await request<XuexitongSettings>({operation:"xuexitong.settings.get"});
       if(JSON.stringify(confirmed)!==JSON.stringify(saved))throw new Error("XUEXITONG_SETTINGS_VERIFY_FAILED");
-      setSettings(confirmed);
+      setSettings(confirmed);setBaseline(confirmed);
       setNotice("参数预设已保存在本机，后续课程任务会读取这些默认参数。");
     }catch(error){setNotice(friendlyBridgeError(error));}
     finally{setBusy(false);}
@@ -121,6 +125,7 @@ export function XuexitongSettingsPanel({desktop}:{
         checked={settings.verify_after_run}
         onChange={e=>setSettings(previous=>({...previous,verify_after_run:e.target.checked}))}/>
     </label>
+    {dirty&&<p className="sf-muted" role="status">存在尚未保存的修改。</p>}
     <div className="actions">
       <button type="button" disabled={!desktop||!loaded||busy} onClick={()=>void save()}>
         {busy?"保存中…":"保存参数预设"}

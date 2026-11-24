@@ -134,6 +134,9 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
+  const [settingsDraft,setSettingsDraft]=useState({dirty:false,saving:false});
+  const pendingSettingsNavigation=useRef<(()=>void)|null>(null);
+  const [discardSettingsOpen,setDiscardSettingsOpen]=useState(false);
   // A course has ONE visible settings action. ZHS uses its course-scoped
   // editor; official/YKT/XXT use the platform preset view.
   const [zhsCourseSettingsOpen,setZhsCourseSettingsOpen]=useState(false);
@@ -588,11 +591,23 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
     </section>;
   };
+  function guardSettingsNavigation(action:()=>void){
+    if(settingsDraft.saving)return;
+    if(settingsDraft.dirty){pendingSettingsNavigation.current=action;setDiscardSettingsOpen(true);return;}
+    action();
+  }
+  function closePlatformSettings(){guardSettingsNavigation(()=>setPlatformSettingsOpen(null));}
+  function resolveSettingsDiscard(discard:boolean){
+    const action=pendingSettingsNavigation.current;
+    pendingSettingsNavigation.current=null;
+    setDiscardSettingsOpen(false);
+    if(discard&&action){setSettingsDraft({dirty:false,saving:false});action();}
+  }
   const renderSettingsNavigation=(platform:Platform)=>
     <nav className="sf-settings-menu" aria-label="平台设置分类">
-      {([["account","账号与连接"],["parameters",platform==="xuexitong"?"运行参数预设":platform==="ucampus"?"只读接口设置":"播放参数"],["advanced","高级管理"]] as const).map(([section,label])=>
+      {([["account","账号与连接"],["parameters",platform==="ucampus"?"只读接口说明":"平台默认参数"],["advanced","高级管理"]] as const).map(([section,label])=>
         <button type="button" key={section} aria-pressed={platformSettingsSection===section}
-          onClick={()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);}}>{label}</button>)}
+          disabled={settingsDraft.saving} onClick={()=>{if(section!==platformSettingsSection)guardSettingsNavigation(()=>{setYuketangScopeJumpRequest(0);setPlatformSettingsSection(section);});}}>{label}</button>)}
     </nav>;
   const renderPlatformSettings=(platform:Platform)=> <section className="sf-platform-settings-view" aria-label={platformNames[platform]+"参数设置"}>
     {platformSettingsSection==="account"&&<PlatformCard definition={platformInfo(platform)!} state={platforms[platform]}
@@ -606,7 +621,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={true}>
       {renderZhidaoModeSwitch()}
       <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-      <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「参数设置」中调整；此处仅管理官方播放器的默认参数。</p>
+      <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「本课参数」中调整；此处仅管理官方播放器的默认参数。</p>
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
@@ -622,7 +637,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
 
       </>}
     </>:platform==="xuexitong"?<>
-      {platformSettingsSection==="parameters"&&<XuexitongSettingsPanel desktop={desktop}/>}
+      {platformSettingsSection==="parameters"&&<XuexitongSettingsPanel desktop={desktop} onDraftChange={setSettingsDraft}/>}
       {platformSettingsSection==="advanced"&&<p className="sf-muted">已保存的登录会话使用 Windows 凭据管理器；可在「账号与连接」清除。</p>}
     </>:platform==="ucampus"?<>
       {platformSettingsSection==="parameters"&&<p className="sf-muted">U校园5.0 目前只读接入：请在「账号与连接」配置已经核验的真实课程接口。尚未实现课程行为写入、播放、章节与进度核验。</p>}
@@ -662,7 +677,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         }}>账号与连接</button>
         <button type="button" className="secondary sf-platform-settings-action"
           onClick={()=>openPlatformSettings(platform,"parameters")}>
-          <SlidersHorizontal size={15}/>参数设置
+          <SlidersHorizontal size={15}/>平台设置
         </button>
         <button type="button" className="secondary"
           disabled={!desktop||Boolean(busy)||syncFeedback[platform].phase==="syncing"||platforms[platform].status!=="connected"}
@@ -671,12 +686,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       {selected?renderCourseWorkspace(selected):renderCourses(platform)}
       <SettingsDialog open={platformSettingsOpen===platform} dark={dark}
         navigation={renderSettingsNavigation(platform)} contentKey={platformSettingsSection}
-        title={platformNames[platform]+" · 设置"} onClose={()=>setPlatformSettingsOpen(null)}
+        title={platformNames[platform]+" · 设置"} onClose={closePlatformSettings}
         footer={<div className="actions">
           <button className="secondary" type="button"
-            onClick={()=>{setPlatformSettingsOpen(null);setPage("logs");}}>日志与诊断</button>
+            disabled={settingsDraft.saving} onClick={()=>guardSettingsNavigation(()=>{setPlatformSettingsOpen(null);setPage("logs");})}>日志与诊断</button>
           <button className="secondary" type="button"
-            onClick={()=>setPlatformSettingsOpen(null)}>关闭</button>
+            disabled={settingsDraft.saving} onClick={closePlatformSettings}>关闭</button>
         </div>}>
         {platformSettingsOpen===platform&&renderPlatformSettings(platform)}
       </SettingsDialog>
@@ -820,7 +835,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
                 openPlatformSettings(course.platform,"parameters");
               }
             }}>
-            <SlidersHorizontal size={15}/>参数设置
+            <SlidersHorizontal size={15}/>{course.platform==="zhidao"&&mode==="zhs-original"?"本课参数":"平台设置"}
           </button>
           <button className="secondary sf-course-logs-action" type="button"
             onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
@@ -1067,6 +1082,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       {globalSettingsTab==="questionbank"&&<QuestionBankSettingsPanel desktop={desktop&&consentAccepted} dark={dark}/>}
       {globalSettingsTab==="general"&&<section className="settings-card">
         <h3>外观</h3>
+        <p className="sf-muted">外观偏好即时生效，无需另行保存。</p>
         <div className="sf-settings-line">
           <div><strong>界面主题</strong></div>
           <ThemeModeSelector mode={mode} onChange={setMode}/>
@@ -1094,6 +1110,11 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         invalidatePlatform("zhidao");
         recordEvent("知到","扫码登录","success","知到服务端验证通过");
         void refresh().then(()=>setNotice(previous=>previous||"知到登录已通过服务端核验。"));}}/>}
+    <ConfirmDialog open={discardSettingsOpen} dark={dark} danger
+      title="放弃尚未保存的修改？"
+      description="当前设置表单中的修改还没有保存。离开后将恢复为最近一次已确认的设置。"
+      confirmLabel="放弃修改" cancelLabel="继续编辑"
+      onConfirm={()=>resolveSettingsDiscard(true)} onCancel={()=>resolveSettingsDiscard(false)}/>
     <ConfirmDialog open={clearLogsOpen} dark={dark} danger
       title="清空本机操作记录？"
       description="将删除学序保存在本机的操作与核验记录。"

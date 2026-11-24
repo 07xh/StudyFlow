@@ -29,7 +29,7 @@ test("selected course offers one parameter entry and hides duplicate ZHS entry",
   assert.match(runtime,/hideTrigger=\{detailMode\}/);
   assert.match(zhs,/!hideTrigger&&<button/);
   assert.doesNotMatch(course,/>平台设置\s*<\/button>/);
-  assert.match(course,/>参数设置\s*<\/button>/);
+  assert.match(course,/\?"本课参数":"平台设置"\}\s*<\/button>/);
 });
 
 test("controlled ZHS dialog opens from course toolbar and leaves runner settings mounted when closed",async()=>{

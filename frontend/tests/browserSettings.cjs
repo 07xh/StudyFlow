@@ -22,7 +22,7 @@ const server=http.createServer((req,res)=>{
    const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
    await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
    await page.getByRole('button',{name:'知到',exact:true}).click();
-   const trigger=page.getByRole('button',{name:'参数设置',exact:true});await trigger.click();
+   const trigger=page.getByRole('button',{name:'平台设置',exact:true});await trigger.click();
    await page.getByRole('button',{name:'高级管理',exact:true}).click();
    const dialog=page.getByRole('dialog',{name:'知到 · 设置'});
    assert.equal(await dialog.locator('.sf-zd-progress-grid').evaluate(e=>getComputedStyle(e).display),'grid','Progress layout must survive the portal');
