@@ -10,7 +10,7 @@ test("platform settings overlay preserves selected course workspace",()=>{
   assert.match(dialog,/createPortal\(/);
   assert.match(dialog,/aria-modal="true"/);
   assert.match(dialog,/event.key==="Escape"/);
-  assert.match(dialog,/lastFocus.current\?\.focus\(\)/);
+  assert.match(dialog,/if\(releaseLock\(\)&&lastFocus\.current\?\.isConnected\)lastFocus\.current\.focus\(\)/);
 });
 test("course and platform parameter controls open a shared dialog without unmounting the runner",()=>{
   const zhs=source("components/ZhsTaskSettingsPanel.tsx");
