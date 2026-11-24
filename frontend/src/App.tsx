@@ -798,9 +798,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     const scope="course:"+course.platform+":"+course.course_id+":";
     const mode=courseMode(course);
     const catalogOnly=course.platform==="xuexitong"||course.platform==="ucampus";
-    return <section className="sf-course-workspace" aria-label={catalogOnly?"课程与任务工作台":"课程播放工作台"}>
+    return <section className="sf-course-workspace" aria-label={course.title+" · 课程工作台"}>
       <div className="sf-course-detail-topline">
-        <button className="secondary" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>返回课程列表</button>
+        <div className="sf-course-context">
+          <button className="secondary sf-course-back" type="button" onClick={()=>enterCourses(course.platform)}><ArrowLeft size={15}/>课程列表</button>
+          <h2 title={course.title}>{course.title}</h2>
+        </div>
         <div className="sf-course-top-actions">
           {course.platform==="zhidao"&&<button
             className="secondary sf-course-mastery-action" type="button"
@@ -823,10 +826,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
             onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
           {!catalogOnly&&<button className="secondary" onClick={()=>{setCourseLogsOpen(false);setPage("tasks");}}>运行任务</button>}
         </div>
-      </div>
-      <div className="sf-course-playback-heading">
-        <span className="eyebrow">{platformNames[course.platform]}</span>
-        <h2>{course.title}</h2>
       </div>
       <section className="sf-course-playback-stage" aria-label={catalogOnly?"任务模块状态":"播放控制"}>
         <div className="sf-course-player-heading">
@@ -853,10 +852,10 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
           <XuexitongHeartbeatPanel course={course} desktop={desktop}/>
         </>:<>
           <div className="sf-course-scope-note" role="note">
-            <span>按已保存的课堂范围执行，可能包含其他课程。</span>
+            <span>当前课堂范围可能包含其他课程。</span>
             <details>
               <summary>范围说明</summary>
-              <p>雨课堂原版目前按已保存的课堂范围运行批量任务，<strong>并非只针对「{course.title}」播放</strong>。需要切换课堂范围或默认参数时，请使用课程页顶部「参数设置」。</p>
+              <p>当前范围与「{course.title}」不一定相同。请在平台设置中核对课堂范围。</p>
             </details>
           </div>
           <YuketangTaskArea courses={platforms.yuketang.courses} view="player" detailMode
@@ -866,7 +865,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         </>}
       </section>
       {course.platform==="zhidao"?<>
-        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
+        <CollapsibleSection id={scope+"chapters"} title="课程章节与资源" defaultExpanded={true}>
           <ZhidaoCourseDetailPanel key={"chapters:"+course.course_id} course={course} desktop={desktop}
             onCoursesUpdated={updateCourses}
             autoVerifyActive={autoVerify.enabled&&autoVerify.courseId===course.course_id&&
@@ -897,15 +896,15 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
             onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
         </CollapsibleSection>
       </>:course.platform==="ucampus"?<>
-        <CollapsibleSection id={scope+"chapters"} title="章节与学习任务" defaultExpanded={true}>
+        <CollapsibleSection id={scope+"chapters"} title="课程章节与资源" defaultExpanded={true}>
           <UCampusCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
       </>:course.platform==="xuexitong"?<>
-        <CollapsibleSection id={scope+"chapters"} title="章节与学习记录" defaultExpanded={true}>
+        <CollapsibleSection id={scope+"chapters"} title="课程章节与资源" defaultExpanded={true}>
           <XuexitongCourseDetailPanel course={course} desktop={desktop}/>
         </CollapsibleSection>
       </>:<>
-        <CollapsibleSection id={scope+"chapters"} title="章节与学习进度" defaultExpanded={true}>
+        <CollapsibleSection id={scope+"chapters"} title="课程章节与资源" defaultExpanded={true}>
           <YuketangCourseDetailPanel course={course} desktop={desktop}
             connected={platforms.yuketang.status==="connected"} scopeDirty={scopeDirty}/>
         </CollapsibleSection>
