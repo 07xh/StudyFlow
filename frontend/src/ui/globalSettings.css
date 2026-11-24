@@ -53,13 +53,13 @@
 }
 .sf-global-settings-header h3{margin:0;color:var(--text);font-size:14px;font-weight:700}
 .sf-global-settings-header button{
-  display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;
-  border:1px solid transparent;border-radius:9px;color:var(--muted);background:transparent;
+  display:grid;place-items:center;flex:none;width:var(--sf-icon-control-size,32px);height:var(--sf-icon-control-size,32px);padding:0;
+  border:1px solid transparent;border-radius:var(--sf-filter-radius);color:var(--muted);background:transparent;
   cursor:pointer;
 }
 .sf-global-settings-header button:hover{color:var(--text);background:var(--soft-accent)}
 .sf-global-settings-header button:focus-visible,.sf-global-settings-nav button:focus-visible{
-  outline:2px solid var(--accent);outline-offset:2px;
+  outline:var(--sf-focus-width) solid var(--accent);outline-offset:var(--sf-focus-offset);
 }
 .sf-global-settings-content{
   flex:1;min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;
