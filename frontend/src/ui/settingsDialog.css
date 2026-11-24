@@ -18,11 +18,11 @@
 .sf-settings-modal-kicker{font-size:10px;color:var(--muted);letter-spacing:.06em}
 .sf-settings-modal-heading h2{margin:3px 0 0;font-size:16px;font-weight:700;line-height:1.3}
 .sf-settings-modal-close{
-  display:grid;place-items:center;flex:none;width:32px;height:32px;padding:0;
-  border:1px solid var(--line);border-radius:9px;color:var(--text);background:var(--panel-raised);cursor:pointer;
+  display:grid;place-items:center;flex:none;width:var(--sf-icon-control-size,32px);height:var(--sf-icon-control-size,32px);padding:0;
+  border:1px solid var(--line);border-radius:var(--sf-filter-radius);color:var(--text);background:var(--panel-raised);cursor:pointer;
 }
 .sf-settings-modal-close:hover,.sf-settings-menu button:hover{background:var(--soft-accent)}
-.sf-settings-modal-close:focus-visible,.sf-settings-menu button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sf-settings-modal-close:focus-visible,.sf-settings-menu button:focus-visible{outline:var(--sf-focus-width) solid var(--accent);outline-offset:var(--sf-focus-offset)}
 .sf-settings-modal-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:16px 20px 20px}
 .sf-settings-modal-footer{
   display:flex;justify-content:flex-end;align-items:center;gap:10px;flex:none;
