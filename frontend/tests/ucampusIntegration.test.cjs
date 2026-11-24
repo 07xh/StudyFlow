@@ -18,7 +18,7 @@ test("U校园 reads only supported task and server status",()=>{
   const login=read("components/UCampusLoginPanel.tsx");
   const detail=read("components/UCampusCourseDetailPanel.tsx");
   assert.match(app,/renderPlatformDetail\("ucampus"\)/);
-  assert.ok(app.includes("<UCampusCourseDetailPanel course={course} desktop={desktop}/>"));
+  assert.match(app,/<UCampusCourseDetailPanel key=\{"ucampus-catalog:"\+course\.course_id\} course=\{course\} desktop=\{desktop\}\/>/);
   assert.ok(detail.includes('operation:"ucampus.units.list"'));
   assert.ok(detail.includes('operation:"ucampus.unit.tasks"'));
   assert.match(detail,/待核验/);

@@ -9,8 +9,8 @@ test("course workspace leads with controls and retains platform-wide Rain Classr
   const course=app.slice(app.indexOf("const renderCourseWorkspace="),app.indexOf("const activeSelectedCourse="));
   assert.doesNotMatch(course,/在这里管理播放与查看真实章节/);
   assert.match(course,/sf-course-scope-note/);
-  assert.match(course,/按已保存的课堂范围执行，可能包含其他课程/);
-  assert.match(course,/并非只针对/);
+  assert.match(course,/当前课堂范围可能包含其他课程/);
+  assert.match(course,/当前范围与「\{course.title\}」不一定相同/);
   assert.match(course,/sf-course-playback-stage/);
 });
 
