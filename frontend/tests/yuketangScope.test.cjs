@@ -31,7 +31,7 @@ test('classroom scope saves in its own section without resending credentials or 
   act(()=>shell.onNavigate('platform-yuketang'));
   assert.equal(view.root.findAllByType('input').some(n=>n.props.value==='11'),false,
     'Classroom scope must not be rendered on the platform course home');
-  const settingsAction=view.root.findAllByType('button').find(n=>words(n)==='参数设置');
+  const settingsAction=view.root.findAllByType('button').find(n=>words(n)==='平台设置');
   assert.ok(settingsAction,'Platform settings must remain directly accessible');
   act(()=>settingsAction.props.onClick());
   const advanced=view.root.findAllByType('button').find(n=>words(n)==='高级管理');
