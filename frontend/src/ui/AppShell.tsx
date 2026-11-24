@@ -40,7 +40,7 @@ function readPlatformExpanded():boolean{
 
 interface Props {
   page:Page;onNavigate:(next:Page)=>void;settingsOpen:boolean;onOpenSettings:()=>void;dark:boolean;onThemeToggle:()=>void;
-  onRefresh:()=>void;desktop:boolean;notice:string;onDismissNotice:()=>void;
+  onRefresh:()=>void;refreshBusy?:boolean;refreshing?:boolean;desktop:boolean;notice:string;onDismissNotice:()=>void;
   compact:boolean;children:ReactNode;
   headerTitle?:string;
   currentPlatform?:string;
@@ -50,7 +50,7 @@ interface Props {
   metricLabel?:string;courseEvidence?:string;courseVerifiedAt?:string|null;currentPlatformStatus?:ConnectionStatus;
 }
 export function AppShell({
-  page,onNavigate,settingsOpen,onOpenSettings,dark,onThemeToggle,onRefresh,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,platformOverview,selectedCourseId="",courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
+  page,onNavigate,settingsOpen,onOpenSettings,dark,onThemeToggle,onRefresh,refreshBusy=false,refreshing=false,desktop,notice,onDismissNotice,compact,children,headerTitle,currentPlatform,currentCourseTitle,courseProgress,platformOverview,selectedCourseId="",courseOptions=[],onCourseSelect,metricLabel,courseEvidence,courseVerifiedAt,currentPlatformStatus
 }:Props){
   const [platformExpanded,setPlatformExpanded]=useState(readPlatformExpanded);
 
@@ -165,8 +165,8 @@ export function AppShell({
         <span className="sf-mode">
           {desktop?"Windows 桌面":"浏览器预览"}
         </span>
-        <button className="theme-button" type="button" title="检测平台连接"
-          aria-label="检测平台连接" disabled={!desktop} onClick={onRefresh}>
+        <button className="theme-button" type="button" title={refreshing?"正在检测平台连接":"检测平台连接"}
+          aria-label={refreshing?"正在检测平台连接":"检测平台连接"} aria-busy={refreshing} disabled={!desktop||refreshBusy} onClick={onRefresh}>
           <RefreshCw size={17}/>
         </button>
         <button className="theme-button" type="button"
