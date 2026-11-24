@@ -1,9 +1,10 @@
-import {cleanContext,courseEvents,executionEvents,storedActivity,type ActivityEntry,type EventContext,type EventResult} from "./activity";
+import {cleanContext,courseEvents,executionEvents,storedActivity,filterActivity,activityResultLabels,type ActivityFilter,type ActivityEntry,type EventContext,type EventResult} from "./activity";
 import {useRuntimeTasks} from "./runtimeTasks";
 import {TaskRecoveryPanel} from "./taskRecovery";
 import {getYuketangLiveProgress} from "./legacyPlayback";
 import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
+import {ActivityFilterBar} from "./ui/ActivityFilterBar";
 import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
@@ -132,6 +133,8 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const [config,setConfig]=useState<Config>(emptyConfiguration);
   const [courseQueries,setCourseQueries]=useState<Record<Platform,string>>({zhidao:"",yuketang:"",xuexitong:"",ucampus:""});
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
+  const [recordFilter,setRecordFilter]=useState<ActivityFilter>({platform:"all",result:"all",query:""});
+  const [logFilter,setLogFilter]=useState<ActivityFilter>({platform:"all",result:"all",query:""});
   const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
   const [settingsDraft,setSettingsDraft]=useState({dirty:false,saving:false});
@@ -1008,12 +1011,16 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
 
   const renderTasks=()=> <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} desktop={desktop} onRefresh={runtime.refresh} onInspect={inspectCourse}
     onEvent={(action,result,detail,context)=>recordEvent(context?.runner==="yuketang"?"雨课堂":"知到",action,result,detail,context)}/>;
+  const recordedEvents=executionEvents(activity);
+  const visibleRecords=filterActivity(recordedEvents,recordFilter);
+  const visibleLogs=filterActivity(activity,logFilter);
   const renderRecords=()=> <section className="sf-section">
     <div className="section-head"><h3>执行与核验记录</h3></div>
     <p className="sf-muted">本机最近记录，进程结束不代表平台确认完成。</p>
-    {executionEvents(activity).length===0?<EmptyState icon={History} title="暂无执行或核验记录" description="实际启动、停止和核验后会在这里留下记录。"/>:<div className="sf-history-list">{executionEvents(activity).map(event=>{
+    <ActivityFilterBar events={recordedEvents} filter={recordFilter} onChange={setRecordFilter} visibleCount={visibleRecords.length}/>
+    {recordedEvents.length===0?<EmptyState icon={History} title="暂无执行或核验记录" description="实际启动、停止和核验后会在这里留下记录。"/>:visibleRecords.length===0?<EmptyState icon={Search} title="没有符合筛选条件的记录" description="请调整平台、结果或搜索条件。"/>:<div className="sf-history-list">{visibleRecords.map(event=>{
       const course=event.courseId?courses.find(course=>platformNames[course.platform]===event.platform&&course.course_id===event.courseId&&!course.stale):undefined;
-      return <article key={event.id}><time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time><div><strong>{event.action}</strong><span>{event.platform}{course?" · "+course.title:event.courseId?" · 历史课程":" · 平台记录"}</span><p>{event.detail}</p></div>{course&&<button className="secondary" onClick={()=>inspectCourse(course)}>查看课程</button>}</article>;
+      return <article key={event.id}><time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time><div><strong>{event.action}</strong><span>{activityResultLabels[event.result]} · {event.platform}{course?" · "+course.title:event.courseId?" · 历史课程":" · 平台记录"}</span><p>{event.detail}</p></div>{course&&<button className="secondary" onClick={()=>inspectCourse(course)}>查看课程</button>}</article>;
     })}</div>}
   </section>;
 
@@ -1024,14 +1031,17 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         清空记录
       </button>
     </div>
+    <ActivityFilterBar events={activity} filter={logFilter} onChange={setLogFilter} visibleCount={visibleLogs.length}/>
     {activity.length===0
       ?<EmptyState icon={Activity} title="暂无操作记录" description="平台连接检测、课程同步和任务操作会显示在这里。"/>
-      :<div className="sf-log-list">{activity.map(item=><article className="sf-log-row" key={item.id}>
-        <span className={"sf-log-indicator "+item.result}/>
-        <div className="sf-log-main"><div><strong>{item.action}</strong><span>{item.platform}</span></div>
+      :visibleLogs.length===0?<EmptyState icon={Search} title="没有符合筛选条件的记录" description="请调整平台、结果或搜索条件。"/>
+      :<div className="sf-log-list">{visibleLogs.map(item=>{const course=item.courseId?courses.find(course=>platformNames[course.platform]===item.platform&&course.course_id===item.courseId&&!course.stale):undefined;return <article className="sf-log-row" key={item.id}>
+        <span className={"sf-log-indicator "+item.result} aria-hidden="true"/>
+        <div className="sf-log-main"><div><strong>{item.action}</strong><span>{activityResultLabels[item.result]} · {item.platform}{course?" · "+course.title:""}</span></div>
           <p>{item.detail}</p></div>
         <time dateTime={item.at}>{new Date(item.at).toLocaleString()}</time>
-      </article>)}</div>}
+        {course&&<button type="button" className="secondary sf-log-course" onClick={()=>inspectCourse(course)}>查看课程</button>}
+      </article>})}</div>}
   </section>;
 
   return <>
