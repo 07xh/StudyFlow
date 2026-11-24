@@ -518,7 +518,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "XUEXITONG_INTERNAL_ERROR": return "本地心跳服务内部错误，请查看运行日志。";
     case "XUEXITONG_UNKNOWN_OPERATION": return "不支持的心跳操作。";
     case "XUEXITONG_NO_TARGET_FOR_DTYPE": return "所选任务类型下没有可运行的任务点。";
-    case "COOKIE_IMPORT_FAILED": return "原版 Cookie 导入组件启动失败或无法完成服务器核验。";
+    case "COOKIE_IMPORT_FAILED": return "Cookie 登录组件异常或无法完成服务器核验，请运行连接诊断。";
     default: return "本机服务调用失败，请检查运行环境。";
   }
 }
@@ -533,7 +533,7 @@ export async function openLegacyZhidao(): Promise<void> {
 export type ZhidaoQrStage = "idle" | "busy" | "requesting" | "ready" | "scanned" |
   "confirming" | "verified" | "unavailable" | "rejected" | "expired" |
   "cancelled" | "failed" | "environment-error";
-export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null};
+export type ZhidaoQrState = {stage:ZhidaoQrStage;image_png_base64?:string|null;reason?:string};
 export function zhidaoQrCommand(action:"start"|"status"|"cancel"):Promise<ZhidaoQrState>{
   const operation = ({start:"zhidao.qr.start",status:"zhidao.qr.status",
     cancel:"zhidao.qr.cancel"} as const)[action];

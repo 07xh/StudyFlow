@@ -33,6 +33,8 @@ if (-not (Test-Path -LiteralPath $bridge -PathType Leaf)) {
 }
 & $bridge --zhidao-env-check
 if ($LASTEXITCODE -ne 0) { throw 'Frozen ZHS 0.1.5 import and dependency check failed' }
+& $bridge --zhidao-login-env-check
+if ($LASTEXITCODE -ne 0) { throw 'Frozen ZHS fresh-profile login initialization failed' }
 & $bridge --yuketang-env-check
 if ($LASTEXITCODE -ne 0) { throw 'Frozen original Rain Classroom imports and configuration check failed' }
 function Invoke-JsonlProbe([string]$requestJson) {

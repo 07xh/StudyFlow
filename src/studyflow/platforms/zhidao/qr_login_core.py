@@ -27,10 +27,8 @@ class LoginObservation:
         if not MONITOR_TOKEN.fullmatch(token):
             raise ValueError("invalid local QR monitor token")
         if root is None:
-            local_app_data = os.environ.get("LOCALAPPDATA")
-            if not local_app_data:
-                raise ValueError("LOCALAPPDATA unavailable")
-            root = Path(os.environ.get("STUDYFLOW_QR_STATUS_DIR") or (Path(local_app_data) / "StudyFlow" / "zhidao"))
+            local_app_data = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+            root = Path(os.environ.get("STUDYFLOW_QR_STATUS_DIR") or (local_app_data / "StudyFlow" / "zhidao"))
         self.token = token
         self.root = root
         self.path = root / f"monitor-qr-{token}.json"
@@ -226,17 +224,12 @@ def main(argv: list[str] | None = None) -> int:
         observation = LoginObservation(args[0])
         observation.record("requesting")
         from loguru import logger
-        from zhs.config import ConfigManager
-        from zhs.session import ZhsSession
-        from zhs.utils.path import get_data_dir
-
-        data_dir = get_data_dir()
-        config = ConfigManager().load()
-        config.qr.image_path = str(observation.root / f"studyflow-qr-{observation.token}.png")
+        from .login_environment import initialize_login
         # Never output an upstream exception that could contain QR tokens,
         # one-time passwords or cookies.
         logger.remove()
-        session = ZhsSession(config)
+        config, session, data_dir = initialize_login(Path.home())
+        config.qr.image_path = str(observation.root / f"studyflow-qr-{observation.token}.png")
         try:
             return login_with_qr(config, session, observation, data_dir)
         finally:
