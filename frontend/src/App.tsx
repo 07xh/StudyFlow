@@ -51,8 +51,7 @@ import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo,platformRegistry} from "./ui/registry";
 import {useAppearance} from "./ui/useAppearance";
-import {ThemeModeSelector} from "./ui/ThemeModeSelector";
-import {Switch} from "./ui/Switch";
+import {AppearanceSettings} from "./ui/AppearanceSettings";
 import {EmptyState} from "./ui/EmptyState";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
 import {SettingsDialog} from "./ui/SettingsDialog";
@@ -947,18 +946,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     <GlobalSettingsModal open={globalSettingsOpen} dark={dark}
       activeTab={globalSettingsTab} onTabChange={setGlobalSettingsTab} onClose={()=>setGlobalSettingsOpen(false)}>
       {globalSettingsTab==="questionbank"&&<QuestionBankSettingsPanel desktop={desktop&&consentAccepted} dark={dark}/>}
-      {globalSettingsTab==="general"&&<section className="settings-card">
-        <h3>外观</h3>
-        <p className="sf-muted">外观偏好即时生效，无需另行保存。</p>
-        <div className="sf-settings-line">
-          <div><strong>界面主题</strong></div>
-          <ThemeModeSelector mode={mode} onChange={setMode}/>
-        </div>
-        <div className="sf-settings-line">
-          <div><strong>紧凑卡片</strong></div>
-          <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
-        </div>
-      </section>}
+      {globalSettingsTab==="general"&&<AppearanceSettings mode={mode} onModeChange={setMode} compactCards={compactCards} onCompactChange={setCompactCards}/>}
       <UpdatePanel desktop={desktop&&consentAccepted}
         visible={globalSettingsOpen&&globalSettingsTab==="updates"} embedded
         onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>
