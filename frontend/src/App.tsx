@@ -15,8 +15,7 @@ import {UCampusProgressVerifyPanel} from "./components/UCampusProgressVerifyPane
 import {UCampusFabricatedPanel} from "./components/UCampusFabricatedPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
-  ArrowLeft,BookOpen,
-  ListChecks,Search,SlidersHorizontal
+  ArrowLeft,ListChecks,SlidersHorizontal
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import {invalidateCourseSync,newCourseSyncCheckpoint,shouldStartCourseSync} from "./courseAutoSync";
@@ -47,12 +46,11 @@ import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {CollapsibleSection} from "./ui/CollapsibleSection";
 import {courseMetric,platformNames,selectedSessionCourse,platformProgressOverview,type YuketangVideoSummary} from "./presentation";
-import {CourseCard} from "./ui/CourseCard";
+import {PlatformCourseList} from "./ui/PlatformCourseList";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo} from "./ui/registry";
 import {useAppearance} from "./ui/useAppearance";
 import {AppearanceSettings} from "./ui/AppearanceSettings";
-import {EmptyState} from "./ui/EmptyState";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
 import {SettingsDialog} from "./ui/SettingsDialog";
 import {GlobalSettingsModal,type GlobalSettingsTab} from "./ui/GlobalSettingsModal";
@@ -840,49 +838,13 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const activeCourseProgress=activeMetric?.percent??null;
   const platformOverview=headerPlatform?platformProgressOverview(platforms[headerPlatform].courses,yuketangSummaries):null;
 
-  const renderCourses=(platform:Platform)=>{
-    const platformCourses=platforms[platform].courses;
-    const query=courseQueries[platform];
-    const search=query.trim().toLocaleLowerCase();
-    const visible=platformCourses.filter(course=>
-      course.title.toLocaleLowerCase().includes(search)||
-      course.course_id.toLocaleLowerCase().includes(search));
-    return <section className="sf-platform-courses" aria-label={platformNames[platform]+"课程列表"}>
-      <div className="section-head"><h3>课程列表</h3>
-        <span className="sf-muted" role="status" aria-live="polite">
-          {syncFeedback[platform].phase==="syncing"?"正在自动读取真实课程…":
-           syncFeedback[platform].phase==="failed"?"课程同步失败，可点击「同步课程列表」重试":
-           syncFeedback[platform].phase==="synced"?"已同步真实课程":""}
-        </span>
-      </div>
-      <div className="sf-search-toolbar">
-        <label className="sf-search"><Search size={16}/><input type="search"
-          placeholder="搜索当前平台课程名称或 ID" value={query} onChange={event=>{const value=event.target.value;setCourseQueries(previous=>({...previous,[platform]:value}));}}
-          aria-label="搜索当前平台课程"/></label>
-      </div>
-      {visible.length>0
-        ?<div className="course-grid">{visible.map(course=>
-          <CourseCard course={course} yuketangSummary={course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined} onInspect={inspectCourse} key={course.platform+":"+course.course_id}/>)}</div>
-        :<EmptyState icon={BookOpen}
-          title={platformCourses.length>0?"未找到匹配课程":"暂无真实课程数据"}
-          description={platformCourses.length>0
-            ?"可以更换搜索词。当前只显示"+platformNames[platform]+"课程。"
-            :platforms[platform].status==="connected"
-              ?syncFeedback[platform].phase==="syncing"?"正在自动读取课程，请稍候。"
-              :syncFeedback[platform].phase==="failed"
-                ?"读取失败："+syncFeedback[platform].error+"；请点击「同步课程列表」重试。"
-                :"已自动尝试读取当前平台课程；如课程尚未出现，可点击「同步课程列表」重试。"
-              :"请点击上方「账号与连接」登录当前平台，登录通过后会自动同步真实课程。"}
-          action={platforms[platform].status!=="connected"
-            ?<button className="secondary" type="button"
-              onClick={()=>{
-                setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
-                openPlatformSettings(platform,"account");
-              }}>
-                前往账号登录
-              </button>:undefined}/>}
-    </section>;
-  };
+  const renderCourses=(platform:Platform)=> <PlatformCourseList platform={platform} state={platforms[platform]}
+    query={courseQueries[platform]} feedback={syncFeedback[platform]} yuketangSummaries={yuketangSummaries}
+    onQueryChange={value=>setCourseQueries(previous=>({...previous,[platform]:value}))}
+    inspectCourse={inspectCourse} onLogin={()=>{
+      setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+      openPlatformSettings(platform,"account");
+    }}/>;
 
   const renderTasks=()=> <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} desktop={desktop} onRefresh={runtime.refresh} onInspect={inspectCourse}
     onEvent={(action,result,detail,context)=>recordEvent(context?.runner==="yuketang"?"雨课堂":"知到",action,result,detail,context)}/>;
