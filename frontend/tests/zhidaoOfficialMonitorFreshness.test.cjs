@@ -32,3 +32,11 @@ test("retired official player UI is absent",()=>{
   }
   assert.doesNotMatch(app,/renderZhidaoModeSwitch|zhidaoPlaybackMode/);
 });
+
+test("retired external launcher and frontend player preference errors stay absent",()=>{
+  const bridge=fs.readFileSync(path.join(root,"frontend/src/bridge.ts"),"utf8");
+  assert.doesNotMatch(native,/\blaunch_zhidao_legacy\b/);
+  assert.doesNotMatch(bridge,/\b(openLegacyZhidao|launch_zhidao_legacy|PLAYER_SETTINGS_UNAVAILABLE|INVALID_PLAYER_SETTINGS)\b/);
+  assert.match(bridge,/export function zhidaoQrCommand/);
+  assert.match(native,/zhidao_open_official_site/);
+});

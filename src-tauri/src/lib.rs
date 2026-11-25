@@ -1001,24 +1001,6 @@ fn zhidao_open_data_folder() -> Result<(), String> {
     }
 }
 
-#[tauri::command]
-fn launch_zhidao_legacy() -> Result<(), String> {
-    let dir = std::env::var_os("LOCALAPPDATA").ok_or("Windows app directory unavailable")?;
-    let script = PathBuf::from(dir).join("ZHSDesktop").join("Zhidao-GUI.ps1");
-    if !script.is_file() {
-        return Err("原版知到客户端未安装，请先安装并登录".into());
-    }
-    let mut cmd = Command::new("powershell.exe");
-    cmd.args(["-NoProfile", "-File"]).arg(script);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000);
-    }
-    cmd.spawn().map_err(|_| "无法打开原版知到登录窗口")?;
-    Ok(())
-}
-
 // Restore the existing renderer and its live IPC state; never open a second window.
 fn show_main_from_tray(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -1068,7 +1050,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site, studyflow_open_source_site, studyflow_open_question_bank_site,
+            bridge_request, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site, studyflow_open_source_site, studyflow_open_question_bank_site,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
             zhidao_player::zhidao_player_clear_web_profile,
