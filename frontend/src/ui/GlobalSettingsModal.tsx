@@ -1,7 +1,7 @@
 import {useEffect,useId,useRef,useState,type KeyboardEvent,type PointerEvent as ReactPointerEvent,type ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {BookOpen,Globe2,Info,Palette,RefreshCw,X} from "lucide-react";
-import {acquireModalScrollLock,trapDialogTab} from "./modalInteraction";
+import {activateDialog,trapDialogTab} from "./modalInteraction";
 import "./globalSettings.css";
 
 export type GlobalSettingsTab="general"|"questionbank"|"updates"|"about"|"developer";
@@ -24,7 +24,7 @@ function savedNavWidth(){
   }catch{return DEFAULT_WIDTH;}
 }
 function maxNavWidth(viewport:number){
-  const dialogWidth=Math.min(960,viewport*.76,viewport-24);
+  const dialogWidth=Math.min(960,viewport<=800?viewport-24:viewport*.76,viewport-24);
   return Math.min(MAX_WIDTH,Math.max(MIN_WIDTH,Math.floor(dialogWidth*.4)));
 }
 function persistWidth(value:number){
@@ -47,7 +47,6 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
   const dragRef=useRef<{startX:number;initialWidth:number}|null>(null);
   const panelRef=useRef<HTMLElement>(null);
   const closeRef=useRef<HTMLButtonElement>(null);
-  const openerRef=useRef<HTMLElement|null>(null);
   const scrollRef=useRef<HTMLDivElement>(null);
   const limit=maxNavWidth(viewport);
   const shownWidth=Math.min(width,limit);
@@ -66,13 +65,7 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
   },[open,mounted]);
   useEffect(()=>{
     if(!open)return;
-    openerRef.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const releaseLock=acquireModalScrollLock();
-    const frame=window.requestAnimationFrame(()=>closeRef.current?.focus());
-    return ()=>{
-      window.cancelAnimationFrame(frame);
-      if(releaseLock()&&openerRef.current?.isConnected)openerRef.current.focus();
-    };
+    return activateDialog(()=>closeRef.current,()=>panelRef.current);
   },[open]);
   useEffect(()=>{
     if(!open)return;
@@ -112,7 +105,7 @@ export function GlobalSettingsModal({open,dark,activeTab,onTabChange,onClose,chi
     };
   },[open]);
   function startDrag(event:ReactPointerEvent<HTMLDivElement>){
-    if(viewport<=620)return;
+    if(viewport<=620||event.button!==0)return;
     event.preventDefault();
     dragRef.current={startX:event.clientX,initialWidth:shownWidth};
     setResizing(true);

@@ -4,9 +4,9 @@
   display:flex;align-items:center;justify-content:center;padding:12px;
   overflow:hidden;background:rgba(8,13,18,.63)!important;
   backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);
-  opacity:0;transition:opacity .19s ease;
+  opacity:0;pointer-events:none;transition:opacity .19s ease;
 }
-.app.sf-shell.sf-global-settings-overlay[data-state="open"]{opacity:1}
+.app.sf-shell.sf-global-settings-overlay[data-state="open"]{opacity:1;pointer-events:auto}
 .app.sf-shell.sf-global-settings-overlay:not(.dark){background:rgba(21,33,29,.43)!important}
 .sf-global-settings-modal{
   display:flex;position:relative;width:min(960px,76vw);height:min(80dvh,760px);

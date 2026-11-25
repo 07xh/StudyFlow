@@ -1,7 +1,7 @@
 import {useEffect,useId,useRef,type KeyboardEvent,type ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {X} from "lucide-react";
-import {acquireModalScrollLock,trapDialogTab} from "./modalInteraction";
+import {activateDialog,trapDialogTab} from "./modalInteraction";
 import "./settingsDialog.css";
 
 /** LightC-style second-level page; does not navigate away from the current workspace. */
@@ -11,20 +11,13 @@ export function SettingsDialog({open,dark,title,onClose,children,kicker="设置"
 }){
   const titleId=useId();
   const panel=useRef<HTMLElement>(null),closeButton=useRef<HTMLButtonElement>(null);
-  const lastFocus=useRef<HTMLElement|null>(null);
   const body=useRef<HTMLDivElement>(null);
   useEffect(()=>{
     if(open&&body.current)body.current.scrollTop=0;
   },[open,contentKey]);
   useEffect(()=>{
     if(!open)return;
-    lastFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const releaseLock=acquireModalScrollLock();
-    const frame=window.requestAnimationFrame(()=>closeButton.current?.focus());
-    return ()=>{
-      window.cancelAnimationFrame(frame);
-      if(releaseLock()&&lastFocus.current?.isConnected)lastFocus.current.focus();
-    };
+    return activateDialog(()=>closeButton.current,()=>panel.current);
   },[open]);
   if(!open)return null;
   function handleKeys(event:KeyboardEvent<HTMLElement>){
