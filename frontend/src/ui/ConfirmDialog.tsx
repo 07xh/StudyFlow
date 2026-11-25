@@ -4,7 +4,7 @@
 import {useEffect,useId,useRef,type KeyboardEvent,type MouseEvent} from "react";
 import {createPortal} from "react-dom";
 import {AlertTriangle,ShieldCheck,X} from "lucide-react";
-import {acquireModalScrollLock,trapDialogTab} from "./modalInteraction";
+import {activateDialog,trapDialogTab} from "./modalInteraction";
 import "./interactions.css";
 
 interface ConfirmDialogProps {
@@ -29,16 +29,9 @@ export function ConfirmDialog({
   const detailId=useId();
   const dialogRef=useRef<HTMLElement>(null);
   const cancelRef=useRef<HTMLButtonElement>(null);
-  const previousFocus=useRef<HTMLElement|null>(null);
   useEffect(()=>{
     if(!open)return;
-    previousFocus.current=document.activeElement instanceof HTMLElement?document.activeElement:null;
-    const releaseLock=acquireModalScrollLock();
-    const frame=window.requestAnimationFrame(()=>cancelRef.current?.focus());
-    return ()=>{
-      window.cancelAnimationFrame(frame);
-      if(releaseLock()&&previousFocus.current?.isConnected)previousFocus.current.focus();
-    };
+    return activateDialog(()=>cancelRef.current,()=>dialogRef.current);
   },[open]);
 
   if(!open)return null;

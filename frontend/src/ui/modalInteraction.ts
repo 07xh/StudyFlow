@@ -22,6 +22,21 @@ export function acquireModalScrollLock():()=>boolean{
   };
 }
 
+/** Share the focus/scroll lifecycle across modal surfaces. */
+export function activateDialog(initialFocus:()=>HTMLElement|null,panel:()=>HTMLElement|null):()=>void{
+  const previous=document.activeElement instanceof HTMLElement?document.activeElement:null;
+  const releaseLock=acquireModalScrollLock();
+  const frame=window.requestAnimationFrame(()=>{
+    const target=initialFocus();
+    if(target&&!target.matches(":disabled")&&target.isConnected)target.focus();
+    else panel()?.focus();
+  });
+  return ()=>{
+    window.cancelAnimationFrame(frame);
+    if(releaseLock()&&previous?.isConnected)previous.focus();
+  };
+}
+
 export function trapDialogTab(event:KeyboardEvent<HTMLElement>,panel:HTMLElement|null){
   if(event.key!=="Tab"||!panel)return;
   const controls=Array.from(panel.querySelectorAll<HTMLElement>(
