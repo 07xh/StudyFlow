@@ -19,24 +19,11 @@ test('global and unverified header contexts have no percentage track, verified m
   assert.equal(view.root.findByProps({role:'progressbar'}).props['aria-label'],'满进度知识点占比');
  }finally{if(view)act(()=>view.unmount());restore();}
 });
-test('saving player defaults preserves a concurrently changed platform mode and only saves after editing',async()=>{
- const restore=browser();let view;const writes=[];let reads=0;
- const original={speed:'1.5',mode:'official',autoStart:true,autoNext:true,allowMinimize:true};
- let persisted={...original};
- const Panel=load('components/ZhidaoPlayerSettingsPanel.tsx',{'bridge.ts':{friendlyBridgeError:String,request:async input=>{
-  if(input.operation==='zhidao.player.settings.get')return {...persisted,mode:reads++===0?'official':'zhs-original'};
-  writes.push(input.settings);persisted={...input.settings};return input.settings;
- }}}).ZhidaoPlayerSettingsPanel;
- try{
-  await act(async()=>{view=create(React.createElement(Panel,{desktop:true}));});
-  const save=()=>view.root.findAllByType('button').find(button=>words(button)==='保存默认参数');
-  assert.equal(save().props.disabled,true);
-  act(()=>view.root.findByType('select').props.onChange({target:{value:'2'}}));
-  assert.equal(save().props.disabled,false);
-  await act(async()=>save().props.onClick());
-  assert.equal(writes.length,1);assert.equal(writes[0].speed,'2');assert.equal(writes[0].mode,'zhs-original');
-  assert.match(words(view.root),/下次启动播放器时生效/);
- }finally{if(view)act(()=>view.unmount());restore();}
+test('retired official player settings are absent from the app entry',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const src=path.join(__dirname,'../src');
+ assert.equal(fs.existsSync(path.join(src,'components/ZhidaoPlayerSettingsPanel.tsx')),false);
+ assert.doesNotMatch(fs.readFileSync(path.join(src,'App.tsx'),'utf8'),/ZhidaoPlayerSettingsPanel/);
 });
 test('a run that changed since display cannot be stopped through the old task card',async()=>{
  const calls=[];
