@@ -23,17 +23,17 @@
 
 | 平台 / 作用域 | 必须逐项验证 |
 | --- | --- |
-| 知到官方播放器（全局） | `speed`、`allowMinimize`、`autoStart`、`autoNext`、`mode`（运行模式） |
 | 知到 ZHS（按课程） | `speed`、`speed_cap`、`limit_minutes`、`learn_optional`、`max_videos`、`stop_on_error`、`concurrency`、`completion_threshold` |
 | 雨课堂（平台级） | `video_speed`、`heartbeat_interval`、`max_concurrent_videos`、`completion_threshold`、`skip_completed`、`use_concurrent`、`test_mode`、`test_video_count`、`auto_richtext`、`debug`、`richtext_stay_seconds`、`richtext_skip_delay` |
 | 学习通（平台级） | `playback_speed`、`concurrency`、`skip_completed`、`verify_after_run` |
 | 课程/课堂额外作用域 | ZHS 的 `scope_mode`、`resource_mode`、`selected_ids`；雨课堂按课堂阈值及作用域身份。此类浏览器本地配置必须单独覆盖“关闭、重开、退出并启动 EXE”的试验，不得当作后端 JSON 测试已覆盖 |
 | 后续平台 | 如 U校园：新增字段时必须先确定存储位置、作用域、加载时机、运行参数映射，并加入对应回归矩阵 |
 
+历史官方播放器已退役；原有配置文件留存，不再作为有效设置参与保存或验收。
+
 ## 本仓库自动化覆盖与边界
 
-- `tests/test_settings_lifecycle_contract.py`：使用隔离的本机设置目录，通过真实 bridge 对以上四类平台的**每个后端字段**分别执行更改 → 保存 → 再次 GET；最后启动一个**新的 Python 解释器**回读并测试非法字段拒绝。禁止使用真实账号或请求外部平台。
-- `frontend/tests/officialSettingsFreshRead.test.cjs`：知到官方播放器新启动必须重新读取保存值，失败时不以缓存值启动。
+- `tests/test_settings_lifecycle_contract.py`：使用隔离的本机设置目录，通过真实 bridge 对以上三类现有后端设置的**每个后端字段**分别执行更改 → 保存 → 再次 GET；最后启动一个**新的 Python 解释器**回读并测试非法字段拒绝。禁止使用真实账号或请求外部平台。
 - `frontend/tests/xuexitongSettingsFreshRead.test.cjs`：学习通课程页不得用过期值覆盖另一设置页的新值；显式修改的字段才可以覆盖。
 - `tests/test_settings_corruption.py`：学习通配置损坏时回读报错且普通保存不能破坏坏文件。
 - Windows CI `scripts/test-windows-install.ps1` 目前负责安装、升级、启动、退出及部分安装后 bridge 读取。**不包含完整的 Windows WebView GUI 逐字段点击及实际任务验证。**
