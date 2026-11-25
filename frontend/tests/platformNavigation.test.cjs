@@ -31,7 +31,7 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.doesNotMatch(app,/openLegacyZhidao|openZhidao\(/);
  assert.match(app,/YuketangLoginPanel/);
  assert.match(app,/ZhidaoLoginPanel/);
- assert.match(app,/ZhidaoOfficialPlayerPanel/);
+ assert.doesNotMatch(app,/ZhidaoOfficialPlayerPanel/);
  assert.match(app,/LegacyPlaybackPanel platform="zhidao"/);
  assert.match(app,/YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
  const yuketang=source("components/YuketangTaskArea.tsx");
@@ -39,10 +39,7 @@ test("new dashboard keeps platform-owned login and task panels",()=>{
  assert.match(app,/onImported=/);
  assert.match(app,/ZhidaoAccountTools/);
  assert.match(app,/ZhidaoProgressPanel/);
- const monitor=source("components/ZhidaoPlayerMonitor.tsx");
- assert.match(app,/consentAccepted&&<ZhidaoPlayerMonitor/);
- assert.match(monitor,/zhidao\.progress\.verify/);
- assert.match(monitor,/1000/);
+ assert.doesNotMatch(app,/ZhidaoPlayerMonitor/);
 });
 
 test("original settings and cookie import use the Python bridge instead of localStorage",()=>{
@@ -81,7 +78,7 @@ test("first-run consent uses native bundled resources and blocks the desktop unt
  assert.match(gate,/studyflow_exit/);
  assert.doesNotMatch(gate,/studyflow\.consent\.status|studyflow\.consent\.accept|zhidao\.document\.read/);
  assert.match(app,/StudyFlowConsentGate desktop=\{desktop\}/);
- assert.match(app,/consentAccepted&&<ZhidaoPlayerMonitor/);
+ assert.doesNotMatch(app,/ZhidaoPlayerMonitor/);
 });
 
 
@@ -104,7 +101,6 @@ test("course details use one foldable workspace and show total progress only in 
  const lesson=source("components/ZhidaoCourseDetailPanel.tsx");
  const server=source("components/ZhidaoProgressPanel.tsx");
  const simulation=source("components/LegacyPlaybackPanel.tsx");
- const player=source("components/ZhidaoOfficialPlayerPanel.tsx");
  const log=source("components/ZhidaoActivityPanel.tsx");
  const yuketang=source("components/YuketangTaskArea.tsx");
  const css=source("ui/foundation.css");
@@ -123,8 +119,6 @@ test("course details use one foldable workspace and show total progress only in 
  assert.match(server,/detailMode/);
  assert.match(simulation,/sf-detail-simulation-only/);
  assert.match(simulation,/courseId\?:string/);
- assert.match(player,/sf-zd-local-observations/);
- assert.match(player,/detailMode/);
  assert.match(log,/expandedByDefault/);
  assert.doesNotMatch(yuketang,/open=\{detailMode\}/);
  assert.match(simulation,/sf-detail-live/);

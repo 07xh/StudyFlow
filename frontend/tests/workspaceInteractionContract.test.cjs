@@ -20,7 +20,8 @@ test("course search is scoped to the platform and not reset by returning to its 
 });
 
 test("local log removal requires explicit confirmation",()=>{
-  assert.match(app,/onClick=\{\(\)=>setClearLogsOpen\(true\)\}/);
+  assert.match(app,/onClear=\{\(\)=>setClearLogsOpen\(true\)\}/);
+  assert.match(read("ui/ActivityViews.tsx"),/onClick=\{onClear\}/);
   assert.match(app,/<ConfirmDialog open=\{clearLogsOpen\}/);
   assert.match(app,/onConfirm=\{\(\)=>\{setActivity\(\[\]\);try\{window\.localStorage\.removeItem\(ACTIVITY_KEY\)/);
   assert.match(app,/onCancel=\{\(\)=>setClearLogsOpen\(false\)\}/);

@@ -997,29 +997,6 @@
 .sf-shell .sf-zd-activity-list .sf-log-indicator{margin-top:4px}
 
 
-.sf-shell .sf-zd-local-track{
-  height:6px;overflow:hidden;margin-top:3px;border-radius:999px;background:var(--line);
-}
-.sf-shell .sf-zd-local-track span{display:block;height:100%;border-radius:inherit;background:var(--accent)}
-.sf-shell .sf-zd-local-observations{
-  margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;
-  background:rgba(255,255,255,.02);
-}
-.sf-shell .sf-zd-local-observations summary{
-  color:var(--muted);font-size:11px;font-weight:650;cursor:pointer;
-}
-.sf-shell .sf-zd-local-observations ul{display:grid;gap:6px;margin:10px 0 0;padding:0;list-style:none}
-.sf-shell .sf-zd-local-observations li{
-  display:grid;grid-template-columns:minmax(0,1fr) 55px 70px;gap:9px;
-  padding:6px 0;border-top:1px solid var(--line);font-size:10px;
-}
-.sf-shell .sf-zd-local-observations li strong{color:var(--text);font-weight:600}
-.sf-shell .sf-zd-local-observations li span,.sf-shell .sf-zd-local-observations li time{
-  color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;
-}
-.sf-shell .sf-zd-local-observations>p{margin:9px 0 0;color:var(--muted);font-size:10px}
-
-
 /* 2026-11-14 UI refinement: shared type scale, aligned cards and independent controls. */
 .sf-shell :is(.main,.sf-settings-modal-body){
   font-size:13px;

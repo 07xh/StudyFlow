@@ -98,11 +98,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.progress"; run_id: string}
   | {id: string; version: 1; operation: "zhidao.progress.sync"}
   | {id: string; version: 1; operation: "zhidao.progress.verify"; course_key: string}
-  | {id: string; version: 1; operation: "zhidao.player.target"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.course.detail"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.zhs.knowledge.detail"; course_key: string; knowledge_id: string}
-  | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
-  | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
+  | {id: string; version: 1; operation: "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
   | {id: string; version: 1; operation: "zhidao.mastery.catalog"; course_key: string; with_mastery?: boolean; force_refresh?: boolean}
   | {id: string; version: 1; operation: "zhidao.mastery.auto.start"; course_key: string; settings: MasteryAutoSettings}
@@ -154,8 +152,6 @@ export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetche
 export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"proxy"; fallback:boolean};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
 export type ReleaseChangelogEntry = {version:string;title:string;notes:string;published_at:string};
-export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
-export type ZhidaoPlayerTarget = {course_key:string;course_type:"ai"|"shared";course_id:string;class_id:string;recruit_and_course_id:string;title:string};
 export type ZhidaoDiagnostic = {code:number;state:string;lines:string[]};
 export type ZhidaoDocument = {id:string;title:string;content:string};
 export type YuketangVideoProgress = {
