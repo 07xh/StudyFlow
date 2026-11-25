@@ -24,7 +24,7 @@ test("selected course offers one parameter entry and hides duplicate ZHS entry",
   assert.ok(start>0&&end>start);
   const course=app.slice(start,end);
   assert.equal((course.match(/className="secondary sf-course-settings-action"/g)||[]).length,1);
-  assert.match(course,/if\(course\.platform==="zhidao"&&mode==="zhs-original"\)/);
+  assert.match(course,/if\(course\.platform==="zhidao"\)/);
   assert.match(course,/onCourseSettingsClose=\{\(\)=>setZhsCourseSettingsOpen\(false\)\}/);
   assert.match(runtime,/hideTrigger=\{detailMode\}/);
   assert.match(zhs,/!hideTrigger&&<button/);

@@ -14,12 +14,13 @@ test('navigation preserves valid selection without leaking its heading to anothe
  global.window={localStorage:{getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)}};
  const course={platform:'zhidao',course_id:'test-course',title:'test course',progress_percent:25,progress_evidence:'server_verified',verified_at:'2026-11-14T12:00:00Z',course_type:'shared'};
  const yuketangCourse={platform:'yuketang',course_id:'ykt-course',title:'other platform course',progress_percent:null};
- let shell,monitor,view;
+ let shell,detail,view;
  const Null=()=>null;
  const presentation=evaluate(compile('presentation.ts'),require);
  const App=evaluate(compile('App.tsx'),name=>{
   if(name==='./platforms')return {initialPlatforms:{zhidao:{platform:'zhidao',status:'connected',courses:[course]},yuketang:{platform:'yuketang',status:'connected',courses:[yuketangCourse]},xuexitong:{platform:'xuexitong',status:'not_connected',courses:[]},ucampus:{platform:'ucampus',status:'not_connected',courses:[]}}};
   if(name==='./presentation')return presentation;
+  if(name==='./progressMerge')return evaluate(compile('progressMerge.ts'),require);
   if(name==='./activity')return require('./helpers/load.cjs')('activity.ts');
   if(name==='./runtimeTasks')return require('./helpers/load.cjs')('runtimeTasks.ts');
   if(name==='./bridge')return {isDesktop:()=>false,friendlyBridgeError:String,request:async()=>({})};
@@ -38,7 +39,7 @@ test('navigation preserves valid selection without leaking its heading to anothe
     getYuketangVerificationRevision:()=>0
   };
   if(name==='./ui/CollapsibleSection')return {CollapsibleSection:props=>props.children};
-  if(name==='./components/ZhidaoPlayerMonitor')return {ZhidaoPlayerMonitor:props=>{monitor=props;return null;}};
+  if(name==='./components/ZhidaoCourseDetailPanel')return {ZhidaoCourseDetailPanel:props=>{detail=props;return null;}};
   if(name==='lucide-react')return new Proxy({},{get:()=>Null});
   if(name.startsWith('./'))return new Proxy({default:Null},{get:(target,key)=>target[key]??Null});
   return require(name);
@@ -65,7 +66,7 @@ test('navigation preserves valid selection without leaking its heading to anothe
   assert.deepEqual(view.root.findAllByProps({'data-select-course':true}).map(node=>node.props['data-course-id']),['test-course']);
   act(()=>view.root.findByProps({'data-select-course':true}).props.onClick());
   assert.equal(shell.currentCourseTitle,'test course');
-  act(()=>monitor.onCoursesUpdated([]));
+  act(()=>detail.onCoursesUpdated([]));
   assert.equal(shell.currentCourseTitle,undefined);
   assert.equal(shell.courseProgress,null);
  }finally{

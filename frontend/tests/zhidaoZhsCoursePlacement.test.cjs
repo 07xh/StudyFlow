@@ -26,11 +26,10 @@ function courseWorkspaceBranches(){
 
 test("ZHS runner controls belong to Zhidao course, never Xuexitong",()=>{
   const branches=courseWorkspaceBranches();
-  const player=branches.find(item=>item.trueBranch.includes("renderZhidaoModeSwitch"));
+  const player=branches.find(item=>item.trueBranch.includes('<LegacyPlaybackPanel platform="zhidao"'));
   assert.ok(player,"Zhidao playback branch must exist");
-  assert.match(player.trueBranch,/<ZhidaoOfficialPlayerPanel/);
+  assert.doesNotMatch(player.trueBranch,/<ZhidaoOfficialPlayerPanel/);
   assert.match(player.trueBranch,/<LegacyPlaybackPanel platform="zhidao"/);
-  assert.match(player.trueBranch,/hidden=\{mode!=="zhs-original"\}/);
   assert.match(player.falseBranch,/<XuexitongHeartbeatPanel/);
   assert.doesNotMatch(player.falseBranch,/<LegacyPlaybackPanel platform="zhidao"/);
   const legacy=source("components/LegacyPlaybackPanel.tsx");
@@ -51,7 +50,7 @@ test("Zhidao server verification stays in Zhidao detail, not Xuexitong",()=>{
 
 test("Yuketang player and Xuexitong task view are isolated",()=>{
   const branches=courseWorkspaceBranches();
-  const player=branches.find(item=>item.trueBranch.includes("renderZhidaoModeSwitch"));
+  const player=branches.find(item=>item.trueBranch.includes('<LegacyPlaybackPanel platform="zhidao"'));
   assert.match(player.falseBranch,/<XuexitongHeartbeatPanel/);
   assert.match(player.falseBranch,/<YuketangTaskArea/);
   assert.doesNotMatch(player.trueBranch,/<YuketangTaskArea/);
