@@ -93,7 +93,10 @@ export function UpdatePanel({desktop,visible,onDownloaded,onOpenChangelog,embedd
         <option value="auto">自动（公共代理优先，GitHub 兜底）</option>
         <option value="github">GitHub 官方源</option>
         <option value="proxy" disabled={!sources.proxy}>国内公共 GitHub 代理</option>
+        <option value="gh-proxy.org" disabled={!sources.proxy}>gh-proxy.org（代理）</option>
+        <option value="ghfast.top" disabled={!sources.proxy}>ghfast.top（代理）</option>
       </select></div>
+    <p className="muted">仅代理公开的 GitHub Release 安装包；具体下载源可手动选择，校验值始终来自 GitHub 官方。</p>
     <div className="sf-settings-line"><label htmlFor="update-fallback">故障切换</label>
       <label className="sf-inline-check"><input id="update-fallback" type="checkbox" checked={settings.fallback}
         disabled={!desktop||busy||!loaded}
