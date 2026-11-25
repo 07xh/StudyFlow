@@ -5,7 +5,7 @@ import {getYuketangLiveProgress} from "./legacyPlayback";
 import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ExecutionRecordsView,OperationLogsView} from "./ui/ActivityViews";
-import {CourseMetrics,RecentCourses} from "./ui/HomeViews";
+import {CourseMetrics,RecentCourses,PlatformOverview} from "./ui/HomeViews";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
@@ -16,7 +16,7 @@ import {UCampusFabricatedPanel} from "./components/UCampusFabricatedPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
   ArrowLeft,BookOpen,
-  ListChecks,RefreshCw,Search,SlidersHorizontal
+  ListChecks,Search,SlidersHorizontal
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import {invalidateCourseSync,newCourseSyncCheckpoint,shouldStartCourseSync} from "./courseAutoSync";
@@ -49,7 +49,7 @@ import {CollapsibleSection} from "./ui/CollapsibleSection";
 import {courseMetric,platformNames,selectedSessionCourse,platformProgressOverview,type YuketangVideoSummary} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
-import {platformInfo,platformRegistry} from "./ui/registry";
+import {platformInfo} from "./ui/registry";
 import {useAppearance} from "./ui/useAppearance";
 import {AppearanceSettings} from "./ui/AppearanceSettings";
 import {EmptyState} from "./ui/EmptyState";
@@ -533,23 +533,10 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     return null;
   }
 
-  const renderPlatforms=()=> <section className="sf-platform-section">
-    <div className="section-head">
-      <h3>学习平台</h3>
-      <button className="secondary sf-refresh" type="button" disabled={!desktop||Boolean(busy)}
-        onClick={()=>void refresh()}><RefreshCw size={15}/>检测连接</button>
-    </div>
-    <div className="platform-grid sf-platform-grid">
-      {platformRegistry.map(definition=><PlatformCard key={definition.id}
-        definition={definition} state={platforms[definition.id]} desktop={desktop}
-        busy={Boolean(busy)||syncFeedback[definition.id].phase==="syncing"} expanded={false}
-        onSync={()=>void sync(definition.id,true)}
-        onToggleLogin={()=>goPlatform(definition.id,true)}
-        onEnterCourses={()=>enterCourses(definition.id)}>
-        {null}
-      </PlatformCard>)}
-    </div>
-  </section>;
+  const renderPlatforms=()=> <PlatformOverview platforms={platforms} desktop={desktop} busy={Boolean(busy)}
+    syncing={{zhidao:syncFeedback.zhidao.phase==="syncing",yuketang:syncFeedback.yuketang.phase==="syncing",xuexitong:syncFeedback.xuexitong.phase==="syncing",ucampus:syncFeedback.ucampus.phase==="syncing"}}
+    onRefresh={()=>void refresh()} onSync={platform=>void sync(platform,true)}
+    onLogin={platform=>goPlatform(platform,true)} onEnterCourses={enterCourses}/>;
 
   function guardSettingsNavigation(action:()=>void){
     if(settingsDraft.saving)return;
