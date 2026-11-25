@@ -61,12 +61,11 @@ if ($oldPulse.id -cne 'packaging-ucampus-retired' -or $oldPulse.ok -or
     $oldPulse.error -cne 'UNKNOWN_OPERATION') {
   throw 'Retired UCampus local pulse IPC was unexpectedly restored'
 }
-# Exercise a real local settings handler as well; this checks the request/response
-# contract without requiring school credentials or contacting a remote platform.
-$settings = Invoke-JsonlProbe '{"id":"packaging-settings","version":1,"operation":"zhidao.player.settings.get"}'
-if ($settings.id -cne 'packaging-settings' -or -not $settings.ok -or
-    $settings.data.speed -notin @('1','1.25','1.5','2')) {
-  throw 'Frozen StudyFlow local settings JSONL contract mismatch'
+# The retired official player must not remain callable in the frozen sidecar.
+$oldPlayer = Invoke-JsonlProbe '{"id":"packaging-player-retired","version":1,"operation":"zhidao.player.settings.get"}'
+if ($oldPlayer.id -cne 'packaging-player-retired' -or $oldPlayer.ok -or
+    $oldPlayer.error -cne 'UNKNOWN_OPERATION') {
+  throw 'Retired official player IPC was unexpectedly restored'
 }
 # Isolate the probe from any settings already present on the build machine.
 $oldYktHome = $env:YKT_HOME

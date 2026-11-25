@@ -282,7 +282,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             => Ok(()),
         "ping" | "platform.status" | "yuketang.clear" | "updates.settings.get" | "updates.latest"
         | "zhidao.qr.start" | "zhidao.qr.status" | "zhidao.qr.cancel"
-        | "zhidao.progress.sync" | "zhidao.player.settings.get"
+        | "zhidao.progress.sync"
         | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"
         | "studyflow.consent.status" | "studyflow.consent.accept" | "yuketang.scope.get"
         | "yuketang.session.marker" | "xuexitong.session.clear" | "xuexitong.settings.get"
@@ -301,7 +301,7 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 80)
             && (operation != "updates.download" || request.get("release_version")
                 .and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty() && v.len() <= 80)) => Ok(()),
-        "zhidao.progress.verify" | "zhidao.player.target"
+        "zhidao.progress.verify"
             if request.get("course_key").and_then(|x| x.as_str())
                 .is_some_and(|key| key.len() == 64
                     && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
@@ -314,7 +314,6 @@ fn validate(request: &serde_json::Value) -> Result<(), String> {
             && request.get("course_key").map_or(true, |key| key.as_str()
                 .is_some_and(|key| key.len() == 64
                     && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch)))) => Ok(()),
-        "zhidao.player.settings.save" if request.get("settings").map_or(false, |x| x.is_object()) => Ok(()),
         "zhidao.course.detail" if request.get("course_key").and_then(|x| x.as_str())
             .is_some_and(|key| key.len() == 64
                 && key.bytes().all(|ch| ch.is_ascii_digit() || (b'a'..=b'f').contains(&ch))) => Ok(()),
@@ -1071,7 +1070,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             bridge_request, launch_zhidao_legacy, zhidao_open_data_folder, zhidao_open_official_site, ucampus_open_official_site, ucampus_login_window_start, ucampus_login_window_import, ucampus_login_window_close, studyflow_exit, updates_open_folder, studyflow_open_releases, studyflow_open_author_site, studyflow_open_source_site, studyflow_open_question_bank_site,
             studyflow_consent_status, studyflow_consent_accept, studyflow_read_document,
-            zhidao_player::zhidao_player_prepare, zhidao_player::zhidao_player_start,
             zhidao_player::zhidao_player_status, zhidao_player::zhidao_player_stop,
             zhidao_player::zhidao_player_clear_web_profile,
             legacy_tasks::legacy_start, legacy_tasks::legacy_status, legacy_tasks::legacy_stop,
@@ -1452,13 +1450,13 @@ mod ipc_validation_tests {
     fn allows_zhidao_readonly_progress_operations() {
         assert!(validate(&json!({"id":"a","version":1,"operation":"zhidao.progress.sync"})).is_ok());
         assert!(validate(&json!({"id":"b","version":1,"operation":"zhidao.progress.verify","course_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})).is_ok());
-        assert!(validate(&json!({"id":"c","version":1,"operation":"zhidao.player.target","course_key":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"})).is_ok());
-        assert!(validate(&json!({"id":"d","version":1,"operation":"zhidao.player.settings.get"})).is_ok());
+        assert!(validate(&json!({"id":"c","version":1,"operation":"zhidao.player.target","course_key":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"})).is_err());
+        assert!(validate(&json!({"id":"d","version":1,"operation":"zhidao.player.settings.get"})).is_err());
         assert!(validate(&json!({"id":"e","version":1,"operation":"zhidao.diagnose"})).is_ok());
         assert!(validate(&json!({"id":"f","version":1,"operation":"zhidao.session.clear"})).is_ok());
         assert!(validate(&json!({"id":"g","version":1,"operation":"zhidao.cache.clear"})).is_ok());
         assert!(validate(&json!({"id":"h","version":1,"operation":"zhidao.document.read","document_id":"privacy"})).is_ok());
-        assert!(validate(&json!({"id":"i","version":1,"operation":"zhidao.player.settings.save","settings":{}})).is_ok());
+        assert!(validate(&json!({"id":"i","version":1,"operation":"zhidao.player.settings.save","settings":{}})).is_err());
         assert!(validate(&json!({"id":"j","version":1,"operation":"zhidao.course.detail","course_key":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"})).is_ok());
         assert!(validate(&json!({"id":"k","version":1,"operation":"studyflow.consent.status"})).is_ok());
         assert!(validate(&json!({"id":"l","version":1,"operation":"studyflow.consent.accept"})).is_ok());

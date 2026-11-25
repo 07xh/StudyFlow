@@ -1,13 +1,12 @@
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
-use tauri::{AppHandle, Manager, State};
-use uuid::Uuid;
+use tauri::State;
 
 #[derive(Default)]
 pub struct ZhidaoPlayerManager {
@@ -45,123 +44,6 @@ fn local_appdata() -> Result<PathBuf, String> {
 
 fn player_root(local: &Path) -> PathBuf {
     local.join("ZHSDesktop")
-}
-
-fn source_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let packaged = app.path().resource_dir()
-        .map_err(|_| "PLAYER_RESOURCES_UNAVAILABLE")?
-        .join("legacy").join("zhidao");
-    if packaged.join("Official-Player.ps1").is_file() {
-        return Ok(packaged);
-    }
-    if cfg!(debug_assertions) {
-        let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..").join("legacy").join("zhidao");
-        if development.join("Official-Player.ps1").is_file() {
-            return Ok(development);
-        }
-    }
-    Err("PLAYER_RESOURCES_UNAVAILABLE".into())
-}
-
-// Keep the pinned historical media-controller source byte-for-byte unchanged.
-// Customize only the fresh, application-owned runtime copy for more reliable
-// read-only HTML5 state observations; never alter platform heartbeats.
-const OFFICIAL_MONITOR_INTERVAL_OLD: &str = "const MONITOR_INTERVAL_MS = 12000;";
-const OFFICIAL_MONITOR_REPORT_OLD: &str =
-    "    const shouldReport = force || state !== monitor.lastState ||\n      (state === 'advancing' && time - monitor.lastReport >= 60000);";
-const OFFICIAL_MONITOR_REPORT_NEW: &str =
-    "    const shouldReport = force || state !== monitor.lastState ||\n      time - monitor.lastReport >= MONITOR_INTERVAL_MS;";
-const LOCAL_OBSERVER_INTERVAL_MS: u64 = 6000;
-
-fn local_observer_copy(source: &str) -> Result<String, String> {
-    // Git's Windows checkout can use CRLF even though the pinned Git blob is
-    // LF. Normalize only the private runtime copy, never the original source.
-    let normalized = source.replace("\r\n", "\n");
-    // Strict version guard: do not apply a textual rewrite to a new upstream
-    // script with changed semantics. The pinned original is retained intact.
-    if normalized.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count() != 1
-        || normalized.matches(OFFICIAL_MONITOR_REPORT_OLD).count() != 1 {
-        return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
-    }
-    Ok(normalized
-        .replacen(OFFICIAL_MONITOR_INTERVAL_OLD,
-            &format!("const MONITOR_INTERVAL_MS = {LOCAL_OBSERVER_INTERVAL_MS};"), 1)
-        .replacen(OFFICIAL_MONITOR_REPORT_OLD, OFFICIAL_MONITOR_REPORT_NEW, 1))
-}
-
-fn copy_player_assets(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
-    let local = local_appdata()?;
-    let root = player_root(&local);
-    fs::create_dir_all(&root).map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
-    let source = source_root(app)?;
-    for name in ["Official-Player.ps1", "Official-MediaController.js", "Install-WebView2.ps1"] {
-        let from = source.join(name);
-        let to = root.join(name);
-        if !from.is_file() {
-            return Err("PLAYER_RESOURCES_UNAVAILABLE".into());
-        }
-        fs::copy(from, to).map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
-    }
-    // The PowerShell host reads this isolated local copy, not the pinned source.
-    let controller = root.join("Official-MediaController.js");
-    let original = fs::read_to_string(&controller)
-        .map_err(|_| "PLAYER_RESOURCES_UNAVAILABLE")?;
-    let fresh = local_observer_copy(&original)?;
-    fs::write(&controller, fresh).map_err(|_| "PLAYER_RUNTIME_UNAVAILABLE")?;
-    Ok((local, root))
-}
-
-fn webview_sdk_ready(root: &Path) -> bool {
-    root.join("webview2").join("Microsoft.Web.WebView2.Core.dll").is_file()
-        && root.join("webview2").join("Microsoft.Web.WebView2.Wpf.dll").is_file()
-        && root.join("webview2").join("runtimes").join("win-x64").join("native")
-            .join("WebView2Loader.dll").is_file()
-}
-
-fn prepare_runtime(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
-    let (local, root) = copy_player_assets(app)?;
-    if webview_sdk_ready(&root) {
-        return Ok((local, root));
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let output = Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
-            .arg(root.join("Install-WebView2.ps1"))
-            .env("LOCALAPPDATA", &local)
-            .current_dir(env::var_os("USERPROFILE").map(PathBuf::from).unwrap_or_else(|| root.clone()))
-            .creation_flags(0x08000000)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map_err(|_| "WEBVIEW2_SDK_UNAVAILABLE")?;
-        if !output.success() || !webview_sdk_ready(&root) {
-            return Err("WEBVIEW2_SDK_UNAVAILABLE".into());
-        }
-        Ok((local, root))
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = local;
-        let _ = root;
-        Err("WEBVIEW2_WINDOWS_ONLY".into())
-    }
-}
-
-fn valid_course_key(value: &str) -> bool {
-    value.len() == 64 && value.bytes()
-        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
-
-fn valid_decimal(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 20 && value.bytes().all(|b| b.is_ascii_digit())
-}
-
-fn valid_route(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 512
-        && value.bytes().all(|b| b.is_ascii_alphanumeric() || b"_+./=:-".contains(&b))
 }
 
 fn read_observation(root: &Path, token: &str) -> (Option<String>, Option<u64>, Option<u64>, Option<bool>, Option<String>) {
@@ -265,104 +147,6 @@ fn kill_child(child: &mut Child) {
 }
 
 #[tauri::command]
-pub async fn zhidao_player_prepare(app: AppHandle) -> Result<bool, String> {
-    tauri::async_runtime::spawn_blocking(move || prepare_runtime(&app).map(|_| true))
-        .await.map_err(|_| "PLAYER_PREPARE_FAILED".to_string())?
-}
-
-#[tauri::command]
-pub async fn zhidao_player_start(
-    app: AppHandle,
-    state: State<'_, ZhidaoPlayerManager>,
-    course_key: String,
-    speed: String,
-    allow_minimize: bool,
-    auto_start: bool,
-    auto_next: bool,
-) -> Result<OfficialPlayerStatus, String> {
-    if !valid_course_key(&course_key) || !["1", "1.25", "1.5", "2"].contains(&speed.as_str()) {
-        return Err("INVALID_PLAYER_REQUEST".into());
-    }
-    let request = json!({
-        "id": format!("player-target-{}", Uuid::new_v4().simple()),
-        "version": 1,
-        "operation": "zhidao.player.target",
-        "course_key": course_key,
-    });
-    let reply = super::bridge_request(app.clone(), request).await?;
-    if reply.get("ok").and_then(Value::as_bool) != Some(true) {
-        return Err(match reply.get("error").and_then(Value::as_str) {
-            Some("COURSE_NOT_FOUND") => "COURSE_NOT_FOUND",
-            _ => "COURSE_ROUTE_UNAVAILABLE",
-        }.into());
-    }
-    let target = reply.get("data").ok_or("COURSE_ROUTE_UNAVAILABLE")?;
-    let course_type = target.get("course_type").and_then(Value::as_str).ok_or("COURSE_ROUTE_UNAVAILABLE")?;
-    let course_id = target.get("course_id").and_then(Value::as_str).ok_or("COURSE_ROUTE_UNAVAILABLE")?;
-    let class_id = target.get("class_id").and_then(Value::as_str).ok_or("COURSE_ROUTE_UNAVAILABLE")?;
-    let route = target.get("recruit_and_course_id").and_then(Value::as_str).unwrap_or("");
-    if !matches!(course_type, "ai" | "shared") || !valid_decimal(course_id) || !valid_decimal(class_id)
-        || (course_type == "ai" && (course_id == "0" || class_id == "0"))
-        || (course_type == "shared" && !valid_route(route)) {
-        return Err("COURSE_ROUTE_UNAVAILABLE".into());
-    }
-
-    let (local, root) = copy_player_assets(&app)?;
-    if !webview_sdk_ready(&root) {
-        let app_for_prepare = app.clone();
-        // First use attempts the pinned SDK download. If it is unavailable,
-        // the unchanged upstream player retains its explicit official-browser fallback.
-        let _ = tauri::async_runtime::spawn_blocking(move || prepare_runtime(&app_for_prepare)).await;
-    }
-
-    let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
-    if let Some(previous) = guard.as_mut() {
-        let current = status_of(previous);
-        if current.state == "running" {
-            return Err("PLAYER_ALREADY_RUNNING".into());
-        }
-    }
-
-    let token = Uuid::new_v4().simple().to_string();
-    let script = root.join("Official-Player.ps1");
-    #[cfg(windows)]
-    let child = {
-        use std::os::windows::process::CommandExt;
-        let mut command = Command::new("powershell.exe");
-        command.args(["-NoProfile", "-STA", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"])
-            .arg(script)
-            .arg("-CourseType").arg(course_type)
-            .arg("-CourseId").arg(course_id)
-            .arg("-ClassId").arg(class_id)
-            .arg("-Speed").arg(&speed)
-            .arg("-MonitorToken").arg(&token);
-        if course_type == "shared" {
-            command.args(["-RecruitAndCourseId", route]);
-        }
-        if allow_minimize { command.arg("-AllowMinimize"); }
-        if auto_start { command.arg("-AutoStart"); }
-        if auto_next { command.arg("-AutoNext"); }
-        command.env("LOCALAPPDATA", &local)
-            .current_dir(env::var_os("USERPROFILE").map(PathBuf::from).unwrap_or(root.clone()))
-            .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null())
-            .creation_flags(0x08000000)
-            .spawn().map_err(|_| "PLAYER_LAUNCH_FAILED")?
-    };
-    #[cfg(not(windows))]
-    let child = {
-        let _ = (script, course_type, course_id, class_id, route, local, root);
-        return Err("WEBVIEW2_WINDOWS_ONLY".into());
-    };
-
-    *guard = Some(ZhidaoPlayerJob {
-        child: Some(child), state: "running".into(), exit_code: None,
-        token, course_key, local_appdata: local,
-    });
-    let job = guard.as_mut().ok_or("PLAYER_STATE_UNAVAILABLE")?;
-    Ok(status_of(job))
-}
-
-#[tauri::command]
 pub fn zhidao_player_status(state: State<'_, ZhidaoPlayerManager>) -> Result<OfficialPlayerStatus, String> {
     let mut guard = state.job.lock().map_err(|_| "PLAYER_STATE_UNAVAILABLE")?;
     match guard.as_mut() {
@@ -462,32 +246,5 @@ impl ZhidaoPlayerManager {
                     .join(format!("monitor-playback-{}.json", job.token)));
             }
         }
-    }
-}
-
-
-#[cfg(test)]
-mod local_observer_tests {
-    use super::*;
-
-    #[test]
-    fn official_observer_overlay_is_bounded_and_leaves_source_unchanged() {
-        const ORIGINAL: &str = include_str!("../../legacy/zhidao/Official-MediaController.js");
-        let canonical = ORIGINAL.replace("\r\n", "\n");
-        let patched = local_observer_copy(ORIGINAL).expect("pinned controller must match");
-        let windows_copy = canonical.replace('\n', "\r\n");
-        assert_eq!(local_observer_copy(&windows_copy).unwrap(), patched);
-        assert_eq!(canonical.matches(OFFICIAL_MONITOR_INTERVAL_OLD).count(), 1);
-        assert_eq!(canonical.matches(OFFICIAL_MONITOR_REPORT_OLD).count(), 1);
-        assert!(patched.contains("const MONITOR_INTERVAL_MS = 6000;"));
-        assert!(patched.contains(OFFICIAL_MONITOR_REPORT_NEW));
-        assert!(!patched.contains(OFFICIAL_MONITOR_REPORT_OLD));
-        assert_eq!(ORIGINAL.matches("window.chrome?.webview?.postMessage").count(),
-            patched.matches("window.chrome?.webview?.postMessage").count());
-    }
-
-    #[test]
-    fn official_observer_overlay_rejects_unknown_future_source() {
-        assert!(local_observer_copy("new upstream controller").is_err());
     }
 }

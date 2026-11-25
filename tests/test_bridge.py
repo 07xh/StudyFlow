@@ -66,17 +66,13 @@ def test_zhidao_single_course_verify_rejects_bad_key(monkeypatch):
 
 
 
-def test_zhidao_player_target_and_settings_bridge(monkeypatch):
-    monkeypatch.setattr(bridge, "resolve_zhidao_course", lambda key: {
-        "course_key": key, "course_type": "ai", "course_id": "11",
-        "class_id": "21", "recruit_and_course_id": "", "title": "智慧课程",
-    })
-    target = dispatch({"id":"p1","version":1,"operation":"zhidao.player.target","course_key":"a"*64})
-    assert target["ok"] and target["data"]["course_id"] == "11"
-
-    monkeypatch.setattr(bridge, "get_zhidao_player_settings", lambda: {"speed":"1.5"})
-    settings = dispatch({"id":"p2","version":1,"operation":"zhidao.player.settings.get"})
-    assert settings["ok"] and settings["data"]["speed"] == "1.5"
+@pytest.mark.parametrize("operation", [
+    "zhidao.player.target", "zhidao.player.settings.get", "zhidao.player.settings.save",
+])
+def test_retired_official_player_ipc_is_rejected(operation):
+    result = dispatch({"id": "retired", "version": 1, "operation": operation,
+                       "course_key": "a"*64, "settings": {}})
+    assert result == {"id": "retired", "ok": False, "error": "UNKNOWN_OPERATION"}
 
 
 def test_zhidao_account_and_legal_operations_use_fixed_handlers(monkeypatch):
