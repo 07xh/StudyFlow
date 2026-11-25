@@ -79,6 +79,7 @@ test("first-run consent uses native bundled resources and blocks the desktop unt
  assert.doesNotMatch(gate,/studyflow\.consent\.status|studyflow\.consent\.accept|zhidao\.document\.read/);
  assert.match(app,/StudyFlowConsentGate desktop=\{desktop\}/);
  assert.doesNotMatch(app,/ZhidaoPlayerMonitor/);
+ assert.match(app,/useRuntimeTasks\(desktop&&consentAccepted\)/);
 });
 
 
