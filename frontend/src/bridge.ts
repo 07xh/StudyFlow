@@ -98,11 +98,9 @@ export type BridgeRequest =
   | {id: string; version: 1; operation: "yuketang.progress"; run_id: string}
   | {id: string; version: 1; operation: "zhidao.progress.sync"}
   | {id: string; version: 1; operation: "zhidao.progress.verify"; course_key: string}
-  | {id: string; version: 1; operation: "zhidao.player.target"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.course.detail"; course_key: string}
   | {id: string; version: 1; operation: "zhidao.zhs.knowledge.detail"; course_key: string; knowledge_id: string}
-  | {id: string; version: 1; operation: "zhidao.player.settings.get" | "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
-  | {id: string; version: 1; operation: "zhidao.player.settings.save"; settings: ZhidaoPlayerSettings}
+  | {id: string; version: 1; operation: "zhidao.diagnose" | "zhidao.session.clear" | "zhidao.cache.clear"}
   | {id: string; version: 1; operation: "zhidao.document.read"; document_id: "terms" | "privacy" | "license" | "source"}
   | {id: string; version: 1; operation: "zhidao.mastery.catalog"; course_key: string; with_mastery?: boolean; force_refresh?: boolean}
   | {id: string; version: 1; operation: "zhidao.mastery.auto.start"; course_key: string; settings: MasteryAutoSettings}
@@ -154,8 +152,6 @@ export type ZhidaoProgressSnapshot = {courses:Course[];incomplete:boolean;fetche
 export type UpdateSettings = {channel:"stable"|"beta"; mode:"notify"|"download"; source:"auto"|"github"|"proxy"; fallback:boolean};
 export type AvailableUpdate = {version:string;notes:string;downloadable:boolean};
 export type ReleaseChangelogEntry = {version:string;title:string;notes:string;published_at:string};
-export type ZhidaoPlayerSettings = {speed:"1"|"1.25"|"1.5"|"2";allowMinimize:boolean;autoStart:boolean;autoNext:boolean;mode:"official"|"zhs-original"};
-export type ZhidaoPlayerTarget = {course_key:string;course_type:"ai"|"shared";course_id:string;class_id:string;recruit_and_course_id:string;title:string};
 export type ZhidaoDiagnostic = {code:number;state:string;lines:string[]};
 export type ZhidaoDocument = {id:string;title:string;content:string};
 export type YuketangVideoProgress = {
@@ -245,7 +241,7 @@ async function checkedRequest<T>(transport: StudyFlowTransport, message: BridgeR
                              "ZHIDAO_QR_UNAVAILABLE", "INVALID_COOKIE_IMPORT", "COOKIE_IMPORT_FAILED",
                              "YUKETANG_SETTINGS_UNAVAILABLE", "INVALID_YUKETANG_SETTINGS",
                              "ZHIDAO_PROGRESS_FAILED", "COURSE_NOT_FOUND", "COURSE_ROUTE_UNAVAILABLE",
-                             "PLAYER_SETTINGS_UNAVAILABLE", "INVALID_PLAYER_SETTINGS", "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
+                             "ZHS_SETTINGS_UNAVAILABLE", "INVALID_ZHS_SETTINGS", "ZHS_DETAIL_UNAVAILABLE", "ZHS_DETAIL_RESOURCES_UNCONFIRMED", "KNOWLEDGE_NOT_FOUND", "ZHIDAO_DIAGNOSE_FAILED",
                              "LOGIN_REQUIRED", "LOGIN_UNCONFIRMED", "LOGIN_CHECK_UNAVAILABLE", "NOT_AI_COURSE", "MASTERY_UNAVAILABLE", "PAPER_UNAVAILABLE", "PAPER_EMPTY",
                              "NO_ACTIVE_ROUND", "ROUND_EXPIRED", "QUESTION_NOT_IN_ROUND", "EMPTY_ANSWER",
                              "ANSWER_SAVE_FAILED", "SUBMIT_FAILED", "SUBMIT_IN_PROGRESS", "SUBMIT_STATUS_UNKNOWN", "ROUND_ALREADY_SUBMITTED", "ZHS_MASTERY_UNAVAILABLE", "MASTERY_AUTO_RUNNING", "MASTERY_AUTO_NOT_RUNNING", "AI_KEY_REQUIRED",
@@ -476,9 +472,7 @@ export function friendlyBridgeError(value: unknown): string {
     case "INVALID_COOKIE_IMPORT": return "Cookie 内容为空、格式不正确或超过原版支持的大小。";
     case "ZHIDAO_PROGRESS_FAILED": return "知到服务器进度读取失败；旧记录保持不变。";
     case "COURSE_NOT_FOUND": return "当前登录会话中找不到这门课程，请先重新同步课程。";
-    case "COURSE_ROUTE_UNAVAILABLE": return "当前课程缺少原版播放器需要的安全路由信息，请重新同步课程。";
-    case "PLAYER_SETTINGS_UNAVAILABLE": return "知到播放器设置读取或保存失败，旧设置保持不变。";
-    case "INVALID_PLAYER_SETTINGS": return "知到播放器参数无效，未保存。";
+    case "COURSE_ROUTE_UNAVAILABLE": return "当前课程缺少必要的课程路由信息，请重新同步课程。";
     case "ZHS_SETTINGS_UNAVAILABLE": return "ZHS 参数读取或保存失败，原版设置未修改。";
     case "INVALID_ZHS_SETTINGS": return "ZHS 参数超出原版支持范围，未保存。";
     case "LOGIN_REQUIRED": return "本机没有知到登录凭证，请在知到账户页扫码登录。";
@@ -521,12 +515,6 @@ export function friendlyBridgeError(value: unknown): string {
     case "COOKIE_IMPORT_FAILED": return "Cookie 登录组件异常或无法完成服务器核验，请运行连接诊断。";
     default: return "本机服务调用失败，请检查运行环境。";
   }
-}
-
-export async function openLegacyZhidao(): Promise<void> {
-  if (!isDesktop()) throw new Error("BRIDGE_NOT_READY");
-  try { await invoke("launch_zhidao_legacy"); }
-  catch { throw new Error("LEGACY_NOT_AVAILABLE"); }
 }
 
 /** Ephemeral QR image, never saved to localStorage or a log. */

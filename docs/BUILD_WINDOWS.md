@@ -37,7 +37,7 @@ Windows 的冻结运行时与 NSIS 产物由 CI 检查，官方账号扫码及�
 
 冻结后的 sidecar 增加 `--yuketang-env-check`，在临时目录中导入原版 main.py（不调用 main、不访问网络），验证 runpy 脚本依赖和原版配置入口均已打包。`--zhidao-env-check` 同时导入 CLI、课程、扫码和单课核验入口。两者失败均阻止 NSIS 打包。
 
-知到官方播放器参数保存到 `%LOCALAPPDATA%/StudyFlow/zhidao/official-player-settings.json`。初次读取可兼容旧 ZHSDesktop 设置，保存时不会写回旧安装目录。
+知到历史官方播放器已退役，专属设置接口不再可用，安装包不再包含播放器启动脚本。旧 ZHSDesktop 及学序自己的 `official-player-settings.json` 保留原样，不读取、迁移或删除。Tauri 应用所需的 WebView2 不受影响。
 
 ## 冻结运行时精简与回归（2026-11-24）
 

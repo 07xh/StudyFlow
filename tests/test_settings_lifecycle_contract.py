@@ -23,19 +23,6 @@ from studyflow.services import bridge
 # Adding a persisted field without adding a case is an intentional test failure.
 CASES = [
     (
-        "official",
-        "zhidao.player.settings",
-        {},
-        {
-            "speed": "2",
-            "allowMinimize": False,
-            "autoStart": False,
-            "autoNext": False,
-            "mode": "zhs-original",
-        },
-        ("speed", "9"),
-    ),
-    (
         "zhs",
         "zhidao.zhs.settings",
         {"course_key": "a" * 64},

@@ -159,7 +159,7 @@ def test_refresh_progress_uses_readonly_mode_and_accepts_partial_snapshot(sessio
 
 
 
-def test_resolve_course_returns_only_current_session_official_route(session_cache):
+def test_resolve_course_returns_only_current_session_course_route(session_cache):
     directory, fingerprint = session_cache
     rows = [
         {"courseType": "ai", "courseId": "11", "classId": "21", "name": "智慧课程"},
@@ -177,20 +177,6 @@ def test_resolve_course_returns_only_current_session_official_route(session_cach
     assert (ai["course_type"], ai["course_id"], ai["class_id"]) == ("ai", "11", "21")
     assert shared["course_type"] == "shared"
     assert shared["recruit_and_course_id"] == "route_13"
-
-
-def test_player_settings_roundtrip_and_reject_invalid_values(session_cache):
-    defaults = legacy_runtime.get_player_settings()
-    assert defaults["speed"] == "1.5" and defaults["mode"] == "official"
-    saved = legacy_runtime.save_player_settings({
-        "speed": "2", "allowMinimize": False, "autoStart": False,
-        "autoNext": True, "mode": "official",
-    })
-    assert saved["speed"] == "2" and saved["allowMinimize"] is False
-    assert legacy_runtime.get_player_settings() == saved
-    with pytest.raises(ValueError, match="INVALID_PLAYER_SETTINGS"):
-        legacy_runtime.save_player_settings({"speed": "8", "allowMinimize": True,
-                                             "autoStart": True, "autoNext": True})
 
 
 def test_signout_and_cache_clear_use_separate_exact_allowlists(session_cache):

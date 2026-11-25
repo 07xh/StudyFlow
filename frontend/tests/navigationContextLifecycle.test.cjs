@@ -28,7 +28,13 @@ test('navigation preserves valid selection without leaking its heading to anothe
   if(name==='./ui/useAppearance')return {useAppearance:()=>({dark:false,mode:'light',setMode:()=>{},toggleTheme:()=>{}})};
   if(name==='./useReleaseChangelog')return {useReleaseChangelog:()=>({dialog:null,close:()=>{},openHistory:()=>{}})};
   if(name==='./ui/AppShell')return {AppShell:props=>{shell=props;return props.children;}};
-  if(name==='./ui/CourseCard')return {CourseCard:props=>React.createElement('button',{'data-select-course':true,'data-course-id':props.course.course_id,onClick:()=>props.onInspect(props.course)})};
+  if(name==='./ui/PlatformCourseList')return evaluate(compile('ui/PlatformCourseList.tsx'),dependency=>{
+   if(dependency==='../presentation')return presentation;
+   if(dependency==='./CourseCard')return {CourseCard:props=>React.createElement('button',{'data-select-course':true,'data-course-id':props.course.course_id,onClick:()=>props.onInspect(props.course)})};
+   if(dependency==='./EmptyState')return {EmptyState:Null};
+   if(dependency==='lucide-react')return new Proxy({},{get:()=>Null});
+   return require(dependency);
+  });
   if(name==='./components/YuketangCourseDetailPanel')return {
     YuketangCourseDetailPanel:Null,
     resetYuketangVerification:()=>{},

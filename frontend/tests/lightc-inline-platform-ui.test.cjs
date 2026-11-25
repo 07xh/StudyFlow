@@ -14,7 +14,8 @@ test("platform sidebar has separate pages and platform-owned login components",(
   assert.match(app,/if\(platform==="yuketang"\)return <YuketangLoginPanel/);
   assert.match(app,/page==="platform-zhidao"&&renderPlatformDetail\("zhidao"\)/);
   assert.match(app,/page==="platform-yuketang"&&renderPlatformDetail\("yuketang"\)/);
-  assert.match(app,/onToggleLogin=\{\(\)=>goPlatform\(definition\.id,true\)\}/);
+  assert.match(app,/onLogin=\{platform=>goPlatform\(platform,true\)\}/);
+  assert.match(read("ui/HomeViews.tsx"),/onToggleLogin=\{\(\)=>onLogin\(definition\.id\)\}/);
   assert.match(card,/expanded&&<div className="sf-platform-expanded">[\s\S]*\{children\}/);
 });
 

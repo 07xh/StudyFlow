@@ -1,10 +1,11 @@
-import {cleanContext,courseEvents,executionEvents,storedActivity,filterActivity,activityResultLabels,type ActivityFilter,type ActivityEntry,type EventContext,type EventResult} from "./activity";
+import {cleanContext,courseEvents,storedActivity,type ActivityFilter,type ActivityEntry,type EventContext,type EventResult} from "./activity";
 import {useRuntimeTasks} from "./runtimeTasks";
 import {TaskRecoveryPanel} from "./taskRecovery";
 import {getYuketangLiveProgress} from "./legacyPlayback";
 import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
-import {ActivityFilterBar} from "./ui/ActivityFilterBar";
+import {ExecutionRecordsView,OperationLogsView} from "./ui/ActivityViews";
+import {CourseMetrics,RecentCourses,PlatformOverview} from "./ui/HomeViews";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
@@ -14,8 +15,7 @@ import {UCampusProgressVerifyPanel} from "./components/UCampusProgressVerifyPane
 import {UCampusFabricatedPanel} from "./components/UCampusFabricatedPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
-  Activity,ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
-  History,ListChecks,RefreshCw,Search,SlidersHorizontal
+  ArrowLeft,ListChecks,SlidersHorizontal
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
 import {invalidateCourseSync,newCourseSyncCheckpoint,shouldStartCourseSync} from "./courseAutoSync";
@@ -45,14 +45,12 @@ import type {Config,Video,YuketangScope} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {CollapsibleSection} from "./ui/CollapsibleSection";
-import {presentCourse,courseMetric,platformNames,selectedSessionCourse,platformProgressOverview,type YuketangVideoSummary} from "./presentation";
-import {CourseCard} from "./ui/CourseCard";
+import {courseMetric,platformNames,selectedSessionCourse,platformProgressOverview,type YuketangVideoSummary} from "./presentation";
+import {PlatformCourseList} from "./ui/PlatformCourseList";
 import {PlatformCard} from "./ui/PlatformCard";
-import {platformInfo,platformRegistry} from "./ui/registry";
+import {platformInfo} from "./ui/registry";
 import {useAppearance} from "./ui/useAppearance";
-import {ThemeModeSelector} from "./ui/ThemeModeSelector";
-import {Switch} from "./ui/Switch";
-import {EmptyState} from "./ui/EmptyState";
+import {AppearanceSettings} from "./ui/AppearanceSettings";
 import {ConfirmDialog} from "./ui/ConfirmDialog";
 import {SettingsDialog} from "./ui/SettingsDialog";
 import {GlobalSettingsModal,type GlobalSettingsTab} from "./ui/GlobalSettingsModal";
@@ -533,23 +531,10 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     return null;
   }
 
-  const renderPlatforms=()=> <section className="sf-platform-section">
-    <div className="section-head">
-      <h3>学习平台</h3>
-      <button className="secondary sf-refresh" type="button" disabled={!desktop||Boolean(busy)}
-        onClick={()=>void refresh()}><RefreshCw size={15}/>检测连接</button>
-    </div>
-    <div className="platform-grid sf-platform-grid">
-      {platformRegistry.map(definition=><PlatformCard key={definition.id}
-        definition={definition} state={platforms[definition.id]} desktop={desktop}
-        busy={Boolean(busy)||syncFeedback[definition.id].phase==="syncing"} expanded={false}
-        onSync={()=>void sync(definition.id,true)}
-        onToggleLogin={()=>goPlatform(definition.id,true)}
-        onEnterCourses={()=>enterCourses(definition.id)}>
-        {null}
-      </PlatformCard>)}
-    </div>
-  </section>;
+  const renderPlatforms=()=> <PlatformOverview platforms={platforms} desktop={desktop} busy={Boolean(busy)}
+    syncing={{zhidao:syncFeedback.zhidao.phase==="syncing",yuketang:syncFeedback.yuketang.phase==="syncing",xuexitong:syncFeedback.xuexitong.phase==="syncing",ucampus:syncFeedback.ucampus.phase==="syncing"}}
+    onRefresh={()=>void refresh()} onSync={platform=>void sync(platform,true)}
+    onLogin={platform=>goPlatform(platform,true)} onEnterCourses={enterCourses}/>;
 
   function guardSettingsNavigation(action:()=>void){
     if(settingsDraft.saving)return;
@@ -705,65 +690,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     if(platform==="yuketang")setVideos([]);
   }
 
-  const renderMetrics=()=> <section className="sf-metrics-grid" aria-label="学习统计">
-    <article className="sf-metric-card">
-      <span className="sf-metric-icon"><BookOpen size={21}/></span>
-      <div><small>全部课程</small><strong>{courses.length}<em>门</em></strong></div>
-    </article>
-    <article className="sf-metric-card">
-      <span className="sf-metric-icon play"><ListChecks size={21}/></span>
-      <div><small>部分内容已完成</small><strong>{learningCount}<em>门</em></strong>
-</div>
-    </article>
-    <article className="sf-metric-card">
-      <span className="sf-metric-icon done"><CheckCircle2 size={21}/></span>
-      <div><small>内容全部完成</small><strong>{completedCount}<em>门</em></strong>
-</div>
-    </article>
-    <article className="sf-metric-card"><span className="sf-metric-icon progress"><CircleGauge size={21}/></span><div><small>待核验课程</small><strong>{courses.length-verifiedCourses.length}<em>门</em></strong></div></article>
-  </section>;
-
-  const renderRecentCourses=()=> <section className="sf-recent-section">
-    <div className="section-head">
-      <h3>课程概览</h3>
-      <button className="text-button" type="button" onClick={()=>setPage("platforms")}>
-        查看学习平台<ChevronRight size={16}/>
-      </button>
-    </div>
-    {courses.length===0
-      ?<EmptyState icon={BookOpen} title="暂无已同步课程"
-          description="先完成平台登录，连接验证通过后会自动同步真实课程。"
-          action={<button className="secondary" type="button" onClick={()=>setPage("platforms")}>管理平台登录</button>}/>
-      :<div className="sf-recent-list">
-        {courses.slice(0,4).map(course=>{
-          const data=presentCourse(course,course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined);
-          return <article className="sf-recent-row" key={course.platform+":"+course.course_id}>
-            <div className={"sf-recent-thumb "+course.platform}>
-              {course.platform==="zhidao"?<GraduationCap size={27}/>:<BookOpen size={27}/>}
-            </div>
-            <div className="sf-recent-main">
-              <div className="sf-recent-title-line">
-                <span className={"sf-course-platform-tag "+course.platform}>{platformNames[course.platform]}</span>
-                <strong title={course.title}>{course.title}</strong>
-                {data.percent===100&&<span className="sf-completed-tag">内容全部完成</span>}
-              </div>
-              <div className="sf-recent-progress-label">
-                <span>{data.percent===null?"暂无平台核验记录":courseMetric(course,course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined).label+"："+data.percent.toFixed(1)+"%"}</span>
-                {course.stale&&<span>数据可能已过期</span>}
-              </div>
-              {data.percent!==null&&<div className="sf-recent-track" role="progressbar"
-                aria-label="服务器已核验进度" aria-valuemin={0} aria-valuemax={100}
-                aria-valuenow={data.percent}><span style={{width:data.percent+"%"}}/></div>}
-            </div>
-            <button className="secondary sf-recent-detail" type="button"
-              onClick={()=>inspectCourse(course)}>
-              课程详情
-            </button>
-          </article>;
-        })}
-      </div>}
-  </section>;
-
   const renderCourseWorkspace=(course:Course)=>{
     const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{
       ...previous[course.platform],courses:course.platform==="zhidao"
@@ -912,84 +838,16 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const activeCourseProgress=activeMetric?.percent??null;
   const platformOverview=headerPlatform?platformProgressOverview(platforms[headerPlatform].courses,yuketangSummaries):null;
 
-  const renderCourses=(platform:Platform)=>{
-    const platformCourses=platforms[platform].courses;
-    const query=courseQueries[platform];
-    const search=query.trim().toLocaleLowerCase();
-    const visible=platformCourses.filter(course=>
-      course.title.toLocaleLowerCase().includes(search)||
-      course.course_id.toLocaleLowerCase().includes(search));
-    return <section className="sf-platform-courses" aria-label={platformNames[platform]+"课程列表"}>
-      <div className="section-head"><h3>课程列表</h3>
-        <span className="sf-muted" role="status" aria-live="polite">
-          {syncFeedback[platform].phase==="syncing"?"正在自动读取真实课程…":
-           syncFeedback[platform].phase==="failed"?"课程同步失败，可点击「同步课程列表」重试":
-           syncFeedback[platform].phase==="synced"?"已同步真实课程":""}
-        </span>
-      </div>
-      <div className="sf-search-toolbar">
-        <label className="sf-search"><Search size={16}/><input type="search"
-          placeholder="搜索当前平台课程名称或 ID" value={query} onChange={event=>{const value=event.target.value;setCourseQueries(previous=>({...previous,[platform]:value}));}}
-          aria-label="搜索当前平台课程"/></label>
-      </div>
-      {visible.length>0
-        ?<div className="course-grid">{visible.map(course=>
-          <CourseCard course={course} yuketangSummary={course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined} onInspect={inspectCourse} key={course.platform+":"+course.course_id}/>)}</div>
-        :<EmptyState icon={BookOpen}
-          title={platformCourses.length>0?"未找到匹配课程":"暂无真实课程数据"}
-          description={platformCourses.length>0
-            ?"可以更换搜索词。当前只显示"+platformNames[platform]+"课程。"
-            :platforms[platform].status==="connected"
-              ?syncFeedback[platform].phase==="syncing"?"正在自动读取课程，请稍候。"
-              :syncFeedback[platform].phase==="failed"
-                ?"读取失败："+syncFeedback[platform].error+"；请点击「同步课程列表」重试。"
-                :"已自动尝试读取当前平台课程；如课程尚未出现，可点击「同步课程列表」重试。"
-              :"请点击上方「账号与连接」登录当前平台，登录通过后会自动同步真实课程。"}
-          action={platforms[platform].status!=="connected"
-            ?<button className="secondary" type="button"
-              onClick={()=>{
-                setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
-                openPlatformSettings(platform,"account");
-              }}>
-                前往账号登录
-              </button>:undefined}/>}
-    </section>;
-  };
+  const renderCourses=(platform:Platform)=> <PlatformCourseList platform={platform} state={platforms[platform]}
+    query={courseQueries[platform]} feedback={syncFeedback[platform]} yuketangSummaries={yuketangSummaries}
+    onQueryChange={value=>setCourseQueries(previous=>({...previous,[platform]:value}))}
+    inspectCourse={inspectCourse} onLogin={()=>{
+      setPlatformLoginExpanded(previous=>({...previous,[platform]:true}));
+      openPlatformSettings(platform,"account");
+    }}/>;
 
   const renderTasks=()=> <RuntimeTaskList loading={runtime.loading} tasks={runtime.tasks} courses={courses} events={activity} desktop={desktop} onRefresh={runtime.refresh} onInspect={inspectCourse}
     onEvent={(action,result,detail,context)=>recordEvent(context?.runner==="yuketang"?"雨课堂":"知到",action,result,detail,context)}/>;
-  const recordedEvents=executionEvents(activity);
-  const visibleRecords=filterActivity(recordedEvents,recordFilter);
-  const visibleLogs=filterActivity(activity,logFilter);
-  const renderRecords=()=> <section className="sf-section">
-    <div className="section-head"><h3>执行与核验记录</h3></div>
-    <p className="sf-muted">本机最近记录，进程结束不代表平台确认完成。</p>
-    <ActivityFilterBar events={recordedEvents} filter={recordFilter} onChange={setRecordFilter} visibleCount={visibleRecords.length}/>
-    {recordedEvents.length===0?<EmptyState icon={History} title="暂无执行或核验记录" description="实际启动、停止和核验后会在这里留下记录。"/>:visibleRecords.length===0?<EmptyState icon={Search} title="没有符合筛选条件的记录" description="请调整平台、结果或搜索条件。"/>:<div className="sf-history-list">{visibleRecords.map(event=>{
-      const course=event.courseId?courses.find(course=>platformNames[course.platform]===event.platform&&course.course_id===event.courseId&&!course.stale):undefined;
-      return <article key={event.id}><time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time><div><strong>{event.action}</strong><span>{activityResultLabels[event.result]} · {event.platform}{course?" · "+course.title:event.courseId?" · 历史课程":" · 平台记录"}</span><p>{event.detail}</p></div>{course&&<button className="secondary" onClick={()=>inspectCourse(course)}>查看课程</button>}</article>;
-    })}</div>}
-  </section>;
-
-  const renderLogs=()=> <section>
-    <div className="section-head"><h3>本机操作记录</h3>
-      <button className="secondary" type="button" disabled={activity.length===0}
-        onClick={()=>setClearLogsOpen(true)}>
-        清空记录
-      </button>
-    </div>
-    <ActivityFilterBar events={activity} filter={logFilter} onChange={setLogFilter} visibleCount={visibleLogs.length}/>
-    {activity.length===0
-      ?<EmptyState icon={Activity} title="暂无操作记录" description="平台连接检测、课程同步和任务操作会显示在这里。"/>
-      :visibleLogs.length===0?<EmptyState icon={Search} title="没有符合筛选条件的记录" description="请调整平台、结果或搜索条件。"/>
-      :<div className="sf-log-list">{visibleLogs.map(item=>{const course=item.courseId?courses.find(course=>platformNames[course.platform]===item.platform&&course.course_id===item.courseId&&!course.stale):undefined;return <article className="sf-log-row" key={item.id}>
-        <span className={"sf-log-indicator "+item.result} aria-hidden="true"/>
-        <div className="sf-log-main"><div><strong>{item.action}</strong><span>{activityResultLabels[item.result]} · {item.platform}{course?" · "+course.title:""}</span></div>
-          <p>{item.detail}</p></div>
-        <time dateTime={item.at}>{new Date(item.at).toLocaleString()}</time>
-        {course&&<button type="button" className="secondary sf-log-course" onClick={()=>inspectCourse(course)}>查看课程</button>}
-      </article>})}</div>}
-  </section>;
 
   return <>
     <AppShell page={page} settingsOpen={globalSettingsOpen} onOpenSettings={()=>openGlobalSettings()} onNavigate={next=>{
@@ -1024,31 +882,20 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         visible={page==="home"||page==="tasks"} tasks={runtime.tasks} loading={runtime.loading}
         connected={{zhidao:platforms.zhidao.status==="connected",yuketang:platforms.yuketang.status==="connected"}}
         courses={courses} onRefresh={runtime.refresh}/>
-      {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
+      {page==="home"&&<>{renderPlatforms()}<CourseMetrics courseCount={courses.length} learningCount={learningCount} completedCount={completedCount} unverifiedCount={courses.length-verifiedCourses.length}/><RecentCourses courses={courses} yuketangSummaries={yuketangSummaries} onOpenPlatforms={()=>setPage("platforms")} inspectCourse={inspectCourse}/></>}
       {page==="tasks"&&renderTasks()}
       {page==="platforms"&&renderPlatforms()}
       {page==="platform-zhidao"&&renderPlatformDetail("zhidao")}
       {page==="platform-yuketang"&&renderPlatformDetail("yuketang")}
       {page==="platform-xuexitong"&&renderPlatformDetail("xuexitong")}
       {page==="platform-ucampus"&&renderPlatformDetail("ucampus")}
-      {page==="records"&&renderRecords()}
-      {page==="logs"&&renderLogs()}
+      {page==="records"&&<ExecutionRecordsView activity={activity} courses={courses} filter={recordFilter} onFilterChange={setRecordFilter} inspectCourse={inspectCourse}/>}
+      {page==="logs"&&<OperationLogsView activity={activity} courses={courses} filter={logFilter} onFilterChange={setLogFilter} inspectCourse={inspectCourse} onClear={()=>setClearLogsOpen(true)}/>}
     </AppShell>
     <GlobalSettingsModal open={globalSettingsOpen} dark={dark}
       activeTab={globalSettingsTab} onTabChange={setGlobalSettingsTab} onClose={()=>setGlobalSettingsOpen(false)}>
       {globalSettingsTab==="questionbank"&&<QuestionBankSettingsPanel desktop={desktop&&consentAccepted} dark={dark}/>}
-      {globalSettingsTab==="general"&&<section className="settings-card">
-        <h3>外观</h3>
-        <p className="sf-muted">外观偏好即时生效，无需另行保存。</p>
-        <div className="sf-settings-line">
-          <div><strong>界面主题</strong></div>
-          <ThemeModeSelector mode={mode} onChange={setMode}/>
-        </div>
-        <div className="sf-settings-line">
-          <div><strong>紧凑卡片</strong></div>
-          <Switch checked={compactCards} aria-label="紧凑卡片" onChange={setCompactCards}/>
-        </div>
-      </section>}
+      {globalSettingsTab==="general"&&<AppearanceSettings mode={mode} onModeChange={setMode} compactCards={compactCards} onCompactChange={setCompactCards}/>}
       <UpdatePanel desktop={desktop&&consentAccepted}
         visible={globalSettingsOpen&&globalSettingsTab==="updates"} embedded
         onDownloaded={setNotice} onOpenChangelog={releaseChangelog.openHistory}/>

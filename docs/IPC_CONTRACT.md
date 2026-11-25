@@ -18,7 +18,7 @@ Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 \`bin/st
 | \`yuketang.configure\` | \`configuration\` | 保存会话到 Windows 凭据管理器 |
 | \`yuketang.clear\` | 无 | 仅清除学序保存的会话 |
 
-知到扫码由 Tauri 独立调用已安装的 \`%LOCALAPPDATA%/ZHSDesktop/Zhidao-GUI.ps1\`；调用原程序的只读 \`doctor-server\` / \`courses\`，不更改旧版本。
+知到扫码由前端经 `bridge_request` 调用内置 Python sidecar 的 `zhidao.qr.start`、`zhidao.qr.status`、`zhidao.qr.cancel`，无需启动旧版 WPF。保留只读课程查询与连接诊断，不更改旧版本。
 
 ## 约束
 
@@ -41,3 +41,7 @@ Rust 桌面壳使用固定路径启动随 Windows 安装程序打包的 \`bin/st
 - `progress_evidence`、`verified_at` 目前返回 `null`。前端需要二者同时提供有效的服务器核验证据才展示进度百分比。
 - `stale=true` 始终显示「历史缓存待核验」，不使用过时进度作为当前完成率。
 - React UI 通过 Tauri `bridge_request` 发送 JSONL IPC，核对 `id` 和平台身份，拒绝跨平台记录及异常格式；保留雨课堂现有配置、清理和视频请求。
+
+## 历史播放器退役边界
+
+`launch_zhidao_legacy`、`zhidao_player_prepare`、`zhidao_player_start` 已移出原生命令注册；Python 不再提供 `zhidao.player.target`、`zhidao.player.settings.get` 或 `zhidao.player.settings.save`。仅保留历史任务停止、状态查询及明确的本机 WebView 配置清理接口；原始文件及许可证留档。

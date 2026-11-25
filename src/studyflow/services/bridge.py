@@ -19,8 +19,7 @@ from studyflow.platforms.zhidao import qr_runtime
 from studyflow.platforms.zhidao.cookie_import import import_cookie
 from studyflow.platforms.zhidao.legacy_runtime import (
     refresh_progress as refresh_zhidao_progress, verify_course as verify_zhidao_course,
-    resolve_course as resolve_zhidao_course, get_player_settings as get_zhidao_player_settings,
-    save_player_settings as save_zhidao_player_settings, diagnose_server as diagnose_zhidao_server,
+    diagnose_server as diagnose_zhidao_server,
     clear_session as clear_zhidao_session, clear_course_cache as clear_zhidao_course_cache,
     read_document as read_zhidao_document,
     read_course_detail as read_zhidao_course_detail,
@@ -430,17 +429,6 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": True, "data": accept_studyflow_consent()}
         except Exception:
             return {"id": request_id, "ok": False, "error": "CONSENT_STORAGE_FAILED"}
-    if operation == "zhidao.player.target":
-        try:
-            target = resolve_zhidao_course(request.get("course_key"))
-            return {"id": request_id, "ok": True, "data": target}
-        except ValueError:
-            return {"id": request_id, "ok": False, "error": "INVALID_REQUEST"}
-        except RuntimeError as exc:
-            error = "COURSE_NOT_FOUND" if str(exc) == "COURSE_NOT_FOUND" else "COURSE_ROUTE_UNAVAILABLE"
-            return {"id": request_id, "ok": False, "error": error}
-        except Exception:
-            return {"id": request_id, "ok": False, "error": "COURSE_ROUTE_UNAVAILABLE"}
     if operation == "zhidao.zhs.knowledge.detail":
         knowledge_id = request.get("knowledge_id")
         course_key = request.get("course_key")
@@ -528,18 +516,6 @@ def dispatch(request: dict[str, Any]) -> dict[str, Any]:
             return {"id": request_id, "ok": False, "error": "INVALID_ZHS_SETTINGS"}
         except Exception:
             return {"id": request_id, "ok": False, "error": "ZHS_SETTINGS_UNAVAILABLE"}
-    if operation == "zhidao.player.settings.get":
-        try:
-            return {"id": request_id, "ok": True, "data": get_zhidao_player_settings()}
-        except Exception:
-            return {"id": request_id, "ok": False, "error": "PLAYER_SETTINGS_UNAVAILABLE"}
-    if operation == "zhidao.player.settings.save":
-        try:
-            return {"id": request_id, "ok": True, "data": save_zhidao_player_settings(request.get("settings"))}
-        except ValueError:
-            return {"id": request_id, "ok": False, "error": "INVALID_PLAYER_SETTINGS"}
-        except Exception:
-            return {"id": request_id, "ok": False, "error": "PLAYER_SETTINGS_UNAVAILABLE"}
     if operation == "zhidao.diagnose":
         try:
             return {"id": request_id, "ok": True, "data": diagnose_zhidao_server()}

@@ -99,9 +99,9 @@ try {
             $xxtStatus.data.PSObject.Properties.Name -notcontains 'heartbeats') {
             throw 'Installed Xuexitong status IPC adapter failed'
         }
-        $zhidao = Invoke-InstalledJsonlProbe '{"id":"installed-zhidao","version":1,"operation":"zhidao.player.settings.get"}'
-        if (-not $zhidao.ok -or $zhidao.data.speed -notin @('1','1.25','1.5','2')) {
-            throw 'Installed Zhidao settings adapter failed'
+        $oldPlayer = Invoke-InstalledJsonlProbe '{"id":"installed-player-retired","version":1,"operation":"zhidao.player.settings.get"}'
+        if ($oldPlayer.id -cne 'installed-player-retired' -or $oldPlayer.ok -or $oldPlayer.error -cne 'UNKNOWN_OPERATION') {
+            throw 'Installed retired official player IPC remains callable'
         }
         # Pair the native Rust allowlist test with the installed Python handler.
         # A course-scoped read must work without altering user settings.

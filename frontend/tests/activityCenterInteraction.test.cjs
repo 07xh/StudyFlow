@@ -21,15 +21,16 @@ test("activity filters combine platform, result and trimmed case-insensitive key
  assert.equal(rows.length,3);
 });
 test("history and logs have independent filters and honest no-match state",()=>{
- const app=read("App.tsx");
- assert.match(app,/filterActivity\(recordedEvents,recordFilter\)/);
- assert.match(app,/filterActivity\(activity,logFilter\)/);
+ const app=read("App.tsx"),views=read("ui/ActivityViews.tsx");
+ assert.match(views,/filterActivity\(recordedEvents,recordFilter\)/);
+ assert.match(views,/filterActivity\(activity,logFilter\)/);
  assert.match(app,/filter=\{recordFilter\}/);
  assert.match(app,/filter=\{logFilter\}/);
- assert.match(app,/visibleLogs.length===0\?<EmptyState/);
- assert.match(app,/visibleRecords.length===0\?<EmptyState/);
- assert.match(app,/onClick=\{\(\)=>setClearLogsOpen\(true\)\}/);
- assert.match(app,/course\.course_id===item\.courseId&&!course\.stale/);
+ assert.match(views,/visibleLogs.length===0\?<EmptyState/);
+ assert.match(views,/visibleRecords.length===0\?<EmptyState/);
+ assert.match(app,/onClear=\{\(\)=>setClearLogsOpen\(true\)\}/);
+ assert.match(views,/onClick=\{onClear\}/);
+ assert.match(views,/course\.course_id===item\.courseId&&!course\.stale/);
 });
 test("task center states its monitor scope and does not equate absent monitoring to idle",()=>{
  const panel=read("components/RuntimeTaskList.tsx");
