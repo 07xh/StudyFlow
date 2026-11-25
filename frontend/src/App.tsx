@@ -5,6 +5,7 @@ import {getYuketangLiveProgress} from "./legacyPlayback";
 import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ExecutionRecordsView,OperationLogsView} from "./ui/ActivityViews";
+import {CourseMetrics,RecentCourses} from "./ui/HomeViews";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
@@ -14,7 +15,7 @@ import {UCampusProgressVerifyPanel} from "./components/UCampusProgressVerifyPane
 import {UCampusFabricatedPanel} from "./components/UCampusFabricatedPanel";
 import {useCallback,useEffect,useMemo,useRef,useState,useSyncExternalStore} from "react";
 import {
-  ArrowLeft,BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,
+  ArrowLeft,BookOpen,
   ListChecks,RefreshCw,Search,SlidersHorizontal
 } from "lucide-react";
 import {initialPlatforms} from "./platforms";
@@ -45,7 +46,7 @@ import type {Config,Video,YuketangScope} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {CollapsibleSection} from "./ui/CollapsibleSection";
-import {presentCourse,courseMetric,platformNames,selectedSessionCourse,platformProgressOverview,type YuketangVideoSummary} from "./presentation";
+import {courseMetric,platformNames,selectedSessionCourse,platformProgressOverview,type YuketangVideoSummary} from "./presentation";
 import {CourseCard} from "./ui/CourseCard";
 import {PlatformCard} from "./ui/PlatformCard";
 import {platformInfo,platformRegistry} from "./ui/registry";
@@ -705,65 +706,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     if(platform==="yuketang")setVideos([]);
   }
 
-  const renderMetrics=()=> <section className="sf-metrics-grid" aria-label="学习统计">
-    <article className="sf-metric-card">
-      <span className="sf-metric-icon"><BookOpen size={21}/></span>
-      <div><small>全部课程</small><strong>{courses.length}<em>门</em></strong></div>
-    </article>
-    <article className="sf-metric-card">
-      <span className="sf-metric-icon play"><ListChecks size={21}/></span>
-      <div><small>部分内容已完成</small><strong>{learningCount}<em>门</em></strong>
-</div>
-    </article>
-    <article className="sf-metric-card">
-      <span className="sf-metric-icon done"><CheckCircle2 size={21}/></span>
-      <div><small>内容全部完成</small><strong>{completedCount}<em>门</em></strong>
-</div>
-    </article>
-    <article className="sf-metric-card"><span className="sf-metric-icon progress"><CircleGauge size={21}/></span><div><small>待核验课程</small><strong>{courses.length-verifiedCourses.length}<em>门</em></strong></div></article>
-  </section>;
-
-  const renderRecentCourses=()=> <section className="sf-recent-section">
-    <div className="section-head">
-      <h3>课程概览</h3>
-      <button className="text-button" type="button" onClick={()=>setPage("platforms")}>
-        查看学习平台<ChevronRight size={16}/>
-      </button>
-    </div>
-    {courses.length===0
-      ?<EmptyState icon={BookOpen} title="暂无已同步课程"
-          description="先完成平台登录，连接验证通过后会自动同步真实课程。"
-          action={<button className="secondary" type="button" onClick={()=>setPage("platforms")}>管理平台登录</button>}/>
-      :<div className="sf-recent-list">
-        {courses.slice(0,4).map(course=>{
-          const data=presentCourse(course,course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined);
-          return <article className="sf-recent-row" key={course.platform+":"+course.course_id}>
-            <div className={"sf-recent-thumb "+course.platform}>
-              {course.platform==="zhidao"?<GraduationCap size={27}/>:<BookOpen size={27}/>}
-            </div>
-            <div className="sf-recent-main">
-              <div className="sf-recent-title-line">
-                <span className={"sf-course-platform-tag "+course.platform}>{platformNames[course.platform]}</span>
-                <strong title={course.title}>{course.title}</strong>
-                {data.percent===100&&<span className="sf-completed-tag">内容全部完成</span>}
-              </div>
-              <div className="sf-recent-progress-label">
-                <span>{data.percent===null?"暂无平台核验记录":courseMetric(course,course.platform==="yuketang"?yuketangSummaries[course.course_id]:undefined).label+"："+data.percent.toFixed(1)+"%"}</span>
-                {course.stale&&<span>数据可能已过期</span>}
-              </div>
-              {data.percent!==null&&<div className="sf-recent-track" role="progressbar"
-                aria-label="服务器已核验进度" aria-valuemin={0} aria-valuemax={100}
-                aria-valuenow={data.percent}><span style={{width:data.percent+"%"}}/></div>}
-            </div>
-            <button className="secondary sf-recent-detail" type="button"
-              onClick={()=>inspectCourse(course)}>
-              课程详情
-            </button>
-          </article>;
-        })}
-      </div>}
-  </section>;
-
   const renderCourseWorkspace=(course:Course)=>{
     const updateCourses=(list:Course[])=>setPlatforms(previous=>({...previous,[course.platform]:{
       ...previous[course.platform],courses:course.platform==="zhidao"
@@ -992,7 +934,7 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
         visible={page==="home"||page==="tasks"} tasks={runtime.tasks} loading={runtime.loading}
         connected={{zhidao:platforms.zhidao.status==="connected",yuketang:platforms.yuketang.status==="connected"}}
         courses={courses} onRefresh={runtime.refresh}/>
-      {page==="home"&&<>{renderPlatforms()}{renderMetrics()}{renderRecentCourses()}</>}
+      {page==="home"&&<>{renderPlatforms()}<CourseMetrics courseCount={courses.length} learningCount={learningCount} completedCount={completedCount} unverifiedCount={courses.length-verifiedCourses.length}/><RecentCourses courses={courses} yuketangSummaries={yuketangSummaries} onOpenPlatforms={()=>setPage("platforms")} inspectCourse={inspectCourse}/></>}
       {page==="tasks"&&renderTasks()}
       {page==="platforms"&&renderPlatforms()}
       {page==="platform-zhidao"&&renderPlatformDetail("zhidao")}
