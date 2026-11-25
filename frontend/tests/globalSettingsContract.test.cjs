@@ -27,7 +27,8 @@ test("floating global settings portal retains focus, keyboard and resize semanti
  assert.match(modal,/aria-label="调整设置导航宽度"/);
  assert.match(modal,/window.localStorage.setItem\(WIDTH_KEY/);
  assert.match(modal,/event.key==="Escape"/);
- assert.match(modal,/openerRef.current.focus\(\)/);
+ assert.match(modal,/activateDialog\(\(\)=>closeRef\.current,\(\)=>panelRef\.current\)/);
+ assert.match(source("ui/modalInteraction.ts"),/if\(releaseLock\(\)&&previous\?\.isConnected\)previous\.focus\(\)/);
  assert.match(css,/backdrop-filter:blur/);
  assert.match(css,/overflow:auto/);
  assert.match(css,/@media\(max-width:620px\)/);
