@@ -1,5 +1,7 @@
-import {BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,ListChecks} from "lucide-react";
-import type {Course} from "../types";
+import {BookOpen,CheckCircle2,ChevronRight,CircleGauge,GraduationCap,ListChecks,RefreshCw} from "lucide-react";
+import type {Course,Platform,PlatformState} from "../types";
+import {PlatformCard} from "./PlatformCard";
+import {platformRegistry} from "./registry";
 import {presentCourse,courseMetric,platformNames,type YuketangVideoSummary} from "../presentation";
 import {EmptyState} from "./EmptyState";
 
@@ -70,5 +72,36 @@ export function RecentCourses({courses,yuketangSummaries,onOpenPlatforms,inspect
           </article>;
         })}
       </div>}
+  </section>;
+}
+
+
+type PlatformOverviewProps={
+  platforms:Record<Platform,PlatformState>;
+  desktop:boolean;
+  busy:boolean;
+  syncing:Record<Platform,boolean>;
+  onRefresh:()=>void;
+  onSync:(platform:Platform)=>void;
+  onLogin:(platform:Platform)=>void;
+  onEnterCourses:(platform:Platform)=>void;
+};
+export function PlatformOverview({platforms,desktop,busy,syncing,onRefresh,onSync,onLogin,onEnterCourses}:PlatformOverviewProps){
+  return <section className="sf-platform-section">
+    <div className="section-head">
+      <h3>学习平台</h3>
+      <button className="secondary sf-refresh" type="button" disabled={!desktop||busy}
+        onClick={onRefresh}><RefreshCw size={15}/>检测连接</button>
+    </div>
+    <div className="platform-grid sf-platform-grid">
+      {platformRegistry.map(definition=><PlatformCard key={definition.id}
+        definition={definition} state={platforms[definition.id]} desktop={desktop}
+        busy={busy||syncing[definition.id]} expanded={false}
+        onSync={()=>onSync(definition.id)}
+        onToggleLogin={()=>onLogin(definition.id)}
+        onEnterCourses={()=>onEnterCourses(definition.id)}>
+        {null}
+      </PlatformCard>)}
+    </div>
   </section>;
 }
