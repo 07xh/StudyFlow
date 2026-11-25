@@ -28,13 +28,8 @@ test("global task polling does not enqueue duplicate requests while a read is in
  }
 });
 
-test("official player status and start-stop actions have independent in-flight guards",()=>{
- const source=fs.readFileSync(path.join(__dirname,"../src/components/ZhidaoOfficialPlayerPanel.tsx"),"utf8");
- assert.match(source,/statusInFlight\.current\|\|actionInFlight\.current/);
- assert.match(source,/statusInFlight\.current=true/);
- assert.match(source,/statusInFlight\.current=false/);
- assert.match(source,/if\(!selected\|\|actionInFlight\.current\)return/);
- assert.match(source,/if\(!ownsStatus\|\|!active\|\|!status\.runId\|\|actionInFlight\.current\)return/);
- assert.match(source,/statusRevision\.current\+\+/);
- assert.match(source,/finally\{actionInFlight\.current=false;setBusy\(null\);void refreshStatus\(\);\}/);
+test("retired official playback controls cannot be mounted from the app",()=>{
+ const src=path.join(__dirname,"../src");
+ assert.equal(fs.existsSync(path.join(src,"components/ZhidaoOfficialPlayerPanel.tsx")),false);
+ assert.doesNotMatch(fs.readFileSync(path.join(src,"App.tsx"),"utf8"),/ZhidaoOfficialPlayerPanel/);
 });
