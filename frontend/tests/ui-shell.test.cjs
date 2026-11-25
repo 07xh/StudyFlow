@@ -44,7 +44,7 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(app,/page==="platform-yuketang"/);
   assert.match(app,/renderPlatformDetail\("zhidao"\)/);
   assert.match(app,/renderPlatformDetail\("yuketang"\)/);
-  assert.match(app,/<ZhidaoOfficialPlayerPanel/);
+  assert.doesNotMatch(app,/<ZhidaoOfficialPlayerPanel/);
   assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
   assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
   assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
@@ -57,12 +57,6 @@ test("platform task and original runtime APIs are retained", () => {
   assert.match(playback,/startLegacy/);
   assert.match(playback,/stopLegacy/);
   assert.match(playback,/getLegacyStatus/);
-  const official=read("src/components/ZhidaoOfficialPlayerPanel.tsx");
-  assert.match(official,/zhidao_player_start/);
-  const monitor=read("src/components/ZhidaoPlayerMonitor.tsx");
-  assert.match(monitor,/zhidao.progress.verify/);
-  assert.match(monitor,/status.runId/);
-  assert.match(official,/autoNext/);
 });
 
 test("Rain Classroom original progress has three distinct UI fields and a scoped IPC", () => {
@@ -139,20 +133,15 @@ test("consent requires one explicit decision and keeps a single exit action", ()
   assert.match(css,/--accent-text:#078f5c/);
   assert.match(css,/sf-consent-confirmation/);
   assert.match(css,/sf-zd-progress-grid/);
-  assert.match(css,/sf-zd-player-settings/);
 });
 
 test("platform controls keep independent settings and per-platform login expansion", () => {
   const app=read("src/App.tsx");
-  const official=read("src/components/ZhidaoPlayerSettingsPanel.tsx");
   const progress=read("src/components/ZhidaoProgressPanel.tsx");
   const yuketang=read("src/components/YuketangTaskArea.tsx");
   assert.match(app,/Record<Platform,boolean>/);
   assert.match(app,/expanded=\{platformLoginExpanded\[platform\]\}/);
   assert.match(app,/\[platform\]:!previous\[platform\]/);
-  assert.match(official,/update\('allowMinimize',value\)/);
-  assert.match(official,/update\('autoStart',value\)/);
-  assert.match(official,/update\('autoNext',value\)/);
   assert.match(progress,/onChange=\{checked=>onAutoVerifyChange\(selected,checked\)\}/);
   assert.match(yuketang,/update\(id,event\.currentTarget\.checked\)/);
 });

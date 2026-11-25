@@ -16,6 +16,9 @@ test("obsolete styles do not reappear in the unified platform UI", () => {
     "sf-task-shortcut",
     "sf-zhs-local",
     "sf-zd-mode-selector",
+    "sf-zd-mode-options",
+    "sf-zd-player-settings",
+    "sf-course-mode-bar",
     "sf-live-course-progress",
     "sf-live-course-heading",
     "credential-form",
@@ -32,7 +35,6 @@ test("shared controls and server-evidence styles stay available", () => {
     "sf-provider-blue",
     "sf-verified-track",
     "sf-live-state",
-    "sf-zd-mode-options",
   ]) {
     assert.match(foundation, new RegExp("\\." + live + "(?![\\w-])"), live);
   }

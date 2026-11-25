@@ -21,7 +21,7 @@ test("platform sidebar has separate pages and platform-owned login components",(
 test("playback configuration belongs to the individual platform page",()=>{
   const app=read("App.tsx"),legacy=read("components/LegacyPlaybackPanel.tsx"),yuketang=read("components/YuketangTaskArea.tsx");
   assert.match(app,/const renderPlatformDetail=\(platform:Platform\)=>/);
-  assert.match(app,/<ZhidaoOfficialPlayerPanel/);
+  assert.doesNotMatch(app,/<ZhidaoOfficialPlayerPanel/);
   assert.match(app,/<LegacyPlaybackPanel platform="zhidao"/);
   assert.match(app,/<YuketangTaskArea courses=\{platforms\.yuketang\.courses\}/);
   assert.match(yuketang,/<LegacyPlaybackPanel platform="yuketang"/);
@@ -30,7 +30,6 @@ test("playback configuration belongs to the individual platform page",()=>{
   assert.match(yuketang,/max_concurrent_videos/);
   assert.match(yuketang,/yuketang\.settings\.get/);
   assert.match(yuketang,/yuketang\.settings\.save/);
-  assert.match(read("components/ZhidaoOfficialPlayerPanel.tsx"),/zhidao_player_start/);
   assert.doesNotMatch(app,/page==="tasks"&&[\s\S]*<LegacyPlaybackPanel platform="zhidao"/);
 });
 

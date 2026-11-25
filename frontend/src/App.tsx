@@ -5,7 +5,6 @@ import {getYuketangLiveProgress} from "./legacyPlayback";
 import {yuketangScopeIssues} from "./yuketangScopeValidation";
 import {RuntimeTaskList} from "./components/RuntimeTaskList";
 import {ActivityFilterBar} from "./ui/ActivityFilterBar";
-import {ZhidaoPlayerSettingsPanel} from "./components/ZhidaoPlayerSettingsPanel";
 import {YuketangContentPanel} from "./components/YuketangContentPanel";
 import {XuexitongLoginPanel,XuexitongCourseDetailPanel,XuexitongSettingsPanel} from "./components/XuexitongPanels";
 import {XuexitongHeartbeatPanel} from "./components/XuexitongHeartbeatPanel";
@@ -33,18 +32,16 @@ import {UpdatePanel} from "./components/UpdatePanel";
 import {ReleaseNotesDialog} from "./ui/ReleaseNotesDialog";
 import {useReleaseChangelog} from "./useReleaseChangelog";
 import {ZhidaoProgressPanel} from "./components/ZhidaoProgressPanel";
-import {ZhidaoOfficialPlayerPanel} from "./components/ZhidaoOfficialPlayerPanel";
 import {ZhidaoAccountTools} from "./components/ZhidaoAccountTools";
 import {ZhidaoCourseDetailPanel} from "./components/ZhidaoCourseDetailPanel";
 import {StudyFlowConsentGate} from "./components/StudyFlowConsentGate";
 import {ZhidaoActivityPanel} from "./components/ZhidaoActivityPanel";
-import {ZhidaoPlayerMonitor} from "./components/ZhidaoPlayerMonitor";
 import {ZhidaoLoginPanel} from "./components/ZhidaoMigration";
 import {YuketangLoginPanel} from "./components/YuketangLoginPanel";
 import {
   fetchStatuses,fetchCoursesFromDesktop,friendlyBridgeError,isDesktop,request
 } from "./bridge";
-import type {Config,Video,ZhidaoPlayerSettings,YuketangScope} from "./bridge";
+import type {Config,Video,YuketangScope} from "./bridge";
 import type {Course,Platform,PlatformState} from "./types";
 import {AppShell,type Page} from "./ui/AppShell";
 import {CollapsibleSection} from "./ui/CollapsibleSection";
@@ -125,7 +122,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const [hasYuketangSign,setHasYuketangSign]=useState(false);
   const [signDirty,setSignDirty]=useState(false);
   const configurationRevision=useRef(0);
-  const [courseModes,setCourseModes]=useState<Record<string,"official"|"zhs-original">>({});
   const [clearDialogOpen,setClearDialogOpen]=useState(false);
   const [clearLogsOpen,setClearLogsOpen]=useState(false);
   const [qrOpen,setQrOpen]=useState(false);
@@ -135,13 +131,12 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
   const [activity,setActivity]=useState<ActivityEntry[]>(readActivity);
   const [recordFilter,setRecordFilter]=useState<ActivityFilter>({platform:"all",result:"all",query:""});
   const [logFilter,setLogFilter]=useState<ActivityFilter>({platform:"all",result:"all",query:""});
-  const [zhidaoPlaybackMode,setZhidaoPlaybackMode]=useState<"official"|"zhs-original">("official");
   const [platformSettingsOpen,setPlatformSettingsOpen]=useState<Platform|null>(null);
   const [settingsDraft,setSettingsDraft]=useState({dirty:false,saving:false});
   const pendingSettingsNavigation=useRef<(()=>void)|null>(null);
   const [discardSettingsOpen,setDiscardSettingsOpen]=useState(false);
   // A course has ONE visible settings action. ZHS uses its course-scoped
-  // editor; official/YKT/XXT use the platform preset view.
+  // editor; other platforms use the platform preset view.
   const [zhsCourseSettingsOpen,setZhsCourseSettingsOpen]=useState(false);
   const [platformSettingsSection,setPlatformSettingsSection]=useState<PlatformSettingsSection>("parameters");
   const [yuketangScopeJumpRequest,setYuketangScopeJumpRequest]=useState(0);
@@ -244,27 +239,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     };
   },[desktop,consentAccepted,platforms.yuketang.status,scopeDirty,
      yuketangCourseId,yuketangRunId,yuketangRunState]);
-  useEffect(()=>{
-    if(!desktop)return;
-    let live=true;
-    void request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"})
-      .then(settings=>{if(live&&settings.mode)setZhidaoPlaybackMode(settings.mode);})
-      .catch(()=>{});
-    return ()=>{live=false;};
-  },[desktop]);
-
-  async function changeZhidaoPlaybackMode(mode:"official"|"zhs-original"){
-    const previous=zhidaoPlaybackMode;
-    setZhidaoPlaybackMode(mode);
-    try{
-      const current=await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.get"});
-      await request<ZhidaoPlayerSettings>({operation:"zhidao.player.settings.save",settings:{...current,mode}});
-    }catch(error){
-      setZhidaoPlaybackMode(previous);
-      setNotice(friendlyBridgeError(error));
-    }
-  }
-
   const recordEvent=useCallback((platform:string,action:string,result:EventResult,detail:string,context:EventContext={})=>{
     const item:ActivityEntry={
       id:Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7),
@@ -544,10 +518,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     setZhsCourseSettingsOpen(false);
     setPlatformSettingsOpen(null);setCourseLogsOpen(false);setSelectedCourse(course);setPage("platform-"+course.platform as Page);
   }
-  function courseMode(course:Course):"official"|"zhs-original"{
-    const active=runtime.tasks.find(task=>task.platform==="zhidao"&&task.courseId===course.course_id&&task.state==="running"&&!task.unavailable);
-    return active?.runner==="official"?"official":active?.runner==="zhs"?"zhs-original":courseModes[course.course_id]??zhidaoPlaybackMode;
-  }
   function renderPlatformLogin(platform:Platform){
     if(platform==="zhidao")return <><ZhidaoLoginPanel desktop={desktop} busy={Boolean(busy)}
       onOpenNative={()=>setQrOpen(true)}
@@ -581,19 +551,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     </div>
   </section>;
 
-  const renderZhidaoModeSwitch=(course?:Course)=>{
-    const mode=course?courseMode(course):zhidaoPlaybackMode;
-    const active=course&&runtime.tasks.some(task=>task.courseId===course.course_id&&task.platform==="zhidao"&&task.state==="running");
-    const choose=(next:"official"|"zhs-original")=>{
-      setZhsCourseSettingsOpen(false);
-      if(course)setCourseModes(previous=>({...previous,[course.course_id]:next}));
-      else void changeZhidaoPlaybackMode(next);
-    };
-    return <section className="sf-course-mode-bar" aria-label="知到运行方式">
-      <strong>{course?"运行方式":"默认方式"}</strong>
-      <div className="sf-zd-mode-options">{(["official","zhs-original"] as const).map(value=><button key={value} disabled={Boolean(active)} aria-pressed={mode===value} className={mode===value?"active":""} onClick={()=>choose(value)}>{value==="official"?"官方播放器":"ZHS 原版"}</button>)}</div>
-    </section>;
-  };
   function guardSettingsNavigation(action:()=>void){
     if(settingsDraft.saving)return;
     if(settingsDraft.dirty){pendingSettingsNavigation.current=action;setDiscardSettingsOpen(true);return;}
@@ -621,10 +578,8 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       {renderPlatformLogin(platform)}
     </PlatformCard>}
     {platformSettingsSection!=="account"&&(platform==="zhidao"?<>
-      {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="平台默认参数与环境" defaultExpanded={true}>
-      {renderZhidaoModeSwitch()}
-      <ZhidaoPlayerSettingsPanel desktop={desktop} onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-      <p className="sf-muted">ZHS 当前课程参数请在课程页顶部「本课参数」中调整；此处仅管理官方播放器的默认参数。</p>
+      {platformSettingsSection==="parameters"&&<CollapsibleSection id="platform:zhidao:defaults" title="课程参数" defaultExpanded={true}>
+       <p className="sf-muted">请在对应课程页顶部打开「本课参数」。</p>
       </CollapsibleSection>}
       {platformSettingsSection==="advanced"&&<>
       <CollapsibleSection id="platform:zhidao:progress" title="进度核验" defaultExpanded={true}>
@@ -814,7 +769,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
       ...previous[course.platform],courses:course.platform==="zhidao"
         ?mergeZhidaoEvidence(previous.zhidao.courses,list):list}}));
     const scope="course:"+course.platform+":"+course.course_id+":";
-    const mode=courseMode(course);
     const catalogOnly=course.platform==="xuexitong"||course.platform==="ucampus";
     return <section className="sf-course-workspace" aria-label={course.title+" · 课程工作台"}>
       <div className="sf-course-detail-topline">
@@ -831,14 +785,14 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
           <button className="secondary sf-course-settings-action" type="button"
             onClick={()=>{
               setCourseLogsOpen(false);
-              if(course.platform==="zhidao"&&mode==="zhs-original"){
+              if(course.platform==="zhidao"){
                 setPlatformSettingsOpen(null);
                 setZhsCourseSettingsOpen(true);
               }else{
                 openPlatformSettings(course.platform,"parameters");
               }
             }}>
-            <SlidersHorizontal size={15}/>{course.platform==="zhidao"&&mode==="zhs-original"?"本课参数":"平台设置"}
+            <SlidersHorizontal size={15}/>{course.platform==="zhidao"?"本课参数":"平台设置"}
           </button>
           <button className="secondary sf-course-logs-action" type="button"
             onClick={()=>{setPlatformSettingsOpen(null);setCourseLogsOpen(true);}}>日志与诊断</button>
@@ -851,18 +805,11 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
           <span className="sf-visually-hidden">{catalogOnly?"本机执行记录与服务端核验分开展示":"运行状态与课程进度分别显示，互不替代"}</span>
         </div>
         {course.platform==="zhidao"?<>
-          {renderZhidaoModeSwitch(course)}
-          <div className="sf-runtime-mode" hidden={mode!=="official"}>
-            <ZhidaoOfficialPlayerPanel key={"official:"+course.course_id} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode desktop={desktop} events={activity} onOpenTasks={()=>setPage("tasks")}
-              onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-          </div>
-          <div className="sf-runtime-mode" hidden={mode!=="zhs-original"}>
-            <LegacyPlaybackPanel platform="zhidao" key={"zhs:"+course.course_id} dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode
-              courseSettingsOpen={zhsCourseSettingsOpen&&mode==="zhs-original"}
+          <LegacyPlaybackPanel platform="zhidao" key={"zhs:"+course.course_id} dark={dark} courses={platforms.zhidao.courses} courseId={course.course_id} detailMode
+              courseSettingsOpen={zhsCourseSettingsOpen}
               onCourseSettingsClose={()=>setZhsCourseSettingsOpen(false)}
               onCourseVerified={updateVerifiedZhidaoCourse} desktop={desktop} connected={platforms.zhidao.status==="connected"} events={activity} onOpenTasks={()=>setPage("tasks")}
               onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>
-          </div>
         </>:course.platform==="ucampus"?<>
           <UCampusProgressVerifyPanel course={course} desktop={desktop}/>
           <UCampusFabricatedPanel course={course} desktop={desktop}/>
@@ -1112,9 +1059,6 @@ export default function App({onStartupReady}: {onStartupReady?:()=>void}={}){
     <ReleaseNotesDialog state={releaseChangelog.dialog} dark={dark} onClose={releaseChangelog.close}
       onRetry={releaseChangelog.retry}
       onOpenUpdates={()=>{releaseChangelog.close();openGlobalSettings("updates");}}/>
-    {consentAccepted&&<ZhidaoPlayerMonitor desktop={desktop}
-      onCoursesUpdated={list=>setPlatforms(previous=>({...previous,zhidao:{...previous.zhidao,courses:list}}))}
-      onEvent={(action,result,detail,context)=>recordEvent("知到",action,result,detail,context)}/>}
     {qrOpen&&<ZhidaoQrDialog dark={dark} onClose={()=>setQrOpen(false)}
       onVerified={()=>{setQrOpen(false);
         invalidatePlatform("zhidao");
